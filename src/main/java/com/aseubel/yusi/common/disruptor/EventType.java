@@ -13,5 +13,7 @@ public enum EventType {
     LOGOUT,
     DIARY_WRITE,
     DIARY_DELETE,
-    DIARY_MODIFY
+    DIARY_MODIFY,
+    DIARY_READ,
+    DIARY_CHAT
 }

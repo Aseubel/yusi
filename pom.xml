@@ -89,6 +89,11 @@
         </dependency>
         <dependency>
             <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-community-dashscope</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-spring-boot-starter</artifactId>
             <version>${langchain4j.version}</version>
         </dependency>

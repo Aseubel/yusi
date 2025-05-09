@@ -19,7 +19,7 @@ public class DisruptorStarter implements EventHandler<Element> {
 
     @Override
     public void onEvent(Element element, long l, boolean b) throws Exception {
-        log.info("接收到disruptor事件");
+        log.info("接收到disruptor事件：{}", element.getEventType());
         disruptorChain.process(element);
     }
 }

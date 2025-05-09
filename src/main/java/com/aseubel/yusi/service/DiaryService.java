@@ -9,4 +9,10 @@ import com.aseubel.yusi.pojo.entity.Diary;
 public interface DiaryService {
 
     Diary addDiary(Diary diary);
+
+    Diary editDiary(Diary diary);
+
+    Diary getDiary(String diaryId);
+
+    String chatWithDiary(String userId, String query);
 }

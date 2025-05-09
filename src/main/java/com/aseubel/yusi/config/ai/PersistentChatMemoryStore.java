@@ -1,4 +1,4 @@
-package com.aseubel.yusi.config;
+package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.redis.IRedisService;
 import dev.langchain4j.data.message.ChatMessage;

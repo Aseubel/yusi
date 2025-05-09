@@ -1,9 +1,12 @@
-package com.aseubel.yusi.config;
+package com.aseubel.yusi.config.ai;
 
+import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import io.milvus.common.clientenum.ConsistencyLevelEnum;
 import io.milvus.param.IndexType;
 import io.milvus.param.MetricType;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -14,14 +17,17 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class MilvusConfig {
 
+    @Autowired
+    private ApplicationContext applicationContext;
+
     @Bean(name = "milvusEmbeddingStore")
     public MilvusEmbeddingStore milvusEmbeddingStoreConfig() {
         MilvusEmbeddingStore store = MilvusEmbeddingStore.builder()
 
                 .host("localhost")                         // Host for Milvus instance
                 .port(19530)                               // Port for Milvus instance
-                .collectionName("example_collection")      // Name of the collection
-                .dimension(128)                            // Dimension of vectors
+                .collectionName("yusi_embedding_collection")      // Name of the collection
+                .dimension(((EmbeddingModel) applicationContext.getBean("embeddingModel")).dimension())                            // Dimension of vectors
                 .indexType(IndexType.FLAT)                 // Index type
                 .metricType(MetricType.COSINE)             // Metric type
                 .username("username")                      // Username for Milvus
