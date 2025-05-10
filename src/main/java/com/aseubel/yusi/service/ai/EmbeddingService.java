@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -37,15 +38,18 @@ public class EmbeddingService implements Processor<Element> {
 
     @Override
     public Result<Element> process(Element data, int index, ProcessorChain<Element> chain) {
-        if (data.getEventType() != EventType.DIARY_WRITE) {
+        if (data.getEventType() != EventType.DIARY_WRITE && data.getEventType() != EventType.DIARY_MODIFY) {
             return chain.process(data, index);
         }
         Diary diary = (Diary) data.getData();
-        TextSegment diaryTextSegment = TextSegment.from(diary.getContent(), Metadata.metadata("userId", diary.getUserId()));
+        List<TextSegment> diaryTextSegment = Collections.singletonList(TextSegment.from(diary.getContent(), Metadata.metadata("userId", diary.getUserId())));
 
+        // 移除旧的embedding
+        milvusEmbeddingStore.remove(diary.getDiaryId());
         // 转换文本段为Embedding
-        Embedding embedding = embeddingModel.embed(diaryTextSegment).content();
-        milvusEmbeddingStore.add(diary.getDiaryId(), embedding);
+        List<Embedding> embedding = embeddingModel.embedAll(diaryTextSegment).content();
+        // 这里三个都要用，暴露的方法也只有addAll有三个入参
+        milvusEmbeddingStore.addAll(Collections.singletonList(diary.getDiaryId()), embedding, diaryTextSegment);
 
         log.info("存储 {} 的日记的embedding，日记:{}", diary.getUserId(), diary);
         return Result.success(data);

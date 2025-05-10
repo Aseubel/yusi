@@ -27,17 +27,12 @@ public class ContentRetrieverConfig {
                 .embeddingStore((MilvusEmbeddingStore) applicationContext.getBean("milvusEmbeddingStore"))
                 .embeddingModel((EmbeddingModel) applicationContext.getBean("embeddingModel"))
                 .maxResults(3)
-                // maxResults 也可以根据查询动态指定
-                .dynamicMaxResults(query -> 3)
-                .minScore(0.75)
-                // minScore 也可以根据查询动态指定
-                .dynamicMinScore(query -> 0.75)
-                .filter(metadataKey("userId").isEqualTo("12345"))
-                // filter 也可以根据查询动态指定
-//                .dynamicFilter(query -> {
-//                    String userId = getUserId(query.metadata().chatMemoryId());
-//                    return metadataKey("userId").isEqualTo(userId);
-//                })
+                .minScore(0.5)
+                // 根据查询动态指定用户id
+                .dynamicFilter(query -> {
+                    String userId = (String) query.metadata().chatMemoryId();
+                    return metadataKey("userId").isEqualTo(userId);
+                })
                 .build();
         return contentRetriever;
     }

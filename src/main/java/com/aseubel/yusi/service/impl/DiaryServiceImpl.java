@@ -20,7 +20,7 @@ public class DiaryServiceImpl implements DiaryService {
     private DiaryRepository diaryRepository;
 
     @Resource
-    private Assistant diaryAssistant;
+    private Assistant diaryRAGAssistant;
 
     @Override
     public Diary addDiary(Diary diary) {
@@ -44,7 +44,7 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     @Override
-    public String chatWithDiary(String userId, String query) {
-        return diaryAssistant.chat(userId, query);
+    public String chatWithDiaryRAG(String userId, String query) {
+        return diaryRAGAssistant.chat(userId, query);
     }
 }

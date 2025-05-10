@@ -14,5 +14,5 @@ public interface DiaryService {
 
     Diary getDiary(String diaryId);
 
-    String chatWithDiary(String userId, String query);
+    String chatWithDiaryRAG(String userId, String query);
 }

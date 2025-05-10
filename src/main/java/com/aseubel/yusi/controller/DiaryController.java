@@ -50,9 +50,9 @@ public class DiaryController {
         return Response.success(diary);
     }
 
-    @GetMapping("/chat")
-    public Response<String> chatBasedDiary(@RequestBody DiaryChatRequest request) {
-        String response = diaryService.chatWithDiary(request.getUserId(), request.getQuery());
+    @GetMapping("/rag")
+    public Response<String> ragChatBasedDiary(@RequestBody DiaryChatRequest request) {
+        String response = diaryService.chatWithDiaryRAG(request.getUserId(), request.getQuery());
         return Response.success(response);
     }
 

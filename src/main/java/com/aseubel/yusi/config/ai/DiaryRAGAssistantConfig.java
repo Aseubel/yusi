@@ -15,12 +15,12 @@ import org.springframework.context.annotation.Configuration;
  * @date 2025/5/9 下午11:18
  */
 @Configuration
-public class DiaryAssistantConfig {
+public class DiaryRAGAssistantConfig {
 
     @Autowired
     private ApplicationContext applicationContext;
 
-    @Bean(name = "diaryAssistant")
+    @Bean(name = "diaryRAGAssistant")
     public Assistant diaryAssistantConfig() {
         Assistant assistant = AiServices.builder(Assistant.class)
                 .chatLanguageModel((ChatLanguageModel) applicationContext.getBean("chatModel"))
