@@ -1,0 +1,40 @@
+dataSources:
+  yusi:
+    dataSourceClassName: com.zaxxer.hikari.HikariDataSource
+    driverClassName: com.mysql.cj.jdbc.Driver
+    jdbcUrl: jdbc:mysql://127.0.0.1:3306/yusi?serverTimezone=Asia/Shanghai&useUnicode=true&characterEncoding=utf-8&zeroDateTimeBehavior=convertToNull&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: root
+    password: root
+
+# 规则配置
+rules:
+- !SHARDING
+  tables:
+    diary:
+      actualDataNodes: yusi.diary_${1..2}  # 配置数据表分片规则
+      tableStrategy:
+        standard:
+          shardingColumn: user_id  # 使用 user_id 作为分片键
+          shardingAlgorithmName: diary-mod  # 使用自定义的分片算法
+      keyGenerateStrategy:
+        column: id
+        keyGeneratorName: snowflake  # 使用雪花算法生成主键
+  shardingAlgorithms:
+    diary-mod:
+      type: CLASS_BASED
+      props:
+        algorithmClassName: com.aseubel.yusi.common.TableHashModShardingSphereAlgorithm
+        sharding-count: 2  # 2个表分片
+        strategy: standard  # 标准分片策略
+  keyGenerators:
+    snowflake:
+      type: SNOWFLAKE
+      props:
+        worker-id: 611  # 雪花算法的 worker-id
+
+props:
+  sql-show: true  # 控制台打印 SQL 日志，便于调试
+
+# 单机模式 也有集群模式 此处本机选择单机即可 这个必须添加! 不然要报错
+mode:
+  type: Standalone

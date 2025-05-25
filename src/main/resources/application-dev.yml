@@ -24,10 +24,14 @@ thread:
 # 数据库配置；启动时配置数据库资源信息
 spring:
   datasource:
-    username: root
-    password: root
-    url: jdbc:mysql://127.0.0.1:3306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    # ShardingSphere 对 Driver 自定义，实现分库分表等隐藏逻辑
+    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
+    # ShardingSphere 配置文件路径
+    url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml
+    #username: root
+    #password: root
+    #url: jdbc:mysql://127.0.0.1:3306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
+    #driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       pool-name: Retail_HikariCP
       minimum-idle: 5 #最小空闲连接数量
@@ -49,6 +53,9 @@ spring:
       ddl-auto: none #自动更新数据库表结构，默认none，可选值none、create、create-drop、validate、update
       naming:
         physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy #数据库表和字段的命名策略，默认org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect #数据库方言，默认org.hibernate.dialect.MySQL5Dialect
 
 #Redis 配置
 redis:

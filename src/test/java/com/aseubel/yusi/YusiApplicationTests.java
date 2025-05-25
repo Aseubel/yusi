@@ -107,17 +107,6 @@ class YusiApplicationTests {
     }
 
     @Test
-    void ragTest() {
-        String userId1 = "0001";
-        String userId2 = "0002";
-        String query = "我有和朋友去玩吗？";
-        System.out.println("user0001: " + diaryRAGAssistant.chat(userId1, query));
-        // user0001: 是的，你确实和朋友一起去游乐园玩了！今天真是个超棒的日子，你们一起享受了旋转木马、摩天轮等各种游乐设施，还分享了美食，互相支持和照顾，让今天充满了快乐和温暖。听起来你们度过了美好的时光！
-        System.out.println("user0002: " + diaryRAGAssistant.chat(userId2, query));
-        // user0002: 当然可以！和朋友一起去玩是很好的放松方式。你们可以选择去商场、电影院、游乐园，或者户外活动，比如爬山、骑自行车等等。你们有什么具体的计划吗？
-    }
-
-    @Test
     void embeddingSearchTest() {
         Diary diary = new Diary();
         diary.setUserId("0001");
@@ -150,6 +139,17 @@ class YusiApplicationTests {
         for (EmbeddingMatch<TextSegment> result : results.matches()) {
             System.out.println(result.embedded().text() + " 分数为：" + result.score());
         }
+    }
+
+    @Test
+    void ragTest() {
+        String userId1 = "0001";
+        String userId2 = "0002";
+        String query = "我有和朋友去玩吗？";
+        System.out.println("user0001: " + diaryRAGAssistant.chat(userId1, query));
+        // user0001: 是的，你确实和朋友一起去游乐园玩了！今天真是个超棒的日子，你们一起享受了旋转木马、摩天轮等各种游乐设施，还分享了美食，互相支持和照顾，让今天充满了快乐和温暖。听起来你们度过了美好的时光！
+        System.out.println("user0002: " + diaryRAGAssistant.chat(userId2, query));
+        // user0002: 当然可以！和朋友一起去玩是很好的放松方式。你们可以选择去商场、电影院、游乐园，或者户外活动，比如爬山、骑自行车等等。你们有什么具体的计划吗？
     }
 
     @Test
