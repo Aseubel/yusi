@@ -11,6 +11,10 @@ import com.aseubel.yusi.service.DiaryService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.web.PagedResourcesAssembler;
+import org.springframework.hateoas.EntityModel;
+import org.springframework.hateoas.PagedModel;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -28,6 +32,18 @@ public class DiaryController {
 
     @Resource
     private DisruptorProducer disruptorProducer;
+
+    @GetMapping("/list")
+    public Response<PagedModel<EntityModel<Diary>>> getDiaryList(
+            @RequestParam(defaultValue = "1") int pageNum,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) String sortBy,
+            @RequestParam(defaultValue = "true") boolean asc,
+            PagedResourcesAssembler<Diary> assembler) {
+
+        Page<Diary> diaryPage = diaryService.getDiaryList(pageNum, pageSize, sortBy, asc);
+        return Response.success(assembler.toModel(diaryPage));
+    }
 
     @PostMapping
     public Response<?> writeDiary(@RequestBody WriteDiaryRequest request) {

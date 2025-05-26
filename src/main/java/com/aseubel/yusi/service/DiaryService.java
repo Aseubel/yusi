@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service;
 
 import com.aseubel.yusi.pojo.entity.Diary;
+import org.springframework.data.domain.Page;
 
 /**
  * @author Aseubel
@@ -15,4 +16,6 @@ public interface DiaryService {
     Diary getDiary(String diaryId);
 
     String chatWithDiaryRAG(String userId, String query);
+
+    Page<Diary> getDiaryList(int pageNum, int pageSize, String sortBy, boolean asc);
 }

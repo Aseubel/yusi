@@ -1,12 +1,16 @@
 package com.aseubel.yusi.service.impl;
 
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.service.DiaryService;
 import com.aseubel.yusi.service.ai.Assistant;
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 /**
@@ -46,5 +50,21 @@ public class DiaryServiceImpl implements DiaryService {
     @Override
     public String chatWithDiaryRAG(String userId, String query) {
         return diaryRAGAssistant.chat(userId, query);
+    }
+
+    @Override
+    public Page<Diary> getDiaryList(int pageNum, int pageSize, String sortBy, boolean asc) {
+        // 处理默认排序字段
+        String actualSort = StrUtil.isBlank(sortBy) ? "createTime" : sortBy;
+
+        // 构建分页请求（注意Spring Data页码从0开始）
+        Sort sort = Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, actualSort);
+        PageRequest pageRequest = PageRequest.of(pageNum - 1, pageSize, sort);
+
+        // 如果不需要过滤条件，直接使用基础查询
+        return diaryRepository.findAll(pageRequest);
+
+        // 如需带条件查询（示例）
+        // return diaryRepository.findByUserId("当前用户ID", pageRequest);
     }
 }
