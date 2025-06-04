@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai;
 
 import dev.langchain4j.service.MemoryId;
+import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 
 /**
@@ -9,6 +10,7 @@ import dev.langchain4j.service.UserMessage;
  */
 public interface Assistant {
 
+    @SystemMessage("")
     String chat(@MemoryId String userId,@UserMessage String message);
 
     String chat(String userMessage);

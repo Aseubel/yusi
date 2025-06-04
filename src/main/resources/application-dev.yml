@@ -8,7 +8,7 @@ server:
 
 embedding:
   qwen:
-    apikey: sk-0c2e9539e1eb413683b97737c4912394
+    apikey: ${QWEN_API_KEY}
 
 # 线程池配置
 thread:

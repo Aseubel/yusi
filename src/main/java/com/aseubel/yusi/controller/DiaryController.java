@@ -66,7 +66,7 @@ public class DiaryController {
         return Response.success(diary);
     }
 
-    @GetMapping("/rag")
+    @PostMapping("/rag")
     public Response<String> ragChatBasedDiary(@RequestBody DiaryChatRequest request) {
         String response = diaryService.chatWithDiaryRAG(request.getUserId(), request.getQuery());
         return Response.success(response);
