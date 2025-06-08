@@ -35,13 +35,14 @@ public class DiaryController {
 
     @GetMapping("/list")
     public Response<PagedModel<EntityModel<Diary>>> getDiaryList(
+            @RequestParam(defaultValue = "0001") String userId,
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(required = false) String sortBy,
             @RequestParam(defaultValue = "true") boolean asc,
             PagedResourcesAssembler<Diary> assembler) {
 
-        Page<Diary> diaryPage = diaryService.getDiaryList(pageNum, pageSize, sortBy, asc);
+        Page<Diary> diaryPage = diaryService.getDiaryList(userId, pageNum, pageSize, sortBy, asc);
         return Response.success(assembler.toModel(diaryPage));
     }
 

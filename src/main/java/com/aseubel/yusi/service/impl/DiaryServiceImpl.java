@@ -8,6 +8,7 @@ import com.aseubel.yusi.service.DiaryService;
 import com.aseubel.yusi.service.ai.Assistant;
 import jakarta.annotation.Resource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -53,7 +54,7 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     @Override
-    public Page<Diary> getDiaryList(int pageNum, int pageSize, String sortBy, boolean asc) {
+    public Page<Diary> getDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc) {
         // 处理默认排序字段
         String actualSort = StrUtil.isBlank(sortBy) ? "createTime" : sortBy;
 
@@ -61,8 +62,8 @@ public class DiaryServiceImpl implements DiaryService {
         Sort sort = Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, actualSort);
         PageRequest pageRequest = PageRequest.of(pageNum - 1, pageSize, sort);
 
-        // 如果不需要过滤条件，直接使用基础查询
-        return diaryRepository.findAll(pageRequest);
+        Example<Diary> example = Example.of(Diary.builder().userId(userId).build());
+        return diaryRepository.findAll(example, pageRequest);
 
         // 如需带条件查询（示例）
         // return diaryRepository.findByUserId("当前用户ID", pageRequest);

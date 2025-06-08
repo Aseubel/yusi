@@ -10,7 +10,7 @@ import dev.langchain4j.service.UserMessage;
  */
 public interface Assistant {
 
-    @SystemMessage("")
+    @SystemMessage("你是智能日记助手，需要根据数据库中用户的日记回答用户的问题")
     String chat(@MemoryId String userId,@UserMessage String message);
 
     String chat(String userMessage);

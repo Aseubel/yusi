@@ -17,5 +17,5 @@ public interface DiaryService {
 
     String chatWithDiaryRAG(String userId, String query);
 
-    Page<Diary> getDiaryList(int pageNum, int pageSize, String sortBy, boolean asc);
+    Page<Diary> getDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc);
 }
