@@ -29,8 +29,8 @@ spring:
     # ShardingSphere 配置文件路径
 #    url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml
     username: root
-    password: 123456
-    url: jdbc:mysql://8.134.200.160:13306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
+    password: root
+    url: jdbc:mysql://127.0.0.1:3306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       pool-name: Retail_HikariCP
@@ -71,15 +71,6 @@ redis:
       retry-interval: 1000
       ping-interval: 60000
       keep-alive: true
-
-milvus:
-  mode: 2
-  uri: https://in03-cf10f8f6eef3a63.serverless.aws-eu-central-1.cloud.zilliz.com
-  token: 064cde8da209e07bec713d60083a689eee36c6711b2228a271900f8f10d59ff3f9bb8b96ba9a494d6353593fe7794a17b775c125
-  host:
-  port:
-  username:
-  password:
 
 # 日志
 logging:

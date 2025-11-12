@@ -1,6 +1,5 @@
 package com.aseubel.yusi.config.ai;
 
-import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,7 +12,7 @@ import org.springframework.context.annotation.Configuration;
 public class ChatModelConfig {
 
     @Bean(name = "chatModel")
-    public ChatLanguageModel chatModel() {
+    public OpenAiChatModel chatModel() {
         OpenAiChatModel model = OpenAiChatModel.builder()
                 .baseUrl("http://langchain4j.dev/demo/openai/v1")
                 .apiKey("demo")
