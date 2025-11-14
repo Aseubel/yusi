@@ -38,7 +38,7 @@ public class DiaryServiceImpl implements DiaryService {
         Diary existingDiary = diaryRepository.findByDiaryId(diary.getDiaryId());
         if (ObjectUtil.isNotEmpty(existingDiary)) {
             diary.setId(existingDiary.getId());
-            diaryRepository.save(existingDiary);
+            return diaryRepository.save(diary);
         }
         return null;
     }

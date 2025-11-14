@@ -11,6 +11,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.DynamicInsert;
 import org.hibernate.annotations.DynamicUpdate;
+import com.aseubel.yusi.config.security.AttributeEncryptor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -44,6 +45,7 @@ public class Diary {
     private String title;
 
     @Column(name = "content")
+    @Convert(converter = AttributeEncryptor.class)
     private String content;
 
     @Column(name = "visibility")

@@ -6,4 +6,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Data
 @ConfigurationProperties(prefix = "model.embedding", ignoreInvalidFields = true)
 public class EmbeddingModelConfigProperties {
+
+    private String apikey;
 }

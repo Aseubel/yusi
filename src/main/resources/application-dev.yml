@@ -6,9 +6,14 @@ server:
       min-spare: 50 # 初始化线程数,最小空闲线程数,默认是10
     accept-count: 10 # 等待队列长度
 
-embedding:
-  qwen:
-    apikey: ${QWEN_API_KEY}
+model:
+  embedding:
+      apikey: ${EMBEDDING_MODEL_APIKEY}
+  chat:
+    baseurl: ${CHAT_MODEL_BASEURL}
+    apikey: ${CHAT_MODEL_APIKEY}
+    name: ${CHAT_MODEL_NAME}
+
 
 # 线程池配置
 thread:

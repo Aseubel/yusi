@@ -1,0 +1,36 @@
+@import "tailwindcss";
+
+@layer base {
+  html, body { min-height: 100vh; }
+  body { color: #0a0a0a; font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji"; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  body { background: linear-gradient(to bottom, #f9fafb, #ffffff); }
+  .dark body { color: rgb(244 244 245); background: linear-gradient(to bottom, #0a0a0b, #000000); }
+}
+
+@layer components {
+  .card {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 1rem;
+    backdrop-filter: saturate(180%) blur(12px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+  }
+  .dark .card {
+    background-color: #0a0a0b;
+    border-color: #27272a;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    border-radius: 9999px;
+    border: 1px solid currentColor;
+  }
+  .pill {
+    border-radius: 9999px;
+    padding: 0.5rem 1rem;
+  }
+}
