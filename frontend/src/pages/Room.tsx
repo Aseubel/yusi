@@ -4,6 +4,7 @@ import { Layout } from '../components/Layout'
 import { RoomSubmit, RoomReport } from '../components/room'
 import { getReport } from '../lib'
 import { useRoomStore } from '../stores'
+import { Card, CardContent, CardHeader, CardTitle, Badge } from '../components/ui'
 import type { PersonalSketch, PairCompatibility } from '../lib'
 
 export const Room = () => {
@@ -22,7 +23,9 @@ export const Room = () => {
   if (!room) {
     return (
       <Layout>
-        <div className="text-center">房间不存在或已失效</div>
+        <div className="flex h-[50vh] items-center justify-center text-muted-foreground">
+          房间不存在或已失效
+        </div>
       </Layout>
     )
   }
@@ -31,41 +34,52 @@ export const Room = () => {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-6 max-w-5xl mx-auto">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-semibold">房间 {code}</h2>
-          <span className={
-            `badge ${
-              room.status === 'WAITING' ? 'border-yellow-200 text-yellow-700 bg-yellow-50' :
-              room.status === 'IN_PROGRESS' ? 'border-blue-200 text-blue-700 bg-blue-50' :
-              'border-emerald-200 text-emerald-700 bg-emerald-50'
-            }`
-          }>{room.status}</span>
+          <h2 className="text-3xl font-bold tracking-tight">房间 {code}</h2>
+          <Badge 
+            variant={
+              room.status === 'WAITING' ? 'secondary' :
+              room.status === 'IN_PROGRESS' ? 'default' :
+              'outline'
+            }
+            className="text-sm px-3 py-1"
+          >
+            {room.status === 'WAITING' && '等待中'}
+            {room.status === 'IN_PROGRESS' && '进行中'}
+            {room.status === 'COMPLETED' && '已完成'}
+          </Badge>
         </div>
 
-        <div className="card p-4">
-          <div className="text-sm text-gray-600">成员 ({room.members.length}/8)</div>
-          <div className="mt-2 flex gap-2 flex-wrap">
-            {room.members.map((m) => (
-              <span key={m} className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 text-sm">{m}</span>
-            ))}
-          </div>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">成员 ({room.members.length}/8)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex gap-2 flex-wrap">
+              {room.members.map((m) => (
+                <Badge key={m} variant="secondary" className="px-3 py-1 text-sm">
+                  {m}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
         {room.status === 'IN_PROGRESS' && !submitted && (
-          <div className="card p-4">
-            <RoomSubmit code={code!} userId={userId} />
-          </div>
+          <RoomSubmit code={code!} userId={userId} />
         )}
 
         {room.status === 'IN_PROGRESS' && submitted && (
-          <div className="card p-4 text-center text-gray-600">你已提交，等待其他成员...</div>
+          <Card>
+            <CardContent className="p-8 text-center text-muted-foreground">
+              你已提交，等待其他成员...
+            </CardContent>
+          </Card>
         )}
 
         {room.status === 'COMPLETED' && report && (
-          <div className="card p-4">
-            <RoomReport personal={report.personal} pairs={report.pairs} />
-          </div>
+          <RoomReport personal={report.personal} pairs={report.pairs} />
         )}
       </div>
     </Layout>

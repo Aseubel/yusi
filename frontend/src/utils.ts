@@ -1,7 +1,12 @@
+import { type ClassValue, clsx } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
 /**
- * 通用工具函数
+ * 通用工具函数 - 合并 Tailwind 类名
  */
-export const clsx = (...args: Array<string | boolean | undefined>) => args.filter(Boolean).join(' ')
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
 
 /**
  * 后端地址常量

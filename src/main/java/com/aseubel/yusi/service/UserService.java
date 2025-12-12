@@ -9,4 +9,6 @@ import com.aseubel.yusi.pojo.entity.User;
 public interface UserService {
 
     User register(User user);
+
+    User login(String userName, String password);
 }

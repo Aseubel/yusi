@@ -15,3 +15,8 @@ api.interceptors.response.use(
     return Promise.reject(err)
   }
 )
+
+export const authApi = {
+  login: (data: any) => api.post('/user/login', data),
+  register: (data: any) => api.post('/user/register', data),
+}

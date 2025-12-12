@@ -1,4 +1,4 @@
-import { Button, Textarea, toast } from '../ui'
+import { Button, Textarea, toast, Card, CardHeader, CardTitle, CardContent, CardFooter } from '../ui'
 import { useState } from 'react'
 import { submitNarrative } from '../../lib'
 import { countChars } from '../../utils'
@@ -29,22 +29,26 @@ export const RoomSubmit = ({ code, userId }: { code: string; userId: string }) =
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h3 className="text-xl font-semibold mb-3">写下你的叙事（≤1000字符）</h3>
-      <Textarea
-        value={narrative}
-        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNarrative(e.target.value)}
-        rows={8}
-        placeholder="描述你在该情景下会采取的行动与想法..."
-      />
-      <div className="mt-2 text-sm text-gray-600">
-        已输入 {countChars(narrative)} / 1000 字符
-      </div>
-      <div className="mt-4 flex gap-3">
-        <Button disabled={loading} onClick={handleSubmit}>
-          {loading ? '提交中...' : '提交叙事'}
+    <Card>
+      <CardHeader>
+        <CardTitle>写下你的叙事</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <Textarea
+          value={narrative}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNarrative(e.target.value)}
+          rows={8}
+          placeholder="描述你在该情景下会采取的行动与想法..."
+        />
+        <div className="text-xs text-muted-foreground text-right">
+          已输入 {countChars(narrative)} / 1000 字符
+        </div>
+      </CardContent>
+      <CardFooter>
+        <Button isLoading={loading} onClick={handleSubmit}>
+          提交叙事
         </Button>
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   )
 }

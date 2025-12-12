@@ -1,4 +1,4 @@
-import { Button, Input, toast } from '../ui'
+import { Button, Input, toast, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui'
 import { useState } from 'react'
 import { joinRoom } from '../../lib'
 
@@ -25,11 +25,14 @@ export const RoomJoin = () => {
   }
 
   return (
-    <div>
-      <h2 className="text-xl md:text-2xl font-semibold mb-4">加入情景室</h2>
-      <div className="space-y-5">
-        <div>
-          <label className="block text-sm font-medium mb-1">邀请码（6位）</label>
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle>加入情景室</CardTitle>
+        <CardDescription>输入邀请码，加入朋友的房间。</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">邀请码（6位）</label>
           <Input
             value={code}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCode(e.target.value.toUpperCase())}
@@ -37,18 +40,20 @@ export const RoomJoin = () => {
             maxLength={6}
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">你的用户ID</label>
+        <div className="space-y-2">
+          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">你的用户ID</label>
           <Input
             value={userId}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUserId(e.target.value)}
             placeholder="例如：bob"
           />
         </div>
-        <Button disabled={loading} onClick={handleJoin} className="w-full">
-          {loading ? '加入中...' : '加入房间'}
+      </CardContent>
+      <CardFooter>
+        <Button isLoading={loading} onClick={handleJoin} className="w-full" variant="secondary">
+          加入房间
         </Button>
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   )
 }

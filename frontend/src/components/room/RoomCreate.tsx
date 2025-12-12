@@ -1,4 +1,4 @@
-import { Button, Input, toast } from '../ui'
+import { Button, Input, toast, Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../ui'
 import { useState } from 'react'
 import { createRoom } from '../../lib'
 
@@ -25,34 +25,40 @@ export const RoomCreate = () => {
   }
 
   return (
-    <div>
-      <h2 className="text-xl md:text-2xl font-semibold mb-4">创建情景室</h2>
-      <div className="space-y-5">
-        <div>
-          <label className="block text-sm font-medium mb-1">你的用户ID</label>
+    <Card className="h-full">
+      <CardHeader>
+        <CardTitle>创建情景室</CardTitle>
+        <CardDescription>创建一个新的房间，邀请朋友一起探索。</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">你的用户ID</label>
           <Input
             value={ownerId}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) => setOwnerId(e.target.value)}
             placeholder="例如：alice"
-            className="w-full"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">最大人数（2–8）</label>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">最大人数</label>
+            <span className="text-sm text-muted-foreground">{maxMembers} 人</span>
+          </div>
           <input
             type="range"
             min={2}
             max={8}
             value={maxMembers}
             onChange={(e) => setMaxMembers(parseInt(e.target.value, 10))}
-            className="w-full accent-indigo-600"
+            className="w-full h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
           />
-          <div className="text-xs text-gray-600 mt-1">{maxMembers} 人</div>
         </div>
-        <Button disabled={loading} onClick={handleCreate} className="w-full">
-          {loading ? '创建中...' : '创建房间'}
+      </CardContent>
+      <CardFooter>
+        <Button isLoading={loading} onClick={handleCreate} className="w-full">
+          创建房间
         </Button>
-      </div>
-    </div>
+      </CardFooter>
+    </Card>
   )
 }
