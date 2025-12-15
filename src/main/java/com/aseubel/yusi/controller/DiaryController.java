@@ -35,13 +35,15 @@ public class DiaryController {
 
     @GetMapping("/list")
     public Response<PagedModel<EntityModel<Diary>>> getDiaryList(
-            @RequestParam(defaultValue = "0001") String userId,
+            @RequestParam String userId,
             @RequestParam(defaultValue = "1") int pageNum,
             @RequestParam(defaultValue = "10") int pageSize,
             @RequestParam(required = false) String sortBy,
             @RequestParam(defaultValue = "true") boolean asc,
             PagedResourcesAssembler<Diary> assembler) {
-
+                if (userId == null || userId.isEmpty()) {
+                    throw new IllegalArgumentException("用户ID不能为空");
+                }
         Page<Diary> diaryPage = diaryService.getDiaryList(userId, pageNum, pageSize, sortBy, asc);
         return Response.success(assembler.toModel(diaryPage));
     }
@@ -67,10 +69,10 @@ public class DiaryController {
         return Response.success(diary);
     }
 
-    @PostMapping("/rag")
-    public Response<String> ragChatBasedDiary(@RequestBody DiaryChatRequest request) {
-        String response = diaryService.chatWithDiaryRAG(request.getUserId(), request.getQuery());
-        return Response.success(response);
+    @PostMapping("/chat")
+    public Response<String> chat(@RequestBody DiaryChatRequest request) {
+        // This endpoint is deprecated in favor of /api/ai/chat/stream
+        return Response.fail("Please use /api/ai/chat/stream for chat interaction");
     }
 
 }

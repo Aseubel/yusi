@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service;
 
+import com.aseubel.yusi.pojo.dto.AuthResponse;
 import com.aseubel.yusi.pojo.entity.User;
 
 /**
@@ -10,5 +11,9 @@ public interface UserService {
 
     User register(User user);
 
-    User login(String userName, String password);
+    AuthResponse login(String userName, String password);
+
+    void logout(String userId, String accessToken);
+
+    User getUserByUserId(String userId);
 }

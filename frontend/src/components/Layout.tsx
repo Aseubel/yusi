@@ -4,6 +4,7 @@ import { cn } from '../utils'
 import { Moon, Sun, Github, LogOut, User as UserIcon } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { Button } from './ui/Button'
+import { ChatWidget } from './ChatWidget'
 
 export interface LayoutProps {
   children: ReactNode
@@ -111,6 +112,7 @@ export const Layout = ({ children }: LayoutProps) => {
           </p>
         </div>
       </footer>
+      <ChatWidget />
     </div>
   )
 }

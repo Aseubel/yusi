@@ -1,6 +1,7 @@
 package com.aseubel.yusi.config.ai;
 
 import dev.langchain4j.model.openai.OpenAiChatModel;
+import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -24,5 +25,14 @@ public class ChatModelConfig {
                 .modelName(properties.getName())
                 .build();
         return model;
+    }
+
+    @Bean(name = "streamingChatModel")
+    public OpenAiStreamingChatModel streamingChatModel(ChatModelConfigProperties properties) {
+        return OpenAiStreamingChatModel.builder()
+                .baseUrl(properties.getBaseurl())
+                .apiKey(properties.getApikey())
+                .modelName(properties.getName())
+                .build();
     }
 }

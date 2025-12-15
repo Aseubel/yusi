@@ -11,8 +11,10 @@ interface User {
 interface AuthState {
   user: User | null
   token: string | null
-  login: (user: User, token?: string) => void
+  refreshToken: string | null
+  login: (user: User, token: string, refreshToken: string) => void
   logout: () => void
+  setToken: (token: string) => void
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -20,8 +22,10 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       token: null,
-      login: (user, token) => set({ user, token }),
-      logout: () => set({ user: null, token: null }),
+      refreshToken: null,
+      login: (user, token, refreshToken) => set({ user, token, refreshToken }),
+      logout: () => set({ user: null, token: null, refreshToken: null }),
+      setToken: (token) => set({ token }),
     }),
     {
       name: 'yusi-auth-storage',
