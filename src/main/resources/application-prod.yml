@@ -6,9 +6,14 @@ server:
       min-spare: 50 # 初始化线程数,最小空闲线程数,默认是10
     accept-count: 10 # 等待队列长度
 
-embedding:
-  qwen:
-    apikey: ${QWEN_API_KEY}
+model:
+  embedding:
+    apikey: ${EMBEDDING_MODEL_APIKEY}
+  chat:
+    baseurl: ${CHAT_MODEL_BASEURL}
+    apikey: ${CHAT_MODEL_APIKEY}
+    name: ${CHAT_MODEL_NAME}
+
 
 # 线程池配置
 thread:
@@ -25,12 +30,12 @@ thread:
 spring:
   datasource:
     # ShardingSphere 对 Driver 自定义，实现分库分表等隐藏逻辑
-#    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
+    #    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
     # ShardingSphere 配置文件路径
-#    url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml
+    #    url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml
     username: root
-    password: root
-    url: jdbc:mysql://127.0.0.1:3306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
+    password: 123456
+    url: jdbc:mysql://127.0.0.1:13306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       pool-name: Retail_HikariCP
@@ -71,6 +76,15 @@ redis:
       retry-interval: 1000
       ping-interval: 60000
       keep-alive: true
+
+milvus:
+  mode: 2
+  uri: https://in03-cf10f8f6eef3a63.serverless.aws-eu-central-1.cloud.zilliz.com
+  token: 064cde8da209e07bec713d60083a689eee36c6711b2228a271900f8f10d59ff3f9bb8b96ba9a494d6353593fe7794a17b775c125
+  host:
+  port:
+  username:
+  password:
 
 # 日志
 logging:
