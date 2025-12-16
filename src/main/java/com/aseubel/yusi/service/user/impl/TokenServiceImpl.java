@@ -1,7 +1,7 @@
-package com.aseubel.yusi.service.auth.impl;
+package com.aseubel.yusi.service.user.impl;
 
 import com.aseubel.yusi.config.JwtProperties;
-import com.aseubel.yusi.service.auth.TokenService;
+import com.aseubel.yusi.service.user.TokenService;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;

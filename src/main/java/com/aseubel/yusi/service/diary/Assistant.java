@@ -1,7 +1,6 @@
-package com.aseubel.yusi.service.ai;
+package com.aseubel.yusi.service.diary;
 
 import dev.langchain4j.service.MemoryId;
-import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.UserMessage;
 
@@ -11,6 +10,5 @@ import dev.langchain4j.service.UserMessage;
  */
 public interface Assistant {
 
-    @SystemMessage("你是智能日记助手，需要根据数据库中用户的日记回答用户的问题")
     TokenStream chat(@MemoryId String userId, @UserMessage String message);
 }

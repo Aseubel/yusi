@@ -1,4 +1,4 @@
-package com.aseubel.yusi.service.auth;
+package com.aseubel.yusi.service.user;
 
 public interface TokenService {
 

@@ -7,7 +7,7 @@ import com.aseubel.yusi.pojo.dto.AuthResponse;
 import com.aseubel.yusi.pojo.dto.LoginRequest;
 import com.aseubel.yusi.pojo.dto.RegisterRequest;
 import com.aseubel.yusi.pojo.entity.User;
-import com.aseubel.yusi.service.UserService;
+import com.aseubel.yusi.service.user.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

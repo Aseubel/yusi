@@ -1,12 +1,11 @@
 package com.aseubel.yusi.config.ai;
 
-import dev.langchain4j.community.model.dashscope.QwenEmbeddingModel;
+import com.aseubel.yusi.config.ai.properties.EmbeddingModelConfigProperties;
 import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import com.aseubel.yusi.config.ai.properties.EmbeddingModelConfigProperties;
 
 /**
  * @author Aseubel
@@ -18,8 +17,10 @@ public class EmbeddingModelConfig {
 
     @Bean(name = "embeddingModel")
     public EmbeddingModel embeddingModel(EmbeddingModelConfigProperties properties) {
-        return QwenEmbeddingModel.builder()
+        return OpenAiEmbeddingModel.builder()
+                .baseUrl(properties.getBaseUrl())
                 .apiKey(properties.getApikey())
+                .modelName(properties.getModel())
                 .build();
     }
 }

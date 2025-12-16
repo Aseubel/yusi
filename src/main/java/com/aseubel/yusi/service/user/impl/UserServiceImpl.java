@@ -1,12 +1,12 @@
-package com.aseubel.yusi.service.impl;
+package com.aseubel.yusi.service.user.impl;
 
 import cn.hutool.crypto.digest.BCrypt;
 import com.aseubel.yusi.common.utils.JwtUtils;
 import com.aseubel.yusi.pojo.dto.AuthResponse;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.UserRepository;
-import com.aseubel.yusi.service.UserService;
-import com.aseubel.yusi.service.auth.TokenService;
+import com.aseubel.yusi.service.user.UserService;
+import com.aseubel.yusi.service.user.TokenService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 

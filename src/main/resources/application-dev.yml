@@ -8,11 +8,13 @@ server:
 
 model:
   embedding:
-      apikey: ${EMBEDDING_MODEL_APIKEY}
+    baseurl: ${EMBEDDING_MODEL_BASEURL}
+    apikey: ${EMBEDDING_MODEL_APIKEY}
+    model: ${EMBEDDING_MODEL_NAME}
   chat:
     baseurl: ${CHAT_MODEL_BASEURL}
     apikey: ${CHAT_MODEL_APIKEY}
-    name: ${CHAT_MODEL_NAME}
+    model: ${CHAT_MODEL_NAME}
 
 
 # 线程池配置
@@ -30,9 +32,9 @@ thread:
 spring:
   datasource:
     # ShardingSphere 对 Driver 自定义，实现分库分表等隐藏逻辑
-#    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
+    #    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
     # ShardingSphere 配置文件路径
-#    url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml
+    #    url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml
     username: root
     password: 123456
     url: jdbc:mysql://127.0.0.1:13306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true

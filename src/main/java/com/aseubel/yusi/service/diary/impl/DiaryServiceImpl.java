@@ -1,12 +1,10 @@
-package com.aseubel.yusi.service.impl;
+package com.aseubel.yusi.service.diary.impl;
 
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.DiaryRepository;
-import com.aseubel.yusi.service.DiaryService;
-import com.aseubel.yusi.service.ai.Assistant;
-import jakarta.annotation.Resource;
+import com.aseubel.yusi.service.diary.DiaryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
@@ -23,9 +21,6 @@ public class DiaryServiceImpl implements DiaryService {
 
     @Autowired
     private DiaryRepository diaryRepository;
-
-    @Resource
-    private Assistant diaryRAGAssistant;
 
     @Override
     public Diary addDiary(Diary diary) {
@@ -46,18 +41,6 @@ public class DiaryServiceImpl implements DiaryService {
     @Override
     public Diary getDiary(String diaryId) {
         return diaryRepository.findByDiaryId(diaryId);
-    }
-
-    @Override
-    public String chatWithDiaryRAG(String userId, String query) {
-        // Since we changed Assistant to return TokenStream, this method needs to be refactored or deprecated.
-        // For now, let's just return a placeholder or throw exception as this seems to be for non-streaming.
-        // Or we can convert stream to string (blocking).
-        // However, the interface changed return type to TokenStream.
-        // If we want to keep this method synchronous string returning, we need to collect tokens.
-        // But better to update the controller to use streaming.
-        // For now, to fix compilation, I will just throw exception or return null as we moved to streaming.
-        throw new UnsupportedOperationException("Use streaming API instead");
     }
 
     @Override

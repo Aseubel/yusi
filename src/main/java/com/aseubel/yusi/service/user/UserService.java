@@ -1,4 +1,4 @@
-package com.aseubel.yusi.service;
+package com.aseubel.yusi.service.user;
 
 import com.aseubel.yusi.pojo.dto.AuthResponse;
 import com.aseubel.yusi.pojo.entity.User;

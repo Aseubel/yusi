@@ -8,11 +8,13 @@ server:
 
 model:
   embedding:
+    baseurl: ${EMBEDDING_MODEL_BASEURL}
     apikey: ${EMBEDDING_MODEL_APIKEY}
+    model: ${EMBEDDING_MODEL_NAME}
   chat:
     baseurl: ${CHAT_MODEL_BASEURL}
     apikey: ${CHAT_MODEL_APIKEY}
-    name: ${CHAT_MODEL_NAME}
+    model: ${CHAT_MODEL_NAME}
 
 
 # 线程池配置

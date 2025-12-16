@@ -1,4 +1,4 @@
-package com.aseubel.yusi.service.ai;
+package com.aseubel.yusi.service.room.impl;
 
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.situation.SituationRoom;

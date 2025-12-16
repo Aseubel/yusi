@@ -6,7 +6,7 @@ import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.UserRepository;
-import com.aseubel.yusi.service.ai.Assistant;
+import com.aseubel.yusi.service.diary.Assistant;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;

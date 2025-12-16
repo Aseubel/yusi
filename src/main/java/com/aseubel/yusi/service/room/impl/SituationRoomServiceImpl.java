@@ -1,9 +1,7 @@
-package com.aseubel.yusi.service.impl;
+package com.aseubel.yusi.service.room.impl;
 
-import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
-import com.aseubel.yusi.service.SituationRoomService;
-import com.aseubel.yusi.service.ai.SituationReportService;
+import com.aseubel.yusi.service.room.SituationRoomService;
 import com.aseubel.yusi.situation.RoomStatus;
 import com.aseubel.yusi.situation.SituationRoom;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,8 +9,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 

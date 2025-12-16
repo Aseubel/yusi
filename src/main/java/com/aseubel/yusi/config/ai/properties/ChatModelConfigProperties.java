@@ -11,5 +11,5 @@ public class ChatModelConfigProperties {
 
     private String apikey = "demo";
 
-    private String name = "gpt-4o-mini";
+    private String model = "gpt-4o-mini";
 }

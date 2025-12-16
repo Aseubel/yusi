@@ -2,8 +2,8 @@ package com.aseubel.yusi.common.auth;
 
 import com.aseubel.yusi.common.utils.JwtUtils;
 import com.aseubel.yusi.pojo.entity.User;
-import com.aseubel.yusi.service.UserService;
-import com.aseubel.yusi.service.auth.TokenService;
+import com.aseubel.yusi.service.user.UserService;
+import com.aseubel.yusi.service.user.TokenService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.http.HttpServletRequest;

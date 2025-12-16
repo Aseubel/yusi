@@ -7,7 +7,7 @@ import com.aseubel.yusi.pojo.dto.DiaryChatRequest;
 import com.aseubel.yusi.pojo.dto.EditDiaryRequest;
 import com.aseubel.yusi.pojo.dto.WriteDiaryRequest;
 import com.aseubel.yusi.pojo.entity.Diary;
-import com.aseubel.yusi.service.DiaryService;
+import com.aseubel.yusi.service.diary.DiaryService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -6,7 +6,7 @@ import com.aseubel.yusi.pojo.dto.situation.JoinRoomRequest;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.dto.situation.StartRoomRequest;
 import com.aseubel.yusi.pojo.dto.situation.SubmitNarrativeRequest;
-import com.aseubel.yusi.service.SituationRoomService;
+import com.aseubel.yusi.service.room.SituationRoomService;
 import com.aseubel.yusi.situation.SituationRoom;
 import com.aseubel.yusi.common.auth.Auth;
 import lombok.extern.slf4j.Slf4j;
