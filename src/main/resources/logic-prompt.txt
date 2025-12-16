@@ -33,6 +33,3 @@
     }
   ]
 }
-
-# Input Data
-(User data will be provided in the user prompt)

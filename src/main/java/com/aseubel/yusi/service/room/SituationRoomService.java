@@ -1,7 +1,7 @@
 package com.aseubel.yusi.service.room;
 
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
-import com.aseubel.yusi.situation.SituationRoom;
+import com.aseubel.yusi.pojo.entity.SituationRoom;
 
 public interface SituationRoomService {
     SituationRoom createRoom(String ownerId, int maxMembers);

@@ -1,7 +1,7 @@
 package com.aseubel.yusi.service.room.impl;
 
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
-import com.aseubel.yusi.situation.SituationRoom;
+import com.aseubel.yusi.pojo.entity.SituationRoom;
 import org.springframework.stereotype.Service;
 
 import java.util.*;

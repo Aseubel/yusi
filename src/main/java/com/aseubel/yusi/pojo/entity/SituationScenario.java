@@ -1,4 +1,4 @@
-package com.aseubel.yusi.situation;
+package com.aseubel.yusi.pojo.entity;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

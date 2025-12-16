@@ -1,5 +1,6 @@
-package com.aseubel.yusi.situation;
+package com.aseubel.yusi.pojo.entity;
 
+import com.aseubel.yusi.pojo.contant.RoomStatus;
 import lombok.Builder;
 import lombok.Data;
 

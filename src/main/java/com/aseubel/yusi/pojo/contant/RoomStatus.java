@@ -1,4 +1,4 @@
-package com.aseubel.yusi.situation;
+package com.aseubel.yusi.pojo.contant;
 
 public enum RoomStatus {
     WAITING,
