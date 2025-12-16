@@ -71,7 +71,12 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     public SituationReport getReport(String code) {
         SituationRoom room = get(code);
         if (room.getStatus() != RoomStatus.COMPLETED) throw new IllegalStateException("未完成");
-        return reportService.analyze(room);
+        if (room.getReport() != null) {
+            return room.getReport();
+        }
+        SituationReport report = reportService.analyze(room);
+        room.setReport(report);
+        return report;
     }
 
     private SituationRoom get(String code) {

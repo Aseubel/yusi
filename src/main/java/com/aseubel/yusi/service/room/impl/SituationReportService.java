@@ -1,14 +1,44 @@
 package com.aseubel.yusi.service.room.impl;
 
+import com.alibaba.fastjson.JSON;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
+import com.aseubel.yusi.service.room.SituationRoomAgent;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
 
+@Slf4j
 @Service
 public class SituationReportService {
+
+    @Autowired
+    private SituationRoomAgent situationRoomAgent;
+
     public SituationReport analyze(SituationRoom room) {
+        try {
+            // 1. 准备数据
+            // 暂时使用 ID 作为场景描述，后续应从数据库获取真实场景描述
+            String scenario = "场景ID: " + room.getScenarioId(); 
+            String userAnswersJson = JSON.toJSONString(room.getSubmissions());
+
+            // 2. 调用 AI
+            String jsonReport = situationRoomAgent.analyzeReport(scenario, userAnswersJson);
+            log.info("AI Analysis Result: {}", jsonReport);
+
+            // 3. 解析结果
+            SituationReport report = JSON.parseObject(jsonReport, SituationReport.class);
+            report.setScenarioId(room.getScenarioId());
+            return report;
+        } catch (Exception e) {
+            log.error("AI Analysis failed, falling back to heuristic method", e);
+            return fallbackAnalyze(room);
+        }
+    }
+
+    private SituationReport fallbackAnalyze(SituationRoom room) {
         List<SituationReport.PersonalSketch> personals = new ArrayList<>();
         for (Map.Entry<String, String> entry : room.getSubmissions().entrySet()) {
             String sketch = buildSketch(entry.getValue());

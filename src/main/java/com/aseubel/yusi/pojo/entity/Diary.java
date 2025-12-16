@@ -60,6 +60,9 @@ public class Diary {
     @Column(name = "ai_analysis_status")
     private Integer status;
 
+    @Column(name = "ai_response", length = 1000)
+    private String aiResponse;
+
     @Column(name = "create_time")
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @JsonSerialize(using = LocalDateTimeSerializer.class)

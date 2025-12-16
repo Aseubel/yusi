@@ -16,4 +16,6 @@ public interface DiaryService {
     Diary getDiary(String diaryId);
 
     Page<Diary> getDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc);
+
+    void generateAiResponse(String diaryId);
 }

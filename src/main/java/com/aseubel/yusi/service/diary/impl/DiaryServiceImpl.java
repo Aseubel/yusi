@@ -4,28 +4,67 @@ import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.DiaryRepository;
+import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.diary.DiaryService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+
+import java.time.LocalDateTime;
 
 /**
  * @author Aseubel
  * @date 2025/5/7 上午9:57
  */
+@Slf4j
 @Service
 public class DiaryServiceImpl implements DiaryService {
 
     @Autowired
     private DiaryRepository diaryRepository;
 
+    @Autowired
+    private Assistant diaryAssistant;
+
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private DiaryService self;
+
     @Override
     public Diary addDiary(Diary diary) {
         diary.generateId();
-        return diaryRepository.save(diary);
+        diary.setCreateTime(LocalDateTime.now());
+        diary.setUpdateTime(LocalDateTime.now());
+        Diary saved = diaryRepository.save(diary);
+        
+        // 异步生成AI回应 (通过self调用以触发AOP)
+        self.generateAiResponse(saved.getDiaryId());
+        
+        return saved;
+    }
+
+    @Async
+    @Override
+    public void generateAiResponse(String diaryId) {
+        try {
+            Diary diary = diaryRepository.findByDiaryId(diaryId);
+            if (diary == null) return;
+
+            log.info("Generating AI response for diary: {}", diaryId);
+            String response = diaryAssistant.generateDiaryResponse(diary.getContent());
+            
+            diary.setAiResponse(response);
+            diary.setStatus(1); // 1 = Analyzed
+            diaryRepository.save(diary);
+            log.info("AI response saved for diary: {}", diaryId);
+        } catch (Exception e) {
+            log.error("Failed to generate AI response for diary: {}", diaryId, e);
+        }
     }
 
     @Override

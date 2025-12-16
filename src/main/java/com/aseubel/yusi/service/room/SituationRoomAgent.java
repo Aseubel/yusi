@@ -12,4 +12,12 @@ public interface SituationRoomAgent {
         {{userAnswers}}
         """)
     TokenStream analyze(@V("scenario") String scenario, @V("userAnswers") String userAnswersJson);
+
+    @UserMessage("""
+        场景描述：{{scenario}}
+        
+        用户回答数据：
+        {{userAnswers}}
+        """)
+    String analyzeReport(@V("scenario") String scenario, @V("userAnswers") String userAnswersJson);
 }
