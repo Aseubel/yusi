@@ -43,16 +43,16 @@ public class MilvusConfig {
         MilvusEmbeddingStore store = builder
 
                 .collectionName("yusi_embedding_collection")      // Name of the collection
-                .dimension(((EmbeddingModel) applicationContext.getBean("embeddingModel")).dimension())                            // Dimension of vectors
-                .indexType(IndexType.FLAT)                 // Index type
-                .metricType(MetricType.COSINE)             // Metric type
-                .consistencyLevel(ConsistencyLevelEnum.EVENTUALLY)  // Consistency level
-                .autoFlushOnInsert(true)                   // Auto flush after insert
-                .idFieldName("id")                         // ID field name
-                .textFieldName("text")                     // Text field name
-                .metadataFieldName("metadata")             // Metadata field name
-                .vectorFieldName("vector")                 // Vector field name
-                .build();                                  // Build the MilvusEmbeddingStore instance
+                .dimension(((EmbeddingModel) applicationContext.getBean("embeddingModel")).dimension())
+                .indexType(IndexType.HNSW)  // 它是目前内存索引中 查询速度 和 召回率 (Recall) 平衡最好的算法。
+                .metricType(MetricType.COSINE)  // Cosine 能最好地衡量“语义相似度”
+                .consistencyLevel(ConsistencyLevelEnum.EVENTUALLY)
+                .autoFlushOnInsert(true)
+                .idFieldName("id")
+                .textFieldName("text")
+                .metadataFieldName("metadata")
+                .vectorFieldName("vector")
+                .build();
         return store;
     }
 }

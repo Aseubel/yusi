@@ -28,14 +28,21 @@ export const Register = () => {
 
     setLoading(true)
     try {
-      const res = await authApi.register({
+      await authApi.register({
         userName: formData.userName,
         password: formData.password,
         email: formData.email,
       })
-      const user = res.data.data
-      login(user)
+      
+      // Auto login after register
+      const loginRes = await authApi.login({
+        userName: formData.userName,
+        password: formData.password,
+      })
+      const { user, accessToken, refreshToken } = loginRes.data.data
+      login(user, accessToken, refreshToken)
       localStorage.setItem('yusi-user-id', user.userId)
+      
       toast.success('注册成功')
       navigate('/')
     } catch (error) {

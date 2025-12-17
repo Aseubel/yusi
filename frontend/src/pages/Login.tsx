@@ -21,8 +21,8 @@ export const Login = () => {
     setLoading(true)
     try {
       const res = await authApi.login(formData)
-      const user = res.data.data
-      login(user)
+      const { user, accessToken, refreshToken } = res.data.data
+      login(user, accessToken, refreshToken)
       localStorage.setItem('yusi-user-id', user.userId) // Keep for legacy components if any
       navigate('/')
     } catch (error) {

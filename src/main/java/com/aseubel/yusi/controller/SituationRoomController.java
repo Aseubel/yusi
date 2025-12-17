@@ -36,13 +36,20 @@ public class SituationRoomController {
     }
 
     @PostMapping("/start")
-    public Response<SituationRoom> start(@RequestBody StartRoomRequest request) {
+    public Response<SituationRoom> startRoom(@RequestBody StartRoomRequest request) {
         SituationRoom room = situationRoomService.startRoom(request.getCode(), request.getScenarioId(), request.getOwnerId());
         return Response.success(room);
     }
 
+    @PostMapping("/cancel")
+    public Response<?> cancelRoom(@RequestBody JoinRoomRequest request) {
+        // Reusing JoinRoomRequest for code + userId
+        situationRoomService.cancelRoom(request.getCode(), request.getUserId());
+        return Response.success();
+    }
+
     @PostMapping("/submit")
-    public Response<SituationRoom> submit(@RequestBody SubmitNarrativeRequest request) {
+    public Response<SituationRoom> submitNarrative(@RequestBody SubmitNarrativeRequest request) {
         SituationRoom room = situationRoomService.submit(request.getCode(), request.getUserId(), request.getNarrative());
         return Response.success(room);
     }
@@ -51,5 +58,11 @@ public class SituationRoomController {
     public Response<SituationReport> report(@PathVariable("code") String code) {
         SituationReport report = situationRoomService.getReport(code);
         return Response.success(report);
+    }
+
+    @GetMapping("/{code}")
+    public Response<SituationRoom> getRoom(@PathVariable("code") String code) {
+        SituationRoom room = situationRoomService.getRoom(code);
+        return Response.success(room);
     }
 }

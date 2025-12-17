@@ -2,10 +2,11 @@ import { api } from './api'
 
 export interface Room {
   code: string
-  ownerId: string
-  maxMembers: number
-  members: string[]
   status: 'WAITING' | 'IN_PROGRESS' | 'COMPLETED'
+  ownerId?: string
+  scenarioId?: string
+  members: string[]
+  submissions: Record<string, string>
 }
 
 export interface CreateRoomRequest {
@@ -18,17 +19,20 @@ export interface JoinRoomRequest {
   userId: string
 }
 
+export interface StartRoomRequest {
+  code: string
+  scenarioId: string
+  ownerId: string
+}
+
 export interface SubmitNarrativeRequest {
   code: string
   userId: string
-  content: string
+  narrative: string
 }
 
 export interface PersonalSketch {
   userId: string
-  personality: string
-  traits: string[]
-  insights: string[]
   sketch: string
 }
 
@@ -36,31 +40,45 @@ export interface PairCompatibility {
   userA: string
   userB: string
   score: number
-  analysis: string
-  advice: string
   reason: string
 }
 
-export interface Report {
+export interface SituationReport {
+  scenarioId: string
   personal: PersonalSketch[]
   pairs: PairCompatibility[]
 }
 
 export const createRoom = async (req: CreateRoomRequest): Promise<Room> => {
-  const { data } = await api.post('/api/rooms', req)
-  return data
+  const { data } = await api.post('/room/create', req)
+  return data.data
 }
 
 export const joinRoom = async (req: JoinRoomRequest): Promise<Room> => {
-  const { data } = await api.post(`/api/rooms/${req.code}/join`, { userId: req.userId })
-  return data
+  const { data } = await api.post('/room/join', req)
+  return data.data
 }
 
-export const submitNarrative = async (req: SubmitNarrativeRequest): Promise<void> => {
-  await api.post(`/api/rooms/${req.code}/submit`, { userId: req.userId, content: req.content })
+export const startRoom = async (req: StartRoomRequest): Promise<Room> => {
+  const { data } = await api.post('/room/start', req)
+  return data.data
 }
 
-export const getReport = async (code: string): Promise<Report> => {
-  const { data } = await api.get(`/api/rooms/${code}/report`)
-  return data
+export const submitNarrative = async (req: SubmitNarrativeRequest): Promise<Room> => {
+  const { data } = await api.post('/room/submit', req)
+  return data.data
+}
+
+export const cancelRoom = async (code: string, userId: string): Promise<void> => {
+  await api.post('/room/cancel', { code, userId })
+}
+
+export const getReport = async (code: string): Promise<SituationReport> => {
+  const { data } = await api.get(`/room/report/${code}`)
+  return data.data
+}
+
+export const getRoom = async (code: string): Promise<Room> => {
+  const { data } = await api.get(`/room/${code}`)
+  return data.data
 }

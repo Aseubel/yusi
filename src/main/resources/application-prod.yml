@@ -57,7 +57,7 @@ spring:
   jpa:
     show-sql: true #是否打印SQL语句，默认false
     hibernate:
-      ddl-auto: none #自动更新数据库表结构，默认none，可选值none、create、create-drop、validate、update
+      ddl-auto: update #自动更新数据库表结构，默认none，可选值none、create、create-drop、validate、update
       naming:
         physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy #数据库表和字段的命名策略，默认org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
     properties:

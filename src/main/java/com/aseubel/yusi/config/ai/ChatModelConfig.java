@@ -21,8 +21,6 @@ public class ChatModelConfig {
                 .apiKey(properties.getApikey())
                 .modelName(properties.getModel())
                 .temperature(0.1)
-                .topP(0.1)
-                .presencePenalty(0.4)
                 .strictJsonSchema(true)
                 .build();
         return model;
@@ -36,7 +34,8 @@ public class ChatModelConfig {
                 .modelName(properties.getModel())
                 .temperature(1.3)
                 .topP(0.85)
-                .presencePenalty(0.4)
+                .presencePenalty(0.6)
+                .maxTokens(512)
                 .build();
     }
 }

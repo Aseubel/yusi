@@ -16,6 +16,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * @author Aseubel
@@ -43,7 +44,7 @@ public class DiaryServiceImpl implements DiaryService {
         Diary saved = diaryRepository.save(diary);
         
         // 异步生成AI回应 (通过self调用以触发AOP)
-        self.generateAiResponse(saved.getDiaryId());
+        // self.generateAiResponse(saved.getDiaryId());
         
         return saved;
     }
@@ -56,7 +57,17 @@ public class DiaryServiceImpl implements DiaryService {
             if (diary == null) return;
 
             log.info("Generating AI response for diary: {}", diaryId);
-            String response = diaryAssistant.generateDiaryResponse(diary.getContent());
+            
+            CompletableFuture<String> future = new CompletableFuture<>();
+            StringBuilder sb = new StringBuilder();
+            
+            diaryAssistant.generateDiaryResponse(diary.getContent())
+                .onPartialResponse(sb::append)
+                .onCompleteResponse(res -> future.complete(sb.toString()))
+                .onError(future::completeExceptionally)
+                .start();
+            
+            String response = future.get();
             
             diary.setAiResponse(response);
             diary.setStatus(1); // 1 = Analyzed

@@ -12,7 +12,7 @@ export const Home = () => {
         className="space-y-12"
       >
         <section className="text-center space-y-4">
-          <h2 className="text-3xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-gray-900 to-gray-600 bg-clip-text text-transparent dark:from-white dark:to-gray-400">
+          <h2 className="text-3xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-primary to-indigo-500 bg-clip-text text-transparent dark:from-indigo-400 dark:to-cyan-400">
             把灵魂放进情景，更懂彼此
           </h2>
           <p className="max-w-[42rem] mx-auto text-muted-foreground sm:text-xl sm:leading-8">

@@ -18,7 +18,7 @@ export const RoomSubmit = ({ code, userId }: { code: string; userId: string }) =
     }
     setLoading(true)
     try {
-      await submitNarrative({ code, userId, content: narrative })
+      await submitNarrative({ code, userId, narrative })
       toast.success('提交成功')
       window.location.reload()
     } catch (e) {

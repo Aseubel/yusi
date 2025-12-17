@@ -1,15 +1,35 @@
 import { Button, Textarea, Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter, Input } from './ui'
 import { toast } from 'sonner'
-import { useState } from 'react'
-import { api } from '../lib/api'
+import { useState, useEffect } from 'react'
+import { writeDiary, getDiaryList, generateAiResponse, type Diary as DiaryType } from '../lib'
 import { Link } from 'react-router-dom'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Sparkles, Lock, MessageCircle } from 'lucide-react'
+import { cn } from '../utils'
+import { useChatStore } from '../stores'
 
 export const Diary = () => {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [loading, setLoading] = useState(false)
+  const [genLoading, setGenLoading] = useState<string | null>(null)
+  const [diaries, setDiaries] = useState<DiaryType[]>([])
   const userId = localStorage.getItem('yusi-user-id') || ''
+  
+  const { setIsOpen, setInitialMessage } = useChatStore()
+
+  const loadDiaries = async () => {
+    if (!userId) return
+    try {
+      const list = await getDiaryList(userId)
+      setDiaries(list)
+    } catch (e) {
+      console.error('Failed to load diaries', e)
+    }
+  }
+
+  useEffect(() => {
+    loadDiaries()
+  }, [userId])
 
   const handleSave = async () => {
     if (!title.trim() || !content.trim()) {
@@ -18,15 +38,38 @@ export const Diary = () => {
     }
     setLoading(true)
     try {
-      await api.post('/diary', { userId, title, content })
+      await writeDiary({ userId, title, content })
       toast.success('日记已保存')
       setTitle('')
       setContent('')
+      loadDiaries()
     } catch (e) {
       // error handled by interceptor
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleGenerate = async (diaryId: string) => {
+    setGenLoading(diaryId)
+    try {
+        await generateAiResponse(diaryId)
+        toast.success('AI回应生成中，请稍候刷新')
+        // In a real app, we might want to poll or use websocket/SSE to get the update.
+        // For now, let's just reload after a short delay or rely on manual refresh/polling logic if implemented.
+        // Or simply wait a bit and reload list.
+        setTimeout(loadDiaries, 3000)
+    } catch (e) {
+        // error handled
+    } finally {
+        setGenLoading(null)
+    }
+  }
+
+  const handleChat = (diary: DiaryType) => {
+      const context = `我刚写了一篇日记：\n标题：${diary.title}\n内容：${diary.content}\n\nAI的回应是：${diary.aiResponse}\n\n`
+      setInitialMessage(context)
+      setIsOpen(true)
   }
 
   return (
@@ -39,7 +82,7 @@ export const Diary = () => {
       </div>
 
       <div className="text-center space-y-4">
-        <h2 className="text-3xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-600 to-fuchsia-600 dark:from-indigo-400 dark:to-fuchsia-400">
+        <h2 className="text-3xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-primary to-indigo-500 dark:from-indigo-400 dark:to-cyan-400">
           AI知己 · 私密日记
         </h2>
         <p className="text-muted-foreground text-lg">端到端加密，仅你可见。</p>
@@ -77,6 +120,75 @@ export const Diary = () => {
           </Button>
         </CardFooter>
       </Card>
+
+      <div className="space-y-6">
+        <h3 className="text-2xl font-semibold tracking-tight">往期日记</h3>
+        {diaries.length === 0 && (
+          <div className="text-center text-muted-foreground py-10">
+            暂无日记，写下第一篇吧。
+          </div>
+        )}
+        {diaries.map((diary) => (
+          <Card key={diary.diaryId} className="overflow-hidden">
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-start">
+                <div className="space-y-1">
+                  <CardTitle className="text-xl">{diary.title}</CardTitle>
+                  <CardDescription>
+                    {new Date(diary.createTime).toLocaleString()} <Lock className="inline w-3 h-3 ml-1" />
+                  </CardDescription>
+                </div>
+                <div className="flex gap-2">
+                {diary.aiResponse ? (
+                  <>
+                  <Badge variant="secondary" className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300">
+                    <Sparkles className="w-3 h-3 mr-1" /> 已回应
+                  </Badge>
+                  <Button variant="ghost" size="sm" onClick={() => handleChat(diary)}>
+                      <MessageCircle className="w-4 h-4 mr-1" /> 聊聊
+                  </Button>
+                  </>
+                ) : (
+                    <Button 
+                        variant="outline" 
+                        size="sm" 
+                        isLoading={genLoading === diary.diaryId}
+                        onClick={() => handleGenerate(diary.diaryId)}
+                    >
+                        <Sparkles className="w-3 h-3 mr-1" /> 生成AI回应
+                    </Button>
+                )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-sm leading-relaxed whitespace-pre-wrap text-muted-foreground/90">
+                {diary.content}
+              </div>
+              
+              {diary.aiResponse && (
+                <div className="mt-4 rounded-lg bg-secondary/50 p-4 border border-border/50">
+                  <div className="flex items-center gap-2 mb-2 text-indigo-600 dark:text-indigo-400 font-medium text-sm">
+                    <Sparkles className="w-4 h-4" />
+                    Yusi 的回应
+                  </div>
+                  <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                    {diary.aiResponse}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   )
+}
+
+function Badge({ children, className }: any) {
+    return (
+        <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2", className)}>
+            {children}
+        </span>
+    )
 }

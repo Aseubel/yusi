@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.diary;
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.UserMessage;
+import dev.langchain4j.service.V;
 
 /**
  * @author Aseubel
@@ -27,5 +28,5 @@ public interface Assistant {
             3. **提问**（可选）：如果合适，可以温柔地问一个问题，引导TA更深层地探索。
             4. **语气**：像老朋友一样自然、温暖，不要说教。
             """)
-    String generateDiaryResponse(@UserMessage("diaryContent") String diaryContent);
+    TokenStream generateDiaryResponse(@V("diaryContent") String diaryContent);
 }

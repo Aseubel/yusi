@@ -1,6 +1,7 @@
 package com.aseubel.yusi.controller;
 
 import com.aseubel.yusi.common.Response;
+import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.disruptor.DisruptorProducer;
 import com.aseubel.yusi.common.disruptor.EventType;
 import com.aseubel.yusi.pojo.dto.DiaryChatRequest;
@@ -33,6 +34,7 @@ public class DiaryController {
     @Resource
     private DisruptorProducer disruptorProducer;
 
+    @Auth
     @GetMapping("/list")
     public Response<PagedModel<EntityModel<Diary>>> getDiaryList(
             @RequestParam String userId,
@@ -48,6 +50,7 @@ public class DiaryController {
         return Response.success(assembler.toModel(diaryPage));
     }
 
+    @Auth
     @PostMapping
     public Response<?> writeDiary(@RequestBody WriteDiaryRequest request) {
         Diary diary = diaryService.addDiary(request.toDiary());
@@ -55,6 +58,7 @@ public class DiaryController {
         return Response.success();
     }
 
+    @Auth
     @PutMapping
     public Response<?> editDiary(@RequestBody EditDiaryRequest request) {
         Diary diary = diaryService.editDiary(request.toDiary());
@@ -62,6 +66,7 @@ public class DiaryController {
         return Response.success();
     }
 
+    @Auth
     @GetMapping("/{diaryId}")
     public Response<Diary> getDiary(@PathVariable("diaryId") String diaryId) {
         Diary diary = diaryService.getDiary(diaryId);
@@ -75,4 +80,9 @@ public class DiaryController {
         return Response.fail("Please use /api/ai/chat/stream for chat interaction");
     }
 
+    @PostMapping("/generate-response/{diaryId}")
+    public Response<?> generateResponse(@PathVariable("diaryId") String diaryId) {
+        diaryService.generateAiResponse(diaryId);
+        return Response.success();
+    }
 }

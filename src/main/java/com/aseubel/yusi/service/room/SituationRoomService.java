@@ -7,6 +7,8 @@ public interface SituationRoomService {
     SituationRoom createRoom(String ownerId, int maxMembers);
     SituationRoom joinRoom(String code, String userId);
     SituationRoom startRoom(String code, String scenarioId, String ownerId);
+    void cancelRoom(String code, String userId);
     SituationRoom submit(String code, String userId, String narrative);
+    SituationRoom getRoom(String code);
     SituationReport getReport(String code);
 }

@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
-import { MessageCircle, X, Send, StopCircle, RefreshCw, Loader2 } from 'lucide-react'
+import { MessageCircle, X, Send, StopCircle } from 'lucide-react'
 import { Button } from './ui/Button'
-import { Card } from './ui/Card'
 import { Input } from './ui/Input'
 import { cn, API_BASE } from '../utils'
 import { useAuthStore } from '../store/authStore'
@@ -15,14 +14,23 @@ interface Message {
   pending?: boolean
 }
 
+import { useChatStore } from '../stores'
+
 export const ChatWidget = () => {
   const { user, token } = useAuthStore()
-  const [isOpen, setIsOpen] = useState(false)
+  const { isOpen, setIsOpen, initialMessage, setInitialMessage } = useChatStore()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [isStreaming, setIsStreaming] = useState(false)
   const abortControllerRef = useRef<AbortController | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (isOpen && initialMessage) {
+        setInput(initialMessage)
+        setInitialMessage('')
+    }
+  }, [isOpen, initialMessage])
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -72,12 +80,32 @@ export const ChatWidget = () => {
 
       if (!reader) throw new Error('No reader available')
 
+      let buffer = ''
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          if (buffer.length > 0) {
+            // Process any remaining buffer content
+             if (buffer.startsWith('data:')) {
+                const data = buffer.slice(5)
+                setMessages((prev) =>
+                  prev.map((msg) =>
+                    msg.id === aiMsgId
+                      ? { ...msg, content: msg.content + data, pending: false }
+                      : msg
+                  )
+                )
+             }
+          }
+          break
+        }
 
-        const chunk = decoder.decode(value)
-        const lines = chunk.split('\n')
+        const chunk = decoder.decode(value, { stream: true })
+        buffer += chunk
+        
+        const lines = buffer.split('\n')
+        // Keep the last part in buffer as it might be incomplete
+        buffer = lines.pop() || ''
 
         for (const line of lines) {
           if (line.startsWith('data:')) {
@@ -193,24 +221,25 @@ export const ChatWidget = () => {
                   disabled={isStreaming}
                 />
                 {isStreaming ? (
-                  <Button
-                    size="icon"
-                    variant="destructive"
-                    className="absolute right-1 h-8 w-8 rounded-full"
-                    onClick={handleStop}
-                  >
-                    <StopCircle className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    size="icon"
-                    className="absolute right-1 h-8 w-8 rounded-full shadow-md"
-                    onClick={handleSend}
-                    disabled={!input.trim()}
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
-                )}
+                    <Button
+                      size="icon"
+                      variant="danger"
+                      className="absolute right-1 h-8 w-8 rounded-full"
+                      onClick={handleStop}
+                    >
+                      <StopCircle className="h-4 w-4" />
+                    </Button>
+                  ) : (
+                    <Button
+                      size="icon"
+                      variant="primary"
+                      className="absolute right-1 h-8 w-8 rounded-full"
+                      onClick={handleSend}
+                      disabled={!input.trim()}
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  )}
               </div>
             </div>
           </motion.div>

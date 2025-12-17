@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
@@ -25,7 +26,15 @@ public class SituationReportService {
             String userAnswersJson = JSON.toJSONString(room.getSubmissions());
 
             // 2. 调用 AI
-            String jsonReport = situationRoomAgent.analyzeReport(scenario, userAnswersJson);
+            CompletableFuture<String> future = new CompletableFuture<>();
+            StringBuilder sb = new StringBuilder();
+            situationRoomAgent.analyzeReport(scenario, userAnswersJson)
+                .onPartialResponse(sb::append)
+                .onCompleteResponse(res -> future.complete(sb.toString()))
+                .onError(future::completeExceptionally)
+                .start();
+            
+            String jsonReport = future.get();
             log.info("AI Analysis Result: {}", jsonReport);
 
             // 3. 解析结果

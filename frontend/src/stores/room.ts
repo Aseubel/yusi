@@ -5,6 +5,7 @@ export type RoomStatus = 'WAITING' | 'IN_PROGRESS' | 'COMPLETED'
 export interface Room {
   code: string
   status: RoomStatus
+  ownerId?: string
   scenarioId?: string
   members: string[]
   submissions: Record<string, string>
