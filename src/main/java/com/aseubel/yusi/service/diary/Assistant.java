@@ -16,6 +16,9 @@ public interface Assistant {
     @UserMessage("""
             用户刚写了一篇日记。
             
+            日期：
+            {{entryDate}}
+            
             日记内容：
             {{diaryContent}}
             
@@ -28,5 +31,5 @@ public interface Assistant {
             3. **提问**（可选）：如果合适，可以温柔地问一个问题，引导TA更深层地探索。
             4. **语气**：像老朋友一样自然、温暖，不要说教。
             """)
-    TokenStream generateDiaryResponse(@V("diaryContent") String diaryContent);
+    TokenStream generateDiaryResponse(@V("diaryContent") String diaryContent, @V("entryDate") String entryDate);
 }

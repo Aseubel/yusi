@@ -61,7 +61,7 @@ public class DiaryServiceImpl implements DiaryService {
             CompletableFuture<String> future = new CompletableFuture<>();
             StringBuilder sb = new StringBuilder();
             
-            diaryAssistant.generateDiaryResponse(diary.getContent())
+            diaryAssistant.generateDiaryResponse(diary.getContent(), diary.getEntryDate().toString())
                 .onPartialResponse(sb::append)
                 .onCompleteResponse(res -> future.complete(sb.toString()))
                 .onError(future::completeExceptionally)

@@ -35,7 +35,7 @@ public class ChatModelConfig {
                 .temperature(1.3)
                 .topP(0.85)
                 .presencePenalty(0.6)
-                .maxTokens(512)
+                .maxCompletionTokens(512)
                 .build();
     }
 }

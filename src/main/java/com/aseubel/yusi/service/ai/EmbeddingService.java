@@ -26,6 +26,7 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 
 /**
@@ -48,7 +49,11 @@ public class EmbeddingService implements Processor<Element> {
             return chain.process(data, index);
         }
         Diary diary = (Diary) data.getData();
-        Document document = Document.document(diary.getContent(), Metadata.metadata("userId", diary.getUserId()));
+        HashMap<String, Object> params = new HashMap<>();
+        params.put("userId", diary.getUserId());
+
+        String text = String.format("日期：%s\n日记内容：%s", params.get("entryDate"), diary.getContent());
+        Document document = Document.document(text, Metadata.from(params));
 
         // 切分文本段
         List<TextSegment> diaryTextSegment = documentSplitter.split(document);
