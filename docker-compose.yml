@@ -1,6 +1,6 @@
 # /usr/local/bin/docker-compose -f /docs/dev-ops/environment/environment-docker-compose-2.4.yml up -d
 version: '3.3'
-# docker-compose -f docker-compose-app.yml up -d
+# docker-compose -f docker-compose.yml up -d
 services:
   yusi:
     build:
