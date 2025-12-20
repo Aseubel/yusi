@@ -24,5 +24,7 @@ jobs:
           script: |
             set -e
             cd /root/yusi
+            git pull
+            mvn compile package -Dmaven.test.skip=true -s settings.xml
             docker compose up --build -d
             echo "✅ Deploy finished at $(date)"
