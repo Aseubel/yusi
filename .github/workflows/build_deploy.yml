@@ -27,4 +27,5 @@ jobs:
             git pull
             mvn compile package -Dmaven.test.skip=true -s settings.xml
             docker compose up --build -d
+            docker image prune -af
             echo "✅ Deploy finished at $(date)"
