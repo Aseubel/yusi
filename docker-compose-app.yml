@@ -1,0 +1,43 @@
+# /usr/local/bin/docker-compose -f /docs/dev-ops/environment/environment-docker-compose-2.4.yml up -d
+version: '3.3'
+# docker-compose -f docker-compose-app.yml up -d
+services:
+  yusi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: yusi:latest
+    container_name: yusi
+    restart: on-failure
+    ports:
+      - "611:611"
+    environment:
+      - TZ=PRC
+      - SPRING_PROFILES_ACTIVE=prod
+      - SPRING_DATASOURCE_USERNAME=root
+      - SPRING_DATASOURCE_PASSWORD=123456
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/yusi?serverTimezone=UTC&characterEncoding=utf8&autoReconnect=true&serverTimezone=Asia/Shanghai
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=com.mysql.cj.jdbc.Driver
+      - SPRING_HIKARI_POOL_NAME=Retail_HikariCP
+      - SERVER_PORT=611
+      - YUSI_JWT_SECRET=YOUR_JWT_SECRET
+      - CHAT_MODEL_APIKEY=YOUR_CHAT_APIKEY
+      - CHAT_MODEL_NAME=deepseek-chat
+      - CHAT_MODEL_BASEURL=https://api.deepseek.com
+      - EMBEDDING_MODEL_APIKEY=YOUR_EMBEDDING_APIKEY
+      - EMBEDDING_MODEL_BASEURL=https://api.siliconflow.cn/v1
+      - EMBEDDING_MODEL_NAME=BAAI/bge-m3
+    volumes:
+      - ./log:/data/log
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - my-network
+
+networks:
+  my-network:
+    driver: bridge
+    external: true

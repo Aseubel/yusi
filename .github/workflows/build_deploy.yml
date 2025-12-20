@@ -1,0 +1,28 @@
+name: push to ACR and deploy to server
+
+on:
+#  push:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # 拉取仓库代码
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 登录服务器并执行部署命令
+      - name: SSH & Deploy
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          script: |
+            set -e
+            cd /root/yusi
+            docker compose up --build -d
+            echo "✅ Deploy finished at $(date)"
