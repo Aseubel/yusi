@@ -1,4 +1,4 @@
-name: push to ACR and deploy to server
+name: build and deploy to server
 
 on:
 #  push:
