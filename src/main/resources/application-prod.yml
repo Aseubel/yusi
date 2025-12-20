@@ -37,7 +37,7 @@ spring:
     #    url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml
     username: root
     password: 123456
-    url: jdbc:mysql://127.0.0.1:13306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
+    url: jdbc:mysql://mysql:3306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       pool-name: Retail_HikariCP
@@ -68,7 +68,7 @@ spring:
 redis:
   sdk:
     config:
-      host: 127.0.0.1
+      host: redis
       port: 6379
       pool-size: 10
       min-idle-size: 5
