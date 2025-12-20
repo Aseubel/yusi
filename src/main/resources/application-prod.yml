@@ -70,6 +70,7 @@ redis:
     config:
       host: redis
       port: 6379
+      password: ""
       pool-size: 10
       min-idle-size: 5
       idle-timeout: 30000
