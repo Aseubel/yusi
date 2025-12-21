@@ -56,6 +56,9 @@ public class SituationRoom {
     @Transient
     private Map<String, String> memberNames;
 
+    @Transient
+    private com.aseubel.yusi.pojo.entity.SituationScenario scenario;
+
     public boolean allSubmitted() {
         return members != null && submissions != null && submissions.size() == members.size() && members.size() >= 2;
     }
