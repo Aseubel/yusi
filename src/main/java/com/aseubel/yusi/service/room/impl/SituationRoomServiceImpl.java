@@ -113,7 +113,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     }
 
     @Override
-    public SituationRoom submit(String code, String userId, String narrative) {
+    public SituationRoom submit(String code, String userId, String narrative, Boolean isPublic) {
         SituationRoom room = getRoom(code);
         if (room.getStatus() != RoomStatus.IN_PROGRESS)
             throw new BusinessException("未开始或已结束");
@@ -125,6 +125,11 @@ public class SituationRoomServiceImpl implements SituationRoomService {
             throw new BusinessException("叙事长度不合法");
 
         room.getSubmissions().put(userId, narrative);
+        if (room.getSubmissionVisibility() == null) {
+            room.setSubmissionVisibility(new ConcurrentHashMap<>());
+        }
+        room.getSubmissionVisibility().put(userId, isPublic != null && isPublic);
+
         if (room.allSubmitted()) {
             room.setStatus(RoomStatus.COMPLETED);
             // Trigger analysis immediately when completed
@@ -136,6 +141,11 @@ public class SituationRoomServiceImpl implements SituationRoomService {
             }
         }
         return roomRepository.save(room);
+    }
+
+    @Override
+    public java.util.List<SituationRoom> getHistory(String userId) {
+        return roomRepository.findByMembersContainingOrderByCreatedAtDesc(userId);
     }
 
     @Override

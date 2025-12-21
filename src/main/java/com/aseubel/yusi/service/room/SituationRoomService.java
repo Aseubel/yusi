@@ -14,11 +14,13 @@ public interface SituationRoomService {
 
     SituationRoom voteCancel(String code, String userId);
 
-    SituationRoom submit(String code, String userId, String narrative);
+    SituationRoom submit(String code, String userId, String narrative, Boolean isPublic);
 
     SituationRoom getRoom(String code);
 
     SituationReport getReport(String code);
 
     java.util.List<com.aseubel.yusi.pojo.entity.SituationScenario> getScenarios();
+
+    java.util.List<SituationRoom> getHistory(String userId);
 }

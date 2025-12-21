@@ -82,4 +82,28 @@ public class SituationConverters {
             }
         }
     }
+
+    @Converter
+    public static class BooleanMapConverter implements AttributeConverter<Map<String, Boolean>, String> {
+        @Override
+        public String convertToDatabaseColumn(Map<String, Boolean> attribute) {
+            if (attribute == null) return null;
+            try {
+                return objectMapper.writeValueAsString(attribute);
+            } catch (Exception e) {
+                throw new RuntimeException("Error converting Map to JSON", e);
+            }
+        }
+
+        @Override
+        public Map<String, Boolean> convertToEntityAttribute(String dbData) {
+            if (dbData == null || dbData.isEmpty()) return Collections.emptyMap();
+            try {
+                return objectMapper.readValue(dbData, new TypeReference<Map<String, Boolean>>() {});
+            } catch (Exception e) {
+                throw new RuntimeException("Error converting JSON to Map", e);
+            }
+        }
+    }
 }
+

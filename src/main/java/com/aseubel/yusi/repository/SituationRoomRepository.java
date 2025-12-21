@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface SituationRoomRepository extends JpaRepository<SituationRoom, String> {
+    java.util.List<SituationRoom> findByMembersContainingOrderByCreatedAtDesc(String userId);
 }

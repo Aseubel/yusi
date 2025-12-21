@@ -42,6 +42,10 @@ public class SituationRoom {
     @Column(columnDefinition = "TEXT")
     private Map<String, String> submissions;
 
+    @Convert(converter = SituationConverters.BooleanMapConverter.class)
+    @Column(columnDefinition = "TEXT")
+    private Map<String, Boolean> submissionVisibility;
+
     @Convert(converter = SituationConverters.StringSetConverter.class)
     @Column(columnDefinition = "TEXT")
     private Set<String> cancelVotes;

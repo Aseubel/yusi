@@ -64,8 +64,13 @@ public class SituationRoomController {
     @PostMapping("/submit")
     public Response<SituationRoom> submitNarrative(@RequestBody SubmitNarrativeRequest request) {
         SituationRoom room = situationRoomService.submit(request.getCode(), request.getUserId(),
-                request.getNarrative());
+                request.getNarrative(), request.getIsPublic());
         return Response.success(room);
+    }
+
+    @GetMapping("/history")
+    public Response<java.util.List<SituationRoom>> getHistory() {
+        return Response.success(situationRoomService.getHistory(com.aseubel.yusi.common.auth.UserContext.getUserId()));
     }
 
     @GetMapping("/report/{code}")

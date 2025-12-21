@@ -7,4 +7,5 @@ public class SubmitNarrativeRequest {
     private String code;
     private String userId;
     private String narrative;
+    private Boolean isPublic;
 }
