@@ -19,4 +19,6 @@ public interface SituationRoomService {
     SituationRoom getRoom(String code);
 
     SituationReport getReport(String code);
+
+    java.util.List<com.aseubel.yusi.pojo.entity.SituationScenario> getScenarios();
 }

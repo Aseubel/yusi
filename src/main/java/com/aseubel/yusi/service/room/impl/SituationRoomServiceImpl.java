@@ -180,6 +180,11 @@ public class SituationRoomServiceImpl implements SituationRoomService {
         return room;
     }
 
+    @Override
+    public java.util.List<com.aseubel.yusi.pojo.entity.SituationScenario> getScenarios() {
+        return scenarioRepository.findAll();
+    }
+
     private String generateCode() {
         String letters = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
         StringBuilder sb = new StringBuilder();

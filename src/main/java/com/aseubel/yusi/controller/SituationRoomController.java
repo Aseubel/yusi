@@ -25,7 +25,8 @@ public class SituationRoomController {
 
     @PostMapping("/create")
     public Response<SituationRoom> create(@RequestBody CreateRoomRequest request) {
-        SituationRoom room = situationRoomService.createRoom(request.getOwnerId(), Math.max(2, Math.min(8, request.getMaxMembers())));
+        SituationRoom room = situationRoomService.createRoom(request.getOwnerId(),
+                Math.max(2, Math.min(8, request.getMaxMembers())));
         return Response.success(room);
     }
 
@@ -37,8 +38,14 @@ public class SituationRoomController {
 
     @PostMapping("/start")
     public Response<SituationRoom> startRoom(@RequestBody StartRoomRequest request) {
-        SituationRoom room = situationRoomService.startRoom(request.getCode(), request.getScenarioId(), request.getOwnerId());
+        SituationRoom room = situationRoomService.startRoom(request.getCode(), request.getScenarioId(),
+                request.getOwnerId());
         return Response.success(room);
+    }
+
+    @GetMapping("/scenarios")
+    public Response<java.util.List<com.aseubel.yusi.pojo.entity.SituationScenario>> getScenarios() {
+        return Response.success(situationRoomService.getScenarios());
     }
 
     @PostMapping("/cancel")
@@ -56,7 +63,8 @@ public class SituationRoomController {
 
     @PostMapping("/submit")
     public Response<SituationRoom> submitNarrative(@RequestBody SubmitNarrativeRequest request) {
-        SituationRoom room = situationRoomService.submit(request.getCode(), request.getUserId(), request.getNarrative());
+        SituationRoom room = situationRoomService.submit(request.getCode(), request.getUserId(),
+                request.getNarrative());
         return Response.success(room);
     }
 
