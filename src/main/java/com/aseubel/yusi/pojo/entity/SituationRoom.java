@@ -42,12 +42,19 @@ public class SituationRoom {
     @Column(columnDefinition = "TEXT")
     private Map<String, String> submissions;
 
+    @Convert(converter = SituationConverters.StringSetConverter.class)
+    @Column(columnDefinition = "TEXT")
+    private Set<String> cancelVotes;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
     @Convert(converter = SituationConverters.SituationReportConverter.class)
     @Column(columnDefinition = "TEXT")
     private SituationReport report;
+
+    @Transient
+    private Map<String, String> memberNames;
 
     public boolean allSubmitted() {
         return members != null && submissions != null && submissions.size() == members.size() && members.size() >= 2;

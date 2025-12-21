@@ -48,6 +48,12 @@ public class SituationRoomController {
         return Response.success();
     }
 
+    @PostMapping("/vote-cancel")
+    public Response<SituationRoom> voteCancel(@RequestBody JoinRoomRequest request) {
+        SituationRoom room = situationRoomService.voteCancel(request.getCode(), request.getUserId());
+        return Response.success(room);
+    }
+
     @PostMapping("/submit")
     public Response<SituationRoom> submitNarrative(@RequestBody SubmitNarrativeRequest request) {
         SituationRoom room = situationRoomService.submit(request.getCode(), request.getUserId(), request.getNarrative());
