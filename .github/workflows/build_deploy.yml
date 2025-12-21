@@ -1,7 +1,7 @@
 name: build and deploy to server
 
 on:
-#  push:
+  #  push:
   workflow_dispatch:
 
 jobs:
@@ -23,8 +23,5 @@ jobs:
           script: |
             set -e
             cd /root/yusi
-            git pull
-            mvn compile package -Dmaven.test.skip=true -s settings.xml
-            docker compose up --build -d
-            docker image prune -af
+            bash rebuild.sh
             echo "✅ Deploy finished at $(date)"
