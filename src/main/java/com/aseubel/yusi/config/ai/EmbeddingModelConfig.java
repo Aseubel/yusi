@@ -44,8 +44,8 @@ public class EmbeddingModelConfig {
         ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore((MilvusEmbeddingStore) applicationContext.getBean("milvusEmbeddingStore"))
                 .embeddingModel((EmbeddingModel) applicationContext.getBean("embeddingModel"))
-                .maxResults(16)
-                .minScore(0.7)
+                .maxResults(5)
+                .minScore(0.8)
                 // 根据查询动态指定用户id
                 .dynamicFilter(query -> {
                     String userId = (String) query.metadata().chatMemoryId();

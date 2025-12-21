@@ -19,4 +19,6 @@ public interface DiaryRepository extends JpaRepository<Diary, Long> {
 
     @Query("SELECT d FROM Diary d WHERE d.userId = :userId")
     Page<Diary> findByUserId(@Param("userId") String userId, Pageable pageable);
+
+    java.util.List<Diary> findTop3ByUserIdOrderByCreateTimeDesc(String userId);
 }

@@ -16,4 +16,8 @@ public interface UserService {
     void logout(String userId, String accessToken);
 
     User getUserByUserId(String userId);
+
+    User updateMatchSettings(String userId, boolean enabled, String intent);
+
+    java.util.List<User> getMatchEnabledUsers();
 }

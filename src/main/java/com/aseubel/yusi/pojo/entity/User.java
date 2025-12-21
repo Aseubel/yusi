@@ -40,6 +40,12 @@ public class User {
     @Column(name = "email")
     private String email;
 
+    @Column(name = "is_match_enabled")
+    private Boolean isMatchEnabled = false;
+
+    @Column(name = "match_intent")
+    private String matchIntent;
+
     public String generateUserId() {
         this.userId = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
         return this.userId;

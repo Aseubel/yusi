@@ -66,4 +66,20 @@ public class UserServiceImpl implements UserService {
     public User getUserByUserId(String userId) {
         return userRepository.findByUserId(userId);
     }
+
+    @Override
+    public User updateMatchSettings(String userId, boolean enabled, String intent) {
+        User user = userRepository.findByUserId(userId);
+        if (user != null) {
+            user.setIsMatchEnabled(enabled);
+            user.setMatchIntent(intent);
+            return userRepository.save(user);
+        }
+        return null;
+    }
+
+    @Override
+    public java.util.List<User> getMatchEnabledUsers() {
+        return userRepository.findByIsMatchEnabledTrue();
+    }
 }
