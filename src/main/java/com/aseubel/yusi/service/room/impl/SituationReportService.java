@@ -40,6 +40,24 @@ public class SituationReportService {
             // 3. 解析结果
             SituationReport report = JSON.parseObject(jsonReport, SituationReport.class);
             report.setScenarioId(room.getScenarioId());
+            
+            // Populate public submissions
+            List<SituationReport.PublicSubmission> publicSubmissions = new ArrayList<>();
+            if (room.getSubmissions() != null) {
+                for (Map.Entry<String, String> entry : room.getSubmissions().entrySet()) {
+                    String uid = entry.getKey();
+                    String content = entry.getValue();
+                    Boolean isPublic = room.getSubmissionVisibility() != null ? room.getSubmissionVisibility().get(uid) : false;
+                    if (Boolean.TRUE.equals(isPublic)) {
+                        publicSubmissions.add(SituationReport.PublicSubmission.builder()
+                                .userId(uid)
+                                .content(content)
+                                .build());
+                    }
+                }
+            }
+            report.setPublicSubmissions(publicSubmissions);
+
             return report;
         } catch (Exception e) {
             log.error("AI Analysis failed, falling back to heuristic method", e);
@@ -49,9 +67,21 @@ public class SituationReportService {
 
     private SituationReport fallbackAnalyze(SituationRoom room) {
         List<SituationReport.PersonalSketch> personals = new ArrayList<>();
+        List<SituationReport.PublicSubmission> publicSubmissions = new ArrayList<>();
+
         for (Map.Entry<String, String> entry : room.getSubmissions().entrySet()) {
-            String sketch = buildSketch(entry.getValue());
-            personals.add(SituationReport.PersonalSketch.builder().userId(entry.getKey()).sketch(sketch).build());
+            String uid = entry.getKey();
+            String narrative = entry.getValue();
+            String sketch = buildSketch(narrative);
+            personals.add(SituationReport.PersonalSketch.builder().userId(uid).sketch(sketch).build());
+            
+            Boolean isPublic = room.getSubmissionVisibility() != null ? room.getSubmissionVisibility().get(uid) : false;
+            if (Boolean.TRUE.equals(isPublic)) {
+                publicSubmissions.add(SituationReport.PublicSubmission.builder()
+                        .userId(uid)
+                        .content(narrative)
+                        .build());
+            }
         }
         List<String> users = new ArrayList<>(room.getMembers());
         List<SituationReport.PairCompatibility> pairs = new ArrayList<>();
@@ -64,7 +94,12 @@ public class SituationReportService {
                 pairs.add(SituationReport.PairCompatibility.builder().userA(a).userB(b).score(score).reason(reason).build());
             }
         }
-        return SituationReport.builder().scenarioId(room.getScenarioId()).personal(personals).pairs(pairs).build();
+        return SituationReport.builder()
+            .scenarioId(room.getScenarioId())
+            .personal(personals)
+            .pairs(pairs)
+            .publicSubmissions(publicSubmissions)
+            .build();
     }
 
     private String buildSketch(String narrative) {

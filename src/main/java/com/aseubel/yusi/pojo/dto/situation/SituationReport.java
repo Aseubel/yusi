@@ -35,4 +35,14 @@ public class SituationReport {
     private String scenarioId;
     private List<PersonalSketch> personal;
     private List<PairCompatibility> pairs;
+    private List<PublicSubmission> publicSubmissions;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class PublicSubmission {
+        private String userId;
+        private String content;
+    }
 }
