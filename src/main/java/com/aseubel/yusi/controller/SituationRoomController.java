@@ -81,7 +81,8 @@ public class SituationRoomController {
 
     @GetMapping("/{code}")
     public Response<SituationRoom> getRoom(@PathVariable("code") String code) {
-        SituationRoom room = situationRoomService.getRoom(code);
+        // Use getRoomDetail to return masked data
+        SituationRoom room = situationRoomService.getRoomDetail(code, com.aseubel.yusi.common.auth.UserContext.getUserId());
         return Response.success(room);
     }
 }

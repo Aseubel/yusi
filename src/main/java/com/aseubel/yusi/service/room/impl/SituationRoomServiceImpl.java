@@ -1,38 +1,39 @@
 package com.aseubel.yusi.service.room.impl;
 
 import com.aseubel.yusi.common.exception.BusinessException;
-import com.aseubel.yusi.pojo.dto.situation.SituationReport;
-import com.aseubel.yusi.service.room.SituationRoomService;
 import com.aseubel.yusi.pojo.contant.RoomStatus;
+import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
+import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.SituationRoomRepository;
 import com.aseubel.yusi.repository.SituationScenarioRepository;
+import com.aseubel.yusi.service.room.SituationRoomService;
 import com.aseubel.yusi.service.user.UserService;
-import com.aseubel.yusi.pojo.entity.User;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class SituationRoomServiceImpl implements SituationRoomService {
 
-    @Autowired
-    private SituationRoomRepository roomRepository;
+    private final SituationRoomRepository roomRepository;
 
-    @Autowired
-    private SituationScenarioRepository scenarioRepository;
+    private final SituationScenarioRepository scenarioRepository;
 
-    @Autowired
-    private UserService userService;
+    private final UserService userService;
 
-    @Autowired
-    private SituationReportService reportService;
+    private final SituationReportService reportService;
 
     @Override
     public SituationRoom createRoom(String ownerId, int maxMembers) {
@@ -144,8 +145,24 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     }
 
     @Override
-    public java.util.List<SituationRoom> getHistory(String userId) {
-        return roomRepository.findByMembersContainingOrderByCreatedAtDesc(userId);
+    public List<SituationRoom> getHistory(String userId) {
+        List<SituationRoom> rooms = roomRepository.findByMembersContainingOrderByCreatedAtDesc(userId);
+        // Mask submissions for history to protect privacy
+        return rooms.stream().map(room -> {
+            SituationRoom safeRoom = room.toBuilder().build();
+            if (room.getSubmissions() != null) {
+                Map<String, String> maskedSubmissions = new ConcurrentHashMap<>();
+                room.getSubmissions().forEach((k, v) -> {
+                    if (k.equals(userId)) {
+                        maskedSubmissions.put(k, v);
+                    } else {
+                        maskedSubmissions.put(k, "");
+                    }
+                });
+                safeRoom.setSubmissions(maskedSubmissions);
+            }
+            return safeRoom;
+        }).collect(Collectors.toList());
     }
 
     @Override
@@ -167,6 +184,37 @@ public class SituationRoomServiceImpl implements SituationRoomService {
         SituationRoom room = roomRepository.findById(code).orElseThrow(() -> new BusinessException("房间不存在"));
 
         // Populate member names
+        populateMemberNames(room);
+
+        // Populate scenario info if available
+        if (room.getScenarioId() != null) {
+            scenarioRepository.findById(room.getScenarioId()).ifPresent(room::setScenario);
+        }
+        return room;
+    }
+
+    @Override
+    public SituationRoom getRoomDetail(String code, String requesterId) {
+        SituationRoom room = getRoom(code);
+        SituationRoom safeRoom = room.toBuilder().build();
+        
+        if (room.getSubmissions() != null) {
+            Map<String, String> maskedSubmissions = new ConcurrentHashMap<>();
+            room.getSubmissions().forEach((k, v) -> {
+                if (k.equals(requesterId)) {
+                    maskedSubmissions.put(k, v);
+                } else {
+                    // Keep the key to show "Submitted", but mask the content
+                    maskedSubmissions.put(k, "");
+                }
+            });
+            safeRoom.setSubmissions(maskedSubmissions);
+        }
+        
+        return safeRoom;
+    }
+
+    private void populateMemberNames(SituationRoom room) {
         if (room.getMembers() != null) {
             room.setMemberNames(new HashMap<>());
             for (String memberId : room.getMembers()) {
@@ -182,16 +230,10 @@ public class SituationRoomServiceImpl implements SituationRoomService {
                 }
             }
         }
-
-        // Populate scenario info if available
-        if (room.getScenarioId() != null) {
-            scenarioRepository.findById(room.getScenarioId()).ifPresent(room::setScenario);
-        }
-        return room;
     }
 
     @Override
-    public java.util.List<com.aseubel.yusi.pojo.entity.SituationScenario> getScenarios() {
+    public List<com.aseubel.yusi.pojo.entity.SituationScenario> getScenarios() {
         return scenarioRepository.findAll();
     }
 

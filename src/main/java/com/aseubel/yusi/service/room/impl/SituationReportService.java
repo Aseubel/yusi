@@ -4,6 +4,7 @@ import com.alibaba.fastjson.JSON;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
 import com.aseubel.yusi.service.room.SituationRoomAgent;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -13,10 +14,10 @@ import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class SituationReportService {
 
-    @Autowired
-    private SituationRoomAgent situationRoomAgent;
+    private final SituationRoomAgent situationRoomAgent;
 
     public SituationReport analyze(SituationRoom room) {
         try {

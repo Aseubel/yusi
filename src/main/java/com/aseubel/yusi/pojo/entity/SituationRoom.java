@@ -13,7 +13,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 
 @Data
-@Builder
+@Builder(toBuilder = true)
 @Entity
 @Table(name = "situation_room")
 @NoArgsConstructor

@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.user.impl;
 
 import com.aseubel.yusi.config.JwtProperties;
+import com.aseubel.yusi.redis.IRedisService;
 import com.aseubel.yusi.service.user.TokenService;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
@@ -16,6 +17,9 @@ public class TokenServiceImpl implements TokenService {
     private RedissonClient redissonClient;
 
     @Autowired
+    private IRedisService redissonService;
+
+    @Autowired
     private JwtProperties jwtProperties;
 
     private static final String REFRESH_TOKEN_KEY = "auth:refresh:";
@@ -23,20 +27,17 @@ public class TokenServiceImpl implements TokenService {
 
     @Override
     public void saveRefreshToken(String userId, String refreshToken) {
-        RBucket<String> bucket = redissonClient.getBucket(REFRESH_TOKEN_KEY + userId);
-        bucket.set(refreshToken, jwtProperties.getRefreshTokenExpiration(), TimeUnit.MILLISECONDS);
+        redissonService.setValue(REFRESH_TOKEN_KEY + userId, refreshToken, jwtProperties.getRefreshTokenExpiration());
     }
 
     @Override
     public String getRefreshToken(String userId) {
-        RBucket<String> bucket = redissonClient.getBucket(REFRESH_TOKEN_KEY + userId);
-        return bucket.get();
+        return redissonService.getValue(REFRESH_TOKEN_KEY + userId);
     }
 
     @Override
     public void deleteRefreshToken(String userId) {
-        RBucket<String> bucket = redissonClient.getBucket(REFRESH_TOKEN_KEY + userId);
-        bucket.delete();
+        redissonService.remove(REFRESH_TOKEN_KEY + userId);
     }
 
     @Override

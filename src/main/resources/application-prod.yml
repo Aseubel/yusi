@@ -55,7 +55,7 @@ spring:
       max-request-size: 60MB #上传文件总大小限制
       enabled: true #是否开启文件上传功能，默认false
   jpa:
-    show-sql: true #是否打印SQL语句，默认false
+    show-sql: false #是否打印SQL语句，默认false
     hibernate:
       ddl-auto: update #自动更新数据库表结构，默认none，可选值none、create、create-drop、validate、update
       naming:
