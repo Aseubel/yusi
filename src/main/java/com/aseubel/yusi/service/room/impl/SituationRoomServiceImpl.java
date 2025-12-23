@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.room.impl;
 
+import cn.hutool.core.util.ObjectUtil;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.pojo.contant.RoomStatus;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
@@ -190,7 +191,9 @@ public class SituationRoomServiceImpl implements SituationRoomService {
         if (room.getScenarioId() != null) {
             scenarioRepository.findById(room.getScenarioId()).ifPresent(room::setScenario);
         }
-        room.getReport().extractPublicSubmissions(room);
+        if (ObjectUtil.isNotEmpty(room) && ObjectUtil.isNotEmpty(room.getReport())) {
+            room.getReport().extractPublicSubmissions(room);
+        }
         return room;
     }
 
