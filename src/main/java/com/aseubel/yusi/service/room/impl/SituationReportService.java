@@ -1,8 +1,12 @@
 package com.aseubel.yusi.service.room.impl;
 
+import cn.hutool.core.util.ObjectUtil;
 import com.alibaba.fastjson.JSON;
+import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
+import com.aseubel.yusi.pojo.entity.SituationScenario;
+import com.aseubel.yusi.repository.SituationScenarioRepository;
 import com.aseubel.yusi.service.room.SituationRoomAgent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,18 +22,23 @@ import java.util.concurrent.CompletableFuture;
 public class SituationReportService {
 
     private final SituationRoomAgent situationRoomAgent;
+    private final SituationScenarioRepository scenarioRepository;
 
     public SituationReport analyze(SituationRoom room) {
         try {
-            // 1. 准备数据
-            // 暂时使用 ID 作为场景描述，后续应从数据库获取真实场景描述
-            String scenario = "场景ID: " + room.getScenarioId(); 
+            // 准备数据
+            SituationScenario scenario = scenarioRepository.findById(room.getScenarioId()).orElse(null);
+            if (ObjectUtil.isEmpty(scenario)) {
+                throw new BusinessException("Scenario not found: " + room.getScenarioId());
+            }
+
+            String scenarioString = scenario.getContentString();
             String userAnswersJson = JSON.toJSONString(room.getSubmissions());
 
-            // 2. 调用 AI
+            // 调用 AI
             CompletableFuture<String> future = new CompletableFuture<>();
             StringBuilder sb = new StringBuilder();
-            situationRoomAgent.analyzeReport(scenario, userAnswersJson)
+            situationRoomAgent.analyzeReport(scenarioString, userAnswersJson)
                 .onPartialResponse(sb::append)
                 .onCompleteResponse(res -> future.complete(sb.toString()))
                 .onError(future::completeExceptionally)
@@ -38,25 +47,12 @@ public class SituationReportService {
             String jsonReport = future.get();
             log.info("AI Analysis Result: {}", jsonReport);
 
-            // 3. 解析结果
+            // 解析结果
             SituationReport report = JSON.parseObject(jsonReport, SituationReport.class);
             report.setScenarioId(room.getScenarioId());
-            
-            // Populate public submissions
-            List<SituationReport.PublicSubmission> publicSubmissions = new ArrayList<>();
-            if (room.getSubmissions() != null) {
-                for (Map.Entry<String, String> entry : room.getSubmissions().entrySet()) {
-                    String uid = entry.getKey();
-                    String content = entry.getValue();
-                    Boolean isPublic = room.getSubmissionVisibility() != null ? room.getSubmissionVisibility().get(uid) : false;
-                    if (Boolean.TRUE.equals(isPublic)) {
-                        publicSubmissions.add(SituationReport.PublicSubmission.builder()
-                                .userId(uid)
-                                .content(content)
-                                .build());
-                    }
-                }
-            }
+
+            // 过滤出允许公开的回答
+            List<SituationReport.PublicSubmission> publicSubmissions = report.extractPublicSubmissions(room);
             report.setPublicSubmissions(publicSubmissions);
 
             return report;

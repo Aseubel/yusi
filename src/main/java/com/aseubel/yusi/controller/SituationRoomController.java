@@ -1,6 +1,7 @@
 package com.aseubel.yusi.controller;
 
 import com.aseubel.yusi.common.Response;
+import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.pojo.dto.situation.CreateRoomRequest;
 import com.aseubel.yusi.pojo.dto.situation.JoinRoomRequest;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
@@ -70,7 +71,7 @@ public class SituationRoomController {
 
     @GetMapping("/history")
     public Response<java.util.List<SituationRoom>> getHistory() {
-        return Response.success(situationRoomService.getHistory(com.aseubel.yusi.common.auth.UserContext.getUserId()));
+        return Response.success(situationRoomService.getHistory(UserContext.getUserId()));
     }
 
     @GetMapping("/report/{code}")
@@ -82,7 +83,7 @@ public class SituationRoomController {
     @GetMapping("/{code}")
     public Response<SituationRoom> getRoom(@PathVariable("code") String code) {
         // Use getRoomDetail to return masked data
-        SituationRoom room = situationRoomService.getRoomDetail(code, com.aseubel.yusi.common.auth.UserContext.getUserId());
+        SituationRoom room = situationRoomService.getRoomDetail(code, UserContext.getUserId());
         return Response.success(room);
     }
 }

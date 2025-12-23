@@ -190,6 +190,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
         if (room.getScenarioId() != null) {
             scenarioRepository.findById(room.getScenarioId()).ifPresent(room::setScenario);
         }
+        room.getReport().extractPublicSubmissions(room);
         return room;
     }
 
