@@ -15,6 +15,11 @@ public class GlobalExceptionHandler {
         return Response.fail(e.getMessage());
     }
 
+    @ExceptionHandler(RateLimitException.class)
+    public Response<String> handleRateLimitException(RateLimitException e) {
+        return Response.<String>builder().code(429).info(e.getMessage()).build();
+    }
+
     @ExceptionHandler(Exception.class)
     public Response<String> handleException(Exception e) {
         log.error("System error", e);

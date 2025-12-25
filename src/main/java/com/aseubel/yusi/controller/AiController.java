@@ -2,6 +2,8 @@ package com.aseubel.yusi.controller;
 
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.service.diary.Assistant;
 import dev.langchain4j.service.TokenStream;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,7 @@ public class AiController {
 
     private final ThreadPoolTaskExecutor executor;
 
+    @RateLimiter(key = "chatStream", time = 60, count = 20, limitType = LimitType.USER)
     @GetMapping(value = "/chat/stream", produces = "text/event-stream")
     public SseEmitter chatStream(@RequestParam String message) {
         // Set timeout to 3 minutes

@@ -18,11 +18,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.core.annotation.Order;
 
 import java.lang.reflect.Method;
 
 @Aspect
 @Component
+@Order(1)
 @Slf4j
 public class AuthAspect {
 
