@@ -12,13 +12,14 @@ import com.aseubel.yusi.service.room.SituationRoomService;
 import com.aseubel.yusi.service.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -134,13 +135,26 @@ public class SituationRoomServiceImpl implements SituationRoomService {
 
         if (room.allSubmitted()) {
             room.setStatus(RoomStatus.COMPLETED);
-            // Trigger analysis immediately when completed
-            try {
-                SituationReport report = reportService.analyze(room);
-                room.setReport(report);
-            } catch (Exception e) {
-                log.error("Auto analysis failed", e);
-            }
+            roomRepository.save(room); // Save status first
+
+            // Trigger analysis asynchronously
+            CompletableFuture.runAsync(() -> {
+                try {
+                    log.info("Starting async analysis for room: {}", room.getCode());
+                    SituationReport report = reportService.analyze(room);
+
+                    // Reload room to avoid stale object state issues (though in this simple case it
+                    // might be okay, safer to reload)
+                    roomRepository.findById(room.getCode()).ifPresent(r -> {
+                        r.setReport(report);
+                        roomRepository.save(r);
+                        log.info("Async analysis completed for room: {}", room.getCode());
+                    });
+                } catch (Exception e) {
+                    log.error("Async analysis failed for room: " + room.getCode(), e);
+                }
+            });
+            return room; // Return immediately
         }
         return roomRepository.save(room);
     }
@@ -201,7 +215,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     public SituationRoom getRoomDetail(String code, String requesterId) {
         SituationRoom room = getRoom(code);
         SituationRoom safeRoom = room.toBuilder().build();
-        
+
         if (room.getSubmissions() != null) {
             Map<String, String> maskedSubmissions = new ConcurrentHashMap<>();
             room.getSubmissions().forEach((k, v) -> {
@@ -214,7 +228,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
             });
             safeRoom.setSubmissions(maskedSubmissions);
         }
-        
+
         return safeRoom;
     }
 
