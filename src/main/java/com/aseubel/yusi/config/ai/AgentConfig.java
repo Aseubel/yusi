@@ -2,7 +2,6 @@ package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.room.SituationRoomAgent;
-import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.rag.content.retriever.ContentRetriever;

@@ -1,7 +1,6 @@
 package com.aseubel.yusi.service.match.impl;
 
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.util.RandomUtil;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.User;
@@ -10,7 +9,6 @@ import com.aseubel.yusi.repository.SoulMatchRepository;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.match.MatchService;
 import com.aseubel.yusi.service.user.UserService;
-import dev.langchain4j.service.TokenStream;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;

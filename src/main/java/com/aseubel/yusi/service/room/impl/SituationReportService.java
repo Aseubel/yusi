@@ -10,7 +10,6 @@ import com.aseubel.yusi.repository.SituationScenarioRepository;
 import com.aseubel.yusi.service.room.SituationRoomAgent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -39,11 +38,11 @@ public class SituationReportService {
             CompletableFuture<String> future = new CompletableFuture<>();
             StringBuilder sb = new StringBuilder();
             situationRoomAgent.analyzeReport(scenarioString, userAnswersJson)
-                .onPartialResponse(sb::append)
-                .onCompleteResponse(res -> future.complete(sb.toString()))
-                .onError(future::completeExceptionally)
-                .start();
-            
+                    .onPartialResponse(sb::append)
+                    .onCompleteResponse(res -> future.complete(sb.toString()))
+                    .onError(future::completeExceptionally)
+                    .start();
+
             String jsonReport = future.get();
             log.info("AI Analysis Result: {}", jsonReport);
 
@@ -71,7 +70,7 @@ public class SituationReportService {
             String narrative = entry.getValue();
             String sketch = buildSketch(narrative);
             personals.add(SituationReport.PersonalSketch.builder().userId(uid).sketch(sketch).build());
-            
+
             Boolean isPublic = room.getSubmissionVisibility() != null ? room.getSubmissionVisibility().get(uid) : false;
             if (Boolean.TRUE.equals(isPublic)) {
                 publicSubmissions.add(SituationReport.PublicSubmission.builder()
@@ -88,15 +87,16 @@ public class SituationReportService {
                 String b = users.get(j);
                 int score = calcScore(room.getSubmissions().get(a), room.getSubmissions().get(b));
                 String reason = buildReason(room.getSubmissions().get(a), room.getSubmissions().get(b));
-                pairs.add(SituationReport.PairCompatibility.builder().userA(a).userB(b).score(score).reason(reason).build());
+                pairs.add(SituationReport.PairCompatibility.builder().userA(a).userB(b).score(score).reason(reason)
+                        .build());
             }
         }
         return SituationReport.builder()
-            .scenarioId(room.getScenarioId())
-            .personal(personals)
-            .pairs(pairs)
-            .publicSubmissions(publicSubmissions)
-            .build();
+                .scenarioId(room.getScenarioId())
+                .personal(personals)
+                .pairs(pairs)
+                .publicSubmissions(publicSubmissions)
+                .build();
     }
 
     private String buildSketch(String narrative) {
@@ -105,10 +105,14 @@ public class SituationReportService {
         boolean fairness = lower.contains("公平") || lower.contains("平衡") || lower.contains("公正");
         boolean empathy = lower.contains("共情") || lower.contains("理解") || lower.contains("感受");
         List<String> traits = new ArrayList<>();
-        if (discipline) traits.add("自律");
-        if (fairness) traits.add("看重公平");
-        if (empathy) traits.add("富有理解");
-        if (traits.isEmpty()) traits.add("务实");
+        if (discipline)
+            traits.add("自律");
+        if (fairness)
+            traits.add("看重公平");
+        if (empathy)
+            traits.add("富有理解");
+        if (traits.isEmpty())
+            traits.add("务实");
         return "一个" + String.join("、", traits) + "的人";
     }
 
@@ -116,7 +120,9 @@ public class SituationReportService {
         Set<String> keywordsA = extractKeywords(a);
         Set<String> keywordsB = extractKeywords(b);
         int overlap = 0;
-        for (String k : keywordsA) if (keywordsB.contains(k)) overlap++;
+        for (String k : keywordsA)
+            if (keywordsB.contains(k))
+                overlap++;
         int base = 50 + overlap * 10;
         return Math.max(0, Math.min(100, base));
     }
@@ -136,7 +142,9 @@ public class SituationReportService {
         String lower = narrative == null ? "" : narrative.toLowerCase(Locale.ROOT);
         List<String> pool = Arrays.asList("责任", "公平", "效率", "情绪", "长期", "短期", "规则", "风险", "群体", "个人");
         Set<String> set = new HashSet<>();
-        for (String k : pool) if (lower.contains(k)) set.add(k);
+        for (String k : pool)
+            if (lower.contains(k))
+                set.add(k);
         return set;
     }
 }

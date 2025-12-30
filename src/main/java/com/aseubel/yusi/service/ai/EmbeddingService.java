@@ -6,23 +6,15 @@ import com.aseubel.yusi.common.repochain.Processor;
 import com.aseubel.yusi.common.repochain.ProcessorChain;
 import com.aseubel.yusi.common.repochain.Result;
 import com.aseubel.yusi.pojo.entity.Diary;
-import dev.langchain4j.community.model.dashscope.QwenEmbeddingModel;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
 import dev.langchain4j.data.document.Metadata;
-import dev.langchain4j.data.document.splitter.DocumentSplitters;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.data.segment.TextSegmentTransformer;
-import dev.langchain4j.model.TokenCountEstimator;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
-import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -37,7 +29,6 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 public class EmbeddingService implements Processor<Element> {
-
 
     private final MilvusEmbeddingStore milvusEmbeddingStore;
     private final EmbeddingModel embeddingModel;

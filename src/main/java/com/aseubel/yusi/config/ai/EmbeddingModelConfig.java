@@ -1,7 +1,6 @@
 package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.config.ai.properties.EmbeddingModelConfigProperties;
-import dev.langchain4j.community.model.dashscope.QwenTokenCountEstimator;
 import dev.langchain4j.data.document.DocumentSplitter;
 import dev.langchain4j.data.document.splitter.DocumentSplitters;
 import dev.langchain4j.model.TokenCountEstimator;

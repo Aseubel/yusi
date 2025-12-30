@@ -19,7 +19,6 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.core.annotation.Order;
 
 import java.lang.reflect.Method;
-import java.util.Objects;
 
 /**
  * 限流切面
@@ -40,12 +39,12 @@ public class RateLimiterAspect {
         int count = rateLimiter.count();
 
         String combineKey = getCombineKey(rateLimiter, point);
-        
+
         RRateLimiter rRateLimiter = redissonClient.getRateLimiter(combineKey);
         // 尝试设置速率，如果已存在则忽略
         // 注意：这里简单的使用 trySetRate，如果需要动态调整速率，可能需要先 delete 再 set，或者使用 expire
         rRateLimiter.trySetRate(RateType.OVERALL, count, time, RateIntervalUnit.SECONDS);
-        
+
         // 设置过期时间，避免 key 永久存在 (稍微长于限流窗口)
         rRateLimiter.expire(java.time.Duration.ofSeconds(time + 10));
 
@@ -66,18 +65,19 @@ public class RateLimiterAspect {
                 stringBuffer.append(userId).append(":");
             }
         }
-        
+
         MethodSignature signature = (MethodSignature) point.getSignature();
         Method method = signature.getMethod();
         Class<?> targetClass = method.getDeclaringClass();
         stringBuffer.append(targetClass.getName()).append(":").append(method.getName());
-        
+
         return stringBuffer.toString();
     }
 
     private String getIpAddress() {
         try {
-            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder
+                    .getRequestAttributes();
             if (attributes != null) {
                 HttpServletRequest request = attributes.getRequest();
                 String ip = request.getHeader("X-Forwarded-For");
