@@ -3,7 +3,7 @@ package com.aseubel.yusi.config.ai;
 import dev.langchain4j.mcp.McpToolProvider;
 import dev.langchain4j.mcp.client.DefaultMcpClient;
 import dev.langchain4j.mcp.client.McpClient;
-import dev.langchain4j.mcp.client.transport.http.HttpMcpTransport;
+import dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport;
 import dev.langchain4j.mcp.client.transport.McpTransport;
 import dev.langchain4j.service.tool.ToolProvider;
 import jakarta.annotation.PreDestroy;
@@ -19,9 +19,14 @@ import org.springframework.context.annotation.Configuration;
  * 通过 MCP 协议连接到 Go 实现的 MCP Server，获取外部工具（如 web_search）。
  * 这使得 DiaryAssistant 可以访问实时网络搜索等能力。
  * 
+ * 使用 Streamable HTTP 传输协议（推荐）：
+ * - 单一 POST 端点 (/mcp)
+ * - 响应为 SSE 流
+ * - 无状态，每次请求独立
+ * 
  * 配置项：
  * - mcp.enabled: 是否启用 MCP 集成（默认 false）
- * - mcp.server.url: MCP Server 的 SSE 端点 URL
+ * - mcp.server.url: MCP Server 的端点 URL
  * 
  * @author Aseubel
  * @date 2025/12/31
@@ -31,7 +36,7 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(name = "mcp.enabled", havingValue = "true", matchIfMissing = false)
 public class McpConfig {
 
-    @Value("${mcp.server.url:http://localhost:8080/sse}")
+    @Value("${mcp.server.url:http://localhost:8080/mcp}")
     private String mcpServerUrl;
 
     private McpClient mcpClient;
@@ -40,22 +45,15 @@ public class McpConfig {
     /**
      * 创建 MCP Transport
      * 
-     * 使用 HTTP SSE 传输层连接到 Go MCP Server。
-     * Go Server 提供 /sse 端点用于建立 SSE 连接。
-     * 
-     * 注意：HttpMcpTransport 已被标记为弃用，推荐使用 StreamableHttpMcpTransport。
-     * 但当前 Go MCP Server 使用的是 legacy SSE 协议（/sse + /messages 端点），
-     * 需要等 Go Server 升级到 Streamable HTTP 协议后才能切换。
-     * 
-     * @see dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport
+     * 使用 Streamable HTTP 传输层连接到 Go MCP Server。
+     * Go Server 提供 POST /mcp 端点用于处理请求。
      */
-    @SuppressWarnings("deprecation")
     @Bean(name = "mcpTransport")
     public McpTransport mcpTransport() {
-        log.info("正在创建 MCP Transport (legacy SSE)，连接到: {}", mcpServerUrl);
+        log.info("正在创建 MCP Transport (Streamable HTTP)，连接到: {}", mcpServerUrl);
 
-        this.mcpTransport = HttpMcpTransport.builder()
-                .sseUrl(mcpServerUrl)
+        this.mcpTransport = StreamableHttpMcpTransport.builder()
+                .url(mcpServerUrl)
                 .logRequests(true)
                 .logResponses(true)
                 .build();

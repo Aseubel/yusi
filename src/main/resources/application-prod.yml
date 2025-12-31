@@ -114,4 +114,4 @@ logging:
 mcp:
   enabled: false  # 设置为 true 启用 MCP 集成
   server:
-    url: http://localhost:8080/sse  # Go MCP Server 的 SSE 端点
+    url: http://localhost:8080/mcp  # Go MCP Server 端点 (Streamable HTTP)
