@@ -42,10 +42,17 @@ public class McpConfig {
      * 
      * 使用 HTTP SSE 传输层连接到 Go MCP Server。
      * Go Server 提供 /sse 端点用于建立 SSE 连接。
+     * 
+     * 注意：HttpMcpTransport 已被标记为弃用，推荐使用 StreamableHttpMcpTransport。
+     * 但当前 Go MCP Server 使用的是 legacy SSE 协议（/sse + /messages 端点），
+     * 需要等 Go Server 升级到 Streamable HTTP 协议后才能切换。
+     * 
+     * @see dev.langchain4j.mcp.client.transport.http.StreamableHttpMcpTransport
      */
+    @SuppressWarnings("deprecation")
     @Bean(name = "mcpTransport")
     public McpTransport mcpTransport() {
-        log.info("正在创建 MCP Transport，连接到: {}", mcpServerUrl);
+        log.info("正在创建 MCP Transport (legacy SSE)，连接到: {}", mcpServerUrl);
 
         this.mcpTransport = HttpMcpTransport.builder()
                 .sseUrl(mcpServerUrl)
