@@ -43,7 +43,7 @@ public class EmbeddingService implements Processor<Element> {
         HashMap<String, Object> params = new HashMap<>();
         params.put("userId", diary.getUserId());
 
-        String text = String.format("日期：%s\n日记内容：%s", params.get("entryDate"), diary.getContent());
+        String text = String.format("日期：%s\n日记内容：%s", diary.getEntryDate(), diary.getContent());
         Document document = Document.document(text, Metadata.from(params));
 
         // 切分文本段

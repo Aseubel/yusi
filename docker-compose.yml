@@ -27,6 +27,8 @@ services:
       - EMBEDDING_MODEL_APIKEY=YOUR_EMBEDDING_APIKEY
       - EMBEDDING_MODEL_BASEURL=https://api.siliconflow.cn/v1
       - EMBEDDING_MODEL_NAME=BAAI/bge-m3
+      # 日记内容 AES/GCM 加密密钥 - 必须设置，至少16字符
+      - YUSI_ENCRYPTION_KEY=YOUR_ENCRYPTION_KEY_16CHARS
     volumes:
       - ./log:/data/log
     logging:
