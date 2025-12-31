@@ -42,8 +42,10 @@ public class EmbeddingService implements Processor<Element> {
         Diary diary = (Diary) data.getData();
         HashMap<String, Object> params = new HashMap<>();
         params.put("userId", diary.getUserId());
+        // 添加 entryDate 作为独立的 Metadata 字段，格式 YYYY-MM-DD，用于时间范围过滤
+        params.put("entryDate", diary.getEntryDate().toString());
 
-        String text = String.format("日期：%s\n日记内容：%s", diary.getEntryDate().toString(), diary.getContent());
+        String text = diary.getContent();
         Document document = Document.document(text, Metadata.from(params));
 
         // 切分文本段

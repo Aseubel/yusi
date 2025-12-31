@@ -38,7 +38,17 @@ public class EmbeddingModelConfig {
                 .build();
     }
 
-    @Bean(name = "contentRetriever")
+    /**
+     * 【已废弃】传统的 ContentRetriever 实现
+     * 
+     * 已切换到 Agentic RAG 模式，使用 DiarySearchTool 替代。
+     * 保留此代码以备未来回退需求。
+     * 
+     * @see com.aseubel.yusi.service.ai.DiarySearchTool
+     * @deprecated 使用 DiarySearchTool 进行带时间范围过滤的检索
+     */
+    @Deprecated
+    // @Bean(name = "contentRetriever") // 已禁用，切换到 Agentic RAG 模式
     public ContentRetriever contentRetriever() {
         ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
                 .embeddingStore((MilvusEmbeddingStore) applicationContext.getBean("milvusEmbeddingStore"))
