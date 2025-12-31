@@ -1,9 +1,13 @@
 package com.aseubel.yusi.common.exception;
 
 import com.aseubel.yusi.common.Response;
+
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 @Slf4j
 @RestControllerAdvice
@@ -24,5 +28,12 @@ public class GlobalExceptionHandler {
     public Response<String> handleException(Exception e) {
         log.error("System error", e);
         return Response.fail("系统内部错误: " + e.getMessage());
+    }
+
+    @ExceptionHandler(AuthorizationException.class)
+    public Response<String> handleAuthorizationException(AuthorizationException e) {
+        HttpServletResponse response = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getResponse();
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        return Response.<String>builder().code(401).info(e.getMessage()).build();
     }
 }

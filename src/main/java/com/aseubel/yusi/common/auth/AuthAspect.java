@@ -1,5 +1,6 @@
 package com.aseubel.yusi.common.auth;
 
+import com.aseubel.yusi.common.exception.AuthorizationException;
 import com.aseubel.yusi.common.utils.JwtUtils;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.service.user.UserService;
@@ -62,11 +63,11 @@ public class AuthAspect {
         if (StringUtils.hasText(token) && token.startsWith("Bearer ")) {
             token = token.substring(7);
         } else {
-            throw new RuntimeException("未登录");
+            throw new AuthorizationException("未登录");
         }
 
         if (tokenService.isBlacklisted(token)) {
-            throw new RuntimeException("令牌已失效");
+            throw new AuthorizationException("令牌已失效");
         }
 
         try {
@@ -79,7 +80,7 @@ public class AuthAspect {
             // Token expired, try refresh
             String refreshToken = request.getHeader("X-Refresh-Token");
             if (!StringUtils.hasText(refreshToken)) {
-                throw new RuntimeException("登录已过期");
+                throw new AuthorizationException("登录已过期");
             }
 
             // Validate refresh token
@@ -89,19 +90,19 @@ public class AuthAspect {
                 String type = (String) refreshClaims.get("type");
                 
                 if (!"refresh".equals(type)) {
-                    throw new RuntimeException("无效的刷新令牌");
+                    throw new AuthorizationException("无效的刷新令牌");
                 }
 
                 // Check if refresh token matches stored one
                 String storedRefreshToken = tokenService.getRefreshToken(userId);
                 if (storedRefreshToken == null || !storedRefreshToken.equals(refreshToken)) {
-                    throw new RuntimeException("刷新令牌已失效");
+                    throw new AuthorizationException("刷新令牌已失效");
                 }
 
                 // Generate new access token
                 User user = userService.getUserByUserId(userId);
                 if (user == null) {
-                    throw new RuntimeException("用户不存在");
+                    throw new AuthorizationException("用户不存在");
                 }
                 
                 String newAccessToken = jwtUtils.generateAccessToken(userId, user.getUserName());
@@ -115,10 +116,10 @@ public class AuthAspect {
                 UserContext.setUserId(userId);
                 UserContext.setUsername(user.getUserName());
             } catch (Exception ex) {
-                throw new RuntimeException("登录已过期，请重新登录");
+                throw new AuthorizationException("登录已过期，请重新登录");
             }
         } catch (Exception e) {
-            throw new RuntimeException("无效的令牌");
+            throw new AuthorizationException("无效的令牌");
         }
 
         try {
