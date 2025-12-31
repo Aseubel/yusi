@@ -105,5 +105,5 @@ milvus:
 # 日志
 logging:
   level:
-    root: info
+    root: debug
   config: classpath:logback-spring.xml
