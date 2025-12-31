@@ -136,6 +136,13 @@
             <artifactId>langchain4j-milvus</artifactId>
             <version>${langchain4j-external.version}</version>
         </dependency>
+        <!-- MCP (Model Context Protocol) 客户端，用于连接外部 MCP Server -->
+        <!-- 注意: langchain4j-mcp 是较新的模块，需要使用更高版本 -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-mcp</artifactId>
+            <version>1.10.0-beta18</version>
+        </dependency>
 
         <dependency>
             <groupId>com.lmax</groupId>

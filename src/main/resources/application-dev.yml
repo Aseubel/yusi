@@ -107,3 +107,10 @@ logging:
   level:
     root: debug
   config: classpath:logback-spring.xml
+
+# MCP (Model Context Protocol) 配置
+# 启用后，DiaryAssistant 将可以使用 MCP Server 提供的工具（如 web_search）
+mcp:
+  enabled: false  # 设置为 true 启用 MCP 集成
+  server:
+    url: http://localhost:8080/sse  # Go MCP Server 的 SSE 端点
