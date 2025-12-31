@@ -82,9 +82,23 @@ spring:
 
 设置环境变量（PowerShell 示例）：
 ```powershell
-$env:QWEN_API_KEY = "sk-xxxxxxxxxxxx"
-$env:YUSI_ENCRYPTION_KEY = "1234567890123456" # 必须 16 字符以上
+# AI 模型 API 密钥
+$env:CHAT_MODEL_APIKEY = "sk-xxxxxxxxxxxx"
+$env:CHAT_MODEL_BASEURL = "https://api.deepseek.com"
+$env:CHAT_MODEL_NAME = "deepseek-chat"
+$env:EMBEDDING_MODEL_APIKEY = "sk-xxxxxxxxxxxx"
+$env:EMBEDDING_MODEL_BASEURL = "https://api.siliconflow.cn/v1"
+$env:EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
+
+# ⚠️ 重要：日记加密密钥（必需，至少16字符）
+# 用于 AES/GCM 加密存储日记内容，确保用户隐私
+$env:YUSI_ENCRYPTION_KEY = "mySecureKey12345" # 请替换为你自己的安全密钥
 ```
+
+> **⚠️ 安全提醒**：`YUSI_ENCRYPTION_KEY` 是服务器端统一加密密钥，必须：
+> - 至少 16 个字符
+> - 生产环境使用强随机密钥
+> - 妥善保管，密钥丢失将无法解密现有日记
 
 ### 4. 运行服务
 ```bash
