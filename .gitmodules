@@ -1,3 +1,6 @@
 [submodule "frontend"]
 	path = frontend
 	url = https://github.com/Aseubel/yusi-front.git
+[submodule "mcp"]
+	path = mcp
+	url = https://github.com/Aseubel/go-mcp-server.git
