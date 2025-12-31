@@ -58,14 +58,14 @@ public class InterfaceUsageMonitor {
      */
     @Scheduled(cron = "0 0/30 * * * ?")
     public void syncToDatabase() {
-        log.info("Starting interface usage sync...");
+        log.debug("Starting interface usage sync...");
         LocalDate today = LocalDate.now();
         LocalDate yesterday = today.minusDays(1);
 
         syncDate(yesterday);
         syncDate(today);
         
-        log.info("Interface usage sync completed.");
+        log.debug("Interface usage sync completed.");
     }
 
     private void syncDate(LocalDate date) {
