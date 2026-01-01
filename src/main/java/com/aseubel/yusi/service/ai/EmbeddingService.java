@@ -6,23 +6,15 @@ import com.aseubel.yusi.common.repochain.Processor;
 import com.aseubel.yusi.common.repochain.ProcessorChain;
 import com.aseubel.yusi.common.repochain.Result;
 import com.aseubel.yusi.pojo.entity.Diary;
-import dev.langchain4j.community.model.dashscope.QwenEmbeddingModel;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
 import dev.langchain4j.data.document.Metadata;
-import dev.langchain4j.data.document.splitter.DocumentSplitters;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.data.segment.TextSegmentTransformer;
-import dev.langchain4j.model.TokenCountEstimator;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
-import jakarta.annotation.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -38,7 +30,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class EmbeddingService implements Processor<Element> {
 
-
     private final MilvusEmbeddingStore milvusEmbeddingStore;
     private final EmbeddingModel embeddingModel;
     private final DocumentSplitter documentSplitter;
@@ -51,8 +42,10 @@ public class EmbeddingService implements Processor<Element> {
         Diary diary = (Diary) data.getData();
         HashMap<String, Object> params = new HashMap<>();
         params.put("userId", diary.getUserId());
+        // 添加 entryDate 作为独立的 Metadata 字段，格式 YYYY-MM-DD，用于时间范围过滤
+        params.put("entryDate", diary.getEntryDate().toString());
 
-        String text = String.format("日期：%s\n日记内容：%s", params.get("entryDate"), diary.getContent());
+        String text = diary.getContent();
         Document document = Document.document(text, Metadata.from(params));
 
         // 切分文本段

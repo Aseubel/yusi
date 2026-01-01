@@ -1,3 +1,16 @@
+# ============================================================
+# Yusi Development Configuration
+# ============================================================
+# 必需的环境变量 (在启动前必须设置):
+#   - YUSI_ENCRYPTION_KEY: 日记加密密钥 (至少16字符, 用于AES/GCM加密)
+#   - CHAT_MODEL_APIKEY: AI 聊天模型 API Key
+#   - CHAT_MODEL_BASEURL: AI 聊天模型地址
+#   - CHAT_MODEL_NAME: AI 聊天模型名称
+#   - EMBEDDING_MODEL_APIKEY: 向量模型 API Key
+#   - EMBEDDING_MODEL_BASEURL: 向量模型地址
+#   - EMBEDDING_MODEL_NAME: 向量模型名称
+# ============================================================
+
 server:
   port: 20611
   tomcat:
@@ -92,5 +105,12 @@ milvus:
 # 日志
 logging:
   level:
-    root: info
+    root: debug
   config: classpath:logback-spring.xml
+
+# MCP (Model Context Protocol) 配置
+# 启用后，DiaryAssistant 将可以使用 MCP Server 提供的工具（如 web_search）
+mcp:
+  enabled: false  # 设置为 true 启用 MCP 集成
+  server:
+    url: http://localhost:8080/mcp  # Go MCP Server 端点 (Streamable HTTP)

@@ -4,7 +4,6 @@ import com.aseubel.yusi.pojo.entity.PromptTemplate;
 import com.aseubel.yusi.repository.PromptRepository;
 import com.aseubel.yusi.service.ai.PromptService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 @Service

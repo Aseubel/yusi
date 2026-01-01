@@ -24,4 +24,8 @@ public class SituationScenario {
 
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    public String getContentString() {
+        return "标题：" + title + "\n" + "描述：" + description;
+    }
 }

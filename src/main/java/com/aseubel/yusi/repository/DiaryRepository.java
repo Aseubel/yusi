@@ -8,6 +8,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
+
 /**
  * @author Aseubel
  * @date 2025/5/7 上午9:51
@@ -20,5 +22,5 @@ public interface DiaryRepository extends JpaRepository<Diary, Long> {
     @Query("SELECT d FROM Diary d WHERE d.userId = :userId")
     Page<Diary> findByUserId(@Param("userId") String userId, Pageable pageable);
 
-    java.util.List<Diary> findTop3ByUserIdOrderByCreateTimeDesc(String userId);
+    List<Diary> findTop3ByUserIdOrderByCreateTimeDesc(String userId);
 }

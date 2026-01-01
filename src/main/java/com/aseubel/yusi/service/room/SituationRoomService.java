@@ -18,6 +18,8 @@ public interface SituationRoomService {
 
     SituationRoom getRoom(String code);
 
+    SituationRoom getRoomDetail(String code, String requesterId);
+
     SituationReport getReport(String code);
 
     java.util.List<com.aseubel.yusi.pojo.entity.SituationScenario> getScenarios();

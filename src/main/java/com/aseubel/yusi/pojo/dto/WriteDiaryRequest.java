@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateSerializer;
-import jakarta.persistence.Column;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -34,11 +33,11 @@ public class WriteDiaryRequest implements Serializable {
 
     public Diary toDiary() {
         return Diary.builder()
-               .userId(userId)
-               .title(title)
-               .content(content)
-               .visibility(visibility)
-               .entryDate(entryDate)
-               .build();
+                .userId(userId)
+                .title(title)
+                .content(content)
+                .visibility(visibility)
+                .entryDate(entryDate)
+                .build();
     }
 }

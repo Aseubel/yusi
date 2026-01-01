@@ -1,106 +1,158 @@
-# Yusi 后端服务
+# Yusi - 灵魂叙事 (Soul Narrative)
 
-Yusi 是基于 Spring Boot 的后端服务，提供日记管理、情景房间协作与基于向量检索的对话能力。本文档帮助你在本地或生产环境快速搭建、运行与扩展该服务。
+Yusi 是一个深度社交后端服务，旨在通过 AI 分析用户的“叙事”和“情景行为”，实现基于深层性格与价值观的灵魂匹配。项目基于 Spring Boot 3.4.5 构建，集成了 LangChain4j 进行向量检索与大模型交互。
 
-## 技术栈
-- Spring Boot 3.4.5，Java 17
-- Spring Web、Spring Data JPA、Hibernate、HikariCP
-- MySQL 8.x，Redis（Redisson）
-- 可选：Apache ShardingSphere JDBC 5.5.0（分库分表）、LangChain4j + Milvus/Zilliz（向量检索/嵌入）、LMAX Disruptor（事件处理）
+## 🌟 核心功能
 
-## 环境要求
-- `Java 17` 与 `Maven 3.9+`
-- `MySQL 8.x`（创建数据库 `yusi`）
-- `Redis`（本地默认：`127.0.0.1:6379`）
-- 可选：`Milvus`/`Zilliz Cloud`
-- 环境变量：
-  - `QWEN_API_KEY`（用于嵌入模型）
-  - `YUSI_ENCRYPTION_KEY`（启用字段加密，至少 16 字符）
+### 1. 情景室 (The Situation Room)
+- **多人实时协作**：支持 2-8 人创建房间，同步参与情景模拟。
+- **AI 行为分析**：基于用户提交的行动与想法，AI 生成多维度的性格分析报告与合拍度矩阵。
+- **实时状态流转**：使用 Redis 维护房间状态，支持 LMAX Disruptor 高性能事件处理（可选）。
 
-## 快速开始
-1. 配置数据库与缓存：
-   - 在 `src/main/resources/application-dev.yml` 调整 `spring.datasource.url/username/password` 指向你的 MySQL
-   - 保持 `redis.sdk.config` 与本地 Redis 设置一致
-2. 设置环境变量：
-   - Windows PowerShell：`$env:QWEN_API_KEY = "<your_key>"`；`$env:YUSI_ENCRYPTION_KEY = "<your_key>"`
-3. 启动开发环境：
-   - `mvn spring-boot:run`
-   - 默认端口 `20611`
-4. 打包与运行：
-   - `mvn clean package`
-   - `java -jar target/yusi-0.0.1-SNAPSHOT.jar`
-   - 切换环境：`java -jar target/yusi-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod`
+### 2. AI 知己日记 (The Confidant Journal)
+- **隐私保险库**：日记内容采用 AES/GCM 透明加密存储，确保绝对隐私。
+- **RAG 增强对话**：基于向量数据库（Milvus/Zilliz）的检索增强生成，让 AI 拥有“记忆”，成为懂你的知己。
+- **灵魂匹配与匿名畅聊**：
+  - 基于 AI 推荐信的双向匹配机制。
+  - **匿名聊天室**：匹配成功后开启限时/限次匿名对话，保护双方隐私，仅通过灵魂共鸣交流。
 
-## 配置说明
-- 基础配置：`src/main/resources/application.yml`
-  - 默认激活 `dev`：`spring.profiles.active: dev`
-- 开发/生产配置：
-  - `application-dev.yml`、`application-prod.yml`
-  - 数据源：`spring.datasource.*`（`driver-class-name: com.mysql.cj.jdbc.Driver`）
-  - JPA：`show-sql: true`、`hibernate.ddl-auto: none`、命名策略 `CamelCaseToUnderscoresNamingStrategy`
-  - 上传限制：`spring.servlet.multipart.max-file-size: 15MB`、`max-request-size: 60MB`
-- 日志：`src/main/resources/logback-spring.xml`（控制台输出；日志路径 `${log.path}: ./data/log`）
+### 3. 系统可观测性与稳定性
+- **分布式限流**：集成 Redisson RRateLimiter，支持 IP、用户、全局维度的精细化流量控制。
+- **接口使用监控**：
+  - 基于 Redis 的原子计数器，高性能记录接口调用频次。
+  - 自动处理跨天数据，每 30 分钟异步同步至 MySQL 持久化。
+  - 支持按用户、IP、接口名维度的统计分析。
 
-### 可选：启用 ShardingSphere 分片
-- 配置文件：`src/main/resources/shardingsphere-config.yaml`
-- 启用步骤（在对应环境 yml 中）：
-  - 注释取消：
-    - `spring.datasource.driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver`
-    - `spring.datasource.url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml`
-- 当前示例分片：表 `diary` 使用 `user_id` 取模到 `diary_1/diary_2`，主键生成 `SNOWFLAKE`
+---
 
-### 字段加密
-- `Diary.content` 使用 `AttributeEncryptor`（`AES/GCM`）进行透明加解密
-- 需设置 `YUSI_ENCRYPTION_KEY` 环境变量，否则回退为明文存储
+## 🛠 技术栈
 
-## 运行端口与服务
-- 端口：`20611`
-- CORS：控制器标注 `@CrossOrigin("*")`
-- Redis：`redis.sdk.config`（默认本地）
-- Milvus（可选）：`milvus.mode: 2` 支持 Zilliz Cloud；请通过安全方式设置 `uri/token`
+- **核心框架**：Spring Boot 3.4.5, Java 17
+- **数据存储**：
+  - MySQL 8.x (业务数据)
+  - Redis (缓存、分布式锁、限流、计数器)
+  - Milvus / Zilliz Cloud (向量数据)
+- **AI & LLM**：LangChain4j, Qwen (通义千问) API
+- **ORM & 数据库**：Spring Data JPA, Hibernate, HikariCP
+- **中间件**：Redisson (分布式服务), Spring AOP (切面监控)
+- **工具**：Lombok, Hutool, Jackson
 
-## 包结构
-- 入口：`com.aseubel.yusi.YusiApplication`
-- 控制器：`controller/*`
-- 实体/DTO：`pojo/entity/*`、`pojo/dto/*`
-- 仓储：`repository/*`
-- 业务：`service/*`
-- 配置：`config/*`（包含 AI/线程池/Redis/安全）
-- 公共组件：`common/*`（分片算法、响应包装、Disruptor 等）
+---
 
-## 主要接口（简要）
-- 日记 `@RequestMapping("/api/diary")`
-  - `GET /list`：分页列表（`userId`、`pageNum`、`pageSize`、`sortBy`、`asc`）
-  - `POST /`：新增日记（`WriteDiaryRequest`）
-  - `PUT /`：编辑日记（`EditDiaryRequest`）
-  - `GET /{diaryId}`：获取详情
-  - `POST /rag`：基于 RAG 的对话（`DiaryChatRequest`）
-- 用户 `@RequestMapping("/api/user")`
-  - `POST /register`：注册（`RegisterRequest`）
-- 情景房间 `@RequestMapping("/api/room")`
-  - `POST /create`、`POST /join`、`POST /start`、`POST /submit`
-  - `GET /report/{code}`：获取汇总报告
+## 🚀 快速开始
 
-## 示例请求
-```bash
-# 获取日记分页
-curl "http://localhost:20611/api/diary/list?userId=0001&pageNum=1&pageSize=10&asc=true"
+### 1. 环境准备
+- **Java 17+**
+- **Maven 3.9+**
+- **MySQL 8.x**：创建数据库 `yusi`
+- **Redis**：默认端口 `6379`
 
-# 新增日记
-curl -X POST "http://localhost:20611/api/diary" \
-  -H "Content-Type: application/json" \
-  -d '{"userId":"0001","title":"测试","content":"今天很开心","visibility":true,"entryDate":"2025-11-14"}'
+### 2. 数据库初始化
+项目启动时会自动根据实体类更新表结构（`hibernate.ddl-auto: update` 或 `validate`）。
+**接口监控表结构**：
+```sql
+CREATE TABLE IF NOT EXISTS `interface_daily_usage` (
+    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
+    `user_id` VARCHAR(64) NOT NULL COMMENT 'User ID',
+    `ip` VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'Client IP',
+    `interface_name` VARCHAR(128) NOT NULL COMMENT 'Interface/Method Name',
+    `usage_date` DATE NOT NULL COMMENT 'Date of usage',
+    `request_count` BIGINT NOT NULL DEFAULT 0 COMMENT 'Daily request count',
+    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY `uk_user_ip_interface_date` (`user_id`, `ip`, `interface_name`, `usage_date`),
+    INDEX `idx_date` (`usage_date`),
+    INDEX `idx_user` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='User Interface Daily Usage Stats';
 ```
 
-## 常用命令
-- 开发运行：`mvn spring-boot:run`
-- 单元测试：`mvn test`
-- 打包：`mvn clean package`
-- 生产运行：`java -jar target/yusi-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod`
+### 3. 配置说明
+修改 `src/main/resources/application-dev.yml`：
+```yaml
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/yusi?useSSL=false&serverTimezone=UTC
+    username: <your_username>
+    password: <your_password>
+  data:
+    redis:
+      host: localhost
+      port: 6379
+```
 
-## 安全与敏感信息
-- 不要在配置文件中提交真实的 `API Key`、数据库密码或云端 Token
-- 使用环境变量或安全的密钥管理方案（本项目已通过 `QWEN_API_KEY`、`YUSI_ENCRYPTION_KEY` 支持）
+设置环境变量（PowerShell 示例）：
+```powershell
+# AI 模型 API 密钥
+$env:CHAT_MODEL_APIKEY = "sk-xxxxxxxxxxxx"
+$env:CHAT_MODEL_BASEURL = "https://api.deepseek.com"
+$env:CHAT_MODEL_NAME = "deepseek-chat"
+$env:EMBEDDING_MODEL_APIKEY = "sk-xxxxxxxxxxxx"
+$env:EMBEDDING_MODEL_BASEURL = "https://api.siliconflow.cn/v1"
+$env:EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
 
-## 反馈与扩展
-- 如需进一步补充接口文档（字段定义、错误码、示例响应）或生成 OpenAPI，请提出需求，我可以基于当前控制器自动化生成说明。
+# ⚠️ 重要：日记加密密钥（必需，至少16字符）
+# 用于 AES/GCM 加密存储日记内容，确保用户隐私
+$env:YUSI_ENCRYPTION_KEY = "mySecureKey12345" # 请替换为你自己的安全密钥
+```
+
+> **⚠️ 安全提醒**：`YUSI_ENCRYPTION_KEY` 是服务器端统一加密密钥，必须：
+> - 至少 16 个字符
+> - 生产环境使用强随机密钥
+> - 妥善保管，密钥丢失将无法解密现有日记
+
+### 4. 运行服务
+```bash
+# 编译
+mvn clean package
+
+# 运行
+java -jar target/yusi-0.0.1-SNAPSHOT.jar --spring.profiles.active=dev
+```
+服务默认端口：`20611`
+
+---
+
+## 📊 监控体系详解
+
+### 接口请求监控
+系统内置 `InterfaceMonitorAspect` 切面，自动拦截 Controller 层请求。
+- **数据流**：请求 -> AOP 拦截 -> Redis `INCR` -> 定时任务 (30min) -> MySQL `UPSERT`
+- **Redis Key 策略**：`yusi:interface:usage:{yyyy-MM-dd}`
+- **数据落盘**：支持 `ON DUPLICATE KEY UPDATE`，确保高并发下的数据一致性。
+
+### 限流策略
+使用 `@RateLimiter` 注解进行流量控制：
+```java
+@RateLimiter(key = "chat", time = 60, count = 10, limitType = LimitType.USER)
+@PostMapping("/send")
+public Result sendMessage(...) { ... }
+```
+- **LimitType.IP**：针对来源 IP 限流
+- **LimitType.USER**：针对用户 ID 限流
+- **LimitType.DEFAULT**：全局限流
+
+---
+
+## 📂 目录结构
+
+```
+com.aseubel.yusi
+├── common          # 通用组件 (Result, Exception, Utils)
+├── config          # 配置类 (Redis, Web, Async, Security)
+├── controller      # 控制器 (API 接口)
+├── monitor         # 监控模块 (Aspect, Scheduled Task)
+├── pojo            # 实体类 (Entity, DTO)
+├── repository      # 数据访问层 (JPA Repository)
+├── service         # 业务逻辑层
+└── YusiApplication.java # 启动类
+```
+
+## 📝 常用 API
+
+| 模块 | 方法 | 路径 | 描述 |
+| :--- | :--- | :--- | :--- |
+| **日记** | GET | `/api/diary/list` | 获取日记列表 |
+| **日记** | POST | `/api/diary/rag` | 与 AI 知己对话 |
+| **情景室** | POST | `/api/room/create` | 创建情景房间 |
+| **灵魂匹配** | POST | `/api/soul/match` | 获取匹配推荐 |
+| **匿名聊天** | POST | `/api/soul/chat/send` | 发送匿名消息 |

@@ -8,6 +8,7 @@ import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.diary.DiaryService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -33,7 +34,7 @@ public class DiaryServiceImpl implements DiaryService {
     private Assistant diaryAssistant;
 
     @Autowired
-    @org.springframework.context.annotation.Lazy
+    @Lazy
     private DiaryService self;
 
     @Override
@@ -83,6 +84,9 @@ public class DiaryServiceImpl implements DiaryService {
         Diary existingDiary = diaryRepository.findByDiaryId(diary.getDiaryId());
         if (ObjectUtil.isNotEmpty(existingDiary)) {
             diary.setId(existingDiary.getId());
+            diary.setUpdateTime(LocalDateTime.now());
+            diary.setStatus(0);
+            diary.setAiResponse(null);
             return diaryRepository.save(diary);
         }
         return null;
