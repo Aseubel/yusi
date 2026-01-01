@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.ai;
 
+import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.auth.UserContext;
 
 import dev.langchain4j.agent.tool.P;
@@ -74,7 +75,7 @@ public class DiarySearchTool {
 
         // 安全检查：必须从 UserContext 获取当前用户 ID，防止 AI 幻觉访问其他用户数据
         String currentUserId = UserContext.getUserId();
-        if (currentUserId == null || currentUserId.isEmpty()) {
+        if (StrUtil.isEmpty(currentUserId)) {
             log.warn("DiarySearchTool: 无法获取当前用户ID，拒绝搜索请求");
             return List.of("无法验证用户身份，请重新登录后再试。");
         }

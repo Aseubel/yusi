@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.*;
  * @author Aseubel
  * @date 2025/5/7 上午9:57
  */
+@Auth
 @Slf4j
 @RestController()
 @CrossOrigin("*")
@@ -34,7 +35,6 @@ public class DiaryController {
     @Resource
     private DisruptorProducer disruptorProducer;
 
-    @Auth
     @GetMapping("/list")
     public Response<PagedModel<EntityModel<Diary>>> getDiaryList(
             @RequestParam String userId,
@@ -50,7 +50,6 @@ public class DiaryController {
         return Response.success(assembler.toModel(diaryPage));
     }
 
-    @Auth
     @PostMapping
     public Response<?> writeDiary(@RequestBody WriteDiaryRequest request) {
         Diary diary = diaryService.addDiary(request.toDiary());
@@ -58,7 +57,6 @@ public class DiaryController {
         return Response.success();
     }
 
-    @Auth
     @PutMapping
     public Response<?> editDiary(@RequestBody EditDiaryRequest request) {
         Diary diary = diaryService.editDiary(request.toDiary());
@@ -66,7 +64,6 @@ public class DiaryController {
         return Response.success();
     }
 
-    @Auth
     @GetMapping("/{diaryId}")
     public Response<Diary> getDiary(@PathVariable("diaryId") String diaryId) {
         Diary diary = diaryService.getDiary(diaryId);
