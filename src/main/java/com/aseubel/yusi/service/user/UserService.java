@@ -15,6 +15,8 @@ public interface UserService {
 
     AuthResponse login(String userName, String password);
 
+    AuthResponse refreshToken(String refreshToken);
+
     void logout(String userId, String accessToken);
 
     User getUserByUserId(String userId);

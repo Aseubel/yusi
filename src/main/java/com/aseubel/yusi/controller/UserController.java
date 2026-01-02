@@ -45,6 +45,12 @@ public class UserController {
         return Response.success(userService.login(request.getUserName(), request.getPassword()));
     }
 
+    @Auth(required = false)
+    @PostMapping("/refresh")
+    public Response<AuthResponse> refresh(@RequestHeader("X-Refresh-Token") String refreshToken) {
+        return Response.success(userService.refreshToken(refreshToken));
+    }
+
     @PostMapping("/logout")
     public Response<Void> logout(HttpServletRequest request) {
         String token = request.getHeader("Authorization");

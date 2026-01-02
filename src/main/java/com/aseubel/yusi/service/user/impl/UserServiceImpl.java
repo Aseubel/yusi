@@ -57,6 +57,39 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    public AuthResponse refreshToken(String refreshToken) {
+        if (!jwtUtils.validateToken(refreshToken)) {
+            throw new RuntimeException("无效的刷新令牌");
+        }
+        
+        String type = jwtUtils.getTypeFromToken(refreshToken);
+        if (!"refresh".equals(type)) {
+            throw new RuntimeException("非刷新令牌");
+        }
+
+        String userId = jwtUtils.getUserIdFromToken(refreshToken);
+        String storedRefreshToken = tokenService.getRefreshToken(userId);
+        
+        if (storedRefreshToken == null || !storedRefreshToken.equals(refreshToken)) {
+            throw new RuntimeException("刷新令牌已失效");
+        }
+
+        User user = userRepository.findByUserId(userId);
+        if (user == null) {
+            throw new RuntimeException("用户不存在");
+        }
+
+        String newAccessToken = jwtUtils.generateAccessToken(userId, user.getUserName());
+        // Optionally rotate refresh token here, but for now we keep the same one until it expires
+        
+        return AuthResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(refreshToken) // Return same refresh token
+                .user(user)
+                .build();
+    }
+
+    @Override
     public void logout(String userId, String accessToken) {
         tokenService.deleteRefreshToken(userId);
         tokenService.addToBlacklist(accessToken);
