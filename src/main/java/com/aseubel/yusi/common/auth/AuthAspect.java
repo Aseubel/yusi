@@ -77,47 +77,7 @@ public class AuthAspect {
             UserContext.setUserId(userId);
             UserContext.setUsername(username);
         } catch (ExpiredJwtException e) {
-            // Token expired, try refresh
-            String refreshToken = request.getHeader("X-Refresh-Token");
-            if (!StringUtils.hasText(refreshToken)) {
-                throw new AuthorizationException("登录已过期");
-            }
-
-            // Validate refresh token
-            try {
-                Claims refreshClaims = jwtUtils.getClaims(refreshToken);
-                String userId = refreshClaims.getSubject();
-                String type = (String) refreshClaims.get("type");
-                
-                if (!"refresh".equals(type)) {
-                    throw new AuthorizationException("无效的刷新令牌");
-                }
-
-                // Check if refresh token matches stored one
-                String storedRefreshToken = tokenService.getRefreshToken(userId);
-                if (storedRefreshToken == null || !storedRefreshToken.equals(refreshToken)) {
-                    throw new AuthorizationException("刷新令牌已失效");
-                }
-
-                // Generate new access token
-                User user = userService.getUserByUserId(userId);
-                if (user == null) {
-                    throw new AuthorizationException("用户不存在");
-                }
-                
-                String newAccessToken = jwtUtils.generateAccessToken(userId, user.getUserName());
-                
-                // Add to response header
-                if (response != null) {
-                    response.setHeader("X-New-Access-Token", newAccessToken);
-                    response.setHeader("Access-Control-Expose-Headers", "X-New-Access-Token");
-                }
-
-                UserContext.setUserId(userId);
-                UserContext.setUsername(user.getUserName());
-            } catch (Exception ex) {
-                throw new AuthorizationException("登录已过期，请重新登录");
-            }
+            throw new AuthorizationException("登录已过期");
         } catch (Exception e) {
             throw new AuthorizationException("无效的令牌");
         }
