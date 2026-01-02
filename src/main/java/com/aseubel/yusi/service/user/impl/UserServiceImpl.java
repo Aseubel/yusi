@@ -1,6 +1,9 @@
 package com.aseubel.yusi.service.user.impl;
 
 import cn.hutool.crypto.digest.BCrypt;
+
+import com.aseubel.yusi.common.exception.AuthorizationException;
+import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.utils.JwtUtils;
 import com.aseubel.yusi.pojo.dto.AuthResponse;
 import com.aseubel.yusi.pojo.entity.User;
@@ -59,24 +62,24 @@ public class UserServiceImpl implements UserService {
     @Override
     public AuthResponse refreshToken(String refreshToken) {
         if (!jwtUtils.validateToken(refreshToken)) {
-            throw new RuntimeException("无效的刷新令牌");
+            throw new BusinessException("无效的刷新令牌");
         }
         
         String type = jwtUtils.getTypeFromToken(refreshToken);
         if (!"refresh".equals(type)) {
-            throw new RuntimeException("非刷新令牌");
+            throw new BusinessException("非刷新令牌");
         }
 
         String userId = jwtUtils.getUserIdFromToken(refreshToken);
         String storedRefreshToken = tokenService.getRefreshToken(userId);
         
         if (storedRefreshToken == null || !storedRefreshToken.equals(refreshToken)) {
-            throw new RuntimeException("刷新令牌已失效");
+            throw new BusinessException("刷新令牌已失效");
         }
 
         User user = userRepository.findByUserId(userId);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
 
         String newAccessToken = jwtUtils.generateAccessToken(userId, user.getUserName());

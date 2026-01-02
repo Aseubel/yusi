@@ -30,7 +30,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     @Override
     public void updateMessages(Object memoryId, List<ChatMessage> messages) {
         String json = messagesToJson(messages);
-        redissonService.setValue("langchain:" + memoryId.toString(), json);
+        redissonService.setValue("langchain:" + memoryId.toString(), json, 30 * 60 * 1000);
     }
 
     @Override

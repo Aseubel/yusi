@@ -43,10 +43,10 @@ public class DiaryServiceImpl implements DiaryService {
         diary.setCreateTime(LocalDateTime.now());
         diary.setUpdateTime(LocalDateTime.now());
         Diary saved = diaryRepository.save(diary);
-        
+
         // 异步生成AI回应 (通过self调用以触发AOP)
         // self.generateAiResponse(saved.getDiaryId());
-        
+
         return saved;
     }
 
@@ -55,21 +55,22 @@ public class DiaryServiceImpl implements DiaryService {
     public void generateAiResponse(String diaryId) {
         try {
             Diary diary = diaryRepository.findByDiaryId(diaryId);
-            if (diary == null) return;
+            if (diary == null)
+                return;
 
             log.info("Generating AI response for diary: {}", diaryId);
-            
+
             CompletableFuture<String> future = new CompletableFuture<>();
             StringBuilder sb = new StringBuilder();
-            
+
             diaryAssistant.generateDiaryResponse(diary.getContent(), diary.getEntryDate().toString())
-                .onPartialResponse(sb::append)
-                .onCompleteResponse(res -> future.complete(sb.toString()))
-                .onError(future::completeExceptionally)
-                .start();
-            
+                    .onPartialResponse(sb::append)
+                    .onCompleteResponse(res -> future.complete(sb.toString()))
+                    .onError(future::completeExceptionally)
+                    .start();
+
             String response = future.get();
-            
+
             diary.setAiResponse(response);
             diary.setStatus(1); // 1 = Analyzed
             diaryRepository.save(diary);
@@ -87,6 +88,7 @@ public class DiaryServiceImpl implements DiaryService {
             diary.setUpdateTime(LocalDateTime.now());
             diary.setStatus(0);
             diary.setAiResponse(null);
+            diary.setCreateTime(existingDiary.getCreateTime());
             return diaryRepository.save(diary);
         }
         return null;
