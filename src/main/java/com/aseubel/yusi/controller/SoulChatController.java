@@ -3,6 +3,7 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.pojo.dto.chat.SendMessageRequest;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.SoulMessage;
 import com.aseubel.yusi.repository.SoulMatchRepository;
@@ -29,12 +30,6 @@ public class SoulChatController {
 
     @Autowired
     private SoulMatchRepository matchRepository;
-
-    @Data
-    public static class SendMessageRequest {
-        private Long matchId;
-        private String content;
-    }
 
     @PostMapping("/send")
     public Response<SoulMessage> sendMessage(@RequestBody SendMessageRequest request) {

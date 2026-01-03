@@ -2,10 +2,9 @@ package com.aseubel.yusi.service.user.impl;
 
 import cn.hutool.crypto.digest.BCrypt;
 
-import com.aseubel.yusi.common.exception.AuthorizationException;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.utils.JwtUtils;
-import com.aseubel.yusi.pojo.dto.AuthResponse;
+import com.aseubel.yusi.pojo.dto.user.AuthResponse;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.user.UserService;

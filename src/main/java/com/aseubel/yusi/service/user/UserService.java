@@ -1,6 +1,6 @@
 package com.aseubel.yusi.service.user;
 
-import com.aseubel.yusi.pojo.dto.AuthResponse;
+import com.aseubel.yusi.pojo.dto.user.AuthResponse;
 import com.aseubel.yusi.pojo.entity.User;
 
 import java.util.List;

@@ -2,6 +2,8 @@ package com.aseubel.yusi.controller;
 
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.pojo.dto.match.MatchActionRequest;
+import com.aseubel.yusi.pojo.dto.match.MatchSettingsRequest;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.service.match.MatchService;
@@ -32,12 +34,6 @@ public class MatchController {
     @Autowired
     private UserService userService;
 
-    @Data
-    public static class MatchSettingsRequest {
-        private Boolean enabled;
-        private String intent;
-    }
-
     @PostMapping("/settings")
     public User updateSettings(@RequestBody MatchSettingsRequest request) {
         String userId = UserContext.getUserId();
@@ -48,11 +44,6 @@ public class MatchController {
     public List<SoulMatch> getRecommendations() {
         String userId = UserContext.getUserId();
         return matchService.getMatches(userId);
-    }
-
-    @Data
-    public static class MatchActionRequest {
-        private Integer action; // 1: Interested, 2: Skipped
     }
 
     @PostMapping("/{matchId}/action")

@@ -5,6 +5,8 @@ import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.pojo.contant.CardType;
 import com.aseubel.yusi.pojo.contant.ResonanceType;
+import com.aseubel.yusi.pojo.dto.soulplaza.ResonateRequest;
+import com.aseubel.yusi.pojo.dto.soulplaza.SubmitCardRequest;
 import com.aseubel.yusi.pojo.entity.SoulCard;
 import com.aseubel.yusi.pojo.entity.SoulResonance;
 import com.aseubel.yusi.service.plaza.SoulPlazaService;
@@ -24,13 +26,6 @@ public class SoulPlazaController {
 
     private final SoulPlazaService plazaService;
 
-    @Data
-    public static class SubmitCardRequest {
-        private String content;
-        private String originId;
-        private CardType type;
-    }
-
     @PostMapping("/submit")
     public Response<SoulCard> submit(@RequestBody SubmitCardRequest request) {
         SoulCard card = plazaService.submitToPlaza(
@@ -46,11 +41,6 @@ public class SoulPlazaController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
         return Response.success(plazaService.getFeed(UserContext.getUserId(), page, size));
-    }
-
-    @Data
-    public static class ResonateRequest {
-        private ResonanceType type;
     }
 
     @PostMapping("/{cardId}/resonate")

@@ -1,4 +1,4 @@
-package com.aseubel.yusi.pojo.dto;
+package com.aseubel.yusi.pojo.dto.diary;
 
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -16,9 +16,11 @@ import java.time.LocalDate;
  * @date 2025/5/7 上午10:11
  */
 @Data
-public class WriteDiaryRequest implements Serializable {
+public class EditDiaryRequest implements Serializable {
 
     private String userId;
+
+    private String diaryId;
 
     private String title;
 
@@ -33,11 +35,12 @@ public class WriteDiaryRequest implements Serializable {
 
     public Diary toDiary() {
         return Diary.builder()
-                .userId(userId)
-                .title(title)
-                .content(content)
-                .visibility(visibility)
-                .entryDate(entryDate)
-                .build();
+               .userId(userId)
+                .diaryId(diaryId)
+               .title(title)
+               .content(content)
+               .visibility(visibility)
+               .entryDate(entryDate)
+               .build();
     }
 }

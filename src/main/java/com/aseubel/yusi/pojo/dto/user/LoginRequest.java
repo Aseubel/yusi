@@ -1,4 +1,4 @@
-package com.aseubel.yusi.pojo.dto;
+package com.aseubel.yusi.pojo.dto.user;
 
 import lombok.Data;
 
