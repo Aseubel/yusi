@@ -10,7 +10,7 @@ public interface SoulPlazaService {
 
     SoulCard submitToPlaza(String userId, String content, String originId, CardType type);
 
-    Page<SoulCard> getFeed(String userId, int page, int size);
+    Page<SoulCard> getFeed(String userId, int page, int size, String emotion);
 
     SoulResonance resonate(String userId, Long cardId, ResonanceType type);
 }

@@ -48,9 +48,14 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     }
 
     @Override
-    public Page<SoulCard> getFeed(String userId, int page, int size) {
+    public Page<SoulCard> getFeed(String userId, int page, int size, String emotion) {
         // Exclude own posts
         PageRequest pageRequest = PageRequest.of(page - 1, size);
+        
+        if (emotion != null && !emotion.isEmpty() && !emotion.equals("All")) {
+            return cardRepository.findByUserIdNotAndEmotionOrderByCreatedAtDesc(userId, emotion, pageRequest);
+        }
+        
         // Note: Logic here is simple reverse chronological.
         // V2.1 should implement more complex 'Soul Matching' ranking.
         return cardRepository.findByUserIdNotOrderByCreatedAtDesc(userId, pageRequest);

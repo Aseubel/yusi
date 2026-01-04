@@ -39,8 +39,9 @@ public class SoulPlazaController {
     @GetMapping("/feed")
     public Response<Page<SoulCard>> getFeed(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return Response.success(plazaService.getFeed(UserContext.getUserId(), page, size));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String emotion) {
+        return Response.success(plazaService.getFeed(UserContext.getUserId(), page, size, emotion));
     }
 
     @PostMapping("/{cardId}/resonate")
