@@ -1,5 +1,6 @@
 package com.aseubel.yusi.pojo.entity;
 
+import com.aseubel.yusi.common.utils.UuidUtils;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
@@ -76,7 +77,7 @@ public class Diary {
     private LocalDateTime updateTime;
 
     public String generateId() {
-        this.diaryId = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        this.diaryId = UuidUtils.genUuidSimple();
         return this.diaryId;
     }
 }

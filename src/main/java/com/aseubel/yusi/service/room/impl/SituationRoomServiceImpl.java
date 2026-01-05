@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.room.impl;
 
 import cn.hutool.core.util.ObjectUtil;
 import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.utils.UuidUtils;
 import com.aseubel.yusi.pojo.contant.RoomStatus;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
@@ -255,7 +256,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     @Override
     public SituationScenario submitScenario(String userId, String title, String description) {
         SituationScenario scenario = new SituationScenario();
-        scenario.setId(java.util.UUID.randomUUID().toString().replace("-", ""));
+        scenario.setId(UuidUtils.genUuidSimple());
         scenario.setTitle(title);
         scenario.setDescription(description);
         scenario.setSubmitterId(userId);
@@ -285,7 +286,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
 
     private Boolean checkAdmin(String userId) {
         List<String> adminIds = new ArrayList<>();
-        adminIds.add("1");
+        adminIds.add("b98758ca6f4d4e7b");
         return adminIds.contains(userId);
     }
 

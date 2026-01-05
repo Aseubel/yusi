@@ -1,5 +1,6 @@
 package com.aseubel.yusi.pojo.entity;
 
+import com.aseubel.yusi.common.utils.UuidUtils;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -47,7 +48,7 @@ public class User {
     private String matchIntent;
 
     public String generateUserId() {
-        this.userId = UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        this.userId = UuidUtils.genUuidSimple();
         return this.userId;
     }
 }

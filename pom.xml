@@ -26,12 +26,23 @@
         <tag/>
         <url/>
     </scm>
+    
     <properties>
         <java.version>17</java.version>
         <langchain4j.version>1.8.0</langchain4j.version>
         <langchain4j-external.version>1.8.0-beta15</langchain4j-external.version>
         <shardingsphere.version>5.5.0</shardingsphere.version>
+        <java-uuid-generator.version>5.0.0</java-uuid-generator.version>
+        <lombok.version>1.18.30</lombok.version>
+        <jjwt.version>0.11.5</jjwt.version>
+        <hutool.version>5.8.24</hutool.version>
+        <redisson.version>3.26.0</redisson.version>
+        <fastjson.version>2.0.28</fastjson.version>
+        <langchain4j-mcp.version>1.10.0-beta18</langchain4j-mcp.version>
+        <disruptor.version>4.0.0</disruptor.version>
+        <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
     </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -50,7 +61,7 @@
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>1.18.30</version>
+            <version>${lombok.version}</version>
             <optional>true</optional>
         </dependency>
         <dependency>
@@ -75,35 +86,35 @@
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-api</artifactId>
-            <version>0.11.5</version>
+            <version>${jjwt.version}</version>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-impl</artifactId>
-            <version>0.11.5</version>
+            <version>${jjwt.version}</version>
             <scope>runtime</scope>
         </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-jackson</artifactId>
-            <version>0.11.5</version>
+            <version>${jjwt.version}</version>
             <scope>runtime</scope>
         </dependency>
 
         <dependency>
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
-            <version>5.8.24</version>
+            <version>${hutool.version}</version>
         </dependency>
         <dependency>
             <groupId>org.redisson</groupId>
             <artifactId>redisson-spring-boot-starter</artifactId>
-            <version>3.26.0</version>
+            <version>${redisson.version}</version>
         </dependency>
         <dependency>
             <groupId>com.alibaba</groupId>
             <artifactId>fastjson</artifactId>
-            <version>2.0.28</version>
+            <version>${fastjson.version}</version>
         </dependency>
 
         <dependency>
@@ -146,13 +157,18 @@
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-mcp</artifactId>
-            <version>1.10.0-beta18</version>
+            <version>${langchain4j-mcp.version}</version>
         </dependency>
 
         <dependency>
             <groupId>com.lmax</groupId>
             <artifactId>disruptor</artifactId>
-            <version>4.0.0</version>
+            <version>${disruptor.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.uuid</groupId>
+            <artifactId>java-uuid-generator</artifactId>
+            <version>${java-uuid-generator.version}</version>
         </dependency>
         <dependency>
             <groupId>org.apache.shardingsphere</groupId>
@@ -188,7 +204,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.8.1</version>
+                <version>${maven-compiler-plugin.version}</version>
                 <configuration>
                     <source>17</source>
                     <target>17</target>
@@ -196,7 +212,7 @@
                         <path>
                             <groupId>org.projectlombok</groupId>
                             <artifactId>lombok</artifactId>
-                            <version>1.18.30</version>
+                            <version>${lombok.version}</version>
                         </path>
                     </annotationProcessorPaths>
                 </configuration>
