@@ -5,6 +5,7 @@ import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.pojo.contant.RoomStatus;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
+import com.aseubel.yusi.pojo.entity.SituationScenario;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.SituationRoomRepository;
 import com.aseubel.yusi.repository.SituationScenarioRepository;
@@ -16,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -251,8 +253,40 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     }
 
     @Override
-    public List<com.aseubel.yusi.pojo.entity.SituationScenario> getScenarios() {
-        return scenarioRepository.findAll();
+    public SituationScenario submitScenario(String userId, String title, String description) {
+        SituationScenario scenario = new SituationScenario();
+        scenario.setId(java.util.UUID.randomUUID().toString().replace("-", ""));
+        scenario.setTitle(title);
+        scenario.setDescription(description);
+        scenario.setSubmitterId(userId);
+        scenario.setStatus(0);
+        return scenarioRepository.save(scenario);
+    }
+
+    @Override
+    public SituationScenario reviewScenario(String adminId, String scenarioId, Integer status, String rejectReason) {
+        if (!checkAdmin(adminId)) {
+             throw new BusinessException("无权限");
+        }
+        
+        SituationScenario scenario = scenarioRepository.findById(scenarioId)
+                .orElseThrow(() -> new BusinessException("Scenario not found"));
+        scenario.setStatus(status);
+        if (status == 1 || status == 2) {
+            scenario.setRejectReason(rejectReason);
+        }
+        return scenarioRepository.save(scenario);
+    }
+
+    @Override
+    public List<SituationScenario> getScenarios() {
+        return scenarioRepository.findByStatusGreaterThanEqual(3);
+    }
+
+    private Boolean checkAdmin(String userId) {
+        List<String> adminIds = new ArrayList<>();
+        adminIds.add("1");
+        return adminIds.contains(userId);
     }
 
     private String generateCode() {

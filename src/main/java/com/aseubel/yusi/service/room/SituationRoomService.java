@@ -24,5 +24,9 @@ public interface SituationRoomService {
 
     java.util.List<com.aseubel.yusi.pojo.entity.SituationScenario> getScenarios();
 
+    com.aseubel.yusi.pojo.entity.SituationScenario submitScenario(String userId, String title, String description);
+
+    com.aseubel.yusi.pojo.entity.SituationScenario reviewScenario(String adminId, String scenarioId, Integer status, String rejectReason);
+
     java.util.List<SituationRoom> getHistory(String userId);
 }

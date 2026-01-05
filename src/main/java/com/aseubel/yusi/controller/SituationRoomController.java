@@ -2,13 +2,10 @@ package com.aseubel.yusi.controller;
 
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.UserContext;
-import com.aseubel.yusi.pojo.dto.situation.CreateRoomRequest;
-import com.aseubel.yusi.pojo.dto.situation.JoinRoomRequest;
-import com.aseubel.yusi.pojo.dto.situation.SituationReport;
-import com.aseubel.yusi.pojo.dto.situation.StartRoomRequest;
-import com.aseubel.yusi.pojo.dto.situation.SubmitNarrativeRequest;
-import com.aseubel.yusi.service.room.SituationRoomService;
+import com.aseubel.yusi.pojo.dto.situation.*;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
+import com.aseubel.yusi.pojo.entity.SituationScenario;
+import com.aseubel.yusi.service.room.SituationRoomService;
 import com.aseubel.yusi.common.auth.Auth;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,8 +41,18 @@ public class SituationRoomController {
         return Response.success(room);
     }
 
+    @PostMapping("/scenarios/submit")
+    public Response<SituationScenario> submitScenario(@RequestBody SubmitScenarioRequest request) {
+        return Response.success(situationRoomService.submitScenario(UserContext.getUserId(), request.getTitle(), request.getDescription()));
+    }
+
+    @PostMapping("/scenarios/review")
+    public Response<SituationScenario> reviewScenario(@RequestBody ReviewScenarioRequest request) {
+        return Response.success(situationRoomService.reviewScenario(UserContext.getUserId(), request.getScenarioId(), request.getStatus(), request.getRejectReason()));
+    }
+
     @GetMapping("/scenarios")
-    public Response<java.util.List<com.aseubel.yusi.pojo.entity.SituationScenario>> getScenarios() {
+    public Response<java.util.List<SituationScenario>> getScenarios() {
         return Response.success(situationRoomService.getScenarios());
     }
 
