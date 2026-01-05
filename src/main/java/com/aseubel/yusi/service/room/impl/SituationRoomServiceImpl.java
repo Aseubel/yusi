@@ -1,6 +1,8 @@
 package com.aseubel.yusi.service.room.impl;
 
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.exception.AuthenticationException;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.utils.UuidUtils;
 import com.aseubel.yusi.pojo.contant.RoomStatus;
@@ -267,7 +269,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     @Override
     public SituationScenario reviewScenario(String adminId, String scenarioId, Integer status, String rejectReason) {
         if (!checkAdmin(adminId)) {
-             throw new BusinessException("无权限");
+             throw new AuthenticationException("无权限");
         }
         
         SituationScenario scenario = scenarioRepository.findById(scenarioId)
@@ -285,6 +287,9 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     }
 
     private Boolean checkAdmin(String userId) {
+        if(StrUtil.isEmpty(userId)) {
+            return false;
+        }
         List<String> adminIds = new ArrayList<>();
         adminIds.add("b98758ca6f4d4e7b");
         return adminIds.contains(userId);

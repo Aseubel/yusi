@@ -9,6 +9,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
+import java.util.Objects;
+
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -16,11 +18,13 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     public Response<String> handleBusinessException(BusinessException e) {
         // Business exceptions are expected, do not log error stack trace
+        setStatus(HttpServletResponse.SC_OK);
         return Response.fail(e.getMessage());
     }
 
     @ExceptionHandler(RateLimitException.class)
     public Response<String> handleRateLimitException(RateLimitException e) {
+        setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         return Response.<String>builder().code(429).info(e.getMessage()).build();
     }
 
@@ -32,8 +36,20 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AuthorizationException.class)
     public Response<String> handleAuthorizationException(AuthorizationException e) {
-        HttpServletResponse response = ((ServletRequestAttributes) RequestContextHolder.getRequestAttributes()).getResponse();
-        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         return Response.<String>builder().code(401).info(e.getMessage()).build();
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    public Response<String> handleAuthenticationException(AuthenticationException e) {
+        setStatus(HttpServletResponse.SC_FORBIDDEN);
+        return Response.<String>builder().code(403).info(e.getMessage()).build();
+    }
+
+    private void setStatus(int code) {
+        HttpServletResponse response = ((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes())).getResponse();
+        if (response != null) {
+            response.setStatus(code);
+        }
     }
 }
