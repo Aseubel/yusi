@@ -1,6 +1,7 @@
 package com.aseubel.yusi.common.auth;
 
 import com.aseubel.yusi.common.exception.AuthorizationException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.utils.JwtUtils;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.service.user.UserService;
@@ -63,11 +64,11 @@ public class AuthAspect {
         if (StringUtils.hasText(token) && token.startsWith("Bearer ")) {
             token = token.substring(7);
         } else {
-            throw new AuthorizationException("未登录");
+            throw new AuthorizationException(ErrorCode.TOKEN_MISSING);
         }
 
         if (tokenService.isBlacklisted(token)) {
-            throw new AuthorizationException("令牌已失效");
+            throw new AuthorizationException(ErrorCode.TOKEN_INVALID, "令牌已失效");
         }
 
         try {
@@ -77,9 +78,9 @@ public class AuthAspect {
             UserContext.setUserId(userId);
             UserContext.setUsername(username);
         } catch (ExpiredJwtException e) {
-            throw new AuthorizationException("登录已过期");
+            throw new AuthorizationException(ErrorCode.TOKEN_EXPIRED);
         } catch (Exception e) {
-            throw new AuthorizationException("无效的令牌");
+            throw new AuthorizationException(ErrorCode.TOKEN_INVALID);
         }
 
         try {

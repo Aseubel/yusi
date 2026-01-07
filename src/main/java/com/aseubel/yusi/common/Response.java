@@ -3,6 +3,7 @@ package com.aseubel.yusi.common;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import com.aseubel.yusi.common.exception.ErrorCode;
 
 import java.io.Serializable;
 

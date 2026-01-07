@@ -1,7 +1,6 @@
 package com.aseubel.yusi.common.exception;
 
 import com.aseubel.yusi.common.Response;
-
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.ExceptionHandler;
