@@ -45,8 +45,18 @@ public class GlobalExceptionHandler {
         return Response.<String>builder().code(403).info(e.getMessage()).build();
     }
 
+    @ExceptionHandler(AiLockException.class)
+    public Response<String> handleAiLockException(AiLockException e) {
+        setStatus(429);
+        return Response.<String>builder()
+                .code(ErrorCode.AI_REQUEST_IN_PROGRESS.getCode())
+                .info(e.getMessage())
+                .build();
+    }
+
     private void setStatus(int code) {
-        HttpServletResponse response = ((ServletRequestAttributes) Objects.requireNonNull(RequestContextHolder.getRequestAttributes())).getResponse();
+        HttpServletResponse response = ((ServletRequestAttributes) Objects
+                .requireNonNull(RequestContextHolder.getRequestAttributes())).getResponse();
         if (response != null) {
             response.setStatus(code);
         }

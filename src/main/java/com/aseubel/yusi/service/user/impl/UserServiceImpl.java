@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class UserServiceImpl implements UserService {
 
+    private static final int MAX_DEVICES = 3;
+
     @Autowired
     private UserRepository userRepository;
 
@@ -46,11 +48,16 @@ public class UserServiceImpl implements UserService {
             throw new RuntimeException("密码错误");
         }
 
+        // Enforce device limit before adding new token (max 3 devices)
+        tokenService.enforceDeviceLimit(user.getUserId(), MAX_DEVICES);
+
         String accessToken = jwtUtils.generateAccessToken(user.getUserId(), user.getUserName());
         String refreshToken = jwtUtils.generateRefreshToken(user.getUserId());
-        
+
         tokenService.saveRefreshToken(user.getUserId(), refreshToken);
-        
+        // Add the new device token
+        tokenService.addDeviceToken(user.getUserId(), accessToken, "login");
+
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
@@ -63,7 +70,7 @@ public class UserServiceImpl implements UserService {
         if (!jwtUtils.validateToken(refreshToken)) {
             throw new BusinessException("无效的刷新令牌");
         }
-        
+
         String type = jwtUtils.getTypeFromToken(refreshToken);
         if (!"refresh".equals(type)) {
             throw new BusinessException("非刷新令牌");
@@ -71,7 +78,7 @@ public class UserServiceImpl implements UserService {
 
         String userId = jwtUtils.getUserIdFromToken(refreshToken);
         String storedRefreshToken = tokenService.getRefreshToken(userId);
-        
+
         if (storedRefreshToken == null || !storedRefreshToken.equals(refreshToken)) {
             throw new BusinessException("刷新令牌已失效");
         }
@@ -81,9 +88,13 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("用户不存在");
         }
 
+        // Enforce device limit and add new device token
+        tokenService.enforceDeviceLimit(userId, MAX_DEVICES);
+
         String newAccessToken = jwtUtils.generateAccessToken(userId, user.getUserName());
-        // Optionally rotate refresh token here, but for now we keep the same one until it expires
-        
+        // Add the new device token for the refreshed session
+        tokenService.addDeviceToken(userId, newAccessToken, "refresh");
+
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
                 .refreshToken(refreshToken) // Return same refresh token
@@ -93,8 +104,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void logout(String userId, String accessToken) {
+        // Remove this specific device token
+        tokenService.removeDeviceToken(userId, accessToken);
         tokenService.deleteRefreshToken(userId);
-        tokenService.addToBlacklist(accessToken);
     }
 
     @Override
