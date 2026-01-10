@@ -9,5 +9,6 @@ import java.util.List;
 @Repository
 public interface SituationScenarioRepository extends JpaRepository<SituationScenario, String> {
     List<SituationScenario> findByStatusGreaterThanEqual(Integer status);
+    List<SituationScenario> findByStatus(Integer status);
     List<SituationScenario> findBySubmitterId(String submitterId);
 }

@@ -11,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @Auth
 @Slf4j
 @RestController()
@@ -52,8 +54,13 @@ public class SituationRoomController {
     }
 
     @GetMapping("/scenarios")
-    public Response<java.util.List<SituationScenario>> getScenarios() {
+    public Response<List<SituationScenario>> getScenarios() {
         return Response.success(situationRoomService.getScenarios());
+    }
+
+    @GetMapping("/scenarios")
+    public Response<List<SituationScenario>> getScenariosByStatus(@RequestParam(value = "status") Integer status) {
+        return Response.success(situationRoomService.getScenariosByStatus(UserContext.getUserId(), status));
     }
 
     @PostMapping("/cancel")
@@ -77,7 +84,7 @@ public class SituationRoomController {
     }
 
     @GetMapping("/history")
-    public Response<java.util.List<SituationRoom>> getHistory() {
+    public Response<List<SituationRoom>> getHistory() {
         return Response.success(situationRoomService.getHistory(UserContext.getUserId()));
     }
 

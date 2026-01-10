@@ -31,7 +31,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
             throw new BusinessException("内容太短");
         }
 
-        // Basic emotion analysis placeholder (In full version, call AI here)
+        // Basic emotion analysis placeholder (TODO: In full version, call AI here)
         String emotion = "Neutral";
 
         SoulCard card = SoulCard.builder()
@@ -57,7 +57,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
         }
         
         // Note: Logic here is simple reverse chronological.
-        // V2.1 should implement more complex 'Soul Matching' ranking.
+        // TODO: V2.1 should implement more complex 'Soul Matching' ranking.
         return cardRepository.findByUserIdNotOrderByCreatedAtDesc(userId, pageRequest);
     }
 

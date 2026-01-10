@@ -2,6 +2,9 @@ package com.aseubel.yusi.service.room;
 
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
+import com.aseubel.yusi.pojo.entity.SituationScenario;
+
+import java.util.List;
 
 public interface SituationRoomService {
     SituationRoom createRoom(String ownerId, int maxMembers);
@@ -22,11 +25,13 @@ public interface SituationRoomService {
 
     SituationReport getReport(String code);
 
-    java.util.List<com.aseubel.yusi.pojo.entity.SituationScenario> getScenarios();
+    List<SituationScenario> getScenarios();
 
-    com.aseubel.yusi.pojo.entity.SituationScenario submitScenario(String userId, String title, String description);
+    List<SituationScenario> getScenariosByStatus(String userId, Integer status);
 
-    com.aseubel.yusi.pojo.entity.SituationScenario reviewScenario(String adminId, String scenarioId, Integer status, String rejectReason);
+    SituationScenario submitScenario(String userId, String title, String description);
 
-    java.util.List<SituationRoom> getHistory(String userId);
+    SituationScenario reviewScenario(String adminId, String scenarioId, Integer status, String rejectReason);
+
+    List<SituationRoom> getHistory(String userId);
 }

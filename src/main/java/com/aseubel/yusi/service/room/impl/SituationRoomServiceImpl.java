@@ -286,6 +286,14 @@ public class SituationRoomServiceImpl implements SituationRoomService {
         return scenarioRepository.findByStatusGreaterThanEqual(3);
     }
 
+    @Override
+    public List<SituationScenario> getScenariosByStatus(String userId, Integer status) {
+        if (!checkAdmin(userId)) {
+            throw new AuthenticationException("无权限");
+        }
+        return scenarioRepository.findByStatus(status);
+    }
+
     private Boolean checkAdmin(String userId) {
         if(StrUtil.isEmpty(userId)) {
             return false;
