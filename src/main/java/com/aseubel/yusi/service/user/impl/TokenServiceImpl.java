@@ -15,6 +15,8 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
+import static com.aseubel.yusi.redis.RedisKey.*;
+
 @Service
 @Slf4j
 public class TokenServiceImpl implements TokenService {
@@ -27,10 +29,6 @@ public class TokenServiceImpl implements TokenService {
 
     @Autowired
     private JwtProperties jwtProperties;
-
-    private static final String REFRESH_TOKEN_KEY = "auth:refresh:";
-    private static final String BLACKLIST_KEY = "auth:blacklist:";
-    private static final String DEVICE_TOKENS_KEY = "auth:devices:";
 
     @Override
     public void saveRefreshToken(String userId, String refreshToken) {

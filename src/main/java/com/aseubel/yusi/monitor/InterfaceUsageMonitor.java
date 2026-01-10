@@ -12,6 +12,9 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
+import static com.aseubel.yusi.redis.RedisKey.USAGE_PREFIX;
+import static com.aseubel.yusi.redis.RedisKey.SEPARATOR;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -19,9 +22,6 @@ public class InterfaceUsageMonitor {
 
     private final IRedisService redisService;
     private final InterfaceDailyUsageRepository repository;
-
-    private static final String REDIS_KEY_PREFIX = "yusi:usage:";
-    private static final String SEPARATOR = "::";
 
     /**
      * Record interface usage to Redis
@@ -32,7 +32,7 @@ public class InterfaceUsageMonitor {
             if (ip == null) ip = "unknown";
             
             String dateStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-            String redisKey = REDIS_KEY_PREFIX + dateStr;
+            String redisKey = USAGE_PREFIX + dateStr;
             String field = userId + SEPARATOR + ip + SEPARATOR + interfaceName;
 
             // Use Redisson's addAndGet for atomic increment
@@ -70,7 +70,7 @@ public class InterfaceUsageMonitor {
 
     private void syncDate(LocalDate date) {
         String dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE);
-        String redisKey = REDIS_KEY_PREFIX + dateStr;
+        String redisKey = USAGE_PREFIX + dateStr;
         
         try {
             if (!redisService.isExists(redisKey)) {
