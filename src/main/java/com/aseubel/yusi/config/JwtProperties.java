@@ -14,9 +14,9 @@ public class JwtProperties {
     private String secret = "yusi-secret-key-should-be-very-long-and-secure-base64-encoded";
     
     /**
-     * Access token expiration time in milliseconds (15 minutes)
+     * Access token expiration time in milliseconds (2 hours)
      */
-    private long accessTokenExpiration = 15 * 60 * 1000;
+    private long accessTokenExpiration = 2 * 60 * 60 * 1000;
     
     /**
      * Refresh token expiration time in milliseconds (7 days)
