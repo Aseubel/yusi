@@ -58,7 +58,7 @@ public class SituationRoomController {
         return Response.success(situationRoomService.getScenarios());
     }
 
-    @GetMapping("/scenarios")
+    @GetMapping("/scenarios/status")
     public Response<List<SituationScenario>> getScenariosByStatus(@RequestParam(value = "status") Integer status) {
         return Response.success(situationRoomService.getScenariosByStatus(UserContext.getUserId(), status));
     }
