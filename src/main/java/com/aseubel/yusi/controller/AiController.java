@@ -31,7 +31,7 @@ public class AiController {
     @Autowired
     private AiLockService aiLockService;
 
-    private final ThreadPoolTaskExecutor executor;
+    private final ThreadPoolTaskExecutor threadPoolExecutor;
 
     @RateLimiter(key = "chatStream", time = 60, count = 20, limitType = LimitType.USER)
     @GetMapping(value = "/chat/stream", produces = "text/event-stream")
@@ -46,7 +46,7 @@ public class AiController {
         // Set timeout to 3 minutes
         SseEmitter emitter = new SseEmitter(180000L);
 
-        executor.execute(() -> {
+        threadPoolExecutor.execute(() -> {
             try {
                 TokenStream tokenStream = diaryAssistant.chat(userId, message);
                 tokenStream
