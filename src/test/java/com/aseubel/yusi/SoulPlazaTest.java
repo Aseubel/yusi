@@ -1,6 +1,5 @@
 package com.aseubel.yusi;
 
-import com.aseubel.yusi.pojo.entity.SoulCard;
 import com.aseubel.yusi.repository.SoulCardRepository;
 import com.aseubel.yusi.service.plaza.impl.SoulPlazaServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -8,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -53,7 +51,7 @@ class SoulPlazaTest {
         verify(cardRepository).findByUserIdNotOrderByCreatedAtDesc(
                 eq(userId), any(PageRequest.class));
     }
-    
+
     @Test
     void getFeed_shouldNotFilterByEmotion_whenEmotionIsAll() {
         String userId = "user1";

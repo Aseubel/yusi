@@ -1,6 +1,7 @@
 package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.config.ai.properties.ChatModelConfigProperties;
+import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -36,6 +37,20 @@ public class ChatModelConfig {
                 .topP(0.85)
                 .presencePenalty(0.6)
                 .maxCompletionTokens(512)
+                .build();
+    }
+
+    /**
+     * 同步聊天模型，用于需要直接获取结果的场景（如情感分析）
+     */
+    @Bean(name = "chatModel")
+    public OpenAiChatModel chatModel(ChatModelConfigProperties properties) {
+        return OpenAiChatModel.builder()
+                .baseUrl(properties.getBaseurl())
+                .apiKey(properties.getApikey())
+                .modelName(properties.getModel())
+                .temperature(0.3) // 较低温度用于分类任务
+                .maxCompletionTokens(32) // 情感分析只需要短输出
                 .build();
     }
 }

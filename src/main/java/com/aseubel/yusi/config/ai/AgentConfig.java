@@ -2,8 +2,10 @@ package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.service.ai.DiarySearchTool;
 import com.aseubel.yusi.service.diary.Assistant;
+import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.room.SituationRoomAgent;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.tool.ToolProvider;
@@ -86,5 +88,18 @@ public class AgentConfig {
                 .systemMessageProvider(chatMemoryId -> systemPrompt)
                 .build();
         return agent;
+    }
+
+    @Bean(name = "emotionAnalyzer")
+    public EmotionAnalyzer emotionAnalyzer() {
+        // 使用轻量级模型进行情感分析，提高响应速度
+        log.info("正在配置 EmotionAnalyzer 情感分析服务");
+
+        EmotionAnalyzer analyzer = AiServices.builder(EmotionAnalyzer.class)
+                .chatModel((ChatModel) applicationContext.getBean("chatModel"))
+                .build();
+
+        log.info("EmotionAnalyzer 已配置完成，可用于广场内容情感分析");
+        return analyzer;
     }
 }
