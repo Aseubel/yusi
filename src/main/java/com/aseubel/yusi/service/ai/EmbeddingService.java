@@ -86,7 +86,18 @@ public class EmbeddingService implements Processor<Element> {
         // 添加 entryDate 作为独立的 Metadata 字段，格式 YYYY-MM-DD，用于时间范围过滤
         params.put("entryDate", diary.getEntryDate().toString());
 
-        String text = diary.getContent();
+        // 优先使用 plainContent（前端发送的明文），如果不存在则使用 content
+        // plainContent 用于客户端加密场景，content 用于非加密或服务端加密场景
+        String text = diary.getPlainContent();
+        if (text == null || text.isEmpty()) {
+            text = diary.getContent();
+        }
+
+        if (text == null || text.isEmpty()) {
+            log.warn("日记 {} 内容为空，跳过向量化", diary.getDiaryId());
+            return chain.process(data, index);
+        }
+
         Document document = Document.document(text, Metadata.from(params));
 
         // 切分文本段

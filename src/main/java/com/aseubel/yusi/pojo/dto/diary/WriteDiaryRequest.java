@@ -22,7 +22,16 @@ public class WriteDiaryRequest implements Serializable {
 
     private String title;
 
+    /**
+     * 日记内容（可能是密文或明文，取决于 clientEncrypted）
+     */
     private String content;
+
+    /**
+     * 明文内容，仅用于 RAG 向量化（不持久化存储）
+     * 当 clientEncrypted=true 且用户允许 RAG 时，前端同时发送此字段
+     */
+    private String plainContent;
 
     private Boolean visibility;
 
@@ -41,6 +50,7 @@ public class WriteDiaryRequest implements Serializable {
                 .userId(userId)
                 .title(title)
                 .content(content)
+                .plainContent(plainContent)
                 .visibility(visibility)
                 .entryDate(entryDate)
                 .clientEncrypted(clientEncrypted)

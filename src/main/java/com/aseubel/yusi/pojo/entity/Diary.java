@@ -60,6 +60,13 @@ public class Diary {
     @Column(name = "client_encrypted")
     private Boolean clientEncrypted;
 
+    /**
+     * 明文内容，仅用于 RAG 向量化（不持久化到数据库）
+     * 当用户允许 RAG 且内容为客户端加密时，前端同时发送此字段
+     */
+    @Transient
+    private String plainContent;
+
     @Column(name = "visibility")
     private Boolean visibility;
 
