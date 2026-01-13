@@ -2,6 +2,8 @@ package com.aseubel.yusi.service.ai;
 
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.repository.UserRepository;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
@@ -29,6 +31,10 @@ import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metad
  * 时间范围过滤使用 Milvus 的标量过滤功能（Scalar Filtering），
  * 可以精确地处理"上周"、"过去一个月"等相对时间查询。
  * 
+ * 注意：RAG 功能仅对以下用户可用：
+ * - 使用 DEFAULT 密钥模式的用户
+ * - 使用 CUSTOM 密钥模式且开启云端备份的用户
+ * 
  * @author Aseubel
  * @date 2025/12/31
  */
@@ -39,6 +45,24 @@ public class DiarySearchTool {
 
     private final MilvusEmbeddingStore milvusEmbeddingStore;
     private final EmbeddingModel embeddingModel;
+    private final UserRepository userRepository;
+
+    /**
+     * 检查用户是否允许 RAG 功能
+     */
+    private boolean isRagAllowed(String userId) {
+        User user = userRepository.findByUserId(userId);
+        if (user == null) {
+            return false;
+        }
+
+        String keyMode = user.getKeyMode();
+        if (keyMode == null || "DEFAULT".equals(keyMode)) {
+            return true;
+        }
+
+        return Boolean.TRUE.equals(user.getHasCloudBackup());
+    }
 
     /**
      * 搜索用户日记
@@ -78,6 +102,12 @@ public class DiarySearchTool {
         if (StrUtil.isEmpty(currentUserId)) {
             log.warn("DiarySearchTool: 无法获取当前用户ID，拒绝搜索请求");
             return List.of("无法验证用户身份，请重新登录后再试。");
+        }
+
+        // 隐私检查：CUSTOM 模式且未开启云端备份的用户不允许 RAG
+        if (!isRagAllowed(currentUserId)) {
+            log.info("DiarySearchTool: 用户 {} 使用最高隐私模式，RAG 功能不可用", currentUserId);
+            return List.of("您当前使用的是最高隐私模式（自定义密钥且未开启云端备份），日记搜索功能不可用。如需使用此功能，请在设置中开启云端密钥备份。");
         }
 
         log.info("DiarySearchTool: 用户 {} 发起搜索，query='{}', startDate='{}', endDate='{}'",

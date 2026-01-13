@@ -12,7 +12,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.DynamicInsert;
 import org.hibernate.annotations.DynamicUpdate;
-import com.aseubel.yusi.config.security.AttributeEncryptor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -33,7 +32,8 @@ import java.util.UUID;
 @NoArgsConstructor
 public class Diary {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(name = "diary_id")
@@ -45,9 +45,20 @@ public class Diary {
     @Column(name = "title")
     private String title;
 
+    /**
+     * 日记内容（前端加密后的密文）
+     * 注意：v2.0 起，加密工作由前端完成，服务端仅存储密文
+     */
     @Column(name = "content")
-    @Convert(converter = AttributeEncryptor.class)
     private String content;
+
+    /**
+     * 是否为客户端加密内容
+     * true: 内容已由前端加密（v2.0+）
+     * false/null: 旧版服务端加密内容
+     */
+    @Column(name = "client_encrypted")
+    private Boolean clientEncrypted;
 
     @Column(name = "visibility")
     private Boolean visibility;

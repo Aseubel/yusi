@@ -47,6 +47,36 @@ public class User {
     @Column(name = "match_intent")
     private String matchIntent;
 
+    /**
+     * 密钥模式: DEFAULT(默认服务端密钥) / CUSTOM(用户自定义密钥)
+     */
+    @Column(name = "key_mode")
+    private String keyMode = "DEFAULT";
+
+    /**
+     * 是否开启云端密钥备份（仅CUSTOM模式有效）
+     */
+    @Column(name = "has_cloud_backup")
+    private Boolean hasCloudBackup = false;
+
+    /**
+     * 云端备份的加密密钥（使用管理员公钥加密）
+     */
+    @Column(name = "encrypted_backup_key", length = 1024)
+    private String encryptedBackupKey;
+
+    /**
+     * 密钥派生盐值（用于PBKDF2/Argon2）
+     */
+    @Column(name = "key_salt")
+    private String keySalt;
+
+    /**
+     * 服务端生成的默认加密密钥（仅DEFAULT模式使用）
+     */
+    @Column(name = "server_encryption_key")
+    private String serverEncryptionKey;
+
     public String generateUserId() {
         this.userId = UuidUtils.genUuidSimple();
         return this.userId;

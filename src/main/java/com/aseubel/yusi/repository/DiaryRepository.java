@@ -23,4 +23,9 @@ public interface DiaryRepository extends JpaRepository<Diary, Long> {
     Page<Diary> findByUserId(@Param("userId") String userId, Pageable pageable);
 
     List<Diary> findTop3ByUserIdOrderByCreateTimeDesc(String userId);
+
+    /**
+     * 获取用户的所有日记（用于密钥更换时全量转换）
+     */
+    List<Diary> findAllByUserId(String userId);
 }

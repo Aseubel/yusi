@@ -31,6 +31,11 @@ public class WriteDiaryRequest implements Serializable {
     @JsonDeserialize(using = LocalDateDeserializer.class)
     private LocalDate entryDate;
 
+    /**
+     * 标识内容是否由客户端加密
+     */
+    private Boolean clientEncrypted = true;
+
     public Diary toDiary() {
         return Diary.builder()
                 .userId(userId)
@@ -38,6 +43,7 @@ public class WriteDiaryRequest implements Serializable {
                 .content(content)
                 .visibility(visibility)
                 .entryDate(entryDate)
+                .clientEncrypted(clientEncrypted)
                 .build();
     }
 }
