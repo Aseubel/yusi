@@ -114,4 +114,4 @@ logging:
 mcp:
   enabled: false  # 设置为 true 启用 MCP 集成
   server:
-    url: http://localhost:11611/mcp  # Go MCP Server 端点 (Streamable HTTP)
+    url: http://mcp-server:11611/mcp  # Go MCP Server 端点 (Streamable HTTP)

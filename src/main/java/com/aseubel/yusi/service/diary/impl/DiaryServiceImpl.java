@@ -42,7 +42,10 @@ public class DiaryServiceImpl implements DiaryService {
         diary.generateId();
         diary.setCreateTime(LocalDateTime.now());
         diary.setUpdateTime(LocalDateTime.now());
+        String plainContent = diary.getPlainContent();
         Diary saved = diaryRepository.save(diary);
+        // 保存后 entity 可能会丢失 transient 字段，这里重新设置以便后续 disruptor 使用
+        saved.setPlainContent(plainContent);
 
         // 异步生成AI回应 (通过self调用以触发AOP)
         // self.generateAiResponse(saved.getDiaryId());
@@ -89,7 +92,11 @@ public class DiaryServiceImpl implements DiaryService {
             diary.setStatus(0);
             diary.setAiResponse(null);
             diary.setCreateTime(existingDiary.getCreateTime());
-            return diaryRepository.save(diary);
+            String plainContent = diary.getPlainContent();
+            Diary saved = diaryRepository.save(diary);
+            // 保存后 entity 可能会丢失 transient 字段，这里重新设置以便后续 disruptor 使用
+            saved.setPlainContent(plainContent);
+            return saved;
         }
         return null;
     }
