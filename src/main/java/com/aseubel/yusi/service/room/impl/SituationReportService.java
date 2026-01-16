@@ -1,7 +1,7 @@
 package com.aseubel.yusi.service.room.impl;
 
 import cn.hutool.core.util.ObjectUtil;
-import com.alibaba.fastjson.JSON;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
@@ -22,6 +22,7 @@ public class SituationReportService {
 
     private final SituationRoomAgent situationRoomAgent;
     private final SituationScenarioRepository scenarioRepository;
+    private final ObjectMapper objectMapper;
 
     public SituationReport analyze(SituationRoom room) {
         try {
@@ -32,7 +33,7 @@ public class SituationReportService {
             }
 
             String scenarioString = scenario.getContentString();
-            String userAnswersJson = JSON.toJSONString(room.getSubmissions());
+            String userAnswersJson = objectMapper.writeValueAsString(room.getSubmissions());
 
             // 调用 AI
             CompletableFuture<String> future = new CompletableFuture<>();
@@ -47,7 +48,7 @@ public class SituationReportService {
             log.info("AI Analysis Result: {}", jsonReport);
 
             // 解析结果
-            SituationReport report = JSON.parseObject(jsonReport, SituationReport.class);
+            SituationReport report = objectMapper.readValue(jsonReport, SituationReport.class);
             report.setScenarioId(room.getScenarioId());
 
             // 过滤出允许公开的回答

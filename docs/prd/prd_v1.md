@@ -1,7 +1,7 @@
 # 产品需求文档 (PRD): "Yusi - 灵魂叙事" (v1.0 Final)
 
 ## 项目
-Yusi (v1.0) - MVP
+Yusi (v1.0)
 
 ## 产品代号
 "灵魂叙事" (Aseubel)

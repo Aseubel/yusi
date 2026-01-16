@@ -37,7 +37,7 @@
         <jjwt.version>0.11.5</jjwt.version>
         <hutool.version>5.8.24</hutool.version>
         <redisson.version>3.26.0</redisson.version>
-        <fastjson.version>2.0.28</fastjson.version>
+
         <langchain4j-mcp.version>1.10.0-beta18</langchain4j-mcp.version>
         <disruptor.version>4.0.0</disruptor.version>
         <maven-compiler-plugin.version>3.8.1</maven-compiler-plugin.version>
@@ -111,11 +111,7 @@
             <artifactId>redisson-spring-boot-starter</artifactId>
             <version>${redisson.version}</version>
         </dependency>
-        <dependency>
-            <groupId>com.alibaba</groupId>
-            <artifactId>fastjson</artifactId>
-            <version>${fastjson.version}</version>
-        </dependency>
+
 
         <dependency>
             <groupId>dev.langchain4j</groupId>
