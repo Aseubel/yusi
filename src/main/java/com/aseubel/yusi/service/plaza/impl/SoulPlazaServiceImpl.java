@@ -7,8 +7,14 @@ import com.aseubel.yusi.pojo.entity.SoulCard;
 import com.aseubel.yusi.pojo.entity.SoulResonance;
 import com.aseubel.yusi.repository.SoulCardRepository;
 import com.aseubel.yusi.repository.SoulResonanceRepository;
+import com.aseubel.yusi.redis.IRedisService;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.plaza.SoulPlazaService;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -33,6 +39,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     private final SoulCardRepository cardRepository;
     private final SoulResonanceRepository resonanceRepository;
     private final EmotionAnalyzer emotionAnalyzer;
+    private final IRedisService redisService;
 
     // 有效的情感类别列表
     private static final Set<String> VALID_EMOTIONS = Set.of(
@@ -99,16 +106,58 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
 
     @Override
     public Page<SoulCard> getFeed(String userId, int page, int size, String emotion) {
-        // Exclude own posts
-        PageRequest pageRequest = PageRequest.of(page - 1, size);
+        String cacheKey = String.format("plaza:feed:%s:%d:%d:%s", userId, page, size,
+                emotion == null ? "All" : emotion);
 
-        if (emotion != null && !emotion.isEmpty() && !emotion.equals("All")) {
-            return cardRepository.findByUserIdNotAndEmotionOrderByCreatedAtDesc(userId, emotion, pageRequest);
+        // Try to get from cache
+        try {
+            FeedCacheWrapper cached = redisService.getValue(cacheKey);
+            if (cached != null) {
+                log.debug("Hit cache for key: {}", cacheKey);
+                PageRequest pageRequest = PageRequest.of(cached.getPageNumber() - 1, cached.getPageSize());
+                return new PageImpl<>(cached.getContent(), pageRequest, cached.getTotalElements());
+            }
+        } catch (Exception e) {
+            log.error("Failed to read from cache", e);
         }
 
-        // 实现灵魂匹配排序算法
-        // 综合考虑：共鸣数量、时间衰减、情感多样性
-        return getSoulMatchedFeed(userId, pageRequest);
+        // Exclude own posts
+        PageRequest pageRequest = PageRequest.of(page - 1, size);
+        Page<SoulCard> result;
+
+        if (emotion != null && !emotion.isEmpty() && !emotion.equals("All")) {
+            result = cardRepository.findByUserIdNotAndEmotionOrderByCreatedAtDesc(userId, emotion, pageRequest);
+        } else {
+            // 实现灵魂匹配排序算法
+            // 综合考虑：共鸣数量、时间衰减、情感多样性
+            result = getSoulMatchedFeed(userId, pageRequest);
+        }
+
+        // Save to cache
+        try {
+            FeedCacheWrapper wrapper = new FeedCacheWrapper(
+                    result.getContent(),
+                    result.getTotalElements(),
+                    page,
+                    size);
+            // Cache for 60 seconds to ensure responsiveness but keep relative freshness
+            redisService.setValue(cacheKey, wrapper, 60);
+        } catch (Exception e) {
+            log.error("Failed to write to cache", e);
+        }
+
+        return result;
+    }
+
+    @Data
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    private static class FeedCacheWrapper {
+        private List<SoulCard> content;
+        private long totalElements;
+        private int pageNumber;
+        private int pageSize;
     }
 
     /**
