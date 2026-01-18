@@ -1,7 +1,7 @@
 package com.aseubel.yusi.service.user.impl;
 
 import com.aseubel.yusi.config.JwtProperties;
-import com.aseubel.yusi.redis.IRedisService;
+import com.aseubel.yusi.redis.service.IRedisService;
 import com.aseubel.yusi.service.user.TokenService;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBucket;
@@ -15,7 +15,7 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
-import static com.aseubel.yusi.redis.RedisKey.*;
+import static com.aseubel.yusi.redis.common.RedisKey.*;
 
 @Service
 @Slf4j

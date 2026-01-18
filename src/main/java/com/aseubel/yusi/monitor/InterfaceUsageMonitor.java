@@ -1,6 +1,6 @@
 package com.aseubel.yusi.monitor;
 
-import com.aseubel.yusi.redis.IRedisService;
+import com.aseubel.yusi.redis.service.IRedisService;
 import com.aseubel.yusi.repository.InterfaceDailyUsageRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -12,15 +12,15 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
-import static com.aseubel.yusi.redis.RedisKey.USAGE_PREFIX;
-import static com.aseubel.yusi.redis.RedisKey.SEPARATOR;
+import static com.aseubel.yusi.redis.common.RedisKey.USAGE_PREFIX;
+import static com.aseubel.yusi.redis.common.RedisKey.SEPARATOR;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class InterfaceUsageMonitor {
 
-    private final IRedisService redisService;
+    private final IRedisService redissonService;
     private final InterfaceDailyUsageRepository repository;
 
     /**
@@ -28,25 +28,30 @@ public class InterfaceUsageMonitor {
      */
     public void recordUsage(String userId, String ip, String interfaceName) {
         try {
-            if (userId == null) userId = "anonymous";
-            if (ip == null) ip = "unknown";
-            
+            if (userId == null)
+                userId = "anonymous";
+            if (ip == null)
+                ip = "unknown";
+
             String dateStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
             String redisKey = USAGE_PREFIX + dateStr;
             String field = userId + SEPARATOR + ip + SEPARATOR + interfaceName;
 
             // Use Redisson's addAndGet for atomic increment
-            // Note: IRedisService needs to expose getMap properly or we cast/use RedissonClient directly
-            // Assuming redisService.getMap returns RMap
-            RMap<String, Long> map = redisService.getMap(redisKey);
+            // Note: IRedisService needs to expose getMap properly or we cast/use
+            // RedissonClient directly
+            // Assuming redissonService.getMap returns RMap
+            RMap<String, Long> map = redissonService.getMap(redisKey);
             map.addAndGet(field, 1L);
-            
+
             // Set expiration if new (e.g., 2 days)
-            // We can check if it's a new key by checking TTL, but simplify by setting expire occasionally or just let it be
-            // A simple way is to set expire every time or just assume it's set. 
+            // We can check if it's a new key by checking TTL, but simplify by setting
+            // expire occasionally or just let it be
+            // A simple way is to set expire every time or just assume it's set.
             // Better: Set expire if we just created it. But addAndGet doesn't tell us.
             // Let's rely on the sync task to cleanup or set expire there.
-            // Or just set it blindly with a long TTL (48h) every time? A bit wasteful on network.
+            // Or just set it blindly with a long TTL (48h) every time? A bit wasteful on
+            // network.
             // Let's do it in the sync task.
         } catch (Exception e) {
             log.error("Failed to record interface usage", e);
@@ -64,21 +69,21 @@ public class InterfaceUsageMonitor {
 
         syncDate(yesterday);
         syncDate(today);
-        
+
         log.debug("Interface usage sync completed.");
     }
 
     private void syncDate(LocalDate date) {
         String dateStr = date.format(DateTimeFormatter.ISO_LOCAL_DATE);
         String redisKey = USAGE_PREFIX + dateStr;
-        
+
         try {
-            if (!redisService.isExists(redisKey)) {
+            if (!redissonService.isExists(redisKey)) {
                 return;
             }
 
-            RMap<String, Long> map = redisService.getMap(redisKey);
-            
+            RMap<String, Long> map = redissonService.getMap(redisKey);
+
             // Set expiration to ensure cleanup (e.g., 2 days from now)
             map.expire(java.time.Duration.ofDays(2));
 
@@ -88,7 +93,7 @@ public class InterfaceUsageMonitor {
                 try {
                     String field = entry.getKey();
                     Long count = entry.getValue();
-                    
+
                     String[] parts = field.split(SEPARATOR);
                     if (parts.length != 3) {
                         log.warn("Invalid usage field format: {}", field);

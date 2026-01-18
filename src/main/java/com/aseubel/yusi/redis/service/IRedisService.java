@@ -1,10 +1,11 @@
-package com.aseubel.yusi.redis;
+package com.aseubel.yusi.redis.service;
 
 import org.redisson.api.*;
 
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Redis 服务
@@ -325,6 +326,27 @@ public interface IRedisService {
 
     Boolean setNx(String key);
 
-    Boolean setNx(String key, long expired, TimeUnit timeUnit);
+    Boolean setNx(String key, Duration expired);
 
+    /**
+     * 执行 Lua 脚本
+     * @param luaScript 脚本内容
+     * @param returnType 返回类型
+     * @param keys 键
+     * @param args 值（ARGS，不能为null）
+     * @return 执行结果
+     */
+    <T> T execute(String shaDigest, String luaScript, RScript.ReturnType returnType, List<Object> keys, Object... args);
+
+    /**
+     * 执行 Lua 脚本
+     * @param luaScript 脚本内容
+     * @param returnType 返回类型
+     * @param keys 键
+     * @param values 值（ARGS，不能为null）
+     * @return 执行结果
+     */
+    <T> T execute(String luaScript, RScript.ReturnType returnType, List<Object> keys, Object... values);
+
+    void incrMap(String key, String field, int delta);
 }

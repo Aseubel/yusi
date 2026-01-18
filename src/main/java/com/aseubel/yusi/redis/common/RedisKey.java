@@ -1,4 +1,4 @@
-package com.aseubel.yusi.redis;
+package com.aseubel.yusi.redis.common;
 
 /**
  * @author Aseubel

@@ -7,7 +7,8 @@ import com.aseubel.yusi.pojo.entity.SoulCard;
 import com.aseubel.yusi.pojo.entity.SoulResonance;
 import com.aseubel.yusi.repository.SoulCardRepository;
 import com.aseubel.yusi.repository.SoulResonanceRepository;
-import com.aseubel.yusi.redis.IRedisService;
+import com.aseubel.yusi.redis.annotation.QueryCache;
+import com.aseubel.yusi.redis.service.IRedisService;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.plaza.SoulPlazaService;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -39,7 +40,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     private final SoulCardRepository cardRepository;
     private final SoulResonanceRepository resonanceRepository;
     private final EmotionAnalyzer emotionAnalyzer;
-    private final IRedisService redisService;
+    private final IRedisService redissonService;
 
     // 有效的情感类别列表
     private static final Set<String> VALID_EMOTIONS = Set.of(
@@ -105,22 +106,8 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     }
 
     @Override
+    @QueryCache(key = "'plaza:feed:' + #userId + ':' + #page + ':' + #size + ':' + (#emotion == null ? 'All' : #emotion)", ttl = 60)
     public Page<SoulCard> getFeed(String userId, int page, int size, String emotion) {
-        String cacheKey = String.format("plaza:feed:%s:%d:%d:%s", userId, page, size,
-                emotion == null ? "All" : emotion);
-
-        // Try to get from cache
-        try {
-            FeedCacheWrapper cached = redisService.getValue(cacheKey);
-            if (cached != null) {
-                log.debug("Hit cache for key: {}", cacheKey);
-                PageRequest pageRequest = PageRequest.of(cached.getPageNumber() - 1, cached.getPageSize());
-                return new PageImpl<>(cached.getContent(), pageRequest, cached.getTotalElements());
-            }
-        } catch (Exception e) {
-            log.error("Failed to read from cache", e);
-        }
-
         // Exclude own posts
         PageRequest pageRequest = PageRequest.of(page - 1, size);
         Page<SoulCard> result;
@@ -133,31 +120,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
             result = getSoulMatchedFeed(userId, pageRequest);
         }
 
-        // Save to cache
-        try {
-            FeedCacheWrapper wrapper = new FeedCacheWrapper(
-                    result.getContent(),
-                    result.getTotalElements(),
-                    page,
-                    size);
-            // Cache for 60 seconds to ensure responsiveness but keep relative freshness
-            redisService.setValue(cacheKey, wrapper, 60);
-        } catch (Exception e) {
-            log.error("Failed to write to cache", e);
-        }
-
         return result;
-    }
-
-    @Data
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    private static class FeedCacheWrapper {
-        private List<SoulCard> content;
-        private long totalElements;
-        private int pageNumber;
-        private int pageSize;
     }
 
     /**

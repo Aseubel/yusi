@@ -1,6 +1,6 @@
 package com.aseubel.yusi.config.ai;
 
-import com.aseubel.yusi.redis.IRedisService;
+import com.aseubel.yusi.redis.service.IRedisService;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
 import lombok.RequiredArgsConstructor;
