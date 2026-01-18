@@ -16,7 +16,7 @@ public class JacksonConfig {
      * 注册 Page 接口的反序列化实现
      */
     @Bean
-    public com.fasterxml.jackson.databind.Module pageModule() {
+    public com.fasterxml.jackson.databind.Module customPageModule() {
         SimpleModule module = new SimpleModule();
         module.addAbstractTypeMapping(Page.class, RestPage.class);
         return module;
