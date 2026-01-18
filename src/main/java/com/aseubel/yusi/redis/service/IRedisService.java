@@ -111,13 +111,19 @@ public interface IRedisService {
      */
     long decrBy(String key, long delta);
 
-
     /**
      * 移除指定 key 的值
      *
      * @param key 键
      */
     void remove(String key);
+
+    /**
+     * 根据模式删除 key
+     * 
+     * @param pattern 模式
+     */
+    void removeByPattern(String pattern);
 
     /**
      * 判断指定 key 的值是否存在
@@ -137,6 +143,7 @@ public interface IRedisService {
 
     /**
      * 删除集合中的指定值
+     * 
      * @param key
      * @param value
      */
@@ -216,7 +223,6 @@ public interface IRedisService {
      */
     void setMapExpired(String key, long expired);
 
-
     /**
      * 获取Map的过期时间
      *
@@ -227,10 +233,11 @@ public interface IRedisService {
 
     /**
      * 获取Map并转换为Java Map
+     * 
      * @param key 键
      * @return
      */
-    Map<String,String> getMapToJavaMap(String key);
+    Map<String, String> getMapToJavaMap(String key);
 
     /**
      * 移除哈希表中指定字段的值
@@ -330,20 +337,22 @@ public interface IRedisService {
 
     /**
      * 执行 Lua 脚本
-     * @param luaScript 脚本内容
+     * 
+     * @param luaScript  脚本内容
      * @param returnType 返回类型
-     * @param keys 键
-     * @param args 值（ARGS，不能为null）
+     * @param keys       键
+     * @param args       值（ARGS，不能为null）
      * @return 执行结果
      */
     <T> T execute(String shaDigest, String luaScript, RScript.ReturnType returnType, List<Object> keys, Object... args);
 
     /**
      * 执行 Lua 脚本
-     * @param luaScript 脚本内容
+     * 
+     * @param luaScript  脚本内容
      * @param returnType 返回类型
-     * @param keys 键
-     * @param values 值（ARGS，不能为null）
+     * @param keys       键
+     * @param values     值（ARGS，不能为null）
      * @return 执行结果
      */
     <T> T execute(String luaScript, RScript.ReturnType returnType, List<Object> keys, Object... values);

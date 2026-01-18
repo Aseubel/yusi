@@ -8,14 +8,11 @@ import com.aseubel.yusi.pojo.entity.SoulResonance;
 import com.aseubel.yusi.repository.SoulCardRepository;
 import com.aseubel.yusi.repository.SoulResonanceRepository;
 import com.aseubel.yusi.redis.annotation.QueryCache;
+import com.aseubel.yusi.redis.annotation.UpdateCache;
 import com.aseubel.yusi.redis.service.IRedisService;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.plaza.SoulPlazaService;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -48,6 +45,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
             "Fear", "Hope", "Calm", "Confusion", "Neutral");
 
     @Override
+    @UpdateCache(key = "'plaza:feed:' + #userId + ':*'", evictOnly = true)
     public SoulCard submitToPlaza(String userId, String content, String originId, CardType type) {
         if (content == null || content.length() < 5) {
             throw new BusinessException("内容太短");
@@ -120,6 +118,16 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
             result = getSoulMatchedFeed(userId, pageRequest);
         }
 
+        if (result.hasContent()) {
+            List<Long> cardIds = result.getContent().stream().map(SoulCard::getId).collect(Collectors.toList());
+            List<SoulResonance> resonances = resonanceRepository.findByUserIdAndCardIdIn(userId, cardIds);
+            Set<Long> resonatedCardIds = resonances.stream().map(SoulResonance::getCardId).collect(Collectors.toSet());
+
+            result.getContent().forEach(card -> {
+                card.setIsResonated(resonatedCardIds.contains(card.getId()));
+            });
+        }
+
         return result;
     }
 
@@ -189,6 +197,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
 
     @Override
     @Transactional
+    @UpdateCache(key = "'plaza:feed:' + #userId + ':*'", evictOnly = true)
     public SoulResonance resonate(String userId, Long cardId, ResonanceType type) {
         SoulCard card = cardRepository.findById(cardId)
                 .orElseThrow(() -> new BusinessException("Card not found"));

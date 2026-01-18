@@ -6,6 +6,7 @@ import com.aseubel.yusi.common.utils.SpelResolverHelper;
 import com.aseubel.yusi.redis.service.IRedisService;
 import com.aseubel.yusi.redis.annotation.QueryCache;
 import com.aseubel.yusi.redis.annotation.UpdateCache;
+import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -106,6 +107,20 @@ public class CacheAspect {
     public Object updateCache(ProceedingJoinPoint joinPoint, UpdateCache updateCache) throws Throwable {
 
         String key = keyPrefix + spelResolverHelper.resolveSpel(joinPoint, updateCache.key());
+
+        // 如果是仅失效模式（通常用于列表页缓存，或者使用通配符批量删除）
+        if (updateCache.evictOnly() || key.contains("*")) {
+            if (key.contains("*")) {
+                redisService.removeByPattern(key);
+            } else {
+                // 如果不是通配符，则直接删除该 Key
+                // 这里不使用 INVALID_SH 脚本，因为 evictOnly 意味着我们不关心缓存的锁状态，只想清除它
+                // 这样下次 QueryCache 进来时会重新加载
+                redisService.remove(key);
+            }
+            return joinPoint.proceed();
+        }
+
         List<Object> results = redisService.execute(INVALID_SH_SHA, INVALID_SH, RScript.ReturnType.MULTI, List.of(key),
                 System.currentTimeMillis() + lockTime);
 
@@ -113,7 +128,11 @@ public class CacheAspect {
         switch (sign) {
             case EMPTY_VALUE_SUCCESS:
                 Object value = joinPoint.proceed();
-                redisService.addToMap(key, VALUE, value);
+                // 确保序列化后写入
+                if (value != null) {
+                    String valueAsJson = objectMapper.writeValueAsString(value);
+                    redisService.addToMap(key, VALUE, valueAsJson);
+                }
                 return value;
             case SUCCESS:
                 return joinPoint.proceed();
@@ -152,9 +171,9 @@ public class CacheAspect {
 
         // 从返回结果中获取原始的、未经处理的业务数据字符串
         String valueStr = (String) result.get(0);
-        // 提前获取目标方法的返回类型，用于后续的反序列化
+        // 提前获取目标方法的返回类型（包含泛型信息），用于后续的反序列化
         Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();
-        Class<?> returnType = method.getReturnType();
+        JavaType returnType = objectMapper.getTypeFactory().constructType(method.getGenericReturnType());
 
         switch (sign) {
             case NEED_QUERY:

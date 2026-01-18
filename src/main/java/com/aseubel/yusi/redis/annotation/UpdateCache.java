@@ -23,4 +23,9 @@ public @interface UpdateCache {
 
     String key() default "";
 
+    /**
+     * 是否仅失效缓存而不更新
+     * 默认为 false，即会尝试将返回值写入缓存
+     */
+    boolean evictOnly() default false;
 }

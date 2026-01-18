@@ -87,6 +87,11 @@ public class RedissonService implements IRedisService {
     }
 
     @Override
+    public void removeByPattern(String pattern) {
+        redissonClient.getKeys().deleteByPattern(pattern);
+    }
+
+    @Override
     public boolean isExists(String key) {
         return redissonClient.getBucket(key).isExists();
     }
