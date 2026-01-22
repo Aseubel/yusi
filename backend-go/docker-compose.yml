@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  yusi-go:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: yusi-go:latest
+    container_name: yusi-go
+    restart: always
+    ports:
+      - "611:20611"
+    environment:
+      - TZ=Asia/Shanghai
+      - DATABASE_SOURCE=root:123456@tcp(mysql:3306)/yusi?charset=utf8mb4&parseTime=True&loc=Local
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=
+      # JWT Secret
+      - JWT_SECRET=YOUR_JWT_SECRET_SHOULD_BE_LONG
+      # AI Configuration
+      - CHAT_MODEL_APIKEY=YOUR_CHAT_APIKEY
+      - CHAT_MODEL_NAME=deepseek-chat
+      - CHAT_MODEL_BASEURL=https://api.deepseek.com
+      - EMBEDDING_MODEL_APIKEY=YOUR_EMBEDDING_APIKEY
+      - EMBEDDING_MODEL_BASEURL=https://api.siliconflow.cn/v1
+      - EMBEDDING_MODEL_NAME=BAAI/bge-m3
+    volumes:
+      - ./log:/app/log
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:20611/api/stats/platform"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - my-network
+
+networks:
+  my-network:
+    external: true

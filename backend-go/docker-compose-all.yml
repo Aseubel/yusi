@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: yusi-backend
+    ports:
+      - "20611:20611"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - DATABASE_SOURCE=root:123456@tcp(mysql:3306)/yusi?charset=utf8mb4&parseTime=True&loc=Local
+      - REDIS_ADDR=redis:6379
+      - SERVER_PORT=20611
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:20611/api/stats/platform"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - yusi-net
+    restart: always
+
+  mysql:
+    image: mysql:8.0
+    container_name: yusi-mysql
+    ports:
+      - "13306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=123456
+      - MYSQL_DATABASE=yusi
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - yusi-net
+    command: --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    restart: always
+
+  redis:
+    image: redis:7.0-alpine
+    container_name: yusi-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - yusi-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: always
+
+networks:
+  yusi-net:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  redis_data:
