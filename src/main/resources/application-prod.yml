@@ -115,3 +115,8 @@ mcp:
   enabled: false  # 设置为 true 启用 MCP 集成
   server:
     url: http://mcp-server:11611/mcp  # Go MCP Server 端点 (Streamable HTTP)
+
+# 高德地图 API 配置
+amap:
+  key: ${AMAP_API_KEY}
+  base-url: https://restapi.amap.com/v3

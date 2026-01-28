@@ -94,6 +94,38 @@ public class Diary {
     @JsonDeserialize(using = LocalDateTimeDeserializer.class)
     private LocalDateTime updateTime;
 
+    // ========== Geo-location fields (Epic 5: 时空足迹) ==========
+
+    /**
+     * 纬度
+     */
+    @Column(name = "latitude")
+    private Double latitude;
+
+    /**
+     * 经度
+     */
+    @Column(name = "longitude")
+    private Double longitude;
+
+    /**
+     * 详细地址
+     */
+    @Column(name = "address")
+    private String address;
+
+    /**
+     * 地点名称（如：星巴克咖啡、公司）
+     */
+    @Column(name = "place_name")
+    private String placeName;
+
+    /**
+     * 地图 POI ID（用于去重和关联）
+     */
+    @Column(name = "place_id")
+    private String placeId;
+
     public String generateId() {
         this.diaryId = UuidUtils.genUuidSimple();
         return this.diaryId;

@@ -45,6 +45,13 @@ public class WriteDiaryRequest implements Serializable {
      */
     private Boolean clientEncrypted = true;
 
+    // ========== Geo-location fields (Epic 5) ==========
+    private Double latitude;
+    private Double longitude;
+    private String address;
+    private String placeName;
+    private String placeId;
+
     public Diary toDiary() {
         return Diary.builder()
                 .userId(userId)
@@ -54,6 +61,11 @@ public class WriteDiaryRequest implements Serializable {
                 .visibility(visibility)
                 .entryDate(entryDate)
                 .clientEncrypted(clientEncrypted)
+                .latitude(latitude)
+                .longitude(longitude)
+                .address(address)
+                .placeName(placeName)
+                .placeId(placeId)
                 .build();
     }
 }
