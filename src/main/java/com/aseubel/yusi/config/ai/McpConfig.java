@@ -54,8 +54,8 @@ public class McpConfig {
 
         this.mcpTransport = StreamableHttpMcpTransport.builder()
                 .url(mcpServerUrl)
-                .logRequests(true)
-                .logResponses(true)
+                .logRequests(false)
+                .logResponses(false)
                 .build();
 
         return this.mcpTransport;
