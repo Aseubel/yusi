@@ -121,4 +121,9 @@ public class DiaryServiceImpl implements DiaryService {
         // 如需带条件查询（示例）
         // return diaryRepository.findByUserId("当前用户ID", pageRequest);
     }
+
+    @Override
+    public java.util.List<Diary> getFootprints(String userId) {
+        return diaryRepository.findAllWithLocationByUserId(userId);
+    }
 }

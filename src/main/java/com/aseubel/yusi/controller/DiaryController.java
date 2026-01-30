@@ -43,9 +43,9 @@ public class DiaryController {
             @RequestParam(required = false) String sortBy,
             @RequestParam(defaultValue = "true") boolean asc,
             PagedResourcesAssembler<Diary> assembler) {
-                if (userId == null || userId.isEmpty()) {
-                    throw new IllegalArgumentException("用户ID不能为空");
-                }
+        if (userId == null || userId.isEmpty()) {
+            throw new IllegalArgumentException("用户ID不能为空");
+        }
         Page<Diary> diaryPage = diaryService.getDiaryList(userId, pageNum, pageSize, sortBy, asc);
         return Response.success(assembler.toModel(diaryPage));
     }
@@ -81,5 +81,29 @@ public class DiaryController {
     public Response<?> generateResponse(@PathVariable("diaryId") String diaryId) {
         diaryService.generateAiResponse(diaryId);
         return Response.success();
+    }
+
+    /**
+     * 获取用户足迹列表（有地理位置的日记）
+     */
+    @GetMapping("/footprints")
+    public Response<java.util.List<com.aseubel.yusi.pojo.dto.diary.DiaryFootprint>> getFootprints(
+            @RequestParam String userId) {
+        if (userId == null || userId.isEmpty()) {
+            throw new IllegalArgumentException("用户ID不能为空");
+        }
+        java.util.List<Diary> diaries = diaryService.getFootprints(userId);
+        java.util.List<com.aseubel.yusi.pojo.dto.diary.DiaryFootprint> footprints = diaries.stream()
+                .map(d -> new com.aseubel.yusi.pojo.dto.diary.DiaryFootprint(
+                        d.getDiaryId(),
+                        d.getLatitude(),
+                        d.getLongitude(),
+                        d.getPlaceName(),
+                        d.getAddress(),
+                        d.getCreateTime(),
+                        null // emotion from AI analysis - TODO
+                ))
+                .toList();
+        return Response.success(footprints);
     }
 }

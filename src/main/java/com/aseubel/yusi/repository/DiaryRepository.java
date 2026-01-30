@@ -28,4 +28,10 @@ public interface DiaryRepository extends JpaRepository<Diary, Long> {
      * 获取用户的所有日记（用于密钥更换时全量转换）
      */
     List<Diary> findAllByUserId(String userId);
+
+    /**
+     * 获取用户所有有地理位置的日记（用于足迹地图）
+     */
+    @Query("SELECT d FROM Diary d WHERE d.userId = :userId AND d.latitude IS NOT NULL AND d.longitude IS NOT NULL ORDER BY d.createTime DESC")
+    List<Diary> findAllWithLocationByUserId(@Param("userId") String userId);
 }
