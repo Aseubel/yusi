@@ -3,6 +3,7 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.pojo.dto.chat.SendMessageRequest;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.SoulMessage;
@@ -34,13 +35,13 @@ public class SoulChatController {
     @PostMapping("/send")
     public Response<SoulMessage> sendMessage(@RequestBody SendMessageRequest request) {
         String senderId = UserContext.getUserId();
-        
+
         // 验证 Match 是否存在且属于该用户
         SoulMatch match = matchRepository.findById(request.getMatchId())
-                .orElseThrow(() -> new RuntimeException("匹配不存在"));
-        
+                .orElseThrow(() -> new BusinessException("匹配不存在"));
+
         if (!Boolean.TRUE.equals(match.getIsMatched())) {
-            throw new RuntimeException("尚未建立连接，无法发送消息");
+            throw new BusinessException("尚未建立连接，无法发送消息");
         }
 
         String receiverId;
@@ -49,7 +50,7 @@ public class SoulChatController {
         } else if (senderId.equals(match.getUserBId())) {
             receiverId = match.getUserAId();
         } else {
-            throw new RuntimeException("无权发送消息");
+            throw new BusinessException("无权发送消息");
         }
 
         SoulMessage message = SoulMessage.builder()
@@ -67,13 +68,13 @@ public class SoulChatController {
     @GetMapping("/history")
     public Response<List<SoulMessage>> getHistory(@RequestParam Long matchId) {
         String userId = UserContext.getUserId();
-        
+
         // 验证权限
         SoulMatch match = matchRepository.findById(matchId)
-                .orElseThrow(() -> new RuntimeException("匹配不存在"));
-        
+                .orElseThrow(() -> new BusinessException("匹配不存在"));
+
         if (!userId.equals(match.getUserAId()) && !userId.equals(match.getUserBId())) {
-            throw new RuntimeException("无权查看消息");
+            throw new BusinessException("无权查看消息");
         }
 
         return Response.success(messageRepository.findByMatchIdOrderByCreateTimeAsc(matchId));

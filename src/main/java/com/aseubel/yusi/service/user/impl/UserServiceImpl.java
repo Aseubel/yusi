@@ -30,7 +30,7 @@ public class UserServiceImpl implements UserService {
     public User register(User user) {
         User existingUser = userRepository.findByUserName(user.getUserName());
         if (existingUser != null) {
-            throw new RuntimeException("用户名已存在");
+            throw new BusinessException("用户名已存在");
         }
         user.generateUserId();
         String hashedPassword = BCrypt.hashpw(user.getPassword(), BCrypt.gensalt());
@@ -42,10 +42,10 @@ public class UserServiceImpl implements UserService {
     public AuthResponse login(String userName, String password) {
         User user = userRepository.findByUserName(userName);
         if (user == null) {
-            throw new RuntimeException("用户不存在");
+            throw new BusinessException("用户不存在");
         }
         if (!BCrypt.checkpw(password, user.getPassword())) {
-            throw new RuntimeException("密码错误");
+            throw new BusinessException("密码错误");
         }
 
         // Enforce device limit before adding new token (max 3 devices)

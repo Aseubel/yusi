@@ -3,6 +3,7 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.pojo.contant.RoomStatus;
 import com.aseubel.yusi.pojo.dto.chat.RoomChatRequest;
 import com.aseubel.yusi.pojo.entity.RoomMessage;
@@ -47,24 +48,24 @@ public class RoomChatController {
 
         // 验证房间存在且用户是成员
         SituationRoom room = roomRepository.findById(roomCode)
-                .orElseThrow(() -> new RuntimeException("房间不存在"));
+                .orElseThrow(() -> new BusinessException("房间不存在"));
 
         if (!room.getMembers().contains(userId)) {
-            throw new RuntimeException("你不是该房间的成员");
+            throw new BusinessException("你不是该房间的成员");
         }
 
         // 验证房间状态允许发送消息
         if (room.getStatus() == RoomStatus.COMPLETED || room.getStatus() == RoomStatus.CANCELLED) {
-            throw new RuntimeException("房间已结束，无法发送消息");
+            throw new BusinessException("房间已结束，无法发送消息");
         }
 
         // 限制消息长度
         String content = request.getContent();
         if (content == null || content.trim().isEmpty()) {
-            throw new RuntimeException("消息内容不能为空");
+            throw new BusinessException("消息内容不能为空");
         }
         if (content.length() > 500) {
-            throw new RuntimeException("消息内容过长，最多500字");
+            throw new BusinessException("消息内容过长，最多500字");
         }
 
         // 获取用户昵称
@@ -93,10 +94,10 @@ public class RoomChatController {
 
         // 验证房间存在且用户是成员
         SituationRoom room = roomRepository.findById(roomCode)
-                .orElseThrow(() -> new RuntimeException("房间不存在"));
+                .orElseThrow(() -> new BusinessException("房间不存在"));
 
         if (!room.getMembers().contains(userId)) {
-            throw new RuntimeException("你不是该房间的成员");
+            throw new BusinessException("你不是该房间的成员");
         }
 
         List<RoomMessage> messages = messageRepository.findByRoomCodeOrderByCreatedAtAsc(roomCode);
@@ -114,10 +115,10 @@ public class RoomChatController {
 
         // 验证房间存在且用户是成员
         SituationRoom room = roomRepository.findById(roomCode)
-                .orElseThrow(() -> new RuntimeException("房间不存在"));
+                .orElseThrow(() -> new BusinessException("房间不存在"));
 
         if (!room.getMembers().contains(userId)) {
-            throw new RuntimeException("你不是该房间的成员");
+            throw new BusinessException("你不是该房间的成员");
         }
 
         if (after == null || after.isEmpty()) {
