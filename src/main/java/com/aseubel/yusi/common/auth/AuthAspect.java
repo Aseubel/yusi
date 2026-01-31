@@ -74,6 +74,12 @@ public class AuthAspect {
         try {
             Claims claims = jwtUtils.getClaims(token);
             String userId = claims.getSubject();
+            if (!StringUtils.hasText(userId)) {
+                userId = (String) claims.get("userId");
+                if (!StringUtils.hasText(userId)) {
+                    throw new AuthorizationException(ErrorCode.TOKEN_INVALID);
+                }
+            }
             String username = (String) claims.get("username");
             UserContext.setUserId(userId);
             UserContext.setUsername(username);

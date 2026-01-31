@@ -2,6 +2,8 @@ package com.aseubel.yusi.service.diary.impl;
 
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
+
+import com.aseubel.yusi.config.security.AttributeEncryptor;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.service.diary.Assistant;
@@ -66,7 +68,10 @@ public class DiaryServiceImpl implements DiaryService {
             CompletableFuture<String> future = new CompletableFuture<>();
             StringBuilder sb = new StringBuilder();
 
-            diaryAssistant.generateDiaryResponse(diary.getContent(), diary.getEntryDate().toString())
+            // 拿到的是加密的日记内容，得先解密
+            String decryptedContent = new AttributeEncryptor().convertToEntityAttribute(diary.getContent());
+
+            diaryAssistant.generateDiaryResponse(decryptedContent, diary.getEntryDate().toString())
                     .onPartialResponse(sb::append)
                     .onCompleteResponse(res -> future.complete(sb.toString()))
                     .onError(future::completeExceptionally)

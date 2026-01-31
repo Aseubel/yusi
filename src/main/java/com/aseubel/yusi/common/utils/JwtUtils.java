@@ -27,6 +27,7 @@ public class JwtUtils {
     public String generateAccessToken(String userId, String username) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("username", username);
+        claims.put("userId", userId);
         claims.put("type", "access");
         return createToken(claims, userId, jwtProperties.getAccessTokenExpiration());
     }
@@ -63,7 +64,7 @@ public class JwtUtils {
     public String getUserIdFromToken(String token) {
         return extractAllClaims(token).getSubject();
     }
-    
+
     public String getTypeFromToken(String token) {
         return (String) extractAllClaims(token).get("type");
     }
