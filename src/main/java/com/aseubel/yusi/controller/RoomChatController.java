@@ -14,6 +14,8 @@ import com.aseubel.yusi.repository.SituationRoomRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -37,6 +39,7 @@ public class RoomChatController {
     private final RoomMessageRepository messageRepository;
     private final SituationRoomRepository roomRepository;
     private final UserRepository userRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     /**
      * 发送消息
@@ -82,7 +85,12 @@ public class RoomChatController {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        return Response.success(messageRepository.save(message));
+        RoomMessage saved = messageRepository.save(message);
+
+        // 广播消息
+        messagingTemplate.convertAndSend("/topic/room/" + roomCode, saved);
+
+        return Response.success(saved);
     }
 
     /**
