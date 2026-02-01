@@ -37,7 +37,7 @@ import static com.aseubel.yusi.redis.common.CacheConstants.*;
 @RequiredArgsConstructor
 public class CacheAspect {
 
-    @Value("${spring.cache.redis.key-prefix:wind-chaser:}")
+    @Value("${spring.cache.redis.key-prefix:yusi:}")
     private String keyPrefix;
     @Value("${spring.cache.redis.time-to-live:1s}")
     private Duration ttl;

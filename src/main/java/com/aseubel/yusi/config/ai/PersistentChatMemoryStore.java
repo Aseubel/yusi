@@ -23,18 +23,18 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
     @Override
     public List<ChatMessage> getMessages(Object memoryId) {
-        String json = redissonService.getValue("langchain:" + memoryId.toString());
+        String json = redissonService.getValue("yusi:langchain:" + memoryId.toString());
         return messagesFromJson(json);
     }
 
     @Override
     public void updateMessages(Object memoryId, List<ChatMessage> messages) {
         String json = messagesToJson(messages);
-        redissonService.setValue("langchain:" + memoryId.toString(), json, 30 * 60 * 1000);
+        redissonService.setValue("yusi:langchain:" + memoryId.toString(), json, 30 * 60 * 1000);
     }
 
     @Override
     public void deleteMessages(Object memoryId) {
-        redissonService.remove("langchain:" + memoryId.toString());
+        redissonService.remove("yusi:langchain:" + memoryId.toString());
     }
 }
