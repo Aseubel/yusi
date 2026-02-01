@@ -11,6 +11,7 @@ import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.diary.DiaryService;
+import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -22,6 +23,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -32,11 +34,18 @@ import java.util.concurrent.CompletableFuture;
 @Service
 public class DiaryServiceImpl implements DiaryService {
 
+    private static final Set<String> VALID_EMOTIONS = Set.of(
+            "Joy", "Sadness", "Anxiety", "Love", "Anger",
+            "Fear", "Hope", "Calm", "Confusion", "Neutral");
+
     @Autowired
     private DiaryRepository diaryRepository;
 
     @Autowired
     private Assistant diaryAssistant;
+
+    @Autowired
+    private EmotionAnalyzer emotionAnalyzer;
 
     @Autowired
     private UserRepository userRepository;
@@ -94,6 +103,7 @@ public class DiaryServiceImpl implements DiaryService {
 
             diary.setAiResponse(response);
             diary.setStatus(1); // 1 = Analyzed
+            diary.setEmotion(analyzeContentEmotion(plainContent));
             diaryRepository.save(diary);
             log.info("AI response saved for diary: {}", diaryId);
         } catch (Exception e) {
@@ -206,11 +216,15 @@ public class DiaryServiceImpl implements DiaryService {
             diary.setPlainContent(plain);
             if (StrUtil.isNotBlank(plain)) {
                 diary.setContent(AesGcmCryptoUtils.encryptText(plain, cryptoService.serverAesKeyBytes()));
+                diary.setEmotion(analyzeContentEmotion(plain));
             }
             return;
         }
         if ("CUSTOM".equals(user.getKeyMode())) {
             diary.setClientEncrypted(true);
+            if (StrUtil.isNotBlank(diary.getPlainContent())) {
+                diary.setEmotion(analyzeContentEmotion(diary.getPlainContent()));
+            }
         }
     }
 
@@ -228,6 +242,27 @@ public class DiaryServiceImpl implements DiaryService {
             diary.setContent(AesGcmCryptoUtils.decryptText(diary.getContent(), cryptoService.serverAesKeyBytes()));
         } catch (Exception e) {
             return;
+        }
+    }
+
+    private String analyzeContentEmotion(String content) {
+        if (StrUtil.isBlank(content)) {
+            return null;
+        }
+        try {
+            String result = emotionAnalyzer.analyzeEmotion(content);
+            String cleaned = result == null ? "" : result.trim().replaceAll("[\\n\\r]", "");
+            if (VALID_EMOTIONS.contains(cleaned)) {
+                return cleaned;
+            }
+            for (String valid : VALID_EMOTIONS) {
+                if (cleaned.toLowerCase().contains(valid.toLowerCase())) {
+                    return valid;
+                }
+            }
+            return "Neutral";
+        } catch (Exception e) {
+            return "Neutral";
         }
     }
 }

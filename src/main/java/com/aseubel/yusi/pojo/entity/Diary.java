@@ -54,8 +54,6 @@ public class Diary {
 
     /**
      * 是否为客户端加密内容
-     * true: 内容已由前端加密（v2.0+）
-     * false/null: 旧版服务端加密内容
      */
     @Column(name = "client_encrypted")
     private Boolean clientEncrypted;
@@ -125,6 +123,9 @@ public class Diary {
      */
     @Column(name = "place_id")
     private String placeId;
+
+    @Column(name = "emotion")
+    private String emotion;
 
     public String generateId() {
         this.diaryId = UuidUtils.genUuidSimple();

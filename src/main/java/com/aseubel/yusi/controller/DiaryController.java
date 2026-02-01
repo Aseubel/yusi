@@ -5,12 +5,16 @@ import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.disruptor.DisruptorProducer;
 import com.aseubel.yusi.common.disruptor.EventType;
 import com.aseubel.yusi.pojo.dto.ai.DiaryChatRequest;
+import com.aseubel.yusi.pojo.dto.diary.DiaryFootprint;
 import com.aseubel.yusi.pojo.dto.diary.EditDiaryRequest;
 import com.aseubel.yusi.pojo.dto.diary.WriteDiaryRequest;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.service.diary.DiaryService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.web.PagedResourcesAssembler;
@@ -87,22 +91,21 @@ public class DiaryController {
      * 获取用户足迹列表（有地理位置的日记）
      */
     @GetMapping("/footprints")
-    public Response<java.util.List<com.aseubel.yusi.pojo.dto.diary.DiaryFootprint>> getFootprints(
+    public Response<List<DiaryFootprint>> getFootprints(
             @RequestParam String userId) {
         if (userId == null || userId.isEmpty()) {
             throw new IllegalArgumentException("用户ID不能为空");
         }
-        java.util.List<Diary> diaries = diaryService.getFootprints(userId);
-        java.util.List<com.aseubel.yusi.pojo.dto.diary.DiaryFootprint> footprints = diaries.stream()
-                .map(d -> new com.aseubel.yusi.pojo.dto.diary.DiaryFootprint(
+        List<Diary> diaries = diaryService.getFootprints(userId);
+        List<DiaryFootprint> footprints = diaries.stream()
+                .map(d -> new DiaryFootprint(
                         d.getDiaryId(),
                         d.getLatitude(),
                         d.getLongitude(),
                         d.getPlaceName(),
                         d.getAddress(),
                         d.getCreateTime(),
-                        null // emotion from AI analysis - TODO
-                ))
+                        d.getEmotion()))
                 .toList();
         return Response.success(footprints);
     }
