@@ -26,7 +26,7 @@ public class KeySettingsResponse {
     private String keySalt;
 
     /**
-     * 服务端默认密钥（仅DEFAULT模式返回，用于前端加密）
+     * 云端备份公钥（RSA-OAEP，SPKI Base64），用于前端加密备份密钥
      */
-    private String serverKey;
+    private String backupPublicKey;
 }

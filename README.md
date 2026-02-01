@@ -90,18 +90,18 @@ $env:EMBEDDING_MODEL_APIKEY = "sk-xxxxxxxxxxxx"
 $env:EMBEDDING_MODEL_BASEURL = "https://api.siliconflow.cn/v1"
 $env:EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
 
-# ⚠️ 重要：日记加密密钥（必需，至少16字符）
-# 用于 AES/GCM 加密存储日记内容，确保用户隐私
-$env:YUSI_ENCRYPTION_KEY = "mySecureKey12345" # 请替换为你自己的安全密钥
+# ⚠️ 重要：服务端日记加密密钥（必需，Base64 的 32 字节 AES-256 Key）
+$env:YUSI_ENCRYPTION_KEY = "BASE64_32_BYTES_AES_KEY"
+
+# ⚠️ 重要：云端备份 RSA 密钥对（用于 CUSTOM+备份，不在网络传输明文用户密钥）
+$env:YUSI_BACKUP_RSA_PUBLIC_KEY_SPKI_BASE64 = "BASE64_SPKI_PUBLIC_KEY"
+$env:YUSI_BACKUP_RSA_PRIVATE_KEY_PKCS8_BASE64 = "BASE64_PKCS8_PRIVATE_KEY"
 
 # 高德地图 API Key (后端地理服务代理)
 $env:AMAP_API_KEY = "your_amap_api_key"
 ```
 
-> **⚠️ 安全提醒**：`YUSI_ENCRYPTION_KEY` 是服务器端统一加密密钥，必须：
-> - 至少 16 个字符
-> - 生产环境使用强随机密钥
-> - 妥善保管，密钥丢失将无法解密现有日记
+> **⚠️ 安全提醒**：服务端密钥必须使用强随机值并妥善保管；一旦丢失将无法解密既有数据。
 
 ### 4. 运行服务
 ```bash

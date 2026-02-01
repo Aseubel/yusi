@@ -20,7 +20,12 @@ services:
       - SPRING_DATASOURCE_DRIVER_CLASS_NAME=com.mysql.cj.jdbc.Driver
       - SPRING_HIKARI_POOL_NAME=Retail_HikariCP
       - SERVER_PORT=611
+      - REDIS_SDK_CONFIG_PASSWORD=YOUR_REDIS_PASSWORD
+      - LOGGING_LEVEL_ROOT=info
       - YUSI_JWT_SECRET=YOUR_JWT_SECRET
+      # 高德地图
+      - AMAP_API_KEY=YOUR_AMAP_API_KEY
+      # Model
       - CHAT_MODEL_APIKEY=YOUR_CHAT_APIKEY
       - CHAT_MODEL_NAME=deepseek-chat
       - CHAT_MODEL_BASEURL=https://api.deepseek.com
@@ -28,7 +33,12 @@ services:
       - EMBEDDING_MODEL_BASEURL=https://api.siliconflow.cn/v1
       - EMBEDDING_MODEL_NAME=BAAI/bge-m3
       # 日记内容 AES/GCM 加密密钥 - 必须设置，至少16字符
-      - YUSI_ENCRYPTION_KEY=YOUR_ENCRYPTION_KEY_16CHARS
+      - YUSI_ENCRYPTION_KEY=YOUR_SERVER_AES256_KEY_BASE64_32BYTES
+      - YUSI_BACKUP_RSA_PUBLIC_KEY_SPKI_BASE64=YOUR_RSA_PUBLIC_KEY_SPKI_BASE64
+      - YUSI_BACKUP_RSA_PRIVATE_KEY_PKCS8_BASE64=YOUR_RSA_PRIVATE_KEY_PKCS8_BASE64
+      # mcp
+      - MCP_ENABLED=true
+      - MCP_SERVER_URL=http://yusi-mcp:11611/mcp
     volumes:
       - ./log:/data/log
     logging:

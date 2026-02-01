@@ -49,7 +49,7 @@ public class Diary {
      * 日记内容（前端加密后的密文）
      * 注意：v2.0 起，加密工作由前端完成，服务端仅存储密文
      */
-    @Column(name = "content")
+    @Column(name = "content", columnDefinition = "TEXT")
     private String content;
 
     /**

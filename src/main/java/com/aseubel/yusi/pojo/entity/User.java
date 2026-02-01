@@ -47,6 +47,9 @@ public class User {
     @Column(name = "match_intent")
     private String matchIntent;
 
+    @Column(name = "permission_level")
+    private Integer permissionLevel = 0;
+
     /**
      * 密钥模式: DEFAULT(默认服务端密钥) / CUSTOM(用户自定义密钥)
      */
@@ -74,9 +77,6 @@ public class User {
     /**
      * 服务端生成的默认加密密钥（仅DEFAULT模式使用）
      */
-    @Column(name = "server_encryption_key")
-    private String serverEncryptionKey;
-
     public String generateUserId() {
         this.userId = UuidUtils.genUuidSimple();
         return this.userId;

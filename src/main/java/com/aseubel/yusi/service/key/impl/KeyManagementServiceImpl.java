@@ -1,6 +1,8 @@
 package com.aseubel.yusi.service.key.impl;
 
 import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
+import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.pojo.dto.key.DiaryReEncryptRequest;
 import com.aseubel.yusi.pojo.dto.key.KeyModeUpdateRequest;
 import com.aseubel.yusi.pojo.dto.key.KeySettingsResponse;
@@ -14,10 +16,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -32,14 +32,14 @@ public class KeyManagementServiceImpl implements KeyManagementService {
     private static final String KEY_MODE_DEFAULT = "DEFAULT";
     private static final String KEY_MODE_CUSTOM = "CUSTOM";
 
-    // 管理员用户ID列表（与 SituationRoomServiceImpl 保持一致）
-    private static final List<String> ADMIN_IDS = List.of("b98758ca6f4d4e7b");
-
     @Autowired
     private UserRepository userRepository;
 
     @Autowired
     private DiaryRepository diaryRepository;
+
+    @Autowired
+    private CryptoService cryptoService;
 
     @Override
     public KeySettingsResponse getKeySettings(String userId) {
@@ -50,20 +50,10 @@ public class KeyManagementServiceImpl implements KeyManagementService {
 
         KeySettingsResponse.KeySettingsResponseBuilder builder = KeySettingsResponse.builder()
                 .keyMode(user.getKeyMode() != null ? user.getKeyMode() : KEY_MODE_DEFAULT)
-                .hasCloudBackup(user.getHasCloudBackup() != null ? user.getHasCloudBackup() : false);
+                .hasCloudBackup(user.getHasCloudBackup() != null ? user.getHasCloudBackup() : false)
+                .backupPublicKey(cryptoService.backupPublicKeySpkiBase64());
 
-        // 如果是DEFAULT模式，返回服务端密钥供前端使用
-        if (KEY_MODE_DEFAULT.equals(user.getKeyMode()) || user.getKeyMode() == null) {
-            // 如果还没有服务端密钥，生成一个
-            if (user.getServerEncryptionKey() == null) {
-                String newKey = generateServerKey();
-                user.setServerEncryptionKey(newKey);
-                user.setKeyMode(KEY_MODE_DEFAULT);
-                userRepository.save(user);
-            }
-            builder.serverKey(user.getServerEncryptionKey());
-        } else {
-            // CUSTOM模式返回盐值
+        if (KEY_MODE_CUSTOM.equals(user.getKeyMode())) {
             builder.keySalt(user.getKeySalt());
         }
 
@@ -100,9 +90,6 @@ public class KeyManagementServiceImpl implements KeyManagementService {
             }
         } else {
             // 默认密钥模式
-            if (user.getServerEncryptionKey() == null) {
-                user.setServerEncryptionKey(generateServerKey());
-            }
             user.setHasCloudBackup(false);
             user.setEncryptedBackupKey(null);
             user.setKeySalt(null);
@@ -119,7 +106,17 @@ public class KeyManagementServiceImpl implements KeyManagementService {
             throw new BusinessException("用户不存在");
         }
 
-        return diaryRepository.findAllByUserId(userId);
+        List<Diary> diaries = diaryRepository.findAllByUserId(userId);
+        String keyMode = user.getKeyMode();
+        if (keyMode == null || KEY_MODE_DEFAULT.equals(keyMode)) {
+            byte[] serverKey = cryptoService.serverAesKeyBytes();
+            diaries.forEach(d -> {
+                if (d != null && d.getContent() != null && !Boolean.TRUE.equals(d.getClientEncrypted())) {
+                    d.setContent(AesGcmCryptoUtils.decryptText(d.getContent(), serverKey));
+                }
+            });
+        }
+        return diaries;
     }
 
     @Override
@@ -143,8 +140,15 @@ public class KeyManagementServiceImpl implements KeyManagementService {
                 continue;
             }
 
-            // 更新为前端加密后的内容
-            diary.setContent(reEncrypted.getEncryptedContent());
+            if (KEY_MODE_DEFAULT.equals(request.getNewKeyMode())) {
+                diary.setClientEncrypted(false);
+                String plain = reEncrypted.getEncryptedContent();
+                diary.setContent(
+                        plain == null ? null : AesGcmCryptoUtils.encryptText(plain, cryptoService.serverAesKeyBytes()));
+            } else {
+                diary.setClientEncrypted(true);
+                diary.setContent(reEncrypted.getEncryptedContent());
+            }
             if (reEncrypted.getEncryptedTitle() != null) {
                 diary.setTitle(reEncrypted.getEncryptedTitle());
             }
@@ -157,7 +161,6 @@ public class KeyManagementServiceImpl implements KeyManagementService {
             log.info("Re-encrypted {} diaries for user {}", toUpdate.size(), userId);
         }
 
-        // 更新用户密钥设置
         user.setKeyMode(request.getNewKeyMode());
         user.setKeySalt(request.getNewKeySalt());
         user.setHasCloudBackup(request.getEnableCloudBackup() != null ? request.getEnableCloudBackup() : false);
@@ -168,25 +171,13 @@ public class KeyManagementServiceImpl implements KeyManagementService {
             user.setEncryptedBackupKey(null);
         }
 
-        // 如果切换到DEFAULT模式，确保有服务端密钥
-        if (KEY_MODE_DEFAULT.equals(request.getNewKeyMode()) && user.getServerEncryptionKey() == null) {
-            user.setServerEncryptionKey(generateServerKey());
-        }
-
         userRepository.save(user);
     }
 
     @Override
-    public String generateServerKey() {
-        SecureRandom random = new SecureRandom();
-        byte[] keyBytes = new byte[32]; // 256-bit key
-        random.nextBytes(keyBytes);
-        return Base64.getEncoder().encodeToString(keyBytes);
-    }
-
-    @Override
     public String getBackupKeyForRecovery(String adminUserId, String targetUserId) {
-        if (!ADMIN_IDS.contains(adminUserId)) {
+        User admin = userRepository.findByUserId(adminUserId);
+        if (admin == null || admin.getPermissionLevel() == null || admin.getPermissionLevel() < 10) {
             throw new BusinessException("无权限：仅管理员可访问备份密钥");
         }
 

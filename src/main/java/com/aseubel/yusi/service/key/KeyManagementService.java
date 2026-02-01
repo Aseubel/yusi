@@ -45,13 +45,6 @@ public interface KeyManagementService {
     void batchUpdateReEncryptedDiaries(String userId, DiaryReEncryptRequest request);
 
     /**
-     * 生成新的服务端密钥（用于DEFAULT模式）
-     * 
-     * @return 新生成的密钥
-     */
-    String generateServerKey();
-
-    /**
      * 验证用户是否有权访问备份密钥（管理员功能）
      * 
      * @param adminUserId  管理员用户ID
