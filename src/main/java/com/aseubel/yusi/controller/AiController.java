@@ -1,15 +1,18 @@
 package com.aseubel.yusi.controller;
 
+import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.AiLockException;
 import com.aseubel.yusi.common.ratelimit.LimitType;
 import com.aseubel.yusi.common.ratelimit.RateLimiter;
+import com.aseubel.yusi.pojo.dto.ai.DiaryChatRequest;
 import com.aseubel.yusi.service.ai.AiLockService;
 import com.aseubel.yusi.service.diary.Assistant;
 import dev.langchain4j.service.TokenStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.bind.annotation.*;
@@ -31,7 +34,45 @@ public class AiController {
     @Autowired
     private AiLockService aiLockService;
 
+    @Autowired
+    private RedissonClient redissonClient;
+
     private final ThreadPoolTaskExecutor threadPoolExecutor;
+
+    @PostMapping("/chat/send")
+    public Response<Void> sendMessage(@RequestBody DiaryChatRequest request) {
+        String userId = UserContext.getUserId();
+        String message = request.getQuery();
+
+        // Try to acquire lock for this user
+        if (!aiLockService.tryAcquireLock(userId)) {
+            throw new AiLockException("您有一个AI请求正在处理中，请等待完成后再试");
+        }
+
+        threadPoolExecutor.execute(() -> {
+            try {
+                TokenStream tokenStream = diaryAssistant.chat(userId, message);
+                tokenStream
+                        .onPartialResponse(token -> {
+                            redissonClient.getTopic("yusi:sse:" + userId).publish(token);
+                        })
+                        .onCompleteResponse(response -> {
+                            aiLockService.releaseLock(userId);
+                        })
+                        .onError(error -> {
+                            aiLockService.releaseLock(userId);
+                            redissonClient.getTopic("yusi:sse:" + userId).publish("[ERROR]: " + error.getMessage());
+                        })
+                        .start();
+            } catch (Exception e) {
+                log.error("Error during AI chat stream", e);
+                aiLockService.releaseLock(userId);
+                redissonClient.getTopic("yusi:sse:" + userId).publish("[ERROR]: " + e.getMessage());
+            }
+        });
+
+        return Response.success();
+    }
 
     @RateLimiter(key = "chatStream", time = 60, count = 20, limitType = LimitType.USER)
     @GetMapping(value = "/chat/stream", produces = "text/event-stream")

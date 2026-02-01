@@ -36,10 +36,18 @@ func main() {
 	statsHandler := api.NewStatsHandler()
 	promptHandler := api.NewPromptHandler()
 	soulChatHandler := api.NewSoulChatHandler()
+	sseHandler := api.NewSSEHandler()
 
 	// Routes
 	apiGroup := r.Group("/api")
 	{
+		// SSE
+		sseGroup := apiGroup.Group("/sse")
+		sseGroup.Use(middleware.AuthMiddleware())
+		{
+			sseGroup.GET("/connect", sseHandler.Stream)
+		}
+
 		// User
 		userGroup := apiGroup.Group("/user")
 		{

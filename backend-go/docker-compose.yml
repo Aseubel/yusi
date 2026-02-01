@@ -9,7 +9,7 @@ services:
     container_name: yusi-go
     restart: always
     ports:
-      - "611:20611"
+      - "20611:20611"
     environment:
       - TZ=Asia/Shanghai
       - DATABASE_SOURCE=root:123456@tcp(mysql:3306)/yusi?charset=utf8mb4&parseTime=True&loc=Local

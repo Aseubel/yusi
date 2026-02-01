@@ -12,6 +12,14 @@ func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
+			// Try query parameter for SSE
+			token := c.Query("token")
+			if token != "" {
+				authHeader = "Bearer " + token
+			}
+		}
+
+		if authHeader == "" {
 			response.FailWithCode(c, response.AuthErrCode, "Missing Authorization header")
 			c.Abort()
 			return
