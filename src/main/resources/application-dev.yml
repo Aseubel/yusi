@@ -29,7 +29,6 @@ model:
     apikey: ${CHAT_MODEL_APIKEY}
     model: ${CHAT_MODEL_NAME}
 
-
 # 线程池配置
 thread:
   pool:
@@ -50,7 +49,7 @@ spring:
     #    url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml
     username: root
     password: 123456
-    url: jdbc:mysql://127.0.0.1:13306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
+    url: jdbc:mysql://127.0.0.1:3306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       pool-name: Retail_HikariCP
@@ -111,9 +110,9 @@ logging:
 # MCP (Model Context Protocol) 配置
 # 启用后，DiaryAssistant 将可以使用 MCP Server 提供的工具（如 web_search）
 mcp:
-  enabled: false  # 设置为 true 启用 MCP 集成
+  enabled: false # 设置为 true 启用 MCP 集成
   server:
-    url: http://localhost:11611/mcp  # Go MCP Server 端点 (Streamable HTTP)
+    url: http://localhost:11611/mcp # Go MCP Server 端点 (Streamable HTTP)
 
 # 高德地图 API 配置
 amap:

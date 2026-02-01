@@ -15,15 +15,23 @@ import java.util.Base64;
 @Converter
 public class AttributeEncryptor implements AttributeConverter<String, String> {
 
+    // 对称加密算法类型
     private static final String ALG = "AES";
+    // GCM 模式同时提供机密性与完整性校验
     private static final String TRANS = "AES/GCM/NoPadding";
+    // GCM 认证标签长度（bit）
     private static final int GCM_TAG_LENGTH = 128;
 
     private SecretKey key() {
-        String k = System.getenv("YUSI_ENCRYPTION_KEY");
+        // 测试环境可用 JVM 属性覆盖，生产优先使用环境变量
+        String k = System.getProperty("YUSI_ENCRYPTION_KEY");
+        if (k == null || k.isEmpty()) {
+            k = System.getenv("YUSI_ENCRYPTION_KEY");
+        }
         if (k == null || k.length() < 16) {
             throw new IllegalStateException("YUSI_ENCRYPTION_KEY must be set and at least 16 characters long.");
         }
+        // 仅取前 16 字节作为 AES-128 密钥
         byte[] bytes = k.substring(0, 16).getBytes(StandardCharsets.UTF_8);
         return new SecretKeySpec(bytes, ALG);
     }
@@ -33,12 +41,14 @@ public class AttributeEncryptor implements AttributeConverter<String, String> {
         if (attribute == null)
             return null;
         try {
-            SecretKey key = key(); // Will throw if invalid
+            SecretKey key = key();
+            // 为每次加密生成随机 IV，避免重复导致的安全问题
             byte[] iv = new byte[12];
             new SecureRandom().nextBytes(iv);
             Cipher cipher = Cipher.getInstance(TRANS);
             cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(GCM_TAG_LENGTH, iv));
             byte[] cipherText = cipher.doFinal(attribute.getBytes(StandardCharsets.UTF_8));
+            // 组合为 [iv长度|iv|密文] 并用 Base64 持久化
             ByteBuffer bb = ByteBuffer.allocate(4 + iv.length + cipherText.length);
             bb.putInt(iv.length);
             bb.put(iv);
@@ -56,7 +66,8 @@ public class AttributeEncryptor implements AttributeConverter<String, String> {
         if (dbData == null)
             return null;
         try {
-            SecretKey key = key(); // Will throw if invalid
+            SecretKey key = key();
+            // 从 Base64 解码后按 [iv长度|iv|密文] 解析
             byte[] all = Base64.getDecoder().decode(dbData);
             ByteBuffer bb = ByteBuffer.wrap(all);
             int ivLen = bb.getInt();
@@ -71,21 +82,6 @@ public class AttributeEncryptor implements AttributeConverter<String, String> {
         } catch (IllegalStateException e) {
             throw e;
         } catch (Exception e) {
-            // Keep fail-safe for legacy data or genuine decryption errors,
-            // but strict key check happens first above.
-            // If the key is present but decryption fails (e.g. wrong key, corrupted data,
-            // or not encrypted),
-            // we might return data as is ONLY if it doesn't look like valid ciphertext?
-            // For now, retaining the behavior of returning dbData on decryption failure
-            // is risky if we strictly want to avoid leaking, but safer for availability.
-            // However, the original code had catch-all.
-            // Given the requirement "Avoid silent failure", we probably want to error out
-            // if we CANT decrypt
-            // what looks like encrypted data?
-            // The original requirement was focused on Storage (encrypting).
-            // For reading, if we fail to decrypt, returning ciphertext is usually useless
-            // UI-wise but safe Security-wise.
-            // Returning dbData as plain text is only okay if it WAS plain text.
             return dbData;
         }
     }

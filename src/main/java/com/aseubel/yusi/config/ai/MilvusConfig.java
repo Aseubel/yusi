@@ -42,12 +42,12 @@ public class MilvusConfig {
         }
         MilvusEmbeddingStore store = builder
 
-                .collectionName("yusi_embedding_collection")      // Name of the collection
+                .collectionName("yusi_embedding_collection") // Name of the collection
                 .dimension(((EmbeddingModel) applicationContext.getBean("embeddingModel")).dimension())
-                .indexType(IndexType.HNSW)  // 它是目前内存索引中 查询速度 和 召回率 (Recall) 平衡最好的算法。
-                .metricType(MetricType.COSINE)  // Cosine 能最好地衡量“语义相似度”
+                .indexType(IndexType.HNSW) // 它是目前内存索引中 查询速度 和 召回率 (Recall) 平衡最好的算法。
+                .metricType(MetricType.COSINE) // Cosine 能最好地衡量“语义相似度”
                 .consistencyLevel(ConsistencyLevelEnum.EVENTUALLY)
-                .autoFlushOnInsert(true)
+                .autoFlushOnInsert(false)
                 .idFieldName("id")
                 .textFieldName("text")
                 .metadataFieldName("metadata")
