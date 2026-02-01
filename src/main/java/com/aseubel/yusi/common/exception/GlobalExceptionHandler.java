@@ -30,6 +30,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public Response<String> handleException(Exception e) {
         log.error("System error", e);
+        setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         return Response.fail("系统内部错误: " + e.getMessage());
     }
 

@@ -9,6 +9,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -18,17 +19,16 @@ import java.util.List;
 public class RestPage<T> extends PageImpl<T> {
 
     @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
-    public RestPage(@JsonProperty("content") List<T> content,
-            @JsonProperty("number") int number,
-            @JsonProperty("size") int size,
-            @JsonProperty("totalElements") Long totalElements,
-            @JsonProperty("pageable") JsonNode pageable,
-            @JsonProperty("last") boolean last,
-            @JsonProperty("totalPages") int totalPages,
-            @JsonProperty("sort") JsonNode sort,
-            @JsonProperty("first") boolean first,
-            @JsonProperty("numberOfElements") int numberOfElements) {
-        super(content, PageRequest.of(number, size > 0 ? size : 10), totalElements);
+    public RestPage(
+            @JsonProperty("content") List<T> content,
+            @JsonProperty("page") JsonNode page,
+            @JsonProperty("number") Integer number,
+            @JsonProperty("size") Integer size,
+            @JsonProperty("totalElements") Long totalElements) {
+        super(
+                content == null ? Collections.emptyList() : content,
+                PageRequest.of(resolveNumber(number, page), resolveSize(size, page)),
+                resolveTotalElements(totalElements, page, content));
     }
 
     public RestPage(List<T> content, Pageable pageable, long total) {
@@ -41,5 +41,38 @@ public class RestPage<T> extends PageImpl<T> {
 
     public RestPage() {
         super(new ArrayList<>());
+    }
+
+    private static int resolveNumber(Integer number, JsonNode page) {
+        if (number != null) {
+            return number;
+        }
+        if (page != null && page.has("number") && page.get("number").canConvertToInt()) {
+            return page.get("number").asInt();
+        }
+        return 0;
+    }
+
+    private static int resolveSize(Integer size, JsonNode page) {
+        if (size != null && size > 0) {
+            return size;
+        }
+        if (page != null && page.has("size") && page.get("size").canConvertToInt()) {
+            int resolved = page.get("size").asInt();
+            if (resolved > 0) {
+                return resolved;
+            }
+        }
+        return 10;
+    }
+
+    private static long resolveTotalElements(Long totalElements, JsonNode page, List<?> content) {
+        if (totalElements != null) {
+            return totalElements;
+        }
+        if (page != null && page.has("totalElements") && page.get("totalElements").canConvertToLong()) {
+            return page.get("totalElements").asLong();
+        }
+        return content == null ? 0L : content.size();
     }
 }
