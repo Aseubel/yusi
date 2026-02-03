@@ -39,41 +39,6 @@ public class AiController {
 
     private final ThreadPoolTaskExecutor threadPoolExecutor;
 
-    @PostMapping("/chat/send")
-    public Response<Void> sendMessage(@RequestBody DiaryChatRequest request) {
-        String userId = UserContext.getUserId();
-        String message = request.getQuery();
-
-        // Try to acquire lock for this user
-        if (!aiLockService.tryAcquireLock(userId)) {
-            throw new AiLockException("您有一个AI请求正在处理中，请等待完成后再试");
-        }
-
-        threadPoolExecutor.execute(() -> {
-            try {
-                TokenStream tokenStream = diaryAssistant.chat(userId, message);
-                tokenStream
-                        .onPartialResponse(token -> {
-                            redissonClient.getTopic("yusi:sse:" + userId).publish(token);
-                        })
-                        .onCompleteResponse(response -> {
-                            aiLockService.releaseLock(userId);
-                        })
-                        .onError(error -> {
-                            aiLockService.releaseLock(userId);
-                            redissonClient.getTopic("yusi:sse:" + userId).publish("[ERROR]: " + error.getMessage());
-                        })
-                        .start();
-            } catch (Exception e) {
-                log.error("Error during AI chat stream", e);
-                aiLockService.releaseLock(userId);
-                redissonClient.getTopic("yusi:sse:" + userId).publish("[ERROR]: " + e.getMessage());
-            }
-        });
-
-        return Response.success();
-    }
-
     @RateLimiter(key = "chatStream", time = 60, count = 20, limitType = LimitType.USER)
     @GetMapping(value = "/chat/stream", produces = "text/event-stream")
     public SseEmitter chatStream(@RequestParam String message) {
