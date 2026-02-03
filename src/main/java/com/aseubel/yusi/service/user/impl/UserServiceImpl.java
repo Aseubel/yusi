@@ -7,6 +7,7 @@ import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.utils.JwtUtils;
 import com.aseubel.yusi.pojo.dto.user.AuthResponse;
 import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.redis.annotation.QueryCache;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.user.UserService;
 import com.aseubel.yusi.service.user.TokenService;
@@ -114,6 +115,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @QueryCache(key = "'user:data:' + #userId")
     public User getUserByUserId(String userId) {
         return userRepository.findByUserId(userId);
     }
@@ -135,6 +137,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @QueryCache(key = "'user:admin:' + #userId")
     public Boolean checkAdmin(String userId) {
         if (StrUtil.isEmpty(userId)) {
             return false;
