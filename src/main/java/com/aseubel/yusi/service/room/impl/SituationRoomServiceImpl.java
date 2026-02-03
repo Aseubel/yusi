@@ -268,7 +268,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
 
     @Override
     public SituationScenario reviewScenario(String adminId, String scenarioId, Integer status, String rejectReason) {
-        if (!checkAdmin(adminId)) {
+        if (!userService.checkAdmin(adminId)) {
             throw new AuthenticationException("无权限");
         }
 
@@ -288,22 +288,10 @@ public class SituationRoomServiceImpl implements SituationRoomService {
 
     @Override
     public List<SituationScenario> getScenariosByStatus(String userId, Integer status) {
-        if (!checkAdmin(userId)) {
+        if (!userService.checkAdmin(userId)) {
             throw new AuthenticationException("无权限");
         }
         return scenarioRepository.findByStatus(status);
-    }
-
-    private Boolean checkAdmin(String userId) {
-        if (StrUtil.isEmpty(userId)) {
-            return false;
-        }
-        try {
-            User user = userService.getUserByUserId(userId);
-            return user != null && user.getPermissionLevel() != null && user.getPermissionLevel() >= 10;
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     private String generateCode() {

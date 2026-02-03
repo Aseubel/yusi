@@ -24,4 +24,6 @@ public interface UserService {
     User updateMatchSettings(String userId, boolean enabled, String intent);
 
     List<User> getMatchEnabledUsers();
+
+    Boolean checkAdmin(String userId);
 }

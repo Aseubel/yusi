@@ -74,9 +74,6 @@ public class User {
     @Column(name = "key_salt")
     private String keySalt;
 
-    /**
-     * 服务端生成的默认加密密钥（仅DEFAULT模式使用）
-     */
     public String generateUserId() {
         this.userId = UuidUtils.genUuidSimple();
         return this.userId;

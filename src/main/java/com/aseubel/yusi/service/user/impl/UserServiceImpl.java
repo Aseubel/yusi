@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.user.impl;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.BCrypt;
 
 import com.aseubel.yusi.common.exception.BusinessException;
@@ -9,6 +10,9 @@ import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.user.UserService;
 import com.aseubel.yusi.service.user.TokenService;
+
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -126,7 +130,20 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public java.util.List<User> getMatchEnabledUsers() {
+    public List<User> getMatchEnabledUsers() {
         return userRepository.findByIsMatchEnabledTrue();
+    }
+
+    @Override
+    public Boolean checkAdmin(String userId) {
+        if (StrUtil.isEmpty(userId)) {
+            return false;
+        }
+        try {
+            User user = this.getUserByUserId(userId);
+            return user != null && user.getPermissionLevel() != null && user.getPermissionLevel() >= 10;
+        } catch (Exception e) {
+            return false;
+        }
     }
 }

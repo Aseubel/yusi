@@ -11,8 +11,10 @@ import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.key.KeyManagementService;
+import com.aseubel.yusi.service.user.UserService;
+
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,19 +29,16 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class KeyManagementServiceImpl implements KeyManagementService {
 
     private static final String KEY_MODE_DEFAULT = "DEFAULT";
     private static final String KEY_MODE_CUSTOM = "CUSTOM";
 
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private DiaryRepository diaryRepository;
-
-    @Autowired
-    private CryptoService cryptoService;
+    private final UserRepository userRepository;
+    private final DiaryRepository diaryRepository;
+    private final CryptoService cryptoService;
+    private final UserService userService;
 
     @Override
     public KeySettingsResponse getKeySettings(String userId) {
@@ -176,8 +175,7 @@ public class KeyManagementServiceImpl implements KeyManagementService {
 
     @Override
     public String getBackupKeyForRecovery(String adminUserId, String targetUserId) {
-        User admin = userRepository.findByUserId(adminUserId);
-        if (admin == null || admin.getPermissionLevel() == null || admin.getPermissionLevel() < 10) {
+        if (!userService.checkAdmin(adminUserId)) {
             throw new BusinessException("无权限：仅管理员可访问备份密钥");
         }
 
