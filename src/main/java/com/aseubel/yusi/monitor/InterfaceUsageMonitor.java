@@ -41,7 +41,7 @@ public class InterfaceUsageMonitor {
             // Note: IRedisService needs to expose getMap properly or we cast/use
             // RedissonClient directly
             // Assuming redissonService.getMap returns RMap
-            RMap<String, Long> map = redissonService.getMap(redisKey);
+            RMap<String, Object> map = redissonService.getMap(redisKey);
             map.addAndGet(field, 1L);
 
             // Set expiration if new (e.g., 2 days)
@@ -82,17 +82,34 @@ public class InterfaceUsageMonitor {
                 return;
             }
 
-            RMap<String, Long> map = redissonService.getMap(redisKey);
+            RMap<String, Object> map = redissonService.getMap(redisKey);
 
             // Set expiration to ensure cleanup (e.g., 2 days from now)
             map.expire(java.time.Duration.ofDays(2));
 
             // Iterate and sync
             // RMap entrySet iteration uses HSCAN
-            for (Map.Entry<String, Long> entry : map.entrySet()) {
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
                 try {
                     String field = entry.getKey();
-                    Long count = entry.getValue();
+                    Object rawCount = entry.getValue();
+                    if (rawCount == null) {
+                        continue;
+                    }
+                    long count;
+                    if (rawCount instanceof Number) {
+                        count = ((Number) rawCount).longValue();
+                    } else if (rawCount instanceof String) {
+                        try {
+                            count = Long.parseLong((String) rawCount);
+                        } catch (NumberFormatException e) {
+                            log.warn("Invalid usage count: {}", rawCount);
+                            continue;
+                        }
+                    } else {
+                        log.warn("Invalid usage count type: {}", rawCount.getClass().getName());
+                        continue;
+                    }
 
                     String[] parts = field.split(SEPARATOR);
                     if (parts.length != 3) {
