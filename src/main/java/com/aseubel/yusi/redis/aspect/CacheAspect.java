@@ -52,14 +52,27 @@ public class CacheAspect {
     private static final String SET_SH = "local key = KEYS[1]\n"
             + "local value = ARGV[1]\n"
             + "local owner = ARGV[2]\n"
+            + "local ttl = tonumber(ARGV[3])\n"
             + "local lockOwner = redis.call('HGET', key, '" + OWNER + "')\n"
             + "local lockInfo = redis.call('HGET', key, '" + LOCK_INFO + "')\n"
             + "if lockOwner and lockOwner == owner then\n"
             + "    redis.call('HMSET', key, '" + LOCK_INFO + "', 'unlocked', '" + VALUE + "', value)\n"
-            + "    redis.call('HDEL', key, '" + UNLOCK_TIME + "')"
+            + "    redis.call('HDEL', key, '" + UNLOCK_TIME + "')\n"
+            + "    if ttl and ttl > 0 then redis.call('EXPIRE', key, ttl) end\n"
             + "    return 0\n"
             + "end\n"
             + "return 1";
+
+    /**
+     * 释放锁脚本（用于查询结果为空时释放锁，避免锁永久卡住）
+     */
+    private static final String RELEASE_LOCK_SH = "local key = KEYS[1]\n"
+            + "local owner = ARGV[1]\n"
+            + "local lockOwner = redis.call('HGET', key, '" + OWNER + "')\n"
+            + "if lockOwner and lockOwner == owner then\n"
+            + "    redis.call('HDEL', key, '" + OWNER + "', '" + UNLOCK_TIME + "', '" + LOCK_INFO + "')\n"
+            + "end\n"
+            + "return 0";
 
     private static final String GET_SH = "local key = KEYS[1]\n"
             + "local newUnlockTime = ARGV[1]\n"
@@ -103,6 +116,7 @@ public class CacheAspect {
     private static final String SET_SH_SHA = DigestUtil.sha1Hex(SET_SH);
     private static final String GET_SH_SHA = DigestUtil.sha1Hex(GET_SH);
     private static final String INVALID_SH_SHA = DigestUtil.sha1Hex(INVALID_SH);
+    private static final String RELEASE_LOCK_SH_SHA = DigestUtil.sha1Hex(RELEASE_LOCK_SH);
 
     @Around("@annotation(updateCache)")
     public Object updateCache(ProceedingJoinPoint joinPoint, UpdateCache updateCache) throws Throwable {
@@ -206,6 +220,7 @@ public class CacheAspect {
     }
 
     private Object queryData(ProceedingJoinPoint joinPoint, String key, long ttl, boolean compress) throws Throwable {
+        String owner = Thread.currentThread().getName();
         try {
             Object value = joinPoint.proceed();
             if (ObjectUtil.isNotEmpty(value)) {
@@ -216,11 +231,22 @@ public class CacheAspect {
                     valueAsJson = CompressUtils.compress(valueAsJson);
                 }
                 redisService.execute(SET_SH_SHA, SET_SH, RScript.ReturnType.INTEGER, List.of(key), valueAsJson,
-                        Thread.currentThread().getName(), ttl);
+                        owner, ttl);
+            } else {
+                // 查询结果为空时，释放锁避免锁永久卡住
+                redisService.execute(RELEASE_LOCK_SH_SHA, RELEASE_LOCK_SH, RScript.ReturnType.INTEGER, List.of(key),
+                        owner);
             }
             return value;
         } catch (Throwable e) {
             log.error("Failed to query data for cache key: {}", key, e);
+            // 异常时也要释放锁
+            try {
+                redisService.execute(RELEASE_LOCK_SH_SHA, RELEASE_LOCK_SH, RScript.ReturnType.INTEGER, List.of(key),
+                        owner);
+            } catch (Exception ex) {
+                log.warn("Failed to release lock for key: {}", key, ex);
+            }
             throw e;
         }
     }
