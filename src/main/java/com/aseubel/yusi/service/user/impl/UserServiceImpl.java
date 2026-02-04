@@ -72,6 +72,11 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public AuthResponse refreshToken(String refreshToken) {
+        return refreshToken(refreshToken, null);
+    }
+
+    @Override
+    public AuthResponse refreshToken(String refreshToken, String oldAccessToken) {
         if (!jwtUtils.validateToken(refreshToken)) {
             throw new BusinessException("无效的刷新令牌");
         }
@@ -93,11 +98,14 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException("用户不存在");
         }
 
-        // Enforce device limit and add new device token
-        tokenService.enforceDeviceLimit(userId, MAX_DEVICES);
+        // Remove the old access token from device list if provided
+        if (oldAccessToken != null && !oldAccessToken.isEmpty()) {
+            tokenService.removeDeviceToken(userId, oldAccessToken);
+        }
 
+        // Generate new access token
         String newAccessToken = jwtUtils.generateAccessToken(userId, user.getUserName());
-        // Add the new device token for the refreshed session
+        // Add the new token (this replaces the old one since we removed it above)
         tokenService.addDeviceToken(userId, newAccessToken, "refresh");
 
         return AuthResponse.builder()

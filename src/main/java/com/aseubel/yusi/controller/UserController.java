@@ -47,8 +47,10 @@ public class UserController {
 
     @Auth(required = false)
     @PostMapping("/refresh")
-    public Response<AuthResponse> refresh(@RequestHeader("X-Refresh-Token") String refreshToken) {
-        return Response.success(userService.refreshToken(refreshToken));
+    public Response<AuthResponse> refresh(
+            @RequestHeader("X-Refresh-Token") String refreshToken,
+            @RequestHeader(value = "X-Old-Access-Token", required = false) String oldAccessToken) {
+        return Response.success(userService.refreshToken(refreshToken, oldAccessToken));
     }
 
     @PostMapping("/logout")

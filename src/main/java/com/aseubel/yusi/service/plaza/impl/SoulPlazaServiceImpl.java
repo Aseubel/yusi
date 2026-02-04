@@ -225,4 +225,50 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
 
         return resonance;
     }
+
+    @Override
+    @QueryCache(key = "'plaza:my:' + #userId + ':' + #page + ':' + #size", ttl = 60)
+    public Page<SoulCard> getMyCards(String userId, int page, int size) {
+        PageRequest pageRequest = PageRequest.of(page - 1, size);
+        return cardRepository.findByUserIdOrderByCreatedAtDesc(userId, pageRequest);
+    }
+
+    @Override
+    @Transactional
+    @UpdateCache(key = "'plaza:my:' + #userId + ':*'", evictOnly = true)
+    public SoulCard updateCard(String userId, Long cardId, String content) {
+        SoulCard card = cardRepository.findById(cardId)
+                .orElseThrow(() -> new BusinessException("卡片不存在"));
+
+        if (!card.getUserId().equals(userId)) {
+            throw new BusinessException("无权修改此卡片");
+        }
+
+        if (content == null || content.length() < 5) {
+            throw new BusinessException("内容太短");
+        }
+
+        // 重新分析情绪
+        String emotion = analyzeContentEmotion(content);
+        card.setContent(content);
+        card.setEmotion(emotion);
+
+        return cardRepository.save(card);
+    }
+
+    @Override
+    @Transactional
+    @UpdateCache(key = "'plaza:my:' + #userId + ':*'", evictOnly = true)
+    public void deleteCard(String userId, Long cardId) {
+        SoulCard card = cardRepository.findById(cardId)
+                .orElseThrow(() -> new BusinessException("卡片不存在"));
+
+        if (!card.getUserId().equals(userId)) {
+            throw new BusinessException("无权删除此卡片");
+        }
+
+        // 同时删除关联的共鸣
+        resonanceRepository.deleteByCardId(cardId);
+        cardRepository.delete(card);
+    }
 }
