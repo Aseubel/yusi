@@ -2,6 +2,7 @@ package com.aseubel.yusi.redis.aspect;
 
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.crypto.digest.DigestUtil;
+import com.aseubel.yusi.common.utils.CompressUtils;
 import com.aseubel.yusi.common.utils.SpelResolverHelper;
 import com.aseubel.yusi.redis.service.IRedisService;
 import com.aseubel.yusi.redis.annotation.QueryCache;
@@ -156,14 +157,15 @@ public class CacheAspect {
 
         // 计算TTL
         long effectiveTtl = queryCache.ttl() > 0 ? queryCache.ttl() : ttl.getSeconds();
+        boolean compress = queryCache.compress();
 
         List<Object> result = redisService.execute(GET_SH_SHA, GET_SH, RScript.ReturnType.MULTI, List.of(key),
                 newUnlockTime, owner, currentTime);
 
         String sign = (String) result.get(1);
-        long maxWaitTime = System.currentTimeMillis() + 2000; // 最多等待2秒
+        long maxWaitTime = System.currentTimeMillis() + 1000; // 最多等待1秒
         while (sign.equals(NEED_WAIT) && System.currentTimeMillis() < maxWaitTime) {
-            Thread.sleep(100); // 休眠
+            Thread.sleep(200); // 休眠
             result = redisService.execute(GET_SH_SHA, GET_SH, RScript.ReturnType.MULTI, List.of(key), newUnlockTime,
                     owner, currentTime);
             sign = (String) result.get(1);
@@ -171,6 +173,10 @@ public class CacheAspect {
 
         // 从返回结果中获取原始的、未经处理的业务数据字符串
         String valueStr = (String) result.get(0);
+        // 如果启用压缩，解压缩数据
+        if (compress && valueStr != null) {
+            valueStr = CompressUtils.decompress(valueStr);
+        }
         // 提前获取目标方法的返回类型（包含泛型信息），用于后续的反序列化
         Method method = ((MethodSignature) joinPoint.getSignature()).getMethod();
         JavaType returnType = objectMapper.getTypeFactory().constructType(method.getGenericReturnType());
@@ -178,12 +184,12 @@ public class CacheAspect {
         switch (sign) {
             case NEED_QUERY:
                 // 缓存未命中，直接查询源数据并返回
-                return queryData(joinPoint, key, effectiveTtl);
+                return queryData(joinPoint, key, effectiveTtl, compress);
             case SUCCESS_NEED_QUERY:
                 // 缓存命中，但数据陈旧，需要异步更新
                 threadPoolExecutor.execute(() -> {
                     try {
-                        queryData(joinPoint, key, effectiveTtl);
+                        queryData(joinPoint, key, effectiveTtl, compress);
                     } catch (Throwable e) {
                         throw new RuntimeException(e);
                     }
@@ -199,12 +205,16 @@ public class CacheAspect {
         throw new RuntimeException("unknown sign: " + sign);
     }
 
-    private Object queryData(ProceedingJoinPoint joinPoint, String key, long ttl) throws Throwable { // 让异常抛出
+    private Object queryData(ProceedingJoinPoint joinPoint, String key, long ttl, boolean compress) throws Throwable {
         try {
             Object value = joinPoint.proceed();
             if (ObjectUtil.isNotEmpty(value)) {
                 // 这样确保了存入 Redis 的是标准、可反序列化的 JSON
                 String valueAsJson = objectMapper.writeValueAsString(value);
+                // 如果启用压缩，压缩数据后再存储
+                if (compress) {
+                    valueAsJson = CompressUtils.compress(valueAsJson);
+                }
                 redisService.execute(SET_SH_SHA, SET_SH, RScript.ReturnType.INTEGER, List.of(key), valueAsJson,
                         Thread.currentThread().getName(), ttl);
             }

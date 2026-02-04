@@ -7,6 +7,8 @@ import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.redis.annotation.QueryCache;
+import com.aseubel.yusi.redis.annotation.UpdateCache;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.diary.Assistant;
@@ -57,7 +59,12 @@ public class DiaryServiceImpl implements DiaryService {
     @Lazy
     private DiaryService self;
 
+    /**
+     * 新增日记
+     * 失效该用户的日记列表缓存
+     */
     @Override
+    @UpdateCache(key = "'diary:list:' + #diary.userId + ':*'", evictOnly = true)
     public Diary addDiary(Diary diary) {
         diary.generateId();
         diary.setCreateTime(LocalDateTime.now());
@@ -149,7 +156,12 @@ public class DiaryServiceImpl implements DiaryService {
         return null;
     }
 
+    /**
+     * 编辑日记
+     * 失效单个日记缓存和用户列表缓存
+     */
     @Override
+    @UpdateCache(key = "'diary:detail:' + #diary.diaryId", evictOnly = true)
     public Diary editDiary(Diary diary) {
         Diary existingDiary = diaryRepository.findByDiaryId(diary.getDiaryId());
         if (ObjectUtil.isNotEmpty(existingDiary)) {
@@ -164,12 +176,27 @@ public class DiaryServiceImpl implements DiaryService {
             Diary saved = diaryRepository.save(diary);
             // 保存后 entity 可能会丢失 transient 字段，这里重新设置以便后续 disruptor 使用
             saved.setPlainContent(plainContent);
+            // 额外失效列表缓存
+            evictListCache(diary.getUserId());
             return saved;
         }
         return null;
     }
 
+    /**
+     * 失效用户日记列表缓存的辅助方法
+     */
+    @UpdateCache(key = "'diary:list:' + #userId + ':*'", evictOnly = true)
+    public void evictListCache(String userId) {
+        // 空方法，仅用于触发缓存失效
+    }
+
+    /**
+     * 获取单个日记详情
+     * 使用压缩缓存，日记内容较大，压缩可显著减少 Redis 内存占用
+     */
     @Override
+    @QueryCache(key = "'diary:detail:' + #diaryId", ttl = 3600, compress = true)
     public Diary getDiary(String diaryId) {
         Diary diary = diaryRepository.findByDiaryId(diaryId);
         if (diary == null) {
@@ -179,7 +206,12 @@ public class DiaryServiceImpl implements DiaryService {
         return diary;
     }
 
+    /**
+     * 获取日记列表
+     * 使用压缩缓存，列表数据较大
+     */
     @Override
+    @QueryCache(key = "'diary:list:' + #userId + ':' + #pageNum + ':' + #pageSize + ':' + #sortBy + ':' + #asc", ttl = 300, compress = true)
     public Page<Diary> getDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc) {
         // 处理默认排序字段
         String actualSort = StrUtil.isBlank(sortBy) ? "createTime" : sortBy;
@@ -199,7 +231,12 @@ public class DiaryServiceImpl implements DiaryService {
         // return diaryRepository.findByUserId("当前用户ID", pageRequest);
     }
 
+    /**
+     * 获取用户足迹列表
+     * 使用压缩缓存
+     */
     @Override
+    @QueryCache(key = "'diary:footprints:' + #userId", ttl = 600, compress = true)
     public java.util.List<Diary> getFootprints(String userId) {
         java.util.List<Diary> diaries = diaryRepository.findAllWithLocationByUserId(userId);
         diaries.forEach(this::applyReadCrypto);

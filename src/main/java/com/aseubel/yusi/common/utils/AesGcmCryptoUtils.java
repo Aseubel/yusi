@@ -7,6 +7,7 @@ import javax.crypto.spec.PBEKeySpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Base64;
 
@@ -17,6 +18,30 @@ public final class AesGcmCryptoUtils {
     private static final int TAG_LENGTH_BITS = 128;
     private static final int PBKDF2_ITERATIONS = 100000;
     private static final int PBKDF2_KEY_LENGTH_BITS = 256;
+
+    /**
+     * ThreadLocal SecureRandom with non-blocking algorithm.
+     * - 使用 DRBG (Deterministic Random Bit Generator) 算法，符合 NIST SP 800-90A 标准
+     * - ThreadLocal 避免线程竞争，同时复用实例
+     * - DRBG 不依赖系统熵池，不会在 Linux /dev/random 下阻塞
+     * - 在高并发加密场景下性能显著提升
+     * 
+     * 部署注意：Linux 环境可额外配置 JVM 参数 -Djava.security.egd=file:/dev/./urandom
+     */
+    private static final ThreadLocal<SecureRandom> SECURE_RANDOM = ThreadLocal.withInitial(() -> {
+        try {
+            // 优先使用 DRBG（Java 9+，非阻塞，符合 NIST 标准）
+            return SecureRandom.getInstance("DRBG");
+        } catch (NoSuchAlgorithmException e) {
+            try {
+                // 降级：SHA1PRNG（性能较好，兼容性强）
+                return SecureRandom.getInstance("SHA1PRNG");
+            } catch (NoSuchAlgorithmException ex) {
+                // 最终降级：平台默认实现
+                return new SecureRandom();
+            }
+        }
+    });
 
     private AesGcmCryptoUtils() {
     }
@@ -66,7 +91,7 @@ public final class AesGcmCryptoUtils {
         validateAesKey(keyBytes);
 
         byte[] iv = new byte[IV_LENGTH_BYTES];
-        new SecureRandom().nextBytes(iv);
+        SECURE_RANDOM.get().nextBytes(iv);
 
         try {
             Cipher cipher = Cipher.getInstance(TRANSFORMATION);

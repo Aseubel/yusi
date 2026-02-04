@@ -34,4 +34,11 @@ public @interface QueryCache {
      * -1 表示使用全局配置
      */
     long ttl() default -1;
+
+    /**
+     * 是否压缩缓存数据
+     * 适用于大文本数据（如日记内容），可显著减少 Redis 内存占用
+     * 默认关闭
+     */
+    boolean compress() default false;
 }

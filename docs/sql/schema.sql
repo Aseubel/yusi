@@ -222,4 +222,26 @@ CREATE TABLE `user_location` (
     KEY `idx_user_location_create_time` (`create_time`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '用户保存的地点表';
 
+-- Milvus Embedding 任务表
+-- 用于可靠的异步批量处理日记向量化
+-- 任务与日记保存在同一事务中，确保不会丢失
+CREATE TABLE `embedding_task` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `diary_id` VARCHAR(255) NOT NULL COMMENT '关联的日记业务ID',
+    `user_id` VARCHAR(255) NOT NULL COMMENT '关联的用户ID',
+    `task_type` VARCHAR(32) NOT NULL COMMENT '任务类型: UPSERT(新增/修改) / DELETE(删除)',
+    `status` VARCHAR(32) NOT NULL COMMENT '任务状态: PENDING/PROCESSING/COMPLETED/FAILED',
+    `retry_count` INT DEFAULT 0 COMMENT '重试次数',
+    `max_retries` INT DEFAULT 5 COMMENT '最大重试次数',
+    `error_message` VARCHAR(1000) DEFAULT NULL COMMENT '错误信息',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `next_retry_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '下次重试时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_embedding_task_status` (`status`),
+    KEY `idx_embedding_task_diary_id` (`diary_id`),
+    KEY `idx_embedding_task_next_retry` (`next_retry_at`),
+    KEY `idx_embedding_task_created` (`created_at`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'Milvus Embedding 任务表';
+
 SET FOREIGN_KEY_CHECKS = 1;
