@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.match;
 
+import com.aseubel.yusi.pojo.dto.match.MatchStatusResponse;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import java.util.List;
 
@@ -22,9 +23,19 @@ public interface MatchService {
 
     /**
      * Handle user action (Interested / Skip).
-     * @param userId Current user ID
+     * 
+     * @param userId  Current user ID
      * @param matchId Match ID
-     * @param action 1: Interested, 2: Skipped
+     * @param action  1: Interested, 2: Skipped
      */
     SoulMatch handleMatchAction(String userId, Long matchId, Integer action);
+
+    /**
+     * Get match status for a user.
+     * 
+     * @param userId Current user ID
+     * @return Match status including enabled state, diary count, and match
+     *         statistics
+     */
+    MatchStatusResponse getMatchStatus(String userId);
 }

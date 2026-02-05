@@ -4,6 +4,7 @@ import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.pojo.dto.match.MatchActionRequest;
 import com.aseubel.yusi.pojo.dto.match.MatchSettingsRequest;
+import com.aseubel.yusi.pojo.dto.match.MatchStatusResponse;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.service.match.MatchService;
@@ -50,6 +51,12 @@ public class MatchController {
     public SoulMatch handleAction(@PathVariable Long matchId, @RequestBody MatchActionRequest request) {
         String userId = UserContext.getUserId();
         return matchService.handleMatchAction(userId, matchId, request.getAction());
+    }
+
+    @GetMapping("/status")
+    public MatchStatusResponse getStatus() {
+        String userId = UserContext.getUserId();
+        return matchService.getMatchStatus(userId);
     }
 
     // Dev endpoint to trigger matching manually

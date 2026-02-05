@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.match.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import com.aseubel.yusi.pojo.dto.match.MatchStatusResponse;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.User;
@@ -54,16 +55,25 @@ public class MatchServiceImpl implements MatchService {
         // Shuffle to randomize
         Collections.shuffle(candidates);
 
-        // Simple pair matching logic (greedy)
-        // Note: Real logic should be more complex (avoid recent duplicates, check
-        // intent compatibility, etc.)
+        /*
+         * 当前策略: 简单随机配对
+         * 
+         * TODO: 实现基于日记分析的智能匹配算法
+         * 1. 获取用户日记的向量嵌入 (从Milvus)
+         * 2. 计算用户间的向量相似度
+         * 3. 按意图(intent)分组，优先匹配相同意图用户
+         * 4. 避免近期已配对的用户重复匹配
+         * 5. 基于GraphRAG图谱结构相似度进行深层匹配 (v3.0)
+         * 
+         * @see PRD v3.0 Section 3.1 灵魂匹配升级
+         */
         List<String> processedUserIds = new ArrayList<>();
 
         for (User userA : candidates) {
             if (processedUserIds.contains(userA.getUserId()))
                 continue;
 
-            // Find a partner
+            // Find a partner (currently random, TODO: use similarity-based matching)
             User partner = null;
             for (User potential : candidates) {
                 if (potential.getUserId().equals(userA.getUserId()))
@@ -71,8 +81,9 @@ public class MatchServiceImpl implements MatchService {
                 if (processedUserIds.contains(potential.getUserId()))
                     continue;
 
-                // Check if already matched recently (omitted for MVP simplicity, or check DB)
-                // if (alreadyMatched(userA, potential)) continue;
+                // TODO: Check diary count >= 3 before matching
+                // TODO: Calculate similarity score and rank candidates
+                // TODO: if (alreadyMatchedRecently(userA, potential)) continue;
 
                 partner = potential;
                 break;
@@ -178,5 +189,43 @@ public class MatchServiceImpl implements MatchService {
 
         match.setUpdateTime(LocalDateTime.now());
         return soulMatchRepository.save(match);
+    }
+
+    @Override
+    public MatchStatusResponse getMatchStatus(String userId) {
+        User user = userService.getUserByUserId(userId);
+        long diaryCount = diaryRepository.countByUserId(userId);
+        List<SoulMatch> matches = getMatches(userId);
+
+        // Calculate pending matches (user hasn't acted yet)
+        long pendingMatches = matches.stream()
+                .filter(m -> {
+                    if (userId.equals(m.getUserAId())) {
+                        return m.getStatusA() == 0;
+                    } else {
+                        return m.getStatusB() == 0;
+                    }
+                })
+                .count();
+
+        // Calculate completed matches (both interested)
+        long completedMatches = matches.stream()
+                .filter(SoulMatch::getIsMatched)
+                .count();
+
+        // Check if user can enable matching
+        boolean canEnable = diaryCount >= 3;
+        String enableHint = canEnable ? null : "需要至少3篇日记才能开启灵魂匹配，让AI更了解你";
+
+        return MatchStatusResponse.builder()
+                .enabled(user.getIsMatchEnabled())
+                .intent(user.getMatchIntent())
+                .diaryCount(diaryCount)
+                .pendingMatches(pendingMatches)
+                .completedMatches(completedMatches)
+                .nextMatchTime("每日凌晨 2:00")
+                .canEnable(canEnable)
+                .enableHint(enableHint)
+                .build();
     }
 }

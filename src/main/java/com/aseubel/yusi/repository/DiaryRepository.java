@@ -30,6 +30,11 @@ public interface DiaryRepository extends JpaRepository<Diary, Long> {
     List<Diary> findAllByUserId(String userId);
 
     /**
+     * 统计用户日记数量（用于匹配资格检查）
+     */
+    long countByUserId(String userId);
+
+    /**
      * 获取用户所有有地理位置的日记（用于足迹地图）
      */
     @Query("SELECT d FROM Diary d WHERE d.userId = :userId AND d.latitude IS NOT NULL AND d.longitude IS NOT NULL ORDER BY d.createTime DESC")
