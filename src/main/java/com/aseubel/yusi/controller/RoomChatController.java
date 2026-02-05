@@ -4,6 +4,8 @@ import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.redis.annotation.QueryCache;
+import com.aseubel.yusi.redis.annotation.UpdateCache;
 import com.aseubel.yusi.pojo.contant.RoomStatus;
 import com.aseubel.yusi.pojo.dto.chat.RoomChatRequest;
 import com.aseubel.yusi.pojo.entity.RoomMessage;
@@ -44,6 +46,7 @@ public class RoomChatController {
     /**
      * 发送消息
      */
+    @UpdateCache(cacheNames = "room:chat", key = "#request.roomCode")
     @PostMapping("/send")
     public Response<RoomMessage> sendMessage(@RequestBody RoomChatRequest request) {
         String userId = UserContext.getUserId();
@@ -96,6 +99,7 @@ public class RoomChatController {
     /**
      * 获取房间聊天历史
      */
+    @QueryCache(cacheNames = "room:chat", key = "#roomCode", ttl = 3600)
     @GetMapping("/history")
     public Response<List<RoomMessage>> getHistory(@RequestParam String roomCode) {
         String userId = UserContext.getUserId();
