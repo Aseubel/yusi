@@ -11,6 +11,7 @@ import com.aseubel.yusi.service.user.UserService;
 import com.aseubel.yusi.service.user.AdminService;
 import com.aseubel.yusi.pojo.dto.admin.AdminStatsResponse;
 import com.aseubel.yusi.pojo.dto.admin.ScenarioAuditRequest;
+import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
 import com.aseubel.yusi.pojo.entity.User;
 import org.springframework.data.domain.Page;
@@ -50,38 +51,40 @@ public class AdminController {
     // }
 
     @GetMapping("/stats")
-    public AdminStatsResponse getStats() {
+    public Response<AdminStatsResponse> getStats() {
         checkAdminPermission();
-        return adminService.getStats();
+        return Response.success(adminService.getStats());
     }
 
     @GetMapping("/users")
-    public Page<User> getUsers(@RequestParam(defaultValue = "0") int page,
+    public Response<Page<User>> getUsers(@RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String search) {
         checkAdminPermission();
-        return adminService.getUsers(PageRequest.of(page, size), search);
+        return Response.success(adminService.getUsers(PageRequest.of(page, size), search));
     }
 
     @PostMapping("/users/{userId}/permission")
-    public void updateUserPermission(@PathVariable String userId, @RequestBody Map<String, Integer> payload) {
+    public Response<Void> updateUserPermission(@PathVariable String userId, @RequestBody Map<String, Integer> payload) {
         checkAdminPermission();
         Integer level = payload.get("level");
         if (level == null)
             throw new BusinessException("Level is required");
         adminService.updateUserPermission(userId, level);
+        return Response.success();
     }
 
     @GetMapping("/scenarios/pending")
-    public Page<SituationScenario> getPendingScenarios(@RequestParam(defaultValue = "0") int page,
+    public Response<Page<SituationScenario>> getPendingScenarios(@RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         checkAdminPermission();
-        return adminService.getPendingScenarios(PageRequest.of(page, size));
+        return Response.success(adminService.getPendingScenarios(PageRequest.of(page, size)));
     }
 
     @PostMapping("/scenarios/{scenarioId}/audit")
-    public void auditScenario(@PathVariable String scenarioId, @RequestBody ScenarioAuditRequest request) {
+    public Response<Void> auditScenario(@PathVariable String scenarioId, @RequestBody ScenarioAuditRequest request) {
         checkAdminPermission();
         adminService.auditScenario(scenarioId, request);
+        return Response.success();
     }
 }
