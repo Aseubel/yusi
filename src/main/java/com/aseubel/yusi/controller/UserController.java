@@ -5,7 +5,9 @@ import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.pojo.dto.user.AuthResponse;
 import com.aseubel.yusi.pojo.dto.user.LoginRequest;
+
 import com.aseubel.yusi.pojo.dto.user.RegisterRequest;
+import com.aseubel.yusi.pojo.dto.user.UpdateUserRequest;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.service.user.UserService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -51,6 +53,12 @@ public class UserController {
             @RequestHeader("X-Refresh-Token") String refreshToken,
             @RequestHeader(value = "X-Old-Access-Token", required = false) String oldAccessToken) {
         return Response.success(userService.refreshToken(refreshToken, oldAccessToken));
+    }
+
+    @PostMapping("/update")
+    public Response<User> update(@RequestBody UpdateUserRequest request) {
+        String userId = UserContext.getUserId();
+        return Response.success(userService.updateUser(userId, request.getUserName(), request.getEmail()));
     }
 
     @PostMapping("/logout")

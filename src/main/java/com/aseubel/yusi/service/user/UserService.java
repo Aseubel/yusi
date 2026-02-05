@@ -28,4 +28,6 @@ public interface UserService {
     List<User> getMatchEnabledUsers();
 
     Boolean checkAdmin(String userId);
+
+    User updateUser(String userId, String userName, String email);
 }

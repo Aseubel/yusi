@@ -157,4 +157,26 @@ public class UserServiceImpl implements UserService {
             return false;
         }
     }
+
+    @Override
+    public User updateUser(String userId, String userName, String email) {
+        User user = userRepository.findByUserId(userId);
+        if (user == null) {
+            throw new BusinessException("User not found");
+        }
+
+        if (StrUtil.isNotEmpty(userName) && !userName.equals(user.getUserName())) {
+            User existing = userRepository.findByUserName(userName);
+            if (existing != null) {
+                throw new BusinessException("Username already exists");
+            }
+            user.setUserName(userName);
+        }
+
+        if (StrUtil.isNotEmpty(email)) {
+            user.setEmail(email);
+        }
+
+        return userRepository.save(user);
+    }
 }
