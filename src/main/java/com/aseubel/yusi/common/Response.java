@@ -26,6 +26,14 @@ public final class Response<T> implements Serializable {
         return Response.<T>builder().code(200).info("success").data(data).build();
     }
 
+    public static <T> Response<T> success(String info) {
+        return Response.<T>builder().code(200).info(info).build();
+    }
+
+    public static <T> Response<T> success(Integer code, String info) {
+        return Response.<T>builder().code(code).info(info).build();
+    }
+
     public static <T> Response<T> fail(String info) {
         return Response.<T>builder().code(500).info(info).build();
     }

@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.user.impl;
 
 import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.admin.AdminStatsResponse;
 import com.aseubel.yusi.pojo.dto.admin.ScenarioAuditRequest;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
@@ -50,7 +51,7 @@ public class AdminServiceImpl implements AdminService {
     public void updateUserPermission(String userId, Integer permissionLevel) {
         User user = userRepository.findByUserId(userId);
         if (user == null) {
-            throw new BusinessException("User currently not found");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "User currently not found");
         }
         user.setPermissionLevel(permissionLevel);
         userRepository.save(user);
@@ -65,7 +66,7 @@ public class AdminServiceImpl implements AdminService {
     @Transactional(rollbackFor = Exception.class)
     public void auditScenario(String scenarioId, ScenarioAuditRequest request) {
         SituationScenario scenario = situationScenarioRepository.findById(scenarioId)
-                .orElseThrow(() -> new BusinessException("Scenario not found"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Scenario not found"));
 
         if (request.isApproved()) {
             scenario.setStatus(4); // 4 for manual approved

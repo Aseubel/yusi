@@ -4,6 +4,7 @@ import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.chat.SendMessageRequest;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.SoulMessage;
@@ -38,10 +39,10 @@ public class SoulChatController {
 
         // 验证 Match 是否存在且属于该用户
         SoulMatch match = matchRepository.findById(request.getMatchId())
-                .orElseThrow(() -> new BusinessException("匹配不存在"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "匹配不存在"));
 
         if (!Boolean.TRUE.equals(match.getIsMatched())) {
-            throw new BusinessException("尚未建立连接，无法发送消息");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "尚未建立连接，无法发送消息");
         }
 
         String receiverId;
@@ -50,7 +51,7 @@ public class SoulChatController {
         } else if (senderId.equals(match.getUserBId())) {
             receiverId = match.getUserAId();
         } else {
-            throw new BusinessException("无权发送消息");
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权发送消息");
         }
 
         SoulMessage message = SoulMessage.builder()
@@ -71,10 +72,10 @@ public class SoulChatController {
 
         // 验证权限
         SoulMatch match = matchRepository.findById(matchId)
-                .orElseThrow(() -> new BusinessException("匹配不存在"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "匹配不存在"));
 
         if (!userId.equals(match.getUserAId()) && !userId.equals(match.getUserBId())) {
-            throw new BusinessException("无权查看消息");
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权查看消息");
         }
 
         return Response.success(messageRepository.findByMatchIdOrderByCreateTimeAsc(matchId));

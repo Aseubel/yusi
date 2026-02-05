@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.service.user.UserService;
 import com.aseubel.yusi.service.user.AdminService;
 import com.aseubel.yusi.pojo.dto.admin.AdminStatsResponse;
@@ -40,7 +41,7 @@ public class AdminController {
     private void checkAdminPermission() {
         String userId = UserContext.getUserId();
         if (!userService.checkAdmin(userId)) {
-            throw new BusinessException("Permission denied: Admin access required");
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Permission denied: Admin access required");
         }
     }
 
@@ -67,9 +68,13 @@ public class AdminController {
     @PostMapping("/users/{userId}/permission")
     public Response<Void> updateUserPermission(@PathVariable String userId, @RequestBody Map<String, Integer> payload) {
         checkAdminPermission();
+        String currentUserId = UserContext.getUserId();
+        if (currentUserId.equals(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Cannot modify your own permissions");
+        }
         Integer level = payload.get("level");
         if (level == null)
-            throw new BusinessException("Level is required");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Level is required");
         adminService.updateUserPermission(userId, level);
         return Response.success();
     }

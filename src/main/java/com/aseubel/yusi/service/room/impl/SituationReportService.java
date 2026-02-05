@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.room.impl;
 import cn.hutool.core.util.ObjectUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
@@ -29,7 +30,8 @@ public class SituationReportService {
             // 准备数据
             SituationScenario scenario = scenarioRepository.findById(room.getScenarioId()).orElse(null);
             if (ObjectUtil.isEmpty(scenario)) {
-                throw new BusinessException("Scenario not found: " + room.getScenarioId());
+                throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
+                        "Scenario not found: " + room.getScenarioId());
             }
 
             String scenarioString = scenario.getContentString();

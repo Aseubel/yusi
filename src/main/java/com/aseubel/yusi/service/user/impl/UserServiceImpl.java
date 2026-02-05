@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.BCrypt;
 
 import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.utils.JwtUtils;
 import com.aseubel.yusi.pojo.dto.user.AuthResponse;
 import com.aseubel.yusi.pojo.entity.User;
@@ -35,7 +36,7 @@ public class UserServiceImpl implements UserService {
     public User register(User user) {
         User existingUser = userRepository.findByUserName(user.getUserName());
         if (existingUser != null) {
-            throw new BusinessException("用户名已存在");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "用户名已存在");
         }
         user.generateUserId();
         String hashedPassword = BCrypt.hashpw(user.getPassword(), BCrypt.gensalt());
@@ -47,10 +48,10 @@ public class UserServiceImpl implements UserService {
     public AuthResponse login(String userName, String password) {
         User user = userRepository.findByUserName(userName);
         if (user == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
         }
         if (!BCrypt.checkpw(password, user.getPassword())) {
-            throw new BusinessException("密码错误");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "密码错误");
         }
 
         // Enforce device limit before adding new token (max 3 devices)
@@ -78,24 +79,24 @@ public class UserServiceImpl implements UserService {
     @Override
     public AuthResponse refreshToken(String refreshToken, String oldAccessToken) {
         if (!jwtUtils.validateToken(refreshToken)) {
-            throw new BusinessException("无效的刷新令牌");
+            throw new BusinessException(ErrorCode.TOKEN_INVALID, "无效的刷新令牌");
         }
 
         String type = jwtUtils.getTypeFromToken(refreshToken);
         if (!"refresh".equals(type)) {
-            throw new BusinessException("非刷新令牌");
+            throw new BusinessException(ErrorCode.TOKEN_INVALID, "非刷新令牌");
         }
 
         String userId = jwtUtils.getUserIdFromToken(refreshToken);
         String storedRefreshToken = tokenService.getRefreshToken(userId);
 
         if (storedRefreshToken == null || !storedRefreshToken.equals(refreshToken)) {
-            throw new BusinessException("刷新令牌已失效");
+            throw new BusinessException(ErrorCode.TOKEN_INVALID, "刷新令牌已失效");
         }
 
         User user = userRepository.findByUserId(userId);
         if (user == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
         }
 
         // Remove the old access token from device list if provided
@@ -162,13 +163,13 @@ public class UserServiceImpl implements UserService {
     public User updateUser(String userId, String userName, String email) {
         User user = userRepository.findByUserId(userId);
         if (user == null) {
-            throw new BusinessException("User not found");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "User not found");
         }
 
         if (StrUtil.isNotEmpty(userName) && !userName.equals(user.getUserName())) {
             User existing = userRepository.findByUserName(userName);
             if (existing != null) {
-                throw new BusinessException("Username already exists");
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "Username already exists");
             }
             user.setUserName(userName);
         }

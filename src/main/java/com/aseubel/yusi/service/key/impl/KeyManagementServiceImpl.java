@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.key.impl;
 
 import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
 import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.pojo.dto.key.DiaryReEncryptRequest;
@@ -44,7 +45,7 @@ public class KeyManagementServiceImpl implements KeyManagementService {
     public KeySettingsResponse getKeySettings(String userId) {
         User user = userRepository.findByUserId(userId);
         if (user == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
         }
 
         KeySettingsResponse.KeySettingsResponseBuilder builder = KeySettingsResponse.builder()
@@ -64,12 +65,12 @@ public class KeyManagementServiceImpl implements KeyManagementService {
     public void updateKeyMode(String userId, KeyModeUpdateRequest request) {
         User user = userRepository.findByUserId(userId);
         if (user == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
         }
 
         String newMode = request.getKeyMode();
         if (!KEY_MODE_DEFAULT.equals(newMode) && !KEY_MODE_CUSTOM.equals(newMode)) {
-            throw new BusinessException("无效的密钥模式");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "无效的密钥模式");
         }
 
         user.setKeyMode(newMode);
@@ -81,7 +82,7 @@ public class KeyManagementServiceImpl implements KeyManagementService {
 
             if (Boolean.TRUE.equals(request.getEnableCloudBackup())) {
                 if (request.getEncryptedBackupKey() == null || request.getEncryptedBackupKey().isEmpty()) {
-                    throw new BusinessException("开启云端备份时必须提供加密后的密钥");
+                    throw new BusinessException(ErrorCode.PARAM_ERROR, "开启云端备份时必须提供加密后的密钥");
                 }
                 user.setEncryptedBackupKey(request.getEncryptedBackupKey());
             } else {
@@ -102,7 +103,7 @@ public class KeyManagementServiceImpl implements KeyManagementService {
     public List<Diary> getAllDiariesForReEncrypt(String userId) {
         User user = userRepository.findByUserId(userId);
         if (user == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
         }
 
         List<Diary> diaries = diaryRepository.findAllByUserId(userId);
@@ -123,7 +124,7 @@ public class KeyManagementServiceImpl implements KeyManagementService {
     public void batchUpdateReEncryptedDiaries(String userId, DiaryReEncryptRequest request) {
         User user = userRepository.findByUserId(userId);
         if (user == null) {
-            throw new BusinessException("用户不存在");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
         }
 
         List<Diary> existingDiaries = diaryRepository.findAllByUserId(userId);
@@ -176,20 +177,20 @@ public class KeyManagementServiceImpl implements KeyManagementService {
     @Override
     public String getBackupKeyForRecovery(String adminUserId, String targetUserId) {
         if (!userService.checkAdmin(adminUserId)) {
-            throw new BusinessException("无权限：仅管理员可访问备份密钥");
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权限：仅管理员可访问备份密钥");
         }
 
         User targetUser = userRepository.findByUserId(targetUserId);
         if (targetUser == null) {
-            throw new BusinessException("目标用户不存在");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标用户不存在");
         }
 
         if (!Boolean.TRUE.equals(targetUser.getHasCloudBackup())) {
-            throw new BusinessException("该用户未开启云端密钥备份");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "该用户未开启云端密钥备份");
         }
 
         if (targetUser.getEncryptedBackupKey() == null) {
-            throw new BusinessException("未找到备份密钥");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "未找到备份密钥");
         }
 
         log.info("Admin {} accessed backup key for user {}", adminUserId, targetUserId);

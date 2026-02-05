@@ -18,7 +18,12 @@ public class GlobalExceptionHandler {
     public Response<String> handleBusinessException(BusinessException e) {
         // Business exceptions are expected, do not log error stack trace
         setStatus(HttpServletResponse.SC_OK);
-        return Response.fail(e.getMessage());
+        ErrorCode ec = e.getErrorCode();
+        int code = ec != null ? ec.getCode() : 500;
+        return Response.<String>builder()
+                .code(code)
+                .info(e.getMessage())
+                .build();
     }
 
     @ExceptionHandler(RateLimitException.class)

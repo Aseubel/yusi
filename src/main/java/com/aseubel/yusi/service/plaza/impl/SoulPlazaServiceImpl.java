@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.plaza.impl;
 
 import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.contant.CardType;
 import com.aseubel.yusi.pojo.contant.ResonanceType;
 import com.aseubel.yusi.pojo.entity.SoulCard;
@@ -48,7 +49,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     @UpdateCache(key = "'plaza:feed:' + #userId + ':*'", evictOnly = true)
     public SoulCard submitToPlaza(String userId, String content, String originId, CardType type) {
         if (content == null || content.length() < 5) {
-            throw new BusinessException("内容太短");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "内容太短");
         }
 
         // 使用AI进行情感分析
@@ -200,14 +201,14 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     @UpdateCache(key = "'plaza:feed:' + #userId + ':*'", evictOnly = true)
     public SoulResonance resonate(String userId, Long cardId, ResonanceType type) {
         SoulCard card = cardRepository.findById(cardId)
-                .orElseThrow(() -> new BusinessException("Card not found"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Card not found"));
 
         if (card.getUserId().equals(userId)) {
-            throw new BusinessException("不能与自己共鸣");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "不能与自己共鸣");
         }
 
         if (resonanceRepository.existsByCardIdAndUserId(cardId, userId)) {
-            throw new BusinessException("已经共鸣过了");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "已经共鸣过了");
         }
 
         SoulResonance resonance = SoulResonance.builder()
@@ -238,14 +239,14 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     @UpdateCache(key = "'plaza:my:' + #userId + ':*'", evictOnly = true)
     public SoulCard updateCard(String userId, Long cardId, String content) {
         SoulCard card = cardRepository.findById(cardId)
-                .orElseThrow(() -> new BusinessException("卡片不存在"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "卡片不存在"));
 
         if (!card.getUserId().equals(userId)) {
-            throw new BusinessException("无权修改此卡片");
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改此卡片");
         }
 
         if (content == null || content.length() < 5) {
-            throw new BusinessException("内容太短");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "内容太短");
         }
 
         // 重新分析情绪
@@ -261,10 +262,10 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     @UpdateCache(key = "'plaza:my:' + #userId + ':*'", evictOnly = true)
     public void deleteCard(String userId, Long cardId) {
         SoulCard card = cardRepository.findById(cardId)
-                .orElseThrow(() -> new BusinessException("卡片不存在"));
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "卡片不存在"));
 
         if (!card.getUserId().equals(userId)) {
-            throw new BusinessException("无权删除此卡片");
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权删除此卡片");
         }
 
         // 同时删除关联的共鸣
