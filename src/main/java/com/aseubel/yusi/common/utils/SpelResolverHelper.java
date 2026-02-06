@@ -44,7 +44,7 @@ public class SpelResolverHelper {
 
         try {
             Object resolvedValue = parser.parseExpression(spelExpression).getValue(context);
-            log.info("SpEL Expression: '{}' resolved to: '{}' [Type: {}]",
+            log.debug("SpEL Expression: '{}' resolved to: '{}' [Type: {}]",
                     spelExpression,
                     resolvedValue,
                     resolvedValue != null ? resolvedValue.getClass().getSimpleName() : "null");
