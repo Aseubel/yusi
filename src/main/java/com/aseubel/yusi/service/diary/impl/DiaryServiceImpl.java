@@ -79,6 +79,7 @@ public class DiaryServiceImpl implements DiaryService {
         // 异步生成AI回应 (通过self调用以触发AOP)
         // self.generateAiResponse(saved.getDiaryId());
 
+        self.evictFootprintsCache(diary.getUserId());
         return saved;
     }
 
@@ -112,6 +113,9 @@ public class DiaryServiceImpl implements DiaryService {
             diary.setStatus(1); // 1 = Analyzed
             diary.setEmotion(analyzeContentEmotion(plainContent));
             diaryRepository.save(diary);
+            self.evictDiaryCache(diaryId);
+            self.evictListCache(diary.getUserId());
+            self.evictFootprintsCache(diary.getUserId());
             log.info("AI response saved for diary: {}", diaryId);
         } catch (Exception e) {
             log.error("Failed to generate AI response for diary: {}", diaryId, e);
@@ -176,11 +180,15 @@ public class DiaryServiceImpl implements DiaryService {
             Diary saved = diaryRepository.save(diary);
             // 保存后 entity 可能会丢失 transient 字段，这里重新设置以便后续 disruptor 使用
             saved.setPlainContent(plainContent);
-            // 额外失效列表缓存
-            evictListCache(diary.getUserId());
+            self.evictListCache(diary.getUserId());
+            self.evictFootprintsCache(diary.getUserId());
             return saved;
         }
         return null;
+    }
+
+    @UpdateCache(key = "'diary:detail:' + #diaryId", evictOnly = true)
+    public void evictDiaryCache(String diaryId) {
     }
 
     /**
@@ -189,6 +197,10 @@ public class DiaryServiceImpl implements DiaryService {
     @UpdateCache(key = "'diary:list:' + #userId + ':*'", evictOnly = true)
     public void evictListCache(String userId) {
         // 空方法，仅用于触发缓存失效
+    }
+
+    @UpdateCache(key = "'diary:footprints:' + #userId", evictOnly = true)
+    public void evictFootprintsCache(String userId) {
     }
 
     /**
