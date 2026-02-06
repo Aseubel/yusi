@@ -21,6 +21,12 @@ public interface DiaryService {
 
     void generateAiResponse(String diaryId);
 
+    void evictDiaryCache(String diaryId);
+
+    void evictListCache(String userId);
+
+    void evictFootprintsCache(String userId);
+
     /**
      * 获取用户足迹列表（有地理位置的日记）
      */
