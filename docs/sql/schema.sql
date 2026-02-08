@@ -93,14 +93,27 @@ CREATE TABLE `interface_daily_usage` (
 
 CREATE TABLE `prompt_template` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    `name` VARCHAR(255) DEFAULT NULL COMMENT '模板名称',
-    `template` TEXT COMMENT '模板内容',
-    `version` VARCHAR(255) DEFAULT NULL COMMENT '版本号',
-    `active` TINYINT(1) NOT NULL COMMENT '是否激活',
+    `name` VARCHAR(255) NOT NULL COMMENT '模板唯一名称',
+    `template` TEXT NOT NULL COMMENT '模板内容',
+    `version` VARCHAR(64) NOT NULL DEFAULT 'v1' COMMENT '版本号',
+    `active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否激活',
+    `scope` VARCHAR(64) NOT NULL DEFAULT 'global' COMMENT '适用范围: diary/match/room/plaza/admin/global',
+    `locale` VARCHAR(16) NOT NULL DEFAULT 'zh-CN' COMMENT '语言区域，如 zh-CN/en-US',
+    `description` VARCHAR(500) DEFAULT NULL COMMENT '描述',
+    `tags` VARCHAR(255) DEFAULT NULL COMMENT '标签，逗号分隔',
+    `is_default` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否为该scope默认模板',
+    `priority` INT NOT NULL DEFAULT 0 COMMENT '匹配优先级（越大越优先）',
+    `updated_by` VARCHAR(64) DEFAULT NULL COMMENT '最后更新人',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_prompt_template_name` (`name`)
+    UNIQUE KEY `uk_prompt_template_name_locale` (`name`, `locale`),
+    KEY `idx_prompt_scope_active_default` (
+        `scope`,
+        `active`,
+        `is_default`
+    ),
+    KEY `idx_prompt_updated_at` (`updated_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'Prompt模板表';
 
 CREATE TABLE `room_message` (

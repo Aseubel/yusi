@@ -1,6 +1,7 @@
 package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.service.ai.DiarySearchTool;
+import com.aseubel.yusi.service.ai.PromptService;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.room.SituationRoomAgent;
@@ -42,6 +43,7 @@ public class AgentConfig {
     private ApplicationContext applicationContext;
 
     private final DiarySearchTool diarySearchTool;
+    private final PromptService promptService;
 
     @Value("${mcp.enabled:false}")
     private boolean mcpEnabled;
@@ -49,8 +51,16 @@ public class AgentConfig {
     @Bean(name = "diaryAssistant")
     public Assistant diaryAssistant() throws IOException {
         ClassPathResource resource = new ClassPathResource("chat-prompt.txt");
-        String systemPrompt = resource.getContentAsString(StandardCharsets.UTF_8);
-        log.info("成功加载聊天助手系统提示词，长度: {} 字符", systemPrompt.length());
+        String fallbackPrompt = resource.getContentAsString(StandardCharsets.UTF_8);
+        String dbPrompt = null;
+        try {
+            dbPrompt = promptService.getPrompt("chat");
+        } catch (Exception e) {
+            log.warn("从数据库加载聊天助手系统提示词失败: {}", e.getMessage());
+        }
+        String systemPrompt = (dbPrompt != null && dbPrompt.length() > 100) ? dbPrompt : fallbackPrompt;
+        log.info("聊天助手系统提示词来源: {}，长度: {} 字符", 
+                (dbPrompt != null && dbPrompt.length() > 100) ? "DB" : "Classpath", systemPrompt.length());
 
         // 构建 AiServices
         AiServices<Assistant> builder = AiServices.builder(Assistant.class)
@@ -80,8 +90,16 @@ public class AgentConfig {
     @Bean(name = "situationRoomAgent")
     public SituationRoomAgent situationRoomAgent() throws IOException {
         ClassPathResource resource = new ClassPathResource("logic-prompt.txt");
-        String systemPrompt = resource.getContentAsString(StandardCharsets.UTF_8);
-        log.info("成功加载情景分析系统提示词，长度: {} 字符", systemPrompt.length());
+        String fallbackPrompt = resource.getContentAsString(StandardCharsets.UTF_8);
+        String dbPrompt = null;
+        try {
+            dbPrompt = promptService.getPrompt("logic");
+        } catch (Exception e) {
+            log.warn("从数据库加载情景分析系统提示词失败: {}", e.getMessage());
+        }
+        String systemPrompt = (dbPrompt != null && dbPrompt.length() > 50) ? dbPrompt : fallbackPrompt;
+        log.info("情景分析系统提示词来源: {}，长度: {} 字符", 
+                (dbPrompt != null && dbPrompt.length() > 50) ? "DB" : "Classpath", systemPrompt.length());
 
         SituationRoomAgent agent = AiServices.builder(SituationRoomAgent.class)
                 .streamingChatModel((StreamingChatModel) applicationContext.getBean("logicModel"))
