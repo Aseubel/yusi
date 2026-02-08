@@ -2,6 +2,7 @@ package com.aseubel.yusi.common.disruptor;
 
 import com.aseubel.yusi.common.repochain.ProcessorChain;
 import com.aseubel.yusi.service.ai.EmbeddingService;
+import com.aseubel.yusi.service.lifegraph.LifeGraphTaskCreator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -21,6 +22,7 @@ public class DisruptorChainConfig {
     public ProcessorChain<Element> disruptorChain() {
         ProcessorChain<Element> processorChain = new ProcessorChain<>();
         processorChain.addProcessor(applicationContext.getBean(EmbeddingService.class));
+        processorChain.addProcessor(applicationContext.getBean(LifeGraphTaskCreator.class));
         return processorChain;
     }
 }

@@ -2,28 +2,6 @@ SET NAMES utf8mb4;
 
 SET FOREIGN_KEY_CHECKS = 0;
 
-DROP TABLE IF EXISTS `user_location`;
-
-DROP TABLE IF EXISTS `soul_resonance`;
-
-DROP TABLE IF EXISTS `soul_message`;
-
-DROP TABLE IF EXISTS `soul_match`;
-
-DROP TABLE IF EXISTS `soul_card`;
-
-DROP TABLE IF EXISTS `situation_room`;
-
-DROP TABLE IF EXISTS `situation_scenario`;
-
-DROP TABLE IF EXISTS `room_message`;
-
-DROP TABLE IF EXISTS `prompt_template`;
-
-DROP TABLE IF EXISTS `interface_daily_usage`;
-
-DROP TABLE IF EXISTS `diary`;
-
 DROP TABLE IF EXISTS `user`;
 
 CREATE TABLE `user` (
@@ -44,6 +22,8 @@ CREATE TABLE `user` (
     UNIQUE KEY `uk_user_username` (`username`),
     KEY `idx_user_permission_level` (`permission_level`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '用户信息表';
+
+DROP TABLE IF EXISTS `diary`;
 
 CREATE TABLE `diary` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
@@ -71,6 +51,8 @@ CREATE TABLE `diary` (
     KEY `idx_diary_create_time` (`create_time`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '用户日记表';
 
+DROP TABLE IF EXISTS `interface_daily_usage`;
+
 CREATE TABLE `interface_daily_usage` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
@@ -90,6 +72,8 @@ CREATE TABLE `interface_daily_usage` (
     KEY `idx_interface_daily_usage_date` (`usage_date`),
     KEY `idx_interface_daily_usage_user` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '用户接口每日调用统计';
+
+DROP TABLE IF EXISTS `prompt_template`;
 
 CREATE TABLE `prompt_template` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
@@ -116,6 +100,8 @@ CREATE TABLE `prompt_template` (
     KEY `idx_prompt_updated_at` (`updated_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'Prompt模板表';
 
+DROP TABLE IF EXISTS `room_message`;
+
 CREATE TABLE `room_message` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `room_code` VARCHAR(32) NOT NULL COMMENT '房间代码',
@@ -128,6 +114,8 @@ CREATE TABLE `room_message` (
     KEY `idx_created_at` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '房间临时聊天消息';
 
+DROP TABLE IF EXISTS `situation_scenario`;
+
 CREATE TABLE `situation_scenario` (
     `id` VARCHAR(32) NOT NULL COMMENT '剧本ID',
     `title` VARCHAR(100) DEFAULT NULL COMMENT '标题',
@@ -137,6 +125,8 @@ CREATE TABLE `situation_scenario` (
     `status` INT DEFAULT 0 COMMENT '状态: 0-待审核/1-人工拒绝/2-AI 审核拒绝/3-AI 审核通过/4-人工通过',
     PRIMARY KEY (`id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '情境剧本表';
+
+DROP TABLE IF EXISTS `situation_room`;
 
 CREATE TABLE `situation_room` (
     `code` VARCHAR(32) NOT NULL COMMENT '房间代码',
@@ -155,6 +145,8 @@ CREATE TABLE `situation_room` (
     KEY `idx_situation_room_created_at` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '情境房间表';
 
+DROP TABLE IF EXISTS `soul_card`;
+
 CREATE TABLE `soul_card` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `content` TEXT COMMENT '卡片内容',
@@ -170,6 +162,8 @@ CREATE TABLE `soul_card` (
     KEY `idx_soul_card_emotion` (`emotion`),
     KEY `idx_soul_card_origin_id` (`origin_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '心灵卡片表';
+
+DROP TABLE IF EXISTS `soul_match`;
 
 CREATE TABLE `soul_match` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
@@ -189,6 +183,8 @@ CREATE TABLE `soul_match` (
     KEY `idx_soul_match_create_time` (`create_time`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '灵魂匹配表';
 
+DROP TABLE IF EXISTS `soul_message`;
+
 CREATE TABLE `soul_message` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `match_id` BIGINT DEFAULT NULL COMMENT '匹配ID',
@@ -203,6 +199,8 @@ CREATE TABLE `soul_message` (
     KEY `idx_soul_message_create_time` (`create_time`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '匹配用户聊天消息表';
 
+DROP TABLE IF EXISTS `soul_resonance`;
+
 CREATE TABLE `soul_resonance` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `card_id` BIGINT DEFAULT NULL COMMENT '卡片ID',
@@ -214,6 +212,8 @@ CREATE TABLE `soul_resonance` (
     KEY `idx_soul_resonance_user_id` (`user_id`),
     KEY `idx_soul_resonance_created_at` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '心灵共鸣表';
+
+DROP TABLE IF EXISTS `user_location`;
 
 CREATE TABLE `user_location` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
@@ -235,6 +235,7 @@ CREATE TABLE `user_location` (
     KEY `idx_user_location_create_time` (`create_time`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '用户保存的地点表';
 
+DROP TABLE IF EXISTS `embedding_task`;
 -- Milvus Embedding 任务表
 -- 用于可靠的异步批量处理日记向量化
 -- 任务与日记保存在同一事务中，确保不会丢失
@@ -256,5 +257,112 @@ CREATE TABLE `embedding_task` (
     KEY `idx_embedding_task_next_retry` (`next_retry_at`),
     KEY `idx_embedding_task_created` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'Milvus Embedding 任务表';
+
+DROP TABLE IF EXISTS `life_graph_entity`;
+-- Life Graph (GraphRAG) - 用户人生图谱
+CREATE TABLE `life_graph_entity` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+    `type` VARCHAR(32) NOT NULL COMMENT '实体类型: Person/Event/Place/Emotion/Topic/Item/User',
+    `name_norm` VARCHAR(255) NOT NULL COMMENT '归一化名称（用于去重与消歧）',
+    `display_name` VARCHAR(255) NOT NULL COMMENT '展示名称',
+    `mention_count` INT NOT NULL DEFAULT 0 COMMENT '提及次数',
+    `first_mention_date` DATE DEFAULT NULL COMMENT '首次出现日期',
+    `last_mention_at` DATETIME DEFAULT NULL COMMENT '最后一次出现时间',
+    `props` JSON DEFAULT NULL COMMENT '扩展属性(JSON): emotion/frequency/coordinates/address/last_interaction 等',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_life_graph_entity_user_type_norm` (
+        `user_id`,
+        `type`,
+        `name_norm`
+    ),
+    KEY `idx_life_graph_entity_user_type` (`user_id`, `type`),
+    KEY `idx_life_graph_entity_user_mentions` (`user_id`, `mention_count`),
+    KEY `idx_life_graph_entity_updated` (`updated_at`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '人生图谱实体表';
+
+DROP TABLE IF EXISTS `life_graph_entity_alias`;
+
+CREATE TABLE `life_graph_entity_alias` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+    `entity_id` BIGINT NOT NULL COMMENT '实体ID',
+    `alias_norm` VARCHAR(255) NOT NULL COMMENT '归一化别名（唯一）',
+    `alias_display` VARCHAR(255) NOT NULL COMMENT '展示别名',
+    `confidence` DECIMAL(4, 3) NOT NULL DEFAULT 0.800 COMMENT '别名映射置信度(0-1)',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_life_graph_alias_user_norm` (`user_id`, `alias_norm`),
+    KEY `idx_life_graph_alias_user_entity` (`user_id`, `entity_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '人生图谱实体别名表';
+
+DROP TABLE IF EXISTS `life_graph_relation`;
+-- 关系边表：逻辑上视为无向边，写入时建议保持 source_id < target_id 用于去重；查询时通过 UNION ALL 做双向展开
+CREATE TABLE `life_graph_relation` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+    `source_id` BIGINT NOT NULL COMMENT '实体ID（较小）',
+    `target_id` BIGINT NOT NULL COMMENT '实体ID（较大）',
+    `type` VARCHAR(64) NOT NULL COMMENT '关系类型: RELATED_TO/HAPPENED_AT/TRIGGERED/PARTICIPATED/MENTIONED_IN 等',
+    `confidence` DECIMAL(4, 3) NOT NULL DEFAULT 0.800 COMMENT '关系置信度(0-1): LLM 0.8, 人工 1.0',
+    `weight` INT NOT NULL DEFAULT 1 COMMENT '关系权重（共现/重复次数累积）',
+    `first_seen` DATETIME DEFAULT NULL COMMENT '首次出现时间',
+    `last_seen` DATETIME DEFAULT NULL COMMENT '最后出现时间',
+    `evidence_diary_id` VARCHAR(255) DEFAULT NULL COMMENT '证据日记业务ID（可为空）',
+    `props` JSON DEFAULT NULL COMMENT '扩展属性(JSON): emotion/coordinates/cause 等',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_life_graph_relation_user_edge` (
+        `user_id`,
+        `source_id`,
+        `target_id`,
+        `type`
+    ),
+    KEY `idx_life_graph_relation_user_source` (`user_id`, `source_id`),
+    KEY `idx_life_graph_relation_user_target` (`user_id`, `target_id`),
+    KEY `idx_life_graph_relation_user_type` (`user_id`, `type`),
+    KEY `idx_life_graph_relation_updated` (`updated_at`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '人生图谱关系表';
+
+DROP TABLE IF EXISTS `life_graph_mention`;
+
+CREATE TABLE `life_graph_mention` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+    `entity_id` BIGINT NOT NULL COMMENT '实体ID',
+    `diary_id` VARCHAR(255) NOT NULL COMMENT '日记业务ID',
+    `entry_date` DATE DEFAULT NULL COMMENT '日记日期',
+    `snippet` VARCHAR(1000) DEFAULT NULL COMMENT '证据片段（截断）',
+    `props` JSON DEFAULT NULL COMMENT '扩展属性(JSON): offsets 等',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_life_graph_mention_user_entity` (`user_id`, `entity_id`),
+    KEY `idx_life_graph_mention_user_diary` (`user_id`, `diary_id`),
+    KEY `idx_life_graph_mention_entry_date` (`entry_date`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '人生图谱实体证据表';
+
+DROP TABLE IF EXISTS `life_graph_task`;
+
+CREATE TABLE `life_graph_task` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `diary_id` VARCHAR(255) NOT NULL COMMENT '关联的日记业务ID',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '关联的用户ID',
+    `task_type` VARCHAR(32) NOT NULL COMMENT '任务类型: UPSERT/DELETE',
+    `status` VARCHAR(32) NOT NULL COMMENT '任务状态: PENDING/PROCESSING/COMPLETED/FAILED',
+    `retry_count` INT DEFAULT 0 COMMENT '重试次数',
+    `max_retries` INT DEFAULT 5 COMMENT '最大重试次数',
+    `error_message` VARCHAR(1000) DEFAULT NULL COMMENT '错误信息',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `next_retry_at` DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '下次重试时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_life_graph_task_status` (`status`),
+    KEY `idx_life_graph_task_diary_id` (`diary_id`),
+    KEY `idx_life_graph_task_next_retry` (`next_retry_at`),
+    KEY `idx_life_graph_task_created` (`created_at`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '人生图谱抽取任务表';
 
 SET FOREIGN_KEY_CHECKS = 1;
