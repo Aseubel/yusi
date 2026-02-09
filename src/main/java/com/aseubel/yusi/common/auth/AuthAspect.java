@@ -80,9 +80,7 @@ public class AuthAspect {
                     throw new AuthorizationException(ErrorCode.TOKEN_INVALID);
                 }
             }
-            String username = (String) claims.get("username");
             UserContext.setUserId(userId);
-            UserContext.setUsername(username);
         } catch (ExpiredJwtException e) {
             throw new AuthorizationException(ErrorCode.TOKEN_EXPIRED);
         } catch (Exception e) {

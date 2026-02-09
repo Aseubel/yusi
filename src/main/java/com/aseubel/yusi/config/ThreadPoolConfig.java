@@ -1,5 +1,6 @@
 package com.aseubel.yusi.config;
 
+import com.aseubel.yusi.common.auth.UserContext;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -42,16 +43,23 @@ public class ThreadPoolConfig {
         }
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor() {
             /**
-             * 所有线程都会委托给这个execute方法，在这个方法中我们把父线程的MDC内容赋值给子线程
+             * 所有线程都会委托给这个execute方法，在这个方法中我们把父线程的MDC内容和UserContext内容赋值给子线程
              */
             @Override
             public void execute(Runnable runnable) {
-                // 获取父线程MDC中的内容，必须在run方法之前，否则等异步线程执行的时候有可能MDC里面的值已经被清空了，这个时候就会返回null
+                // 获取父线程MDC中的内容
                 Map<String, String> context = MDC.getCopyOfContextMap();
+                // 获取父线程UserContext中的内容
+                String userId = UserContext.getUserId();
+                
                 super.execute(() -> {
                     // 将父线程的MDC内容传给子线程
                     if (context != null) {
                         MDC.setContextMap(context);
+                    }
+                    // 将父线程的UserContext内容传给子线程
+                    if (userId != null) {
+                        UserContext.setUserId(userId);
                     }
                     try {
                         // 执行异步操作
@@ -59,17 +67,26 @@ public class ThreadPoolConfig {
                     } finally {
                         // 清空MDC内容
                         MDC.clear();
+                        // 清空UserContext内容
+                        UserContext.clear();
                     }
                 });
             }
             @Override
             public <T> Future<T> submit(Callable<T> task) {
-                // 获取父线程MDC中的内容，必须在run方法之前，否则等异步线程执行的时候有可能MDC里面的值已经被清空了，这个时候就会返回null
+                // 获取父线程MDC中的内容
                 Map<String, String> context = MDC.getCopyOfContextMap();
+                // 获取父线程UserContext中的内容
+                String userId = UserContext.getUserId();
+                
                 return super.submit(() -> {
                     // 将父线程的MDC内容传给子线程
                     if (context != null) {
                         MDC.setContextMap(context);
+                    }
+                    // 将父线程的UserContext内容传给子线程
+                    if (userId != null) {
+                        UserContext.setUserId(userId);
                     }
                     try {
                         // 执行异步操作
@@ -77,6 +94,8 @@ public class ThreadPoolConfig {
                     } finally {
                         // 清空MDC内容
                         MDC.clear();
+                        // 清空UserContext内容
+                        UserContext.clear();
                     }
                 });
             }

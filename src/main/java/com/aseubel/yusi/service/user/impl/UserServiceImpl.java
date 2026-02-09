@@ -57,7 +57,7 @@ public class UserServiceImpl implements UserService {
         // Enforce device limit before adding new token (max 3 devices)
         tokenService.enforceDeviceLimit(user.getUserId(), MAX_DEVICES);
 
-        String accessToken = jwtUtils.generateAccessToken(user.getUserId(), user.getUserName());
+        String accessToken = jwtUtils.generateAccessToken(user.getUserId());
         String refreshToken = jwtUtils.generateRefreshToken(user.getUserId());
 
         tokenService.saveRefreshToken(user.getUserId(), refreshToken);
@@ -105,7 +105,7 @@ public class UserServiceImpl implements UserService {
         }
 
         // Generate new access token
-        String newAccessToken = jwtUtils.generateAccessToken(userId, user.getUserName());
+        String newAccessToken = jwtUtils.generateAccessToken(userId);
         // Add the new token (this replaces the old one since we removed it above)
         tokenService.addDeviceToken(userId, newAccessToken, "refresh");
 

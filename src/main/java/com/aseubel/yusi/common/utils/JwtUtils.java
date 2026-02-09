@@ -24,9 +24,8 @@ public class JwtUtils {
         return Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes());
     }
 
-    public String generateAccessToken(String userId, String username) {
+    public String generateAccessToken(String userId) {
         Map<String, Object> claims = new HashMap<>();
-        claims.put("username", username);
         claims.put("userId", userId);
         claims.put("type", "access");
         return createToken(claims, userId, jwtProperties.getAccessTokenExpiration());
