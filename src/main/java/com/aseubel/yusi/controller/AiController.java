@@ -20,7 +20,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 
-@Auth
 @Slf4j
 @RestController
 @RequiredArgsConstructor
@@ -34,11 +33,9 @@ public class AiController {
     @Autowired
     private AiLockService aiLockService;
 
-    @Autowired
-    private RedissonClient redissonClient;
-
     private final ThreadPoolTaskExecutor threadPoolExecutor;
 
+    @Auth
     @RateLimiter(key = "chatStream", time = 60, count = 20, limitType = LimitType.USER)
     @GetMapping(value = "/chat/stream", produces = "text/event-stream")
     public SseEmitter chatStream(@RequestParam String message) {
