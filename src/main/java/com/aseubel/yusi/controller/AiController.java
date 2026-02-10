@@ -8,6 +8,7 @@ import com.aseubel.yusi.common.ratelimit.LimitType;
 import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.dto.ai.DiaryChatRequest;
 import com.aseubel.yusi.service.ai.AiLockService;
+import com.aseubel.yusi.service.ai.DiaryAssistantFactory;
 import com.aseubel.yusi.service.diary.Assistant;
 import dev.langchain4j.service.TokenStream;
 import lombok.RequiredArgsConstructor;
@@ -28,7 +29,7 @@ import java.io.IOException;
 public class AiController {
 
     @Autowired
-    private Assistant diaryAssistant;
+    private DiaryAssistantFactory diaryAssistantFactory;
 
     @Autowired
     private AiLockService aiLockService;
@@ -51,7 +52,9 @@ public class AiController {
 
         threadPoolExecutor.execute(() -> {
             try {
-                TokenStream tokenStream = diaryAssistant.chat(userId, message);
+                // 为当前请求创建专属 Assistant 实例，确保 Tool 能够获取到正确的 userId
+                Assistant assistant = diaryAssistantFactory.createAssistant(userId);
+                TokenStream tokenStream = assistant.chat(userId, message);
                 tokenStream
                         .onPartialResponse(token -> {
                             try {
