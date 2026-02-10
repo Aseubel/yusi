@@ -13,9 +13,10 @@ import org.springframework.beans.factory.annotation.Qualifier;
 public class LifeGraphAiConfig {
 
     @Bean
-    public LifeGraphExtractor lifeGraphExtractor(@Qualifier("jsonChatModel") ChatModel jsonChatModel) {
+    LifeGraphExtractor lifeGraphExtractor(@Qualifier("jsonChatModel") ChatModel jsonChatModel) {
         return AiServices.builder(LifeGraphExtractor.class)
                 .chatModel(jsonChatModel)
                 .build();
     }
+
 }

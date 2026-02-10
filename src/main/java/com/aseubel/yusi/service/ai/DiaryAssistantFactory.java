@@ -1,7 +1,9 @@
 package com.aseubel.yusi.service.ai;
 
+import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.diary.Assistant;
+import com.aseubel.yusi.service.lifegraph.LifeGraphQueryService;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -19,6 +21,8 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 日记助手工厂 - 用于创建针对特定用户的 Assistant 实例
@@ -51,7 +55,10 @@ public class DiaryAssistantFactory {
     private UserRepository userRepository;
 
     @Autowired
-    private PromptService promptService;
+    private LifeGraphQueryService lifeGraphQueryService;
+
+    @Autowired
+    private ContextBuilderService contextBuilderService;
 
     @Autowired
     private ApplicationContext applicationContext;
@@ -66,18 +73,22 @@ public class DiaryAssistantFactory {
      * @return 绑定了用户上下文的 Assistant
      */
     public Assistant createAssistant(String userId) {
-        // 1. 创建绑定了 userId 的工具实例
-        DiarySearchTool userScopedTool = new DiarySearchTool(userId, milvusEmbeddingStore, embeddingModel, userRepository);
+        // 1. 创建工具列表
+        List<Object> tools = new ArrayList<>();
+        
+        // 1.1 日记搜索工具
+        tools.add(new DiarySearchTool(userId, milvusEmbeddingStore, embeddingModel, userRepository));
+        
+        // 1.2 人生图谱工具
+        tools.add(new LifeGraphTool(userId, lifeGraphQueryService));
 
-        // 2. 获取 System Prompt
-        String systemPrompt = loadSystemPrompt();
-
-        // 3. 构建 AiServices
+        // 2. 构建 AiServices
         AiServices<Assistant> builder = AiServices.builder(Assistant.class)
                 .streamingChatModel(streamingChatModel)
-                .tools(userScopedTool) // 使用绑定了用户ID的工具
+                .tools(tools) // 注册所有工具
                 .chatMemoryProvider(chatMemoryProvider)
-                .systemMessageProvider(chatMemoryId -> systemPrompt);
+                // 3. 使用 ContextBuilder 动态生成 System Message
+                .systemMessageProvider(memoryId -> contextBuilderService.buildSystemMessage(memoryId));
 
         // 4. 集成 MCP (如果有)
         if (mcpEnabled) {
@@ -92,22 +103,4 @@ public class DiaryAssistantFactory {
         return builder.build();
     }
 
-    private String loadSystemPrompt() {
-        try {
-            String dbPrompt = promptService.getPrompt("chat");
-            if (dbPrompt != null && dbPrompt.length() > 100) {
-                return dbPrompt;
-            }
-        } catch (Exception e) {
-            log.warn("从数据库加载聊天助手系统提示词失败: {}", e.getMessage());
-        }
-
-        try {
-            ClassPathResource resource = new ClassPathResource("chat-prompt.txt");
-            return resource.getContentAsString(StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.error("无法加载默认提示词文件", e);
-            return "你是我的日记助手。";
-        }
-    }
 }
