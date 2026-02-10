@@ -53,4 +53,16 @@ public class ChatModelConfig {
                 .maxCompletionTokens(32) // 情感分析只需要短输出
                 .build();
     }
+
+    @Bean(name = "jsonChatModel")
+    public OpenAiChatModel jsonChatModel(ChatModelConfigProperties properties) {
+        return OpenAiChatModel.builder()
+                .baseUrl(properties.getBaseurl())
+                .apiKey(properties.getApikey())
+                .modelName(properties.getModel())
+                .temperature(0.1)
+                .strictJsonSchema(true)
+                .maxCompletionTokens(2048)
+                .build();
+    }
 }
