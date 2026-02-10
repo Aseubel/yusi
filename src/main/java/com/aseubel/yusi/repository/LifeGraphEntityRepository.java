@@ -20,4 +20,6 @@ public interface LifeGraphEntityRepository extends JpaRepository<LifeGraphEntity
             Pageable pageable);
 
     List<LifeGraphEntity> findTop50ByUserIdOrderByMentionCountDesc(String userId);
+
+    List<LifeGraphEntity> findByUserIdAndType(String userId, LifeGraphEntity.EntityType type);
 }
