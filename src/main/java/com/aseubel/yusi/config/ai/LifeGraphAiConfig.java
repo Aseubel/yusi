@@ -1,5 +1,6 @@
 package com.aseubel.yusi.config.ai;
 
+import com.aseubel.yusi.service.lifegraph.ai.LifeGraphAssistant;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphExtractor;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.service.AiServices;
@@ -16,6 +17,13 @@ public class LifeGraphAiConfig {
     LifeGraphExtractor lifeGraphExtractor(@Qualifier("jsonChatModel") ChatModel jsonChatModel) {
         return AiServices.builder(LifeGraphExtractor.class)
                 .chatModel(jsonChatModel)
+                .build();
+    }
+
+    @Bean
+    LifeGraphAssistant lifeGraphAssistant(@Qualifier("chatModel") ChatModel chatModel) {
+        return AiServices.builder(LifeGraphAssistant.class)
+                .chatModel(chatModel)
                 .build();
     }
 
