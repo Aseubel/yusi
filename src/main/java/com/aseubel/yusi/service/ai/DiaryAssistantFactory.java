@@ -1,26 +1,19 @@
 package com.aseubel.yusi.service.ai;
 
 import com.aseubel.yusi.common.constant.PromptKey;
-import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.diary.Assistant;
-import com.aseubel.yusi.service.lifegraph.LifeGraphQueryService;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.tool.ToolProvider;
-import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -44,18 +37,10 @@ public class DiaryAssistantFactory {
     private ChatMemoryProvider chatMemoryProvider;
 
     @Autowired
-    @Qualifier("milvusEmbeddingStore")
-    private MilvusEmbeddingStore milvusEmbeddingStore;
+    private DiarySearchTool diarySearchTool;
 
     @Autowired
-    @Qualifier("embeddingModel")
-    private EmbeddingModel embeddingModel;
-
-    @Autowired
-    private UserRepository userRepository;
-
-    @Autowired
-    private LifeGraphQueryService lifeGraphQueryService;
+    private LifeGraphTool lifeGraphTool;
 
     @Autowired
     private ContextBuilderService contextBuilderService;
@@ -77,10 +62,10 @@ public class DiaryAssistantFactory {
         List<Object> tools = new ArrayList<>();
         
         // 1.1 日记搜索工具
-        tools.add(new DiarySearchTool(userId, milvusEmbeddingStore, embeddingModel, userRepository));
+        tools.add(diarySearchTool);
         
         // 1.2 人生图谱工具
-        tools.add(new LifeGraphTool(userId, lifeGraphQueryService));
+        tools.add(lifeGraphTool);
 
         // 2. 构建 AiServices
         AiServices<Assistant> builder = AiServices.builder(Assistant.class)

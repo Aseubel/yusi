@@ -1,12 +1,13 @@
 package com.aseubel.yusi.service.ai;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.service.lifegraph.LifeGraphQueryService;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
-import java.util.List;
+import org.springframework.stereotype.Component;
 
 /**
  * 人生图谱搜索工具 - 用于 Chat Agent 调用
@@ -17,15 +18,11 @@ import java.util.List;
  * @date 2026/02/10
  */
 @Slf4j
+@Component
+@RequiredArgsConstructor
 public class LifeGraphTool {
 
-    private final String userId;
     private final LifeGraphQueryService queryService;
-
-    public LifeGraphTool(String userId, LifeGraphQueryService queryService) {
-        this.userId = userId;
-        this.queryService = queryService;
-    }
 
     @Tool(name = "searchLifeGraph", value = """
             搜索用户的人生知识图谱（Life Graph）。
@@ -37,6 +34,7 @@ public class LifeGraphTool {
     public String searchLifeGraph(
             @P("搜索查询词，通常是人名、地名或事件名") String query) {
         
+        String userId = UserContext.getUserId();
         if (StrUtil.isBlank(userId)) {
             return "无法验证用户身份。";
         }
