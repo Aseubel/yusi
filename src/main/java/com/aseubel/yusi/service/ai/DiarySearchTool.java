@@ -39,18 +39,16 @@ import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metad
  * @date 2025/12/31
  */
 @Slf4j
+@Component
 public class DiarySearchTool {
 
-    private final String userId;
     private final MilvusEmbeddingStore milvusEmbeddingStore;
     private final EmbeddingModel embeddingModel;
     private final UserRepository userRepository;
 
-    public DiarySearchTool(String userId, 
-                          MilvusEmbeddingStore milvusEmbeddingStore,
+    public DiarySearchTool(MilvusEmbeddingStore milvusEmbeddingStore,
                           EmbeddingModel embeddingModel,
                           UserRepository userRepository) {
-        this.userId = userId;
         this.milvusEmbeddingStore = milvusEmbeddingStore;
         this.embeddingModel = embeddingModel;
         this.userRepository = userRepository;
@@ -106,13 +104,11 @@ public class DiarySearchTool {
             @P("开始日期，格式 YYYY-MM-DD，不指定时间范围则传 null") String startDate,
             @P("结束日期，格式 YYYY-MM-DD，不指定时间范围则传 null") String endDate) {
 
-        // 安全检查：直接使用构造函数传入的 userId，不再依赖 ThreadLocal
-        if (StrUtil.isEmpty(this.userId)) {
+        String currentUserId = UserContext.getUserId();
+        if (StrUtil.isEmpty(currentUserId)) {
             log.warn("DiarySearchTool: 未绑定用户ID，拒绝搜索请求");
             return List.of("无法验证用户身份，请重新登录后再试。");
         }
-
-        String currentUserId = this.userId;
 
         // 检查权限
         if (!isRagAllowed(currentUserId)) {
