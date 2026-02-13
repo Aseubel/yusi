@@ -15,21 +15,21 @@
 
     <profiles>
         <profile>
-            <id>jdk-17</id>
+            <id>jdk-21</id>
             <activation>
                 <activeByDefault>true</activeByDefault>
-                <jdk>17</jdk>
+                <jdk>21</jdk>
             </activation>
             <properties>
-                <maven.compiler.source>17</maven.compiler.source>
-                <maven.compiler.target>17</maven.compiler.target>
-                <maven.compiler.release>17</maven.compiler.release>
+                <maven.compiler.source>21</maven.compiler.source>
+                <maven.compiler.target>21</maven.compiler.target>
+                <maven.compiler.release>21</maven.compiler.release>
                 <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
             </properties>
         </profile>
     </profiles>
 
     <activeProfiles>
-        <activeProfile>jdk-17</activeProfile>
+        <activeProfile>jdk-21</activeProfile>
     </activeProfiles>
 </settings>

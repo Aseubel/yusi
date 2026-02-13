@@ -59,7 +59,7 @@ public class AgentConfig {
             log.warn("从数据库加载聊天助手系统提示词失败: {}", e.getMessage());
         }
         String systemPrompt = (dbPrompt != null && dbPrompt.length() > 100) ? dbPrompt : fallbackPrompt;
-        log.info("聊天助手系统提示词来源: {}，长度: {} 字符",
+        log.info("聊天助手系统提示词来源: {}，长度: {} 字符", 
                 (dbPrompt != null && dbPrompt.length() > 100) ? "DB" : "Classpath", systemPrompt.length());
 
         // 构建 AiServices
@@ -98,7 +98,7 @@ public class AgentConfig {
             log.warn("从数据库加载情景分析系统提示词失败: {}", e.getMessage());
         }
         String systemPrompt = (dbPrompt != null && dbPrompt.length() > 50) ? dbPrompt : fallbackPrompt;
-        log.info("情景分析系统提示词来源: {}，长度: {} 字符",
+        log.info("情景分析系统提示词来源: {}，长度: {} 字符", 
                 (dbPrompt != null && dbPrompt.length() > 50) ? "DB" : "Classpath", systemPrompt.length());
 
         SituationRoomAgent agent = AiServices.builder(SituationRoomAgent.class)

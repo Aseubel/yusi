@@ -1,5 +1,5 @@
 # 阶段 1: Exploded - 展开 JAR 包并创建 CDS 归档
-FROM eclipse-temurin:17-jre-alpine AS cds_creator
+FROM eclipse-temurin:21-jre-alpine AS cds_creator
 WORKDIR /app
 
 # 从构建上下文（即 GitHub Actions 的工作区）复制已经由 Maven 打包好的 JAR 文件
@@ -12,7 +12,7 @@ RUN java -Djarmode=layertools -jar app.jar extract
 RUN java -Xshare:dump -XX:SharedArchiveFile=app.jsa -cp . org.springframework.boot.loader.launch.JarLauncher
 
 # 阶段 2: Final - 构建最终的运行镜像
-FROM eclipse-temurin:17-jre-alpine AS final
+FROM eclipse-temurin:21-jre-alpine AS final
 WORKDIR /app
 
 # 从上一阶段复制 CDS 归档和展开的应用层
