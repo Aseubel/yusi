@@ -9,7 +9,9 @@ docker builder prune -af
 git pull
 
 # 步骤3：Maven清理并构建（加clean）
-mvn clean compile package -Dmaven.test.skip=true -s settings.xml
+export JAVA_HOME="/d/develop/Java/jdk-21"
+export PATH="$JAVA_HOME/bin:$PATH"
+mvn clean compile package -DskipTests -s settings.xml
 
 # 步骤4：Docker构建
 docker compose build --no-cache
