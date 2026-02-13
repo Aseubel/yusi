@@ -2,8 +2,9 @@
 FROM eclipse-temurin:21-jre-alpine AS cds_creator
 WORKDIR /app
 
-# 从构建上下文（即 GitHub Actions 的工作区）复制已经由 Maven 打包好的 JAR 文件
-COPY target/*.jar app.jar
+# 从构建上下文（宿主机）复制 JAR 文件
+ARG JAR_FILE=target/*.jar
+COPY ${JAR_FILE} app.jar
 
 # 展开 JAR 以便进行分层和创建 CDS 归档
 RUN java -Djarmode=layertools -jar app.jar extract
