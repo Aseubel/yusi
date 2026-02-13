@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.lifegraph.impl;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntityAlias;
 import com.aseubel.yusi.pojo.entity.LifeGraphMention;
@@ -51,7 +52,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         String userId = diary.getUserId();
         String locale = "zh-CN";
 
-        String prompt = promptService.getPrompt("graphrag-extract", locale);
+        String prompt = promptService.getPrompt(PromptKey.GRAPHRAG_EXTRACT.getKey(), locale);
         if (prompt == null || prompt.length() < 50 || prompt.contains("智能日记助手")) {
             prompt = defaultExtractPrompt();
         }

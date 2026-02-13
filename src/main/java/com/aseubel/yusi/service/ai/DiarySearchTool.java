@@ -40,12 +40,19 @@ import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metad
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class DiarySearchTool {
 
     private final MilvusEmbeddingStore milvusEmbeddingStore;
     private final EmbeddingModel embeddingModel;
     private final UserRepository userRepository;
+
+    public DiarySearchTool(MilvusEmbeddingStore milvusEmbeddingStore,
+                          EmbeddingModel embeddingModel,
+                          UserRepository userRepository) {
+        this.milvusEmbeddingStore = milvusEmbeddingStore;
+        this.embeddingModel = embeddingModel;
+        this.userRepository = userRepository;
+    }
 
     /**
      * 检查用户是否允许 RAG 功能
@@ -97,14 +104,13 @@ public class DiarySearchTool {
             @P("开始日期，格式 YYYY-MM-DD，不指定时间范围则传 null") String startDate,
             @P("结束日期，格式 YYYY-MM-DD，不指定时间范围则传 null") String endDate) {
 
-        // 安全检查：必须从 UserContext 获取当前用户 ID，防止 AI 幻觉访问其他用户数据
         String currentUserId = UserContext.getUserId();
         if (StrUtil.isEmpty(currentUserId)) {
-            log.warn("DiarySearchTool: 无法获取当前用户ID，拒绝搜索请求");
+            log.warn("DiarySearchTool: 未绑定用户ID，拒绝搜索请求");
             return List.of("无法验证用户身份，请重新登录后再试。");
         }
 
-        // 隐私检查：CUSTOM 模式且未开启云端备份的用户不允许 RAG
+        // 检查权限
         if (!isRagAllowed(currentUserId)) {
             log.info("DiarySearchTool: 用户 {} 使用最高隐私模式，RAG 功能不可用", currentUserId);
             return List.of("您当前使用的是最高隐私模式（自定义密钥且未开启云端备份），日记搜索功能不可用。如需使用此功能，请在设置中开启云端密钥备份。");

@@ -12,4 +12,6 @@ public class LifeGraphMergeSuggestion {
     private String nameB;
     private String type;
     private Double score;
+    private String reason;
+    private String recommendedMasterName;
 }

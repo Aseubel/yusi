@@ -60,6 +60,12 @@ public class LifeGraphEntity {
     @Column(name = "mention_count", nullable = false)
     private Integer mentionCount;
 
+    @Column(name = "relation_count")
+    private Integer relationCount;
+
+    @Column(name = "summary", length = 512)
+    private String summary;
+
     @Column(name = "first_mention_date")
     @JsonFormat(pattern = "yyyy-MM-dd")
     @JsonSerialize(using = LocalDateSerializer.class)
@@ -105,6 +111,8 @@ public class LifeGraphEntity {
             updatedAt = LocalDateTime.now();
         if (mentionCount == null)
             mentionCount = 0;
+        if (relationCount == null)
+            relationCount = 0;
     }
 
     @PreUpdate
@@ -112,5 +120,7 @@ public class LifeGraphEntity {
         updatedAt = LocalDateTime.now();
         if (mentionCount == null)
             mentionCount = 0;
+        if (relationCount == null)
+            relationCount = 0;
     }
 }

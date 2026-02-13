@@ -267,6 +267,8 @@ CREATE TABLE `life_graph_entity` (
     `name_norm` VARCHAR(255) NOT NULL COMMENT '归一化名称（用于去重与消歧）',
     `display_name` VARCHAR(255) NOT NULL COMMENT '展示名称',
     `mention_count` INT NOT NULL DEFAULT 0 COMMENT '提及次数',
+    `relation_count` INT DEFAULT 0 COMMENT '关系数量',
+    `summary` VARCHAR(512) DEFAULT NULL COMMENT '实体摘要',
     `first_mention_date` DATE DEFAULT NULL COMMENT '首次出现日期',
     `last_mention_at` DATETIME DEFAULT NULL COMMENT '最后一次出现时间',
     `props` JSON DEFAULT NULL COMMENT '扩展属性(JSON): emotion/frequency/coordinates/address/last_interaction 等',

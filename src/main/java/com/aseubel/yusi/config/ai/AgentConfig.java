@@ -42,7 +42,6 @@ public class AgentConfig {
     @Autowired
     private ApplicationContext applicationContext;
 
-    private final MemorySearchTool memorySearchTool;
     private final PromptService promptService;
 
     @Value("${mcp.enabled:false}")
@@ -65,7 +64,7 @@ public class AgentConfig {
         // 构建 AiServices
         AiServices<Assistant> builder = AiServices.builder(Assistant.class)
                 .streamingChatModel((StreamingChatModel) applicationContext.getBean("streamingChatModel"))
-                .tools(memorySearchTool)
+                // 注意：移除了 tools(diarySearchTool)，因为现在由 DiaryAssistantFactory 在 Controller 中按请求动态创建带 UserID 上下文的 Tool
                 .chatMemoryProvider((ChatMemoryProvider) applicationContext.getBean("chatMemoryProvider"))
                 .systemMessageProvider(chatMemoryId -> systemPrompt);
 
@@ -82,8 +81,7 @@ public class AgentConfig {
 
         Assistant assistant = builder.build();
 
-        log.info("DiaryAssistant 已配置 Agentic RAG 模式，注册工具: MemorySearchTool{}",
-                mcpEnabled ? " + MCP Tools" : "");
+        log.info("DiaryAssistant (Singleton) 已配置，仅用于非 RAG 场景（如日记回复、推荐信）");
         return assistant;
     }
 
