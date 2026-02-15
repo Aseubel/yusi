@@ -165,14 +165,3 @@ com.aseubel.yusi
 | **情景室** | POST | `/api/room/create` | 创建情景房间 |
 | **灵魂匹配** | POST | `/api/soul/match` | 获取匹配推荐 |
 | **匿名聊天** | POST | `/api/soul/chat/send` | 发送匿名消息 |
-
----
-
-## 🌍 Epic 5: 时空足迹 (Spatial Narrative)
-
-日记支持地理位置关联，通过高德地图 API 实现：
-- **日记地理关联**: 写日记时可添加位置（自动定位/POI 搜索）
-- **常用地点管理**: 设置 → 地点管理，添加家、公司等常用位置
-- **足迹地图**: `/footprints` 页面可视化展示日记足迹
-
-API Key 安全存储在后端 `application.yml`，前端通过 `/api/geo/*` 代理调用。
