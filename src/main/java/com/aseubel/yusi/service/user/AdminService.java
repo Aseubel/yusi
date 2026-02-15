@@ -15,6 +15,8 @@ public interface AdminService {
 
     void updateUserPermission(String userId, Integer permissionLevel);
 
+    void validatePermissionChange(String currentUserId, String targetUserId, Integer newLevel, Integer currentAdminLevel);
+
     Page<SituationScenario> getPendingScenarios(Pageable pageable);
 
     void auditScenario(String scenarioId, ScenarioAuditRequest request);

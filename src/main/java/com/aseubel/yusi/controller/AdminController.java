@@ -45,11 +45,11 @@ public class AdminController {
         }
     }
 
-    // @PostMapping("/remove-diary-collection")
-    // public void removeDiaryCollection() {
-    // checkAdminPermission();
-    // milvusEmbeddingStore.removeAll();
-    // }
+    private int getCurrentUserPermissionLevel() {
+        String userId = UserContext.getUserId();
+        User user = userService.getUserByUserId(userId);
+        return user != null && user.getPermissionLevel() != null ? user.getPermissionLevel() : 0;
+    }
 
     @GetMapping("/stats")
     public Response<AdminStatsResponse> getStats() {
@@ -69,12 +69,16 @@ public class AdminController {
     public Response<Void> updateUserPermission(@PathVariable String userId, @RequestBody Map<String, Integer> payload) {
         checkAdminPermission();
         String currentUserId = UserContext.getUserId();
-        if (currentUserId.equals(userId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "Cannot modify your own permissions");
-        }
         Integer level = payload.get("level");
-        if (level == null)
+        if (level == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Level is required");
+        }
+        if (level < 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Level must be non-negative");
+        }
+        
+        int currentAdminLevel = getCurrentUserPermissionLevel();
+        adminService.validatePermissionChange(currentUserId, userId, level, currentAdminLevel);
         adminService.updateUserPermission(userId, level);
         return Response.success();
     }

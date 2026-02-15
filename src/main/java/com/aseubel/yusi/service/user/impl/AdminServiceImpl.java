@@ -34,7 +34,7 @@ public class AdminServiceImpl implements AdminService {
                 .totalUsers(userRepository.count())
                 .totalDiaries(diaryRepository.count())
                 .totalRooms(situationRoomRepository.count())
-                .pendingScenarios(situationScenarioRepository.findByStatus(0).size()) // 0 for pending
+                .pendingScenarios(situationScenarioRepository.findByStatus(0).size())
                 .build();
     }
 
@@ -51,10 +51,32 @@ public class AdminServiceImpl implements AdminService {
     public void updateUserPermission(String userId, Integer permissionLevel) {
         User user = userRepository.findByUserId(userId);
         if (user == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "User currently not found");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "User not found");
         }
         user.setPermissionLevel(permissionLevel);
         userRepository.save(user);
+    }
+
+    @Override
+    public void validatePermissionChange(String currentUserId, String targetUserId, Integer newLevel, Integer currentAdminLevel) {
+        if (currentUserId.equals(targetUserId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Cannot modify your own permissions");
+        }
+        
+        User targetUser = userRepository.findByUserId(targetUserId);
+        if (targetUser == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Target user not found");
+        }
+        
+        int targetCurrentLevel = targetUser.getPermissionLevel() != null ? targetUser.getPermissionLevel() : 0;
+        
+        if (targetCurrentLevel >= currentAdminLevel) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Cannot modify users with equal or higher permission level");
+        }
+        
+        if (newLevel >= currentAdminLevel) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Cannot set permission level equal or higher than your own");
+        }
     }
 
     @Override
@@ -69,9 +91,9 @@ public class AdminServiceImpl implements AdminService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Scenario not found"));
 
         if (request.isApproved()) {
-            scenario.setStatus(4); // 4 for manual approved
+            scenario.setStatus(4);
         } else {
-            scenario.setStatus(1); // 1 for manual rejected
+            scenario.setStatus(1);
             scenario.setRejectReason(request.getRejectReason());
         }
         situationScenarioRepository.save(scenario);
