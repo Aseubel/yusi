@@ -35,6 +35,9 @@ public class Suggestion {
     @Column(name = "user_id")
     private String userId;
 
+    @Column(name = "username")
+    private String username;
+
     @Column(name = "content", columnDefinition = "TEXT")
     private String content;
 

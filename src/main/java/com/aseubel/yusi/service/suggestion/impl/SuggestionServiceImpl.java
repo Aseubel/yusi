@@ -3,8 +3,10 @@ package com.aseubel.yusi.service.suggestion.impl;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.entity.Suggestion;
+import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.SuggestionRepository;
 import com.aseubel.yusi.service.suggestion.SuggestionService;
+import com.aseubel.yusi.service.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -20,12 +22,17 @@ import java.time.LocalDateTime;
 public class SuggestionServiceImpl implements SuggestionService {
 
     private final SuggestionRepository suggestionRepository;
+    private final UserService userService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Suggestion createSuggestion(String userId, String content, String contactEmail) {
+        User user = userService.getUserByUserId(userId);
+        String username = user != null ? user.getUserName() : "未知用户";
+        
         Suggestion suggestion = Suggestion.builder()
                 .userId(userId)
+                .username(username)
                 .content(content)
                 .contactEmail(contactEmail)
                 .status("PENDING")

@@ -44,7 +44,13 @@ public class AdminServiceImpl implements AdminService {
     @Override
     public Page<User> getUsers(Pageable pageable, String search) {
         if (search != null && !search.isEmpty()) {
-            return userRepository.findByUserNameContaining(search, pageable);
+            // 先尝试按 username 搜索
+            Page<User> users = userRepository.findByUserNameContaining(search, pageable);
+            if (users.hasContent()) {
+                return users;
+            }
+            // 如果没找到，尝试按 userId 搜索
+            return userRepository.findByUserIdContaining(search, pageable);
         }
         return userRepository.findAll(pageable);
     }

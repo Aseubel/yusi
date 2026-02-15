@@ -22,4 +22,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     List<User> findByIsMatchEnabledTrue();
 
     Page<User> findByUserNameContaining(String userName, Pageable pageable);
+
+    Page<User> findByUserIdContaining(String userId, Pageable pageable);
 }
