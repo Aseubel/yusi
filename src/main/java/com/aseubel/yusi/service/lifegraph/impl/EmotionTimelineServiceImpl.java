@@ -25,40 +25,40 @@ public class EmotionTimelineServiceImpl implements EmotionTimelineService {
     private final LifeGraphEntityRepository entityRepository;
     private final LifeGraphMentionRepository mentionRepository;
 
-    private static final Map<String, Double> EMOTION_INTENSITY = Map.of(
-            "joy", 0.8,
-            "excitement", 0.9,
-            "happiness", 0.7,
-            "contentment", 0.5,
-            "calm", 0.3,
-            "neutral", 0.0,
-            "anxiety", 0.6,
-            "sadness", 0.7,
-            "anger", 0.8,
-            "fear", 0.7,
-            "frustration", 0.6,
-            "disappointment", 0.5,
-            "loneliness", 0.6,
-            "stress", 0.5,
-            "tired", 0.3
+    private static final Map<String, Double> EMOTION_INTENSITY = Map.ofEntries(
+            Map.entry("joy", 0.8),
+            Map.entry("excitement", 0.9),
+            Map.entry("happiness", 0.7),
+            Map.entry("contentment", 0.5),
+            Map.entry("calm", 0.3),
+            Map.entry("neutral", 0.0),
+            Map.entry("anxiety", 0.6),
+            Map.entry("sadness", 0.7),
+            Map.entry("anger", 0.8),
+            Map.entry("fear", 0.7),
+            Map.entry("frustration", 0.6),
+            Map.entry("disappointment", 0.5),
+            Map.entry("loneliness", 0.6),
+            Map.entry("stress", 0.5),
+            Map.entry("tired", 0.3)
     );
 
-    private static final Map<String, String> EMOTION_CATEGORIES = Map.of(
-            "joy", "positive",
-            "excitement", "positive",
-            "happiness", "positive",
-            "contentment", "positive",
-            "calm", "positive",
-            "anxiety", "negative",
-            "sadness", "negative",
-            "anger", "negative",
-            "fear", "negative",
-            "frustration", "negative",
-            "disappointment", "negative",
-            "loneliness", "negative",
-            "stress", "negative",
-            "tired", "neutral",
-            "neutral", "neutral"
+    private static final Map<String, String> EMOTION_CATEGORIES = Map.ofEntries(
+            Map.entry("joy", "positive"),
+            Map.entry("excitement", "positive"),
+            Map.entry("happiness", "positive"),
+            Map.entry("contentment", "positive"),
+            Map.entry("calm", "positive"),
+            Map.entry("anxiety", "negative"),
+            Map.entry("sadness", "negative"),
+            Map.entry("anger", "negative"),
+            Map.entry("fear", "negative"),
+            Map.entry("frustration", "negative"),
+            Map.entry("disappointment", "negative"),
+            Map.entry("loneliness", "negative"),
+            Map.entry("stress", "negative"),
+            Map.entry("tired", "neutral"),
+            Map.entry("neutral", "neutral")
     );
 
     @Override
@@ -186,7 +186,7 @@ public class EmotionTimelineServiceImpl implements EmotionTimelineService {
             return Collections.emptyList();
         }
 
-        return Arrays.stream(emotionStr.split("[,，、;；\\s]+"))
+        return Arrays.stream(emotionStr.split("[,，、;；\\s]+", -1))
                 .map(String::trim)
                 .map(String::toLowerCase)
                 .filter(e -> !e.isEmpty())
