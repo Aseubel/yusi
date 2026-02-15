@@ -3,12 +3,18 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.service.lifegraph.CommunityInsightService;
+import com.aseubel.yusi.service.lifegraph.EmotionTimelineService;
 import com.aseubel.yusi.service.lifegraph.LifeGraphQueryService;
 import com.aseubel.yusi.service.lifegraph.LifeTimelineService;
+import com.aseubel.yusi.service.lifegraph.dto.CommunityInsight;
+import com.aseubel.yusi.service.lifegraph.dto.EmotionTimeline;
 import com.aseubel.yusi.service.lifegraph.dto.LifeChapter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @Auth
@@ -19,24 +25,45 @@ public class LifeGraphController {
 
     private final LifeGraphQueryService queryService;
     private final LifeTimelineService timelineService;
+    private final CommunityInsightService communityInsightService;
+    private final EmotionTimelineService emotionTimelineService;
 
-    /**
-     * 图谱本地搜索 (1-hop Context)
-     * 返回结构化的图谱文本（YAML风格），用于调试或前端展示
-     */
     @GetMapping("/search")
     public Response<String> search(@RequestParam String query) {
         String userId = UserContext.getUserId();
-        // 默认限制：5个实体，每个实体50条关系，5条原文提及
         return Response.success(queryService.localSearch(userId, query, 5, 50, 5));
     }
 
-    /**
-     * 获取人生时间线章节
-     */
     @GetMapping("/timeline")
     public Response<List<LifeChapter>> getTimeline() {
         String userId = UserContext.getUserId();
         return Response.success(timelineService.getLifeChapters(userId));
+    }
+
+    @GetMapping("/communities")
+    public Response<List<CommunityInsight>> getCommunities() {
+        String userId = UserContext.getUserId();
+        return Response.success(communityInsightService.detectCommunities(userId));
+    }
+
+    @GetMapping("/communities/{communityId}")
+    public Response<CommunityInsight> getCommunityDetail(@PathVariable String communityId) {
+        String userId = UserContext.getUserId();
+        return Response.success(communityInsightService.getCommunityDetail(userId, communityId));
+    }
+
+    @GetMapping("/emotions")
+    public Response<EmotionTimeline> getEmotionTimeline(
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate) {
+        String userId = UserContext.getUserId();
+        return Response.success(emotionTimelineService.getEmotionTimeline(userId, startDate, endDate));
+    }
+
+    @GetMapping("/emotions/triggers")
+    public Response<List<EmotionTimeline.EmotionTrigger>> getEmotionTriggers(
+            @RequestParam(defaultValue = "10") int limit) {
+        String userId = UserContext.getUserId();
+        return Response.success(emotionTimelineService.getEmotionTriggers(userId, limit));
     }
 }
