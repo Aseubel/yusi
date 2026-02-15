@@ -10,4 +10,5 @@ public class AdminStatsResponse {
     private long totalDiaries;
     private long pendingScenarios;
     private long totalRooms;
+    private long pendingSuggestions;
 }

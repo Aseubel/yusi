@@ -14,7 +14,9 @@ import com.aseubel.yusi.pojo.dto.admin.AdminStatsResponse;
 import com.aseubel.yusi.pojo.dto.admin.ScenarioAuditRequest;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
+import com.aseubel.yusi.pojo.entity.Suggestion;
 import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.service.suggestion.SuggestionService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
@@ -37,6 +39,7 @@ public class AdminController {
     private final MilvusEmbeddingStore milvusEmbeddingStore;
 
     private final AdminService adminService;
+    private final SuggestionService suggestionService;
 
     private void checkAdminPermission() {
         String userId = UserContext.getUserId();
@@ -95,5 +98,49 @@ public class AdminController {
         checkAdminPermission();
         adminService.auditScenario(scenarioId, request);
         return Response.success();
+    }
+
+    @GetMapping("/suggestions")
+    public Response<Page<Suggestion>> getSuggestions(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String status) {
+        checkAdminPermission();
+        return Response.success(suggestionService.getAllSuggestions(PageRequest.of(page, size), status));
+    }
+
+    @GetMapping("/suggestions/{suggestionId}")
+    public Response<Suggestion> getSuggestion(@PathVariable String suggestionId) {
+        checkAdminPermission();
+        return Response.success(suggestionService.getSuggestion(suggestionId));
+    }
+
+    @PostMapping("/suggestions/{suggestionId}/reply")
+    public Response<Void> replySuggestion(@PathVariable String suggestionId, @RequestBody Map<String, String> payload) {
+        checkAdminPermission();
+        String reply = payload.get("reply");
+        if (reply == null || reply.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Reply content is required");
+        }
+        String repliedBy = UserContext.getUserId();
+        suggestionService.replySuggestion(suggestionId, reply, repliedBy);
+        return Response.success();
+    }
+
+    @PostMapping("/suggestions/{suggestionId}/status")
+    public Response<Void> updateSuggestionStatus(@PathVariable String suggestionId, @RequestBody Map<String, String> payload) {
+        checkAdminPermission();
+        String status = payload.get("status");
+        if (status == null || status.trim().isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "Status is required");
+        }
+        suggestionService.updateStatus(suggestionId, status);
+        return Response.success();
+    }
+
+    @GetMapping("/suggestions/pending-count")
+    public Response<Long> getPendingSuggestionCount() {
+        checkAdminPermission();
+        return Response.success(suggestionService.getPendingCount());
     }
 }

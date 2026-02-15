@@ -9,6 +9,7 @@ import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.SituationRoomRepository;
 import com.aseubel.yusi.repository.SituationScenarioRepository;
+import com.aseubel.yusi.repository.SuggestionRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.user.AdminService;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ public class AdminServiceImpl implements AdminService {
     private final DiaryRepository diaryRepository;
     private final SituationRoomRepository situationRoomRepository;
     private final SituationScenarioRepository situationScenarioRepository;
+    private final SuggestionRepository suggestionRepository;
 
     @Override
     public AdminStatsResponse getStats() {
@@ -35,6 +37,7 @@ public class AdminServiceImpl implements AdminService {
                 .totalDiaries(diaryRepository.count())
                 .totalRooms(situationRoomRepository.count())
                 .pendingScenarios(situationScenarioRepository.findByStatus(0).size())
+                .pendingSuggestions(suggestionRepository.countByStatus("PENDING"))
                 .build();
     }
 
