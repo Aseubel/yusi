@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.room;
 
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
+import com.aseubel.yusi.pojo.dto.situation.SituationRoomDetailResponse;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
 
@@ -22,6 +23,8 @@ public interface SituationRoomService {
     SituationRoom getRoom(String code);
 
     SituationRoom getRoomDetail(String code, String requesterId);
+
+    SituationRoomDetailResponse getRoomDetailResponse(String code, String requesterId);
 
     SituationReport getReport(String code);
 

@@ -95,9 +95,8 @@ public class SituationRoomController {
     }
 
     @GetMapping("/{code}")
-    public Response<SituationRoom> getRoom(@PathVariable("code") String code) {
-        // Use getRoomDetail to return masked data
-        SituationRoom room = situationRoomService.getRoomDetail(code, UserContext.getUserId());
+    public Response<SituationRoomDetailResponse> getRoom(@PathVariable("code") String code) {
+        SituationRoomDetailResponse room = situationRoomService.getRoomDetailResponse(code, UserContext.getUserId());
         return Response.success(room);
     }
 }

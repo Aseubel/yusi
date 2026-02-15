@@ -9,6 +9,7 @@ import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.utils.UuidUtils;
 import com.aseubel.yusi.pojo.contant.RoomStatus;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
+import com.aseubel.yusi.pojo.dto.situation.SituationRoomDetailResponse;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
 import com.aseubel.yusi.pojo.entity.User;
@@ -231,7 +232,6 @@ public class SituationRoomServiceImpl implements SituationRoomService {
                 if (k.equals(requesterId)) {
                     maskedSubmissions.put(k, v);
                 } else {
-                    // Keep the key to show "Submitted", but mask the content
                     maskedSubmissions.put(k, "");
                 }
             });
@@ -239,6 +239,69 @@ public class SituationRoomServiceImpl implements SituationRoomService {
         }
 
         return safeRoom;
+    }
+
+    @Override
+    public SituationRoomDetailResponse getRoomDetailResponse(String code, String requesterId) {
+        SituationRoom room = getRoom(code);
+
+        SituationRoomDetailResponse.ScenarioDetail scenarioDetail = null;
+        if (room.getScenario() != null) {
+            SituationScenario scenario = room.getScenario();
+            scenarioDetail = SituationRoomDetailResponse.ScenarioDetail.builder()
+                    .id(scenario.getId())
+                    .title(scenario.getTitle())
+                    .description(scenario.getDescription())
+                    .summary(generateSummary(scenario.getDescription()))
+                    .build();
+        }
+
+        Map<String, String> maskedSubmissions = new ConcurrentHashMap<>();
+        if (room.getSubmissions() != null) {
+            room.getSubmissions().forEach((k, v) -> {
+                if (k.equals(requesterId)) {
+                    maskedSubmissions.put(k, v);
+                } else {
+                    maskedSubmissions.put(k, "");
+                }
+            });
+        }
+
+        return SituationRoomDetailResponse.builder()
+                .code(room.getCode())
+                .status(room.getStatus())
+                .ownerId(room.getOwnerId())
+                .scenarioId(room.getScenarioId())
+                .members(room.getMembers())
+                .submissions(maskedSubmissions)
+                .submissionVisibility(room.getSubmissionVisibility())
+                .cancelVotes(room.getCancelVotes())
+                .createdAt(room.getCreatedAt())
+                .report(room.getReport())
+                .memberNames(room.getMemberNames())
+                .scenario(scenarioDetail)
+                .build();
+    }
+
+    private String generateSummary(String description) {
+        if (description == null || description.isEmpty()) {
+            return "";
+        }
+        int length = description.length();
+        if (length <= 80) {
+            return description;
+        }
+        int endIndex = Math.min(80, length);
+        String summary = description.substring(0, endIndex);
+        if (endIndex < length && !summary.endsWith(" ") && !summary.endsWith("\n")) {
+            int lastSpace = summary.lastIndexOf(' ');
+            int lastNewline = summary.lastIndexOf('\n');
+            int cutPoint = Math.max(lastSpace, lastNewline);
+            if (cutPoint > 0) {
+                summary = summary.substring(0, cutPoint);
+            }
+        }
+        return summary + "...";
     }
 
     private void populateMemberNames(SituationRoom room) {

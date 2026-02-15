@@ -14,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.web.bind.annotation.*;
 
-@Auth
 @Slf4j
 @RestController
 @RequiredArgsConstructor
@@ -24,6 +23,7 @@ public class SoulPlazaController {
 
     private final SoulPlazaService plazaService;
 
+    @Auth
     @PostMapping("/submit")
     public Response<SoulCard> submit(@RequestBody SubmitCardRequest request) {
         SoulCard card = plazaService.submitToPlaza(
@@ -34,6 +34,7 @@ public class SoulPlazaController {
         return Response.success(card);
     }
 
+    @Auth(required = false)
     @GetMapping("/feed")
     public Response<Page<SoulCard>> getFeed(
             @RequestParam(defaultValue = "1") int page,
@@ -42,6 +43,7 @@ public class SoulPlazaController {
         return Response.success(plazaService.getFeed(UserContext.getUserId(), page, size, emotion));
     }
 
+    @Auth
     @GetMapping("/my")
     public Response<Page<SoulCard>> getMyCards(
             @RequestParam(defaultValue = "1") int page,
@@ -49,6 +51,7 @@ public class SoulPlazaController {
         return Response.success(plazaService.getMyCards(UserContext.getUserId(), page, size));
     }
 
+    @Auth
     @PutMapping("/{cardId}")
     public Response<SoulCard> updateCard(
             @PathVariable Long cardId,
@@ -56,12 +59,14 @@ public class SoulPlazaController {
         return Response.success(plazaService.updateCard(UserContext.getUserId(), cardId, request.getContent()));
     }
 
+    @Auth
     @DeleteMapping("/{cardId}")
     public Response<Void> deleteCard(@PathVariable Long cardId) {
         plazaService.deleteCard(UserContext.getUserId(), cardId);
         return Response.success(null);
     }
 
+    @Auth
     @PostMapping("/{cardId}/resonate")
     public Response<SoulResonance> resonate(
             @PathVariable Long cardId,
