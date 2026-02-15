@@ -15,6 +15,26 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class SituationScenario {
 
+    public static final int STATUS_PENDING = 0;
+    public static final int STATUS_MANUAL_REJECTED = 1;
+    public static final int STATUS_AI_REJECTED = 2;
+    public static final int STATUS_AI_APPROVED = 3;
+    public static final int STATUS_MANUAL_APPROVED = 4;
+    public static final int STATUS_DELETED = -1;
+
+    public static String getStatusText(Integer status) {
+        if (status == null) return "未知";
+        return switch (status) {
+            case STATUS_PENDING -> "待审核";
+            case STATUS_MANUAL_REJECTED -> "已拒绝";
+            case STATUS_AI_REJECTED -> "AI审核拒绝";
+            case STATUS_AI_APPROVED -> "AI审核通过";
+            case STATUS_MANUAL_APPROVED -> "已通过";
+            case STATUS_DELETED -> "已删除";
+            default -> "未知";
+        };
+    }
+
     @Id
     @Column(length = 32)
     private String id;
@@ -31,7 +51,6 @@ public class SituationScenario {
     @Column(name = "reject_reason", columnDefinition = "TEXT")
     private String rejectReason;
 
-    // 0-待审核/1-人工拒绝/2-AI 审核拒绝/3-AI 审核通过/4-人工通过
     @Column(columnDefinition = "INT DEFAULT 0")
     private Integer status = 0;
 

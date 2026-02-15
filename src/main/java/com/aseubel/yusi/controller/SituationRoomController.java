@@ -48,6 +48,27 @@ public class SituationRoomController {
         return Response.success(situationRoomService.submitScenario(UserContext.getUserId(), request.getTitle(), request.getDescription()));
     }
 
+    @GetMapping("/scenarios/my")
+    public Response<List<SituationScenario>> getMyScenarios() {
+        return Response.success(situationRoomService.getMyScenarios(UserContext.getUserId()));
+    }
+
+    @PutMapping("/scenarios/{id}")
+    public Response<SituationScenario> updateScenario(@PathVariable("id") String scenarioId, @RequestBody SubmitScenarioRequest request) {
+        return Response.success(situationRoomService.updateScenario(UserContext.getUserId(), scenarioId, request.getTitle(), request.getDescription()));
+    }
+
+    @DeleteMapping("/scenarios/{id}")
+    public Response<?> deleteScenario(@PathVariable("id") String scenarioId) {
+        situationRoomService.deleteScenario(UserContext.getUserId(), scenarioId);
+        return Response.success();
+    }
+
+    @PostMapping("/scenarios/{id}/resubmit")
+    public Response<SituationScenario> resubmitScenario(@PathVariable("id") String scenarioId) {
+        return Response.success(situationRoomService.resubmitScenario(UserContext.getUserId(), scenarioId));
+    }
+
     @PostMapping("/scenarios/review")
     public Response<SituationScenario> reviewScenario(@RequestBody ReviewScenarioRequest request) {
         return Response.success(situationRoomService.reviewScenario(UserContext.getUserId(), request.getScenarioId(), request.getStatus(), request.getRejectReason()));

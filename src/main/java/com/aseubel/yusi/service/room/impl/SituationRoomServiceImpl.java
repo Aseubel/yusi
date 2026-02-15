@@ -329,8 +329,56 @@ public class SituationRoomServiceImpl implements SituationRoomService {
         scenario.setTitle(title);
         scenario.setDescription(description);
         scenario.setSubmitterId(userId);
-        scenario.setStatus(0);
+        scenario.setStatus(SituationScenario.STATUS_PENDING);
         return scenarioRepository.save(scenario);
+    }
+
+    @Override
+    public SituationScenario updateScenario(String userId, String scenarioId, String title, String description) {
+        SituationScenario scenario = scenarioRepository.findById(scenarioId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "情景不存在"));
+        if (!scenario.getSubmitterId().equals(userId)) {
+            throw new AuthenticationException("无权限修改此情景");
+        }
+        if (scenario.getStatus() == SituationScenario.STATUS_DELETED) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "情景已被删除");
+        }
+        scenario.setTitle(title);
+        scenario.setDescription(description);
+        scenario.setStatus(SituationScenario.STATUS_PENDING);
+        scenario.setRejectReason(null);
+        return scenarioRepository.save(scenario);
+    }
+
+    @Override
+    public void deleteScenario(String userId, String scenarioId) {
+        SituationScenario scenario = scenarioRepository.findById(scenarioId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "情景不存在"));
+        if (!scenario.getSubmitterId().equals(userId)) {
+            throw new AuthenticationException("无权限删除此情景");
+        }
+        scenario.setStatus(SituationScenario.STATUS_DELETED);
+        scenarioRepository.save(scenario);
+    }
+
+    @Override
+    public SituationScenario resubmitScenario(String userId, String scenarioId) {
+        SituationScenario scenario = scenarioRepository.findById(scenarioId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "情景不存在"));
+        if (!scenario.getSubmitterId().equals(userId)) {
+            throw new AuthenticationException("无权限操作此情景");
+        }
+        if (scenario.getStatus() == SituationScenario.STATUS_DELETED) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "情景已被删除");
+        }
+        scenario.setStatus(SituationScenario.STATUS_PENDING);
+        scenario.setRejectReason(null);
+        return scenarioRepository.save(scenario);
+    }
+
+    @Override
+    public List<SituationScenario> getMyScenarios(String userId) {
+        return scenarioRepository.findBySubmitterIdAndStatusNot(userId, SituationScenario.STATUS_DELETED);
     }
 
     @Override
@@ -342,7 +390,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
         SituationScenario scenario = scenarioRepository.findById(scenarioId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Scenario not found"));
         scenario.setStatus(status);
-        if (status == 1 || status == 2) {
+        if (status == SituationScenario.STATUS_MANUAL_REJECTED || status == SituationScenario.STATUS_AI_REJECTED) {
             scenario.setRejectReason(rejectReason);
         }
         return scenarioRepository.save(scenario);
@@ -350,7 +398,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
 
     @Override
     public List<SituationScenario> getScenarios() {
-        return scenarioRepository.findByStatusGreaterThanEqual(3);
+        return scenarioRepository.findByStatusGreaterThanEqual(SituationScenario.STATUS_AI_APPROVED);
     }
 
     @Override

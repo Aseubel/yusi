@@ -34,6 +34,14 @@ public interface SituationRoomService {
 
     SituationScenario submitScenario(String userId, String title, String description);
 
+    SituationScenario updateScenario(String userId, String scenarioId, String title, String description);
+
+    void deleteScenario(String userId, String scenarioId);
+
+    SituationScenario resubmitScenario(String userId, String scenarioId);
+
+    List<SituationScenario> getMyScenarios(String userId);
+
     SituationScenario reviewScenario(String adminId, String scenarioId, Integer status, String rejectReason);
 
     List<SituationRoom> getHistory(String userId);

@@ -16,5 +16,7 @@ public interface SituationScenarioRepository extends JpaRepository<SituationScen
 
     List<SituationScenario> findBySubmitterId(String submitterId);
 
+    List<SituationScenario> findBySubmitterIdAndStatusNot(String submitterId, Integer status);
+
     Page<SituationScenario> findByStatus(Integer status, Pageable pageable);
 }
