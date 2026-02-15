@@ -55,20 +55,27 @@ public class AuthAspect {
             auth = joinPoint.getTarget().getClass().getAnnotation(Auth.class);
         }
 
-        // If auth is not required, proceed
-        if (auth != null && !auth.required()) {
-            return joinPoint.proceed();
-        }
+        boolean isRequired = auth == null || auth.required();
 
         String token = request.getHeader("Authorization");
         if (StringUtils.hasText(token) && token.startsWith("Bearer ")) {
             token = token.substring(7);
         } else {
-            throw new AuthorizationException(ErrorCode.TOKEN_MISSING);
+            token = null;
+        }
+
+        if (token == null) {
+            if (isRequired) {
+                throw new AuthorizationException(ErrorCode.TOKEN_MISSING);
+            }
+            return joinPoint.proceed();
         }
 
         if (tokenService.isBlacklisted(token)) {
-            throw new AuthorizationException(ErrorCode.TOKEN_INVALID, "令牌已失效");
+            if (isRequired) {
+                throw new AuthorizationException(ErrorCode.TOKEN_INVALID, "令牌已失效");
+            }
+            return joinPoint.proceed();
         }
 
         try {
@@ -77,14 +84,23 @@ public class AuthAspect {
             if (!StringUtils.hasText(userId)) {
                 userId = (String) claims.get("userId");
                 if (!StringUtils.hasText(userId)) {
-                    throw new AuthorizationException(ErrorCode.TOKEN_INVALID);
+                    if (isRequired) {
+                        throw new AuthorizationException(ErrorCode.TOKEN_INVALID);
+                    }
+                    return joinPoint.proceed();
                 }
             }
             UserContext.setUserId(userId);
         } catch (ExpiredJwtException e) {
-            throw new AuthorizationException(ErrorCode.TOKEN_EXPIRED);
+            if (isRequired) {
+                throw new AuthorizationException(ErrorCode.TOKEN_EXPIRED);
+            }
+            return joinPoint.proceed();
         } catch (Exception e) {
-            throw new AuthorizationException(ErrorCode.TOKEN_INVALID);
+            if (isRequired) {
+                throw new AuthorizationException(ErrorCode.TOKEN_INVALID);
+            }
+            return joinPoint.proceed();
         }
 
         try {
