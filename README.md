@@ -1,167 +1,268 @@
-# Yusi - 灵魂叙事 (Soul Narrative)
+# Yusi - 灵魂叙事
 
-Yusi 是一个深度社交后端服务，旨在通过 AI 分析用户的“叙事”和“情景行为”，实现基于深层性格与价值观的灵魂匹配。项目基于 Spring Boot 3.4.5 构建，集成了 LangChain4j 进行向量检索与大模型交互。
+<p align="center">
+  <img src="https://img.shields.io/badge/Java-21-blue" alt="Java">
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.4.5-green" alt="Spring Boot">
+  <img src="https://img.shields.io/badge/React-18-blue" alt="React">
+  <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
+</p>
 
-## 🌟 核心功能
+## 产品理念
 
-### 1. 情景室 (The Situation Room)
-- **多人实时协作**：支持 2-8 人创建房间，同步参与情景模拟。
-- **AI 行为分析**：基于用户提交的行动与想法，AI 生成多维度的性格分析报告与合拍度矩阵。
-- **实时状态流转**：使用 Redis 维护房间状态，支持 LMAX Disruptor 高性能事件处理（可选）。
+**人不被行为标签所定义，记忆使人成型。**
 
-### 2. AI 知己日记 (The Confidant Journal)
-- **隐私保险库**：日记内容采用 AES/GCM 透明加密存储，确保绝对隐私。
-- **RAG 增强对话**：基于向量数据库（Milvus/Zilliz）的检索增强生成，让 AI 拥有“记忆”，成为懂你的知己。
-- **灵魂匹配与匿名畅聊**：
-  - 基于 AI 推荐信的双向匹配机制。
-  - **匿名聊天室**：匹配成功后开启限时/限次匿名对话，保护双方隐私，仅通过灵魂共鸣交流。
-
-### 3. 系统可观测性与稳定性
-- **分布式限流**：集成 Redisson RRateLimiter，支持 IP、用户、全局维度的精细化流量控制。
-- **接口使用监控**：
-  - 基于 Redis 的原子计数器，高性能记录接口调用频次。
-  - 自动处理跨天数据，每 30 分钟异步同步至 MySQL 持久化。
-  - 支持按用户、IP、接口名维度的统计分析。
+我们坚信，真正的理解不是记住几个标签（如"温柔"、"果断"），而是明白他人在具体情境下会做出怎样的选择和行动。Yusi 通过情景叙事和记忆图谱，让每个人都能记录对自己重要的选择与时刻，在具体场景中真正理解彼此。
 
 ---
 
-## 🛠 技术栈
+## 核心功能
 
-- **核心框架**：Spring Boot 3.4.5, Java 17
-- **数据存储**：
-  - MySQL 8.x (业务数据)
-  - Redis (缓存、分布式锁、限流、计数器)
-  - Milvus / Zilliz Cloud (向量数据)
-- **AI & LLM**：LangChain4j, Qwen (通义千问) API
-- **ORM & 数据库**：Spring Data JPA, Hibernate, HikariCP
-- **中间件**：Redisson (分布式服务), Spring AOP (切面监控)
-- **工具**：Lombok, Hutool, Jackson
+### 1. 情景叙事 (The Situation Room)
+
+- **具体情境中的真实选择**：支持 2-8 人创建情景室，在精心设计的情景中呈现真实的自己
+- **AI 行为分析**：基于用户提交的行动与想法，AI 生成多维度的分析报告
+- **超越标签的理解**：不是用"温柔"或"果断"来定义，而是看见他人具体情境中的行动
+
+### 2. 记忆成型 (The Memory Journal)
+
+- **记录重要选择**：提供绝对私密的日记本，记录生命中的重要时刻与选择
+- **AES/GCM 加密存储**：日记内容采用透明加密，确保绝对隐私
+- **RAG 增强对话**：基于向量数据库的检索增强生成，让 AI 拥有"记忆"
+- **记忆图谱**：AI 从日记中提取关键实体与关系，呈现你的人生轨迹
+
+### 3. 深度理解与连接
+
+- **叙事广场**：匿名分享你的故事，看见他人的选择
+- **精神共鸣**：基于对行为和记忆的深度分析，找到真正理解你的人
+- **匿名对话**：匹配成功后开启限时匿名对话，保护双方隐私
+
+### 4. 人生图谱 (Life Graph)
+
+- **实体关系抽取**：AI 自动从日记中提取人物、地点、事件、情绪等实体
+- **关系图谱构建**：基于实体间的共现和语义分析，自动建立关系边
+- **多跳推理问答**：AI 可回答复杂问题，通过图谱遍历进行多跳推理
+- **情感图谱**：追踪用户情绪随时间和事件的变化，识别情绪触发点
 
 ---
 
-## 🚀 快速开始
+## 技术架构
 
-### 1. 环境准备
-- **Java 17+**
-- **Maven 3.9+**
-- **MySQL 8.x**：创建数据库 `yusi`
-- **Redis**：默认端口 `6379`
+### 后端技术栈
 
-### 2. 数据库初始化
-项目启动时会自动根据实体类更新表结构（`hibernate.ddl-auto: update` 或 `validate`）。
-**接口监控表结构**：
-```sql
-CREATE TABLE IF NOT EXISTS `interface_daily_usage` (
-    `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
-    `user_id` VARCHAR(64) NOT NULL COMMENT 'User ID',
-    `ip` VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'Client IP',
-    `interface_name` VARCHAR(128) NOT NULL COMMENT 'Interface/Method Name',
-    `usage_date` DATE NOT NULL COMMENT 'Date of usage',
-    `request_count` BIGINT NOT NULL DEFAULT 0 COMMENT 'Daily request count',
-    `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP,
-    `updated_at` DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY `uk_user_ip_interface_date` (`user_id`, `ip`, `interface_name`, `usage_date`),
-    INDEX `idx_date` (`usage_date`),
-    INDEX `idx_user` (`user_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='User Interface Daily Usage Stats';
+| 类别 | 技术 |
+|------|------|
+| 核心框架 | Spring Boot 3.4.5, Java 21 |
+| ORM | Spring Data JPA, Hibernate |
+| 数据库 | MySQL 8.x, Redis, Milvus/Zilliz |
+| AI & LLM | LangChain4j, Qwen/DeepSeek API |
+| 分布式中间件 | Redisson (分布式锁、限流) |
+| 高性能事件处理 | LMAX Disruptor |
+| 安全 | JWT, AES/GCM 加密 |
+
+### 前端技术栈
+
+| 类别 | 技术 |
+|------|------|
+| 框架 | React 18 + TypeScript |
+| 构建工具 | Vite |
+| UI 框架 | Tailwind CSS |
+| 状态管理 | Zustand |
+| 动画 | Framer Motion |
+| HTTP 客户端 | Axios |
+
+### 项目模块
+
+```
+yusi/
+├── src/                    # Spring Boot 后端
+│   ├── main/java/com/aseubel/yusi/
+│   │   ├── common/         # 通用组件 (Response, 异常, 工具类)
+│   │   ├── config/         # 配置类 (Redis, AI, Security)
+│   │   ├── controller/     # REST API 控制器
+│   │   ├── service/        # 业务逻辑层
+│   │   ├── repository/    # 数据访问层
+│   │   ├── pojo/           # 实体类与 DTO
+│   │   └── monitor/       # 监控模块
+│   └── resources/         # 配置与模板
+├── frontend/              # React 前端
+│   ├── src/
+│   │   ├── pages/         # 页面组件
+│   │   ├── components/    # 通用组件
+│   │   ├── lib/           # API 与工具
+│   │   └── stores/        # 状态管理
+│   └── public/            # 静态资源
+├── mcp/                   # MCP 服务 (AI 工具集成)
+└── docs/                  # 文档 (PRD, SQL)
 ```
 
-### 3. 配置说明
-修改 `src/main/resources/application-dev.yml`：
+---
+
+## 快速开始
+
+### 前置要求
+
+- **Java 21+**
+- **Maven 3.9+**
+- **Node.js 18+**
+- **MySQL 8.x**
+- **Redis 7.x**
+
+### 1. 克隆项目
+
+```bash
+git clone https://github.com/Aseubel/yusi.git
+cd yusi
+```
+
+### 2. 配置数据库
+
+```sql
+CREATE DATABASE yusi CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+```
+
+### 3. 配置后端
+
+创建 `src/main/resources/application-dev.yml`：
+
 ```yaml
 spring:
   datasource:
     url: jdbc:mysql://localhost:3306/yusi?useSSL=false&serverTimezone=UTC
-    username: <your_username>
-    password: <your_password>
+    username: root
+    password: your_password
   data:
     redis:
       host: localhost
       port: 6379
 ```
 
-设置环境变量（PowerShell 示例）：
-```powershell
-# AI 模型 API 密钥
-$env:CHAT_MODEL_APIKEY = "sk-xxxxxxxxxxxx"
-$env:CHAT_MODEL_BASEURL = "https://api.deepseek.com"
-$env:CHAT_MODEL_NAME = "deepseek-chat"
-$env:EMBEDDING_MODEL_APIKEY = "sk-xxxxxxxxxxxx"
-$env:EMBEDDING_MODEL_BASEURL = "https://api.siliconflow.cn/v1"
-$env:EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
+设置环境变量：
 
-# ⚠️ 重要：服务端日记加密密钥（必需，Base64 的 32 字节 AES-256 Key）
-$env:YUSI_ENCRYPTION_KEY = "BASE64_32_BYTES_AES_KEY"
-
-# ⚠️ 重要：云端备份 RSA 密钥对（用于 CUSTOM+备份，不在网络传输明文用户密钥）
-$env:YUSI_BACKUP_RSA_PUBLIC_KEY_SPKI_BASE64 = "BASE64_SPKI_PUBLIC_KEY"
-$env:YUSI_BACKUP_RSA_PRIVATE_KEY_PKCS8_BASE64 = "BASE64_PKCS8_PRIVATE_KEY"
-
-# 高德地图 API Key (后端地理服务代理)
-$env:AMAP_API_KEY = "your_amap_api_key"
-```
-
-> **⚠️ 安全提醒**：服务端密钥必须使用强随机值并妥善保管；一旦丢失将无法解密既有数据。
-
-### 4. 运行服务
 ```bash
-# 编译
-mvn clean package
+# AI 模型配置
+export CHAT_MODEL_APIKEY="your-api-key"
+export CHAT_MODEL_BASEURL="https://api.deepseek.com"
+export CHAT_MODEL_NAME="deepseek-chat"
+export EMBEDDING_MODEL_APIKEY="your-api-key"
+export EMBEDDING_MODEL_BASEURL="https://api.siliconflow.cn/v1"
+export EMBEDDING_MODEL_NAME="BAAI/bge-m3"
 
-# 运行
-java -jar target/yusi-0.0.1-SNAPSHOT.jar --spring.profiles.active=dev
+# 日记加密密钥 (32字节 AES-256 Key，Base64编码)
+export YUSI_ENCRYPTION_KEY="your-32-byte-base64-key"
 ```
+
+### 4. 启动后端
+
+```bash
+./mvnw spring-boot:run
+```
+
 服务默认端口：`20611`
+
+### 5. 启动前端
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+前端默认端口：`5173`
 
 ---
 
-## 📊 监控体系详解
+## Docker 部署
+
+### 使用 Docker Compose
+
+```bash
+# 启动所有服务
+docker-compose up -d
+```
+
+### 手动构建
+
+```bash
+# 构建后端
+./mvnw clean package -DskipTests
+docker build -t yusi-backend .
+
+# 构建前端
+cd frontend
+npm run build
+docker build -t yusi-frontend .
+```
+
+---
+
+## API 文档
+
+### 核心接口
+
+| 模块 | 方法 | 路径 | 描述 |
+|------|------|------|------|
+| 用户 | POST | `/api/user/register` | 用户注册 |
+| 用户 | POST | `/api/user/login` | 用户登录 |
+| 日记 | GET | `/api/diary/list` | 获取日记列表 |
+| 日记 | POST | `/api/diary` | 写日记 |
+| 日记 | POST | `/api/ai/chat/stream` | AI 对话 (流式) |
+| 情景室 | POST | `/api/room/create` | 创建情景房间 |
+| 情景室 | POST | `/api/room/join` | 加入房间 |
+| 情景室 | POST | `/api/room/submit` | 提交叙事 |
+| 广场 | GET | `/api/plaza/feed` | 获取广场内容 |
+| 广场 | POST | `/api/plaza/submit` | 发布内容 |
+| 匹配 | POST | `/api/soul/match` | 获取匹配推荐 |
+| 匿名聊天 | POST | `/api/soul/chat/send` | 发送消息 |
+| 人生图谱 | GET | `/api/lifegraph/emotions` | 情感时间线 |
+| 人生图谱 | GET | `/api/lifegraph/communities` | 社区洞察 |
+
+---
+
+## 监控体系
 
 ### 接口请求监控
-系统内置 `InterfaceMonitorAspect` 切面，自动拦截 Controller 层请求。
-- **数据流**：请求 -> AOP 拦截 -> Redis `INCR` -> 定时任务 (30min) -> MySQL `UPSERT`
-- **Redis Key 策略**：`yusi:interface:usage:{yyyy-MM-dd}`
-- **数据落盘**：支持 `ON DUPLICATE KEY UPDATE`，确保高并发下的数据一致性。
+
+系统内置 `InterfaceMonitorAspect` 切面，自动拦截 Controller 层请求：
+
+- **数据流**：请求 → AOP 拦截 → Redis `INCR` → 定时任务 (30min) → MySQL `UPSERT`
+- **Redis Key**：`yusi:interface:usage:{yyyy-MM-dd}`
 
 ### 限流策略
+
 使用 `@RateLimiter` 注解进行流量控制：
+
 ```java
 @RateLimiter(key = "chat", time = 60, count = 10, limitType = LimitType.USER)
 @PostMapping("/send")
 public Result sendMessage(...) { ... }
 ```
-- **LimitType.IP**：针对来源 IP 限流
-- **LimitType.USER**：针对用户 ID 限流
-- **LimitType.DEFAULT**：全局限流
+
+- `LimitType.IP`：针对来源 IP 限流
+- `LimitType.USER`：针对用户 ID 限流
+- `LimitType.DEFAULT`：全局限流
 
 ---
 
-## 📂 目录结构
+## 安全特性
 
-```
-com.aseubel.yusi
-├── common          # 通用组件 (Result, Exception, Utils)
-├── config          # 配置类 (Redis, Web, Async, Security)
-├── controller      # 控制器 (API 接口)
-├── monitor         # 监控模块 (Aspect, Scheduled Task)
-├── pojo            # 实体类 (Entity, DTO)
-├── repository      # 数据访问层 (JPA Repository)
-├── service         # 业务逻辑层
-└── YusiApplication.java # 启动类
-```
+- **日记加密**：采用 AES/GCM 透明加密，密钥由用户掌控
+- **JWT 认证**：无状态身份验证
+- **隐私优先**：AI 分析脱敏处理，数据库 ACL 控制
 
-## 📝 常用 API
+---
 
-| 模块 | 方法 | 路径 | 描述 |
-| :--- | :--- | :--- | :--- |
-| **日记** | GET | `/api/diary/list` | 获取日记列表 |
-| **日记** | POST | `/api/diary` | 写日记 (支持地理位置) |
-| **日记** | GET | `/api/diary/footprints` | 获取足迹列表 (Epic 5) |
-| **日记** | POST | `/api/ai/chat/stream` | 与 AI 知己对话 |
-| **地理** | GET | `/api/geo/search` | POI 搜索代理 |
-| **地理** | GET | `/api/geo/reverse` | 逆地理编码代理 |
-| **地点** | GET | `/api/location/list` | 获取用户保存的地点 |
-| **地点** | POST | `/api/location` | 添加常用/重要地点 |
-| **情景室** | POST | `/api/room/create` | 创建情景房间 |
-| **灵魂匹配** | POST | `/api/soul/match` | 获取匹配推荐 |
-| **匿名聊天** | POST | `/api/soul/chat/send` | 发送匿名消息 |
+## 贡献指南
+
+欢迎提交 Issue 和 Pull Request！
+
+---
+
+## 许可证
+
+MIT License - 查看 [LICENSE](LICENSE) 了解更多。
+
+---
+
+<p align="center">
+  Made with ❤️ by <a href="https://github.com/Aseubel">Aseubel</a>
+</p>

@@ -367,4 +367,24 @@ CREATE TABLE `life_graph_task` (
     KEY `idx_life_graph_task_created` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '人生图谱抽取任务表';
 
+DROP TABLE IF EXISTS `suggestion`;
+CREATE TABLE `suggestion` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `suggestion_id` VARCHAR(64) NOT NULL COMMENT '建议唯一标识',
+    `user_id` VARCHAR(64) DEFAULT NULL COMMENT '用户ID',
+    `content` TEXT COMMENT '建议内容',
+    `contact_email` VARCHAR(255) DEFAULT NULL COMMENT '联系邮箱',
+    `status` VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING-待处理，PROCESSING-处理中，RESOLVED-已解决，REJECTED-已拒绝',
+    `reply` TEXT COMMENT '回复内容',
+    `replied_by` VARCHAR(64) DEFAULT NULL COMMENT '回复人ID',
+    `replied_at` DATETIME DEFAULT NULL COMMENT '回复时间',
+    `create_time` DATETIME DEFAULT NULL COMMENT '创建时间',
+    `update_time` DATETIME DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_suggestion_id` (`suggestion_id`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_status` (`status`),
+    KEY `idx_create_time` (`create_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户建议/反馈表';
+
 SET FOREIGN_KEY_CHECKS = 1;
