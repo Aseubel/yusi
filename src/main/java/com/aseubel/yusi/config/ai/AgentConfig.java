@@ -1,5 +1,6 @@
 package com.aseubel.yusi.config.ai;
 
+import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.ai.MemorySearchTool;
 import com.aseubel.yusi.service.ai.PromptService;
 import com.aseubel.yusi.service.diary.Assistant;
@@ -91,7 +92,7 @@ public class AgentConfig {
         String fallbackPrompt = resource.getContentAsString(StandardCharsets.UTF_8);
         String dbPrompt = null;
         try {
-            dbPrompt = promptService.getPrompt("logic");
+            dbPrompt = promptService.getPrompt(PromptKey.LOGIC.name());
         } catch (Exception e) {
             log.warn("从数据库加载情景分析系统提示词失败: {}", e.getMessage());
         }

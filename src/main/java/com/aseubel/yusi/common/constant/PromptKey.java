@@ -19,6 +19,11 @@ public enum PromptKey {
     CHAT("chat"),
 
     /**
+     * 情景式分析 Prompt
+     */
+    LOGIC("logic"),
+
+    /**
      * GraphRAG: Entity Extraction Prompt
      */
     GRAPHRAG_EXTRACT("graphrag-extract"),
