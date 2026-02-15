@@ -52,6 +52,9 @@ public class AiController {
 
         threadPoolExecutor.execute(() -> {
             try {
+                // 在异步线程中设置用户上下文，确保 Tool 能够获取到正确的 userId
+                UserContext.setUserId(userId);
+                
                 // 为当前请求创建专属 Assistant 实例，确保 Tool 能够获取到正确的 userId
                 Assistant assistant = diaryAssistantFactory.createAssistant(userId);
                 TokenStream tokenStream = assistant.chat(userId, message);
@@ -64,16 +67,19 @@ public class AiController {
                             }
                         })
                         .onCompleteResponse(response -> {
+                            UserContext.clear();
                             aiLockService.releaseLock(userId);
                             emitter.complete();
                         })
                         .onError(error -> {
+                            UserContext.clear();
                             aiLockService.releaseLock(userId);
                             emitter.completeWithError(error);
                         })
                         .start();
             } catch (Exception e) {
                 log.error("Error during AI chat stream", e);
+                UserContext.clear();
                 aiLockService.releaseLock(userId);
                 emitter.completeWithError(e);
             }

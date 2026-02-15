@@ -262,7 +262,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
                 if (k.equals(requesterId)) {
                     maskedSubmissions.put(k, v);
                 } else {
-                    maskedSubmissions.put(k, "");
+                    maskedSubmissions.put(k, "[HIDDEN]");
                 }
             });
         }
