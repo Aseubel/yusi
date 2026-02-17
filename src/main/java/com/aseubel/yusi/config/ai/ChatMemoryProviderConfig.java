@@ -9,6 +9,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
+ * ChatMemory 配置
+ * 
+ * 注意：maxMessages 应该足够大以容纳完整的对话历史
+ * SystemMessage 不计入此限制（LangChain4j 会特殊处理）
+ * 
  * @author Aseubel
  * @date 2025/5/9 下午11:32
  */
@@ -23,7 +28,7 @@ public class ChatMemoryProviderConfig {
     public ChatMemoryProvider chatMemoryProviderConfig() {
         ChatMemoryProvider chatMemoryProvider = memoryId -> MessageWindowChatMemory.builder()
                 .id(memoryId)
-                .maxMessages(10)
+                .maxMessages(20)
                 .chatMemoryStore(applicationContext.getBean(PersistentChatMemoryStore.class))
                 .build();
         return chatMemoryProvider;

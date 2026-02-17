@@ -1,12 +1,12 @@
 package com.aseubel.yusi.service.ai;
 
 import cn.hutool.core.util.StrUtil;
-import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.UserRepository;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.agent.tool.ToolMemoryId;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -15,7 +15,6 @@ import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.filter.Filter;
 import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -78,6 +77,7 @@ public class DiarySearchTool {
      * 如果用户提到了特定的时间范围（如"上周"、"去年圣诞节"、"最近三天"），
      * 你需要计算出准确的日期范围并传入 startDate 和 endDate 参数。
      * 
+     * @param memoryId  用户ID（由 LangChain4j 自动注入）
      * @param query     语义搜索查询，描述要查找的内容主题（如"工作压力"、"和朋友的聚会"）
      * @param startDate 可选，日期范围的开始日期，格式必须为 YYYY-MM-DD（如 2024-12-01）。
      *                  如果用户没有指定时间范围，则传入 null
@@ -100,11 +100,12 @@ public class DiarySearchTool {
             - "最近三天" -> startDate: 2025-12-28, endDate: 2025-12-31
             """)
     public List<String> searchDiary(
+            @ToolMemoryId String memoryId,
             @P("搜索查询，描述要查找的日记内容主题") String query,
             @P("开始日期，格式 YYYY-MM-DD，不指定时间范围则传 null") String startDate,
             @P("结束日期，格式 YYYY-MM-DD，不指定时间范围则传 null") String endDate) {
 
-        String currentUserId = UserContext.getUserId();
+        String currentUserId = memoryId;
         if (StrUtil.isEmpty(currentUserId)) {
             log.warn("DiarySearchTool: 未绑定用户ID，拒绝搜索请求");
             return List.of("无法验证用户身份，请重新登录后再试。");

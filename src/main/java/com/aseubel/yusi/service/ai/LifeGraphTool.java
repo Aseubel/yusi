@@ -1,10 +1,10 @@
 package com.aseubel.yusi.service.ai;
 
 import cn.hutool.core.util.StrUtil;
-import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.service.lifegraph.LifeGraphQueryService;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
+import dev.langchain4j.agent.tool.ToolMemoryId;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -32,9 +32,10 @@ public class LifeGraphTool {
             返回格式为结构化的文本，请基于这些信息回答用户问题。
             """)
     public String searchLifeGraph(
+            @ToolMemoryId String memoryId,
             @P("搜索查询词，通常是人名、地名或事件名") String query) {
         
-        String userId = UserContext.getUserId();
+        String userId = memoryId;
         if (StrUtil.isBlank(userId)) {
             return "无法验证用户身份。";
         }

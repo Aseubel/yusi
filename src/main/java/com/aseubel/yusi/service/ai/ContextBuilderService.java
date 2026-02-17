@@ -33,6 +33,10 @@ public class ContextBuilderService {
     private final UserRepository userRepository;
     private final PromptService promptService;
 
+    /**
+     * 构建 System Message 内容
+     * LangChain4j 的 systemMessageProvider 期望返回 String
+     */
     public String buildSystemMessage(Object memoryId) {
         String userId = memoryId.toString();
         
