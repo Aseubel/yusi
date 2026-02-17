@@ -20,6 +20,7 @@ public enum ErrorCode {
     // Business errors
     PARAM_ERROR(400, 400, "参数错误"),
     RESOURCE_NOT_FOUND(404, 404, "资源未找到"),
+    RATE_LIMIT_EXCEEDED(429, 429, "请求频率过快，请稍后再试"),
 
     // Device limit errors
     DEVICE_LIMIT_EXCEEDED(40104, 401, "设备登录数量超限"),

@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Objects;
 
@@ -26,10 +27,16 @@ public class GlobalExceptionHandler {
                 .build();
     }
 
+    @ExceptionHandler(NoResourceFoundException.class)
+    public Response<String> handleNoResourceFoundException(NoResourceFoundException e) {
+        setStatus(HttpServletResponse.SC_NOT_FOUND);
+        return Response.<String>builder().code(ErrorCode.RESOURCE_NOT_FOUND.getCode()).info(e.getMessage()).build();
+    }
+
     @ExceptionHandler(RateLimitException.class)
     public Response<String> handleRateLimitException(RateLimitException e) {
         setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        return Response.<String>builder().code(429).info(e.getMessage()).build();
+        return Response.<String>builder().code(ErrorCode.RATE_LIMIT_EXCEEDED.getCode()).info(e.getMessage()).build();
     }
 
     @ExceptionHandler(Exception.class)
@@ -42,18 +49,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AuthorizationException.class)
     public Response<String> handleAuthorizationException(AuthorizationException e) {
         setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        return Response.<String>builder().code(401).info(e.getMessage()).build();
+        return Response.<String>builder().code(ErrorCode.UNAUTHORIZED.getCode()).info(e.getMessage()).build();
     }
 
     @ExceptionHandler(AuthenticationException.class)
     public Response<String> handleAuthenticationException(AuthenticationException e) {
         setStatus(HttpServletResponse.SC_FORBIDDEN);
-        return Response.<String>builder().code(403).info(e.getMessage()).build();
+        return Response.<String>builder().code(ErrorCode.FORBIDDEN.getCode()).info(e.getMessage()).build();
     }
 
     @ExceptionHandler(AiLockException.class)
     public Response<String> handleAiLockException(AiLockException e) {
-        setStatus(429);
+        setStatus(ErrorCode.AI_REQUEST_IN_PROGRESS.getHttpStatus());
         return Response.<String>builder()
                 .code(ErrorCode.AI_REQUEST_IN_PROGRESS.getCode())
                 .info(e.getMessage())
