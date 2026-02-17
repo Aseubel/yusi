@@ -93,6 +93,15 @@ public class AdminController {
         return Response.success(adminService.getPendingScenarios(PageRequest.of(page, size)));
     }
 
+    @GetMapping("/scenarios")
+    public Response<Page<SituationScenario>> getAllScenarios(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) Integer status) {
+        checkAdminPermission();
+        return Response.success(adminService.getAllScenarios(PageRequest.of(page, size), status));
+    }
+
     @PostMapping("/scenarios/{scenarioId}/audit")
     public Response<Void> auditScenario(@PathVariable String scenarioId, @RequestBody ScenarioAuditRequest request) {
         checkAdminPermission();

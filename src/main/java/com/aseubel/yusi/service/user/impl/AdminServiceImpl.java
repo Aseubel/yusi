@@ -94,6 +94,14 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
+    public Page<SituationScenario> getAllScenarios(Pageable pageable, Integer status) {
+        if (status != null) {
+            return situationScenarioRepository.findByStatus(status, pageable);
+        }
+        return situationScenarioRepository.findAll(pageable);
+    }
+
+    @Override
     @Transactional(rollbackFor = Exception.class)
     public void auditScenario(String scenarioId, ScenarioAuditRequest request) {
         SituationScenario scenario = situationScenarioRepository.findById(scenarioId)

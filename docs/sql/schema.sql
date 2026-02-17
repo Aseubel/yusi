@@ -371,7 +371,6 @@ DROP TABLE IF EXISTS `suggestion`;
 CREATE TABLE `suggestion` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `suggestion_id` VARCHAR(64) NOT NULL COMMENT '建议唯一标识',
-    `user_id` VARCHAR(64) DEFAULT NULL COMMENT '用户ID',
     `content` TEXT COMMENT '建议内容',
     `contact_email` VARCHAR(255) DEFAULT NULL COMMENT '联系邮箱',
     `status` VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT '状态：PENDING-待处理，PROCESSING-处理中，RESOLVED-已解决，REJECTED-已拒绝',
@@ -382,7 +381,6 @@ CREATE TABLE `suggestion` (
     `update_time` DATETIME DEFAULT NULL COMMENT '更新时间',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_suggestion_id` (`suggestion_id`),
-    KEY `idx_user_id` (`user_id`),
     KEY `idx_status` (`status`),
     KEY `idx_create_time` (`create_time`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户建议/反馈表';

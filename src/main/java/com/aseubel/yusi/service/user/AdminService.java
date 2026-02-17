@@ -19,5 +19,7 @@ public interface AdminService {
 
     Page<SituationScenario> getPendingScenarios(Pageable pageable);
 
+    Page<SituationScenario> getAllScenarios(Pageable pageable, Integer status);
+
     void auditScenario(String scenarioId, ScenarioAuditRequest request);
 }

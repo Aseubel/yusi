@@ -6,9 +6,7 @@ import org.springframework.data.domain.Pageable;
 
 public interface SuggestionService {
 
-    Suggestion createSuggestion(String userId, String content, String contactEmail);
-
-    Page<Suggestion> getUserSuggestions(String userId, Pageable pageable);
+    Suggestion createSuggestion(String content, String contactEmail);
 
     Page<Suggestion> getAllSuggestions(Pageable pageable, String status);
 
