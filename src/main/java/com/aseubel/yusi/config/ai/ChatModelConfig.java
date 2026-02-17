@@ -25,11 +25,11 @@ import java.util.Map;
 public class ChatModelConfig {
 
     /**
-     * 构建默认请求参数，启用联网搜索
+     * 构建默认请求参数，启用联网搜索，关闭thinking模式
      */
     private OpenAiChatRequestParameters buildDefaultParameters() {
         return OpenAiChatRequestParameters.builder()
-                .customParameters(Map.of("enable_search", true))
+                .customParameters(Map.of("enable_search", true, "enable_thinking", false))
                 .build();
     }
 
@@ -55,7 +55,7 @@ public class ChatModelConfig {
                 .temperature(1.3)
                 .topP(0.85)
                 .presencePenalty(0.6)
-                .maxCompletionTokens(512)
+                .maxCompletionTokens(300)
                 .defaultRequestParameters(buildDefaultParameters())
                 .build();
     }
