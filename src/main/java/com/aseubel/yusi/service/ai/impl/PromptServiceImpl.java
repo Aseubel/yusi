@@ -10,6 +10,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Service
 public class PromptServiceImpl implements PromptService {
 
@@ -23,10 +25,14 @@ public class PromptServiceImpl implements PromptService {
 
     @Override
     public String getPrompt(String name, String locale) {
-        return promptRepository
-                .findTopByNameAndLocaleAndActiveTrueOrderByIsDefaultDescPriorityDescUpdatedAtDesc(name, locale)
-                .map(PromptTemplate::getTemplate)
-                .get();
+        Optional<PromptTemplate> promptOpt = promptRepository
+                .findTopByNameAndLocaleAndActiveTrueOrderByIsDefaultDescPriorityDescUpdatedAtDesc(name, locale);
+        
+        if (promptOpt.isEmpty()) {
+            return null;
+        }
+        
+        return promptOpt.map(PromptTemplate::getTemplate).orElse(null);
     }
 
     @Override

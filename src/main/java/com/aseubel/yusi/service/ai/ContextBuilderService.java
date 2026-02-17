@@ -42,6 +42,9 @@ public class ContextBuilderService {
         
         StringBuilder sb = new StringBuilder();
         String basePrompt = loadBasePrompt();
+        
+        log.debug("Building system message for user: {}, basePrompt length: {}", userId, basePrompt.length());
+        
         sb.append(basePrompt).append("\n\n");
 
         sb.append("<context>\n");
@@ -70,24 +73,37 @@ public class ContextBuilderService {
         
         sb.append("</context>\n");
 
-        return sb.toString();
+        String result = sb.toString();
+        log.debug("System message built, total length: {}", result.length());
+        return result;
     }
 
     private String loadBasePrompt() {
+        // 优先从数据库加载
         try {
             String dbPrompt = promptService.getPrompt(PromptKey.CHAT.getKey());
             if (dbPrompt != null && dbPrompt.length() > 10) {
+                log.info("Loaded base prompt from DB, length: {}", dbPrompt.length());
                 return dbPrompt;
             }
         } catch (Exception e) {
-            log.warn("Failed to load prompt from DB: {}", e.getMessage());
+            log.warn("Failed to load prompt from DB: {}, falling back to classpath resource", e.getMessage());
         }
 
+        // 从 classpath 加载
         try {
             ClassPathResource resource = new ClassPathResource("chat-prompt.txt");
-            return resource.getContentAsString(StandardCharsets.UTF_8);
+            String classpathPrompt = resource.getContentAsString(StandardCharsets.UTF_8);
+            if (classpathPrompt != null && classpathPrompt.length() > 10) {
+                log.info("Loaded base prompt from classpath, length: {}", classpathPrompt.length());
+                return classpathPrompt;
+            }
         } catch (IOException e) {
-            return "你是 Yusi，一位温暖、富有同理心的 AI 灵魂伴侣。";
+            log.warn("Failed to load prompt from classpath: {}", e.getMessage());
         }
+
+        // 最终降级
+        log.warn("Using fallback prompt");
+        return "你是 Yusi，一位温暖、富有同理心的 AI 灵魂伴侣。";
     }
 }
