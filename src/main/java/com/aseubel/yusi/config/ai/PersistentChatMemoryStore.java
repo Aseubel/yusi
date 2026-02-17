@@ -55,7 +55,11 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         String json = redisService.getValue(cacheKey);
         if (json != null) {
             try {
-                return messagesFromJson(json);
+                List<ChatMessage> messages = messagesFromJson(json);
+                // 过滤掉 SystemMessage，因为每次请求都会由 systemMessageProvider 动态生成
+                return messages.stream()
+                        .filter(msg -> !(msg instanceof SystemMessage))
+                        .collect(Collectors.toList());
             } catch (Exception e) {
                 log.warn("Failed to parse chat memory from Redis: {}", e.getMessage());
             }
@@ -72,6 +76,8 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
         List<ChatMessage> messages = entities.stream()
                 .map(this::toChatMessage)
+                // 过滤掉 SystemMessage
+                .filter(msg -> !(msg instanceof SystemMessage))
                 .collect(Collectors.toList());
 
         redisService.setValue(cacheKey, messagesToJson(messages), REDIS_TTL_MS);
@@ -85,17 +91,18 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         String memId = memoryId.toString();
         String cacheKey = getCacheKey(memId);
         
-        // 更新 Redis 缓存（完整消息，包含 SystemMessage 用于当前会话）
-        redisService.setValue(cacheKey, messagesToJson(messages), REDIS_TTL_MS);
-
-        if (messages == null || messages.isEmpty()) return;
-
-        ChatMessage lastMsg = messages.get(messages.size() - 1);
+        // 过滤掉 SystemMessage 后再存储到 Redis
+        // SystemMessage 每次请求都会由 systemMessageProvider 动态生成，不应持久化
+        List<ChatMessage> messagesWithoutSystem = messages.stream()
+                .filter(msg -> !(msg instanceof SystemMessage))
+                .collect(Collectors.toList());
         
-        // SystemMessage 不存储到数据库，由 systemMessageProvider 动态生成
-        if (lastMsg instanceof SystemMessage) {
-            return;
-        }
+        // 更新 Redis 缓存（不包含 SystemMessage）
+        redisService.setValue(cacheKey, messagesToJson(messagesWithoutSystem), REDIS_TTL_MS);
+
+        if (messagesWithoutSystem.isEmpty()) return;
+
+        ChatMessage lastMsg = messagesWithoutSystem.get(messagesWithoutSystem.size() - 1);
         
         // 检查是否需要插入新消息
         String serializedLastMsg = serializeForDb(lastMsg);
