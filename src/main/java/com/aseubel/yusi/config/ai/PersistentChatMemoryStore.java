@@ -2,6 +2,7 @@ package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
+import com.aseubel.yusi.service.ai.ContextBuilderService;
 import com.aseubel.yusi.redis.service.IRedisService;
 import dev.langchain4j.data.message.*;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
@@ -46,6 +47,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
     private final ChatMemoryMessageRepository messageRepository;
     private final IRedisService redisService;
+    private final ContextBuilderService contextBuilderService;
 
     private static final int MAX_LOAD_MESSAGES = 20;
     private static final long REDIS_TTL_MS = 30 * 60 * 1000; // 30 minutes
@@ -60,6 +62,8 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         if (json != null) {
             try {
                 List<ChatMessage> messages = messagesFromJson(json);
+                // 加入 SystemMessage 到开头
+                messages.addFirst(contextBuilderService.buildSystemMessage(memoryId));
                 return messages;
             } catch (Exception e) {
                 log.warn("Failed to parse chat memory from Redis: {}", e.getMessage());
@@ -72,15 +76,16 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         if (entities.isEmpty()) {
             return new ArrayList<>();
         }
-
+        // 按创建时间排序（让最近的在后面）
         Collections.reverse(entities);
-
+        // 转换为 ChatMessage 列表
         List<ChatMessage> messages = entities.stream()
                 .map(this::toChatMessage)
                 .collect(Collectors.toList());
-
+        // 放到缓存下次快速加载
         redisService.setValue(cacheKey, messagesToJson(messages), REDIS_TTL_MS);
-        
+        // 将 SystemMessage 加入到消息列表开头
+        messages.addFirst(contextBuilderService.buildSystemMessage(memoryId));
         return messages;
     }
 

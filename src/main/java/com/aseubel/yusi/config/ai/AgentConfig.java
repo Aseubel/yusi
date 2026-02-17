@@ -66,9 +66,7 @@ public class AgentConfig {
                         applicationContext.getBean(DiarySearchTool.class),
                         applicationContext.getBean(LifeGraphTool.class)
                 )
-                .chatMemoryProvider((ChatMemoryProvider) applicationContext.getBean("chatMemoryProvider"))
-                .systemMessageProvider(memoryId -> 
-                        applicationContext.getBean(ContextBuilderService.class).buildSystemMessage(memoryId));
+                .chatMemoryProvider((ChatMemoryProvider) applicationContext.getBean("chatMemoryProvider"));
 
         // 如果 MCP 启用，添加 MCP Tool Provider
         if (mcpEnabled) {

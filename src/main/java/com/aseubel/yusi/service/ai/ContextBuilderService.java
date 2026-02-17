@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Service;
 
+import dev.langchain4j.data.message.SystemMessage;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
@@ -56,9 +57,9 @@ public class ContextBuilderService {
      * LangChain4j 的 systemMessageProvider 期望返回 String
      *
      * @param memoryId 用户ID
-     * @return 完整的 System Message
+     * @return 完整的 System Message 字符串
      */
-    public String buildSystemMessage(Object memoryId) {
+    public String buildSystemMessageStr(Object memoryId) {
         String userId = memoryId.toString();
 
         String basePrompt = loadBasePrompt();
@@ -77,6 +78,18 @@ public class ContextBuilderService {
         String result = systemMessage.toString();
         log.debug("System message built, total length: {}", result.length());
         return result;
+    }
+
+    /**
+     * 构建 System Message 对象
+     * 用于 LangChain4j 的 AI 服务
+     *
+     * @param memoryId 用户ID
+     * @return SystemMessage 对象
+     */
+    public SystemMessage buildSystemMessage(Object memoryId) {
+        String content = buildSystemMessageStr(memoryId);
+        return SystemMessage.from(content);
     }
 
     /**
