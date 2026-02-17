@@ -60,10 +60,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         if (json != null) {
             try {
                 List<ChatMessage> messages = messagesFromJson(json);
-                // 过滤掉 SystemMessage，因为每次请求都会由 systemMessageProvider 动态生成
-                return messages.stream()
-                        .filter(msg -> !(msg instanceof SystemMessage))
-                        .collect(Collectors.toList());
+                return messages;
             } catch (Exception e) {
                 log.warn("Failed to parse chat memory from Redis: {}", e.getMessage());
             }
@@ -80,8 +77,6 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
         List<ChatMessage> messages = entities.stream()
                 .map(this::toChatMessage)
-                // 过滤掉 SystemMessage
-                .filter(msg -> !(msg instanceof SystemMessage))
                 .collect(Collectors.toList());
 
         redisService.setValue(cacheKey, messagesToJson(messages), REDIS_TTL_MS);
