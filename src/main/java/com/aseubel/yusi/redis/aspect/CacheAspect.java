@@ -120,7 +120,47 @@ public class CacheAspect {
 
     @Around("@annotation(updateCache)")
     public Object updateCache(ProceedingJoinPoint joinPoint, UpdateCache updateCache) throws Throwable {
+        return processUpdateCache(joinPoint, updateCache);
+    }
 
+    /**
+     * 处理多个 @UpdateCache 注解（通过 @Repeatable 支持）
+     */
+    @Around("@annotation(updateCaches)")
+    public Object updateCaches(ProceedingJoinPoint joinPoint, UpdateCache.Container updateCaches) throws Throwable {
+        Object result = null;
+        boolean isFirst = true;
+        for (UpdateCache updateCache : updateCaches.value()) {
+            if (isFirst) {
+                result = processUpdateCache(joinPoint, updateCache);
+                isFirst = false;
+            } else {
+                // 后续注解只处理缓存失效，不再执行方法
+                processEvictOnly(updateCache, joinPoint);
+            }
+        }
+        if (result == null && updateCaches.value().length > 0) {
+            result = joinPoint.proceed();
+        }
+        return result;
+    }
+
+    /**
+     * 仅处理缓存失效（不执行方法）
+     */
+    private void processEvictOnly(UpdateCache updateCache, ProceedingJoinPoint joinPoint) throws Throwable {
+        String key = keyPrefix + spelResolverHelper.resolveSpel(joinPoint, updateCache.key());
+        if (key.contains("*")) {
+            redisService.removeByPattern(key);
+        } else {
+            redisService.remove(key);
+        }
+    }
+
+    /**
+     * 处理单个 @UpdateCache 注解
+     */
+    private Object processUpdateCache(ProceedingJoinPoint joinPoint, UpdateCache updateCache) throws Throwable {
         String key = keyPrefix + spelResolverHelper.resolveSpel(joinPoint, updateCache.key());
 
         // 如果是仅失效模式（通常用于列表页缓存，或者使用通配符批量删除）

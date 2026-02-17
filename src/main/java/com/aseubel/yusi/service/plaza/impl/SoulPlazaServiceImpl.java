@@ -46,7 +46,8 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
             "Fear", "Hope", "Calm", "Confusion", "Neutral");
 
     @Override
-    @UpdateCache(key = "'plaza:feed:' + #userId + ':*'", evictOnly = true)
+    @UpdateCache(key = "'plaza:feed:*'", evictOnly = true)
+    @UpdateCache(key = "'plaza:my:' + #userId + ':*'", evictOnly = true)
     public SoulCard submitToPlaza(String userId, String content, String originId, CardType type) {
         if (content == null || content.length() < 5) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "内容太短");
@@ -206,7 +207,8 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
 
     @Override
     @Transactional
-    @UpdateCache(key = "'plaza:feed:' + #userId + ':*'", evictOnly = true)
+    @UpdateCache(key = "'plaza:feed:*'", evictOnly = true)
+    @UpdateCache(key = "'plaza:my:' + #userId + ':*'", evictOnly = true)
     public SoulResonance resonate(String userId, Long cardId, ResonanceType type) {
         SoulCard card = cardRepository.findById(cardId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Card not found"));
@@ -244,6 +246,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
 
     @Override
     @Transactional
+    @UpdateCache(key = "'plaza:feed:*'", evictOnly = true)
     @UpdateCache(key = "'plaza:my:' + #userId + ':*'", evictOnly = true)
     public SoulCard updateCard(String userId, Long cardId, String content) {
         SoulCard card = cardRepository.findById(cardId)
@@ -267,6 +270,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
 
     @Override
     @Transactional
+    @UpdateCache(key = "'plaza:feed:*'", evictOnly = true)
     @UpdateCache(key = "'plaza:my:' + #userId + ':*'", evictOnly = true)
     public void deleteCard(String userId, Long cardId) {
         SoulCard card = cardRepository.findById(cardId)
