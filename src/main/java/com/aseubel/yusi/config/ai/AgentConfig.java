@@ -1,7 +1,9 @@
 package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.common.constant.PromptKey;
-import com.aseubel.yusi.service.ai.MemorySearchTool;
+import com.aseubel.yusi.service.ai.ContextBuilderService;
+import com.aseubel.yusi.service.ai.DiarySearchTool;
+import com.aseubel.yusi.service.ai.LifeGraphTool;
 import com.aseubel.yusi.service.ai.PromptService;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
@@ -13,16 +15,16 @@ import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.tool.ToolProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
-
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Optional;
 
 /**
  * Agent 配置类 - 实现 Agentic RAG 模式 + MCP 集成
@@ -31,6 +33,11 @@ import java.util.Optional;
  * 让 LLM 能够主动决定何时需要检索日记，并支持时间范围过滤。
  * 
  * 当 MCP 启用时，还会集成外部 MCP Server 提供的工具（如 web_search）。
+ * 
+ * 用户隔离机制：
+ * - ChatMemory 通过 memoryId (userId) 隔离对话历史
+ * - SystemMessage 通过 memoryId 动态注入用户画像
+ * - Tool 通过 UserContext (ThreadLocal) 获取当前用户ID
  * 
  * @author Aseubel
  * @date 2025/5/9 下午11:18
@@ -49,25 +56,19 @@ public class AgentConfig {
     private boolean mcpEnabled;
 
     @Bean(name = "diaryAssistant")
-    public Assistant diaryAssistant() throws IOException {
-        ClassPathResource resource = new ClassPathResource("chat-prompt.txt");
-        String fallbackPrompt = resource.getContentAsString(StandardCharsets.UTF_8);
-        String dbPrompt = null;
-        try {
-            dbPrompt = promptService.getPrompt("chat");
-        } catch (Exception e) {
-            log.warn("从数据库加载聊天助手系统提示词失败: {}", e.getMessage());
-        }
-        String systemPrompt = (dbPrompt != null && dbPrompt.length() > 100) ? dbPrompt : fallbackPrompt;
-        log.info("聊天助手系统提示词来源: {}，长度: {} 字符", 
-                (dbPrompt != null && dbPrompt.length() > 100) ? "DB" : "Classpath", systemPrompt.length());
+    public Assistant diaryAssistant() {
+        log.info("正在配置 DiaryAssistant (Singleton)");
 
-        // 构建 AiServices
+        // 构建 AiServices - 单例模式，用户隔离通过 memoryId 和 UserContext 实现
         AiServices<Assistant> builder = AiServices.builder(Assistant.class)
                 .streamingChatModel((StreamingChatModel) applicationContext.getBean("streamingChatModel"))
-                // 注意：移除了 tools(diarySearchTool)，因为现在由 DiaryAssistantFactory 在 Controller 中按请求动态创建带 UserID 上下文的 Tool
+                .tools(
+                        applicationContext.getBean(DiarySearchTool.class),
+                        applicationContext.getBean(LifeGraphTool.class)
+                )
                 .chatMemoryProvider((ChatMemoryProvider) applicationContext.getBean("chatMemoryProvider"))
-                .systemMessageProvider(chatMemoryId -> systemPrompt);
+                .systemMessageProvider(memoryId -> 
+                        applicationContext.getBean(ContextBuilderService.class).buildSystemMessage(memoryId));
 
         // 如果 MCP 启用，添加 MCP Tool Provider
         if (mcpEnabled) {
@@ -81,8 +82,7 @@ public class AgentConfig {
         }
 
         Assistant assistant = builder.build();
-
-        log.info("DiaryAssistant (Singleton) 已配置，仅用于非 RAG 场景（如日记回复、推荐信）");
+        log.info("DiaryAssistant (Singleton) 已配置完成，支持多用户隔离");
         return assistant;
     }
 
