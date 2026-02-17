@@ -62,9 +62,15 @@ public class SuggestionServiceImpl implements SuggestionService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public void updateStatus(String suggestionId, String status) {
+    public void updateStatus(String suggestionId, String status, String repliedBy, LocalDateTime repliedAt) {
         Suggestion suggestion = getSuggestion(suggestionId);
         suggestion.setStatus(status);
+        if (repliedBy != null) {
+            suggestion.setRepliedBy(repliedBy);
+        }
+        if (repliedAt != null) {
+            suggestion.setRepliedAt(repliedAt);
+        }
         suggestionRepository.save(suggestion);
     }
 

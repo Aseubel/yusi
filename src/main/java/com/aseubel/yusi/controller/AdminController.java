@@ -22,6 +22,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.Map;
 
 import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
@@ -154,7 +155,13 @@ public class AdminController {
         if (status == null || status.trim().isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Status is required");
         }
-        suggestionService.updateStatus(suggestionId, status);
+        String repliedBy = UserContext.getUserId();
+        String repliedAtStr = payload.get("repliedAt");
+        LocalDateTime repliedAt = null;
+        if (repliedAtStr != null && !repliedAtStr.isEmpty()) {
+            repliedAt = LocalDateTime.parse(repliedAtStr);
+        }
+        suggestionService.updateStatus(suggestionId, status, repliedBy, repliedAt);
         return Response.success();
     }
 

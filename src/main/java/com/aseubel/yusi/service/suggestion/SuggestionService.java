@@ -4,6 +4,8 @@ import com.aseubel.yusi.pojo.entity.Suggestion;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDateTime;
+
 public interface SuggestionService {
 
     Suggestion createSuggestion(String content, String contactEmail);
@@ -14,7 +16,7 @@ public interface SuggestionService {
 
     void replySuggestion(String suggestionId, String reply, String repliedBy);
 
-    void updateStatus(String suggestionId, String status);
+    void updateStatus(String suggestionId, String status, String repliedBy, LocalDateTime repliedAt);
 
     long getPendingCount();
 }
