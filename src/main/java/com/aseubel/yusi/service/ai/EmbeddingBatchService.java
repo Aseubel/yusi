@@ -6,6 +6,8 @@ import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.EmbeddingTaskRepository;
 import com.aseubel.yusi.repository.UserRepository;
+import com.aseubel.yusi.service.diary.DiaryService;
+
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
 import dev.langchain4j.data.document.Metadata;
@@ -46,6 +48,7 @@ public class EmbeddingBatchService {
     private final MilvusEmbeddingStore milvusEmbeddingStore;
     private final EmbeddingModel embeddingModel;
     private final DocumentSplitter documentSplitter;
+    private final DiaryService diaryService;
 
     /**
      * 每批处理的最大任务数
@@ -132,7 +135,7 @@ public class EmbeddingBatchService {
             // 获取明文内容
             String text = diary.getPlainContent();
             if (text == null || text.isEmpty()) {
-                text = diary.getContent();
+                text = diaryService.decryptDiaryContent(diary);
             }
             if (text == null || text.isEmpty()) {
                 log.warn("日记 {} 内容为空，跳过", task.getDiaryId());
@@ -258,5 +261,31 @@ public class EmbeddingBatchService {
         if (deleted > 0) {
             log.info("清理 {} 个已完成的 Embedding 任务", deleted);
         }
+    }
+
+    /**
+     * 全量同步：清空 Milvus 并重置所有任务为 PENDING
+     * 用于重新构建索引或修复数据不一致
+     *
+     * @return 同步的任务数量
+     */
+    @Transactional
+    public int fullSync() {
+        log.info("开始执行 Embedding 全量同步");
+
+        // 1. 清空 Milvus collection
+        try {
+            milvusEmbeddingStore.removeAll();
+            log.info("Milvus collection 清空完成");
+        } catch (Exception e) {
+            log.error("清空 Milvus collection 失败", e);
+            throw new RuntimeException("清空 Milvus collection 失败: " + e.getMessage(), e);
+        }
+
+        // 2. 重置所有任务为 PENDING
+        int updatedCount = taskRepository.resetAllToPending(LocalDateTime.now());
+        log.info("已重置 {} 个任务为 PENDING 状态", updatedCount);
+
+        return updatedCount;
     }
 }

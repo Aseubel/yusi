@@ -2,7 +2,9 @@ package com.aseubel.yusi.common.exception;
 
 import com.aseubel.yusi.common.Response;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.RequestContextHolder;
@@ -14,6 +16,32 @@ import java.util.Objects;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public Response<String> handleMethodArgumentNotValidException(MethodArgumentNotValidException e) {
+        setStatus(HttpServletResponse.SC_OK);
+        String message = e.getBindingResult().getFieldErrors().stream()
+                .map(error -> error.getField() + ": " + error.getDefaultMessage())
+                .findFirst()
+                .orElse("参数验证失败");
+        return Response.<String>builder()
+                .code(ErrorCode.PARAM_ERROR.getCode())
+                .info(message)
+                .build();
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public Response<String> handleConstraintViolationException(ConstraintViolationException e) {
+        setStatus(HttpServletResponse.SC_OK);
+        String message = e.getConstraintViolations().stream()
+                .map(violation -> violation.getPropertyPath() + ": " + violation.getMessage())
+                .findFirst()
+                .orElse("参数验证失败");
+        return Response.<String>builder()
+                .code(ErrorCode.PARAM_ERROR.getCode())
+                .info(message)
+                .build();
+    }
 
     @ExceptionHandler(BusinessException.class)
     public Response<String> handleBusinessException(BusinessException e) {

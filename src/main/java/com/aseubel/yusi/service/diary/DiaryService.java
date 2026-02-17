@@ -21,6 +21,11 @@ public interface DiaryService {
 
     void generateAiResponse(String diaryId);
 
+    /**
+     * 解密日记内容
+     */
+    String decryptDiaryContent(Diary diary);
+
     void evictDiaryCache(String diaryId);
 
     void evictListCache(String userId);

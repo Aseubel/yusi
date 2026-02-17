@@ -89,4 +89,12 @@ public interface EmbeddingTaskRepository extends JpaRepository<EmbeddingTask, Lo
      */
     @Query("SELECT COUNT(t) FROM EmbeddingTask t WHERE t.status = 'FAILED'")
     long countFailed();
+
+    /**
+     * 重置所有任务为 PENDING 状态（用于全量同步）
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE EmbeddingTask t SET t.status = 'PENDING', t.retryCount = 0, t.errorMessage = null, t.updatedAt = :now")
+    int resetAllToPending(@Param("now") LocalDateTime now);
 }

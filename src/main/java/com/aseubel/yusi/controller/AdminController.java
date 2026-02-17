@@ -16,6 +16,7 @@ import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
 import com.aseubel.yusi.pojo.entity.Suggestion;
 import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.service.ai.EmbeddingBatchService;
 import com.aseubel.yusi.service.suggestion.SuggestionService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -40,6 +41,7 @@ public class AdminController {
 
     private final AdminService adminService;
     private final SuggestionService suggestionService;
+    private final EmbeddingBatchService embeddingBatchService;
 
     private void checkAdminPermission() {
         String userId = UserContext.getUserId();
@@ -52,6 +54,15 @@ public class AdminController {
         String userId = UserContext.getUserId();
         User user = userService.getUserByUserId(userId);
         return user != null && user.getPermissionLevel() != null ? user.getPermissionLevel() : 0;
+    }
+
+    private void checkSuperAdminPermission() {
+        String userId = UserContext.getUserId();
+        User user = userService.getUserByUserId(userId);
+        int permissionLevel = user != null && user.getPermissionLevel() != null ? user.getPermissionLevel() : 0;
+        if (permissionLevel < 99) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "Permission denied: Super admin access required (level >= 99)");
+        }
     }
 
     @GetMapping("/stats")
@@ -151,5 +162,12 @@ public class AdminController {
     public Response<Long> getPendingSuggestionCount() {
         checkAdminPermission();
         return Response.success(suggestionService.getPendingCount());
+    }
+
+    @PostMapping("/embeddings/full-sync")
+    public Response<Integer> fullSyncEmbeddings() {
+        checkSuperAdminPermission();
+        int count = embeddingBatchService.fullSync();
+        return Response.success(count);
     }
 }

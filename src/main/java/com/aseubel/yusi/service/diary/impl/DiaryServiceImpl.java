@@ -122,7 +122,8 @@ public class DiaryServiceImpl implements DiaryService {
         }
     }
 
-    private String decryptDiaryContent(Diary diary) {
+    @Override
+    public String decryptDiaryContent(Diary diary) {
         if (diary == null) {
             return null;
         }

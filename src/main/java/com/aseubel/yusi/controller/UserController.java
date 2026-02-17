@@ -1,6 +1,7 @@
 package com.aseubel.yusi.controller;
 
 import com.aseubel.yusi.common.Response;
+import jakarta.validation.Valid;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.pojo.dto.user.AuthResponse;
@@ -32,7 +33,7 @@ public class UserController {
 
     @Auth(required = false)
     @PostMapping("/register")
-    public Response<User> register(@RequestBody RegisterRequest request) {
+    public Response<User> register(@Valid @RequestBody RegisterRequest request) {
         User user = User.builder()
                 .userName(request.getUserName())
                 .password(request.getPassword())
@@ -56,7 +57,7 @@ public class UserController {
     }
 
     @PostMapping("/update")
-    public Response<User> update(@RequestBody UpdateUserRequest request) {
+    public Response<User> update(@Valid @RequestBody UpdateUserRequest request) {
         String userId = UserContext.getUserId();
         return Response.success(userService.updateUser(userId, request.getUserName(), request.getEmail()));
     }
