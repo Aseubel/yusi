@@ -125,24 +125,16 @@ public class CacheAspect {
 
     /**
      * 处理多个 @UpdateCache 注解（通过 @Repeatable 支持）
+     * 先清除所有缓存，再执行方法一次
      */
     @Around("@annotation(updateCaches)")
     public Object updateCaches(ProceedingJoinPoint joinPoint, UpdateCache.Container updateCaches) throws Throwable {
-        Object result = null;
-        boolean isFirst = true;
+        // 先清除所有缓存
         for (UpdateCache updateCache : updateCaches.value()) {
-            if (isFirst) {
-                result = processUpdateCache(joinPoint, updateCache);
-                isFirst = false;
-            } else {
-                // 后续注解只处理缓存失效，不再执行方法
-                processEvictOnly(updateCache, joinPoint);
-            }
+            processEvictOnly(updateCache, joinPoint);
         }
-        if (result == null && updateCaches.value().length > 0) {
-            result = joinPoint.proceed();
-        }
-        return result;
+        // 执行方法一次
+        return joinPoint.proceed();
     }
 
     /**

@@ -1,12 +1,17 @@
 package com.aseubel.yusi.controller;
 
+import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.AiLockException;
 import com.aseubel.yusi.common.ratelimit.LimitType;
 import com.aseubel.yusi.common.ratelimit.RateLimiter;
+import com.aseubel.yusi.config.ai.PersistentChatMemoryStore;
 import com.aseubel.yusi.service.ai.AiLockService;
 import com.aseubel.yusi.service.diary.Assistant;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.service.TokenStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +22,9 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -32,7 +40,33 @@ public class AiController {
     @Autowired
     private AiLockService aiLockService;
 
+    @Autowired
+    private PersistentChatMemoryStore chatMemoryStore;
+
     private final ThreadPoolTaskExecutor threadPoolExecutor;
+
+    /**
+     * 获取聊天历史记录
+     */
+    @Auth
+    @GetMapping("/chat/history")
+    public Response<List<Map<String, String>>> getChatHistory() {
+        String userId = UserContext.getUserId();
+        List<ChatMessage> messages = chatMemoryStore.getMessages(userId);
+        
+        List<Map<String, String>> history = messages.stream()
+                .filter(msg -> msg instanceof UserMessage || msg instanceof AiMessage)
+                .map(msg -> {
+                    String role = msg instanceof UserMessage ? "user" : "assistant";
+                    String content = msg instanceof UserMessage 
+                            ? ((UserMessage) msg).singleText() 
+                            : ((AiMessage) msg).text();
+                    return Map.of("role", role, "content", content != null ? content : "");
+                })
+                .collect(Collectors.toList());
+        
+        return Response.success(history);
+    }
 
     @Auth
     @RateLimiter(key = "chatStream", time = 60, count = 20, limitType = LimitType.USER)
