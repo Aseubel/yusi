@@ -100,7 +100,7 @@ public class RoomChatController {
     /**
      * 获取房间聊天历史
      */
-    @QueryCache(cacheNames = "room:chat", key = "#roomCode", ttl = 3600)
+    @QueryCache(key = "'room:chat:' + #roomCode", ttl = 3600)
     @GetMapping("/history")
     public Response<List<RoomMessage>> getHistory(@RequestParam String roomCode) {
         String userId = UserContext.getUserId();
