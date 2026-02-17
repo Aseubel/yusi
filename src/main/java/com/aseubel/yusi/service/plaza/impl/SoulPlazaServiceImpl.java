@@ -105,17 +105,25 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     }
 
     @Override
-    @QueryCache(key = "'plaza:feed:' + #userId + ':' + #page + ':' + #size + ':' + (#emotion == null ? 'All' : #emotion)", ttl = 60)
+    @QueryCache(key = "'plaza:feed:' + (#userId == null ? 'anonymous' : #userId) + ':' + #page + ':' + #size + ':' + (#emotion == null ? 'All' : #emotion)", ttl = 60)
     public Page<SoulCard> getFeed(String userId, int page, int size, String emotion) {
-        // Exclude own posts
         PageRequest pageRequest = PageRequest.of(page - 1, size);
         Page<SoulCard> result;
 
+        // 未登录用户：简单按时间排序，不排除任何帖子
+        if (userId == null || userId.isEmpty()) {
+            if (emotion != null && !emotion.isEmpty() && !emotion.equals("All")) {
+                result = cardRepository.findByEmotionOrderByCreatedAtDesc(emotion, pageRequest);
+            } else {
+                result = cardRepository.findAllByOrderByCreatedAtDesc(pageRequest);
+            }
+            return result;
+        }
+
+        // 已登录用户：排除自己的帖子，并应用灵魂匹配算法
         if (emotion != null && !emotion.isEmpty() && !emotion.equals("All")) {
             result = cardRepository.findByUserIdNotAndEmotionOrderByCreatedAtDesc(userId, emotion, pageRequest);
         } else {
-            // 实现灵魂匹配排序算法
-            // 综合考虑：共鸣数量、时间衰减、情感多样性
             result = getSoulMatchedFeed(userId, pageRequest);
         }
 

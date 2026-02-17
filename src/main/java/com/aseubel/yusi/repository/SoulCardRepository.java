@@ -12,8 +12,14 @@ public interface SoulCardRepository extends JpaRepository<SoulCard, Long> {
     // Find cards not created by the user, for the feed
     Page<SoulCard> findByUserIdNotOrderByCreatedAtDesc(String userId, Pageable pageable);
 
+    // Find all cards (for anonymous users)
+    Page<SoulCard> findAllByOrderByCreatedAtDesc(Pageable pageable);
+
     // Find cards by emotion, excluding own
     Page<SoulCard> findByUserIdNotAndEmotionOrderByCreatedAtDesc(String userId, String emotion, Pageable pageable);
+
+    // Find cards by emotion (for anonymous users)
+    Page<SoulCard> findByEmotionOrderByCreatedAtDesc(String emotion, Pageable pageable);
 
     // Find cards by user for "My Posts" if needed later
     Page<SoulCard> findByUserIdOrderByCreatedAtDesc(String userId, Pageable pageable);
