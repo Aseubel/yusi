@@ -31,6 +31,10 @@ import static dev.langchain4j.data.message.ChatMessageSerializer.messagesToJson;
  * 注意：SystemMessage 不存储到数据库，因为 LangChain4j 每次请求都会通过
  * systemMessageProvider 动态生成，存储会导致重复。
  * 
+ * 序列化策略：
+ * - 所有消息类型都使用 JSON 序列化，以保留完整信息
+ * - 特别是 ToolExecutionResultMessage 需要保留 id 和 name
+ * 
  * @author Aseubel
  * @date 2026/02/10
  */
@@ -104,7 +108,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
         ChatMessage lastMsg = messagesWithoutSystem.get(messagesWithoutSystem.size() - 1);
         
-        // 检查是否需要插入新消息
+        // 序列化消息（使用 JSON 格式保留完整信息）
         String serializedLastMsg = serializeForDb(lastMsg);
         if (serializedLastMsg == null) {
             log.debug("Skipping message with null content: {}", lastMsg.type());
@@ -117,7 +121,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         boolean shouldInsert = true;
         if (!lastDbMsgs.isEmpty()) {
             ChatMemoryMessage lastDb = lastDbMsgs.get(0);
-            // 对于 AI 消息，比较序列化后的内容
+            // 比较序列化后的内容
             if (lastDb.getContent().equals(serializedLastMsg)) {
                 shouldInsert = false;
             }
@@ -147,55 +151,47 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     
     /**
      * 序列化消息用于数据库存储
-     * - AiMessage 包含 toolExecutionRequests 时，序列化为 JSON
-     * - 其他消息类型直接提取文本
+     * 使用 JSON 格式序列化所有消息类型，以保留完整信息：
+     * - AiMessage: 可能包含 toolExecutionRequests
+     * - ToolExecutionResultMessage: 需要保留 id 和 name
+     * - UserMessage/SystemMessage: 保留完整结构
      */
     private String serializeForDb(ChatMessage message) {
-        if (message instanceof AiMessage) {
-            AiMessage aiMessage = (AiMessage) message;
-            // 如果包含工具调用，序列化整个 AiMessage
-            if (aiMessage.hasToolExecutionRequests()) {
-                return messagesToJson(List.of(aiMessage));
-            }
-            return aiMessage.text();
-        } else if (message instanceof UserMessage) {
-            return ((UserMessage) message).singleText();
-        } else if (message instanceof ToolExecutionResultMessage) {
-            return ((ToolExecutionResultMessage) message).text();
-        } else if (message instanceof SystemMessage) {
-            return ((SystemMessage) message).text();
-        }
-        return null;
+        // 统一使用 JSON 序列化，保留消息的完整结构
+        return messagesToJson(List.of(message));
     }
     
     /**
      * 从数据库实体反序列化为 ChatMessage
-     * - AI 消息可能包含工具调用，需要特殊处理
+     * 所有消息都使用 JSON 反序列化
      */
     private ChatMessage toChatMessage(ChatMemoryMessage entity) {
-        String role = entity.getRole();
         String content = entity.getContent();
         
+        if (content == null || content.isEmpty()) {
+            log.warn("Empty content for message with role: {}", entity.getRole());
+            return UserMessage.from("");
+        }
+        
+        try {
+            // 统一使用 JSON 反序列化
+            List<ChatMessage> deserialized = messagesFromJson(content);
+            if (!deserialized.isEmpty()) {
+                return deserialized.get(0);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to deserialize message, falling back to simple text: {}", e.getMessage());
+        }
+        
+        // 降级处理：如果 JSON 反序列化失败，根据 role 类型创建简单消息
+        String role = entity.getRole();
         switch (role) {
             case "AI":
-                // 检查是否是序列化的 AiMessage（包含工具调用）
-                if (content != null && content.startsWith("[{") && content.contains("toolExecutionRequests")) {
-                    try {
-                        List<ChatMessage> deserialized = messagesFromJson(content);
-                        if (!deserialized.isEmpty() && deserialized.get(0) instanceof AiMessage) {
-                            return deserialized.get(0);
-                        }
-                    } catch (Exception e) {
-                        log.warn("Failed to deserialize AiMessage with tool calls: {}", e.getMessage());
-                    }
-                }
                 return AiMessage.from(content);
             case "USER":
                 return UserMessage.from(content);
             case "SYSTEM":
                 return SystemMessage.from(content);
-            case "TOOL_EXECUTION_RESULT":
-                return ToolExecutionResultMessage.from(null, content);
             default:
                 return UserMessage.from(content);
         }
