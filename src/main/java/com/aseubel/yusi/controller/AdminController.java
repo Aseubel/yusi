@@ -23,6 +23,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
@@ -159,7 +161,11 @@ public class AdminController {
         String repliedAtStr = payload.get("repliedAt");
         LocalDateTime repliedAt = null;
         if (repliedAtStr != null && !repliedAtStr.isEmpty()) {
-            repliedAt = LocalDateTime.parse(repliedAtStr);
+            try {
+                repliedAt = OffsetDateTime.parse(repliedAtStr).toLocalDateTime();
+            } catch (Exception e) {
+                repliedAt = LocalDateTime.parse(repliedAtStr, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            }
         }
         suggestionService.updateStatus(suggestionId, status, repliedBy, repliedAt);
         return Response.success();

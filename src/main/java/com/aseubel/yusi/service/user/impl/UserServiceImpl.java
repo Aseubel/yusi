@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.user.impl;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.BCrypt;
+import lombok.extern.slf4j.Slf4j;
 
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
@@ -17,7 +18,9 @@ import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 public class UserServiceImpl implements UserService {
 
@@ -78,19 +81,27 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public AuthResponse refreshToken(String refreshToken, String oldAccessToken) {
+        log.info("收到刷新token请求, refreshToken: {}, oldAccessToken: {}", refreshToken, oldAccessToken);
+        
         if (!jwtUtils.validateToken(refreshToken)) {
+            log.warn("刷新token无效: validateToken返回false");
             throw new BusinessException(ErrorCode.TOKEN_INVALID, "无效的刷新令牌");
         }
 
         String type = jwtUtils.getTypeFromToken(refreshToken);
+        log.info("token type: {}", type);
         if (!"refresh".equals(type)) {
+            log.warn("token类型不是refresh: {}", type);
             throw new BusinessException(ErrorCode.TOKEN_INVALID, "非刷新令牌");
         }
 
         String userId = jwtUtils.getUserIdFromToken(refreshToken);
+        log.info("从token解析出userId: {}", userId);
         String storedRefreshToken = tokenService.getRefreshToken(userId);
+        log.info("Redis中存储的refreshToken: {}, 前端传来的refreshToken: {}", storedRefreshToken, refreshToken);
 
         if (storedRefreshToken == null || !storedRefreshToken.equals(refreshToken)) {
+            log.warn("刷新令牌已失效: storedRefreshToken={}, refreshToken={}", storedRefreshToken, refreshToken);
             throw new BusinessException(ErrorCode.TOKEN_INVALID, "刷新令牌已失效");
         }
 

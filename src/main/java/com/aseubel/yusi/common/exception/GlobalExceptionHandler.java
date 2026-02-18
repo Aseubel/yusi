@@ -77,7 +77,9 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AuthorizationException.class)
     public Response<String> handleAuthorizationException(AuthorizationException e) {
         setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-        return Response.<String>builder().code(ErrorCode.UNAUTHORIZED.getCode()).info(e.getMessage()).build();
+        ErrorCode ec = e.getErrorCode();
+        int code = ec != null ? ec.getCode() : ErrorCode.UNAUTHORIZED.getCode();
+        return Response.<String>builder().code(code).info(e.getMessage()).build();
     }
 
     @ExceptionHandler(AuthenticationException.class)
