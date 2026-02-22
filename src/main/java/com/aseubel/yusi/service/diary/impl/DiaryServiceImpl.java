@@ -25,6 +25,7 @@ import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -227,10 +228,10 @@ public class DiaryServiceImpl implements DiaryService {
     @QueryCache(key = "'diary:list:' + #userId + ':' + #pageNum + ':' + #pageSize + ':' + #sortBy + ':' + #asc", ttl = 300, compress = true)
     public Page<Diary> getDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc) {
         // 处理默认排序字段
-        String actualSort = StrUtil.isBlank(sortBy) ? "createTime" : sortBy;
+        String actualSort = StrUtil.isBlank(sortBy) ? "entryDate" : sortBy;
 
         // 构建分页请求（注意Spring Data页码从0开始）
-        Sort sort = Sort.by(asc ? Sort.Direction.ASC : Sort.Direction.DESC, actualSort);
+        Sort sort = Sort.by(asc ? Sort.Direction.DESC : Sort.Direction.ASC, actualSort);
         PageRequest pageRequest = PageRequest.of(pageNum - 1, pageSize, sort);
 
         Example<Diary> example = Example.of(Diary.builder().userId(userId).build());
@@ -250,8 +251,8 @@ public class DiaryServiceImpl implements DiaryService {
      */
     @Override
     @QueryCache(key = "'diary:footprints:' + #userId", ttl = 600, compress = true)
-    public java.util.List<Diary> getFootprints(String userId) {
-        java.util.List<Diary> diaries = diaryRepository.findAllWithLocationByUserId(userId);
+    public List<Diary> getFootprints(String userId) {
+        List<Diary> diaries = diaryRepository.findAllWithLocationByUserId(userId);
         diaries.forEach(this::applyReadCrypto);
         return diaries;
     }
