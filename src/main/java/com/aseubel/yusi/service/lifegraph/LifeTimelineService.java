@@ -6,6 +6,7 @@ import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
 import com.aseubel.yusi.repository.LifeGraphEntityRepository;
 import com.aseubel.yusi.service.lifegraph.dto.LifeChapter;
 import com.aseubel.yusi.service.lifegraph.dto.TimelineNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,7 @@ import java.util.stream.Collectors;
 public class LifeTimelineService {
 
     private final LifeGraphEntityRepository entityRepository;
+    private final ObjectMapper objectMapper;
 
     /**
      * 生成用户的人生章节（聚类后的时间线）
@@ -139,8 +141,14 @@ public class LifeTimelineService {
     }
 
     private TimelineNode toNode(LifeGraphEntity e) {
-        // 计算权重: 基础提及次数 + 关系数加成
-        double importance = Math.min(1.0, (e.getMentionCount() * 0.1) + (e.getRelationCount() * 0.05));
+        // 优先使用 AI 分析的 importance，否则使用默认计算
+        double importance = getImportanceFromProps(e);
+        if (importance <= 0) {
+            importance = Math.min(1.0, (e.getMentionCount() * 0.1) + (e.getRelationCount() * 0.05));
+        }
+        
+        // 从 props 中提取 emotion
+        String emotion = getEmotionFromProps(e);
         
         return TimelineNode.builder()
                 .entityId(e.getId())
@@ -148,7 +156,37 @@ public class LifeTimelineService {
                 .date(e.getFirstMentionDate())
                 .summary(e.getSummary())
                 .importance(importance)
-                // .emotion() // 暂时没有直接的情绪字段，后续可扩展
+                .emotion(emotion)
                 .build();
+    }
+    
+    private double getImportanceFromProps(LifeGraphEntity e) {
+        if (e.getProps() == null || e.getProps().isBlank()) {
+            return 0;
+        }
+        try {
+            Map<String, Object> props = objectMapper.readValue(e.getProps(), Map.class);
+            Object imp = props.get("importance");
+            if (imp instanceof Number) {
+                return ((Number) imp).doubleValue();
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to parse props for entity {}: {}", e.getId(), ex.getMessage());
+        }
+        return 0;
+    }
+    
+    private String getEmotionFromProps(LifeGraphEntity e) {
+        if (e.getProps() == null || e.getProps().isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, Object> props = objectMapper.readValue(e.getProps(), Map.class);
+            Object emotion = props.get("emotion");
+            return emotion != null ? emotion.toString() : null;
+        } catch (Exception ex) {
+            log.warn("Failed to parse props for entity {}: {}", e.getId(), ex.getMessage());
+        }
+        return null;
     }
 }

@@ -160,7 +160,25 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             entity.setFirstMentionDate(diary.getEntryDate());
         }
 
+        // AI 生成的摘要（仅在首次创建或原摘要为空时更新）
+        if (StrUtil.isNotBlank(e.getSummary()) && StrUtil.isBlank(entity.getSummary())) {
+            entity.setSummary(e.getSummary());
+        }
+
         String mergedProps = mergeProps(entity.getProps(), e.getProps());
+        
+        // 存储 AI 分析的 emotion 和 importance 到 props
+        if (StrUtil.isNotBlank(e.getEmotion())) {
+            Map<String, Object> emotionProp = new HashMap<>();
+            emotionProp.put("emotion", e.getEmotion());
+            mergedProps = mergeProps(mergedProps, emotionProp);
+        }
+        if (e.getImportance() != null && e.getImportance() > 0) {
+            Map<String, Object> importanceProp = new HashMap<>();
+            importanceProp.put("importance", e.getImportance());
+            mergedProps = mergeProps(mergedProps, importanceProp);
+        }
+        
         if (type == LifeGraphEntity.EntityType.Place && diary.getLatitude() != null && diary.getLongitude() != null) {
             Map<String, Object> geo = new HashMap<>();
             Map<String, Object> coordinates = new HashMap<>();
@@ -487,6 +505,9 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                       "displayName": "原文中的称呼或新实体名称",
                       "nameNorm": "归一化名称（尽量映射到已知实体库的规范名；若为新实体则给出合理规范名）",
                       "aliases": ["别名1","别名2"],
+                      "summary": "实体的一句话摘要，描述该实体在用户生活中的意义",
+                      "emotion": "该实体关联的主要情绪（如：Joy/Sadness/Anxiety/Love/Anger/Fear/Hope/Calm/Confusion/Neutral）",
+                      "importance": 0.5,
                       "confidence": 0.0,
                       "props": {}
                     }
@@ -509,8 +530,17 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                     }
                   ]
                 }
-                3) 若无法确定映射：优先使用已知实体库；仍不确定则创建新实体，但把可能别名放到 aliases
-                4) 关系置信度：LLM 自动抽取建议在 0.6-0.9 区间
+                
+                字段说明：
+                - summary: 必填，用一句话概括该实体对用户的意义
+                - emotion: 可选，该实体在上下文中引发的主要情绪
+                - importance: 0.1-1.0，评估该实体对用户的重要程度
+
+                抽取原则：
+                1) 若无法确定映射：优先使用已知实体库；仍不确定则创建新实体，但把可能别名放到 aliases
+                2) 关系置信度：LLM 自动抽取建议在 0.6-0.9 区间
+                3) summary 要具体，避免泛泛而谈
+                4) importance 要综合考虑：提及频率、情感强度、对用户生活的影响程度
                 """;
     }
 }

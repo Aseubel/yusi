@@ -17,6 +17,9 @@ public class LifeGraphExtractionResult {
         private String displayName;
         private String nameNorm;
         private List<String> aliases;
+        private String summary;
+        private String emotion;
+        private Double importance;
         private Double confidence;
         private Map<String, Object> props;
     }
