@@ -11,7 +11,6 @@ import com.aseubel.yusi.redis.annotation.QueryCache;
 import com.aseubel.yusi.redis.annotation.UpdateCache;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.UserRepository;
-import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.diary.DiaryService;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import lombok.extern.slf4j.Slf4j;
@@ -21,13 +20,11 @@ import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * @author Aseubel
@@ -43,9 +40,6 @@ public class DiaryServiceImpl implements DiaryService {
 
     @Autowired
     private DiaryRepository diaryRepository;
-
-    @Autowired
-    private Assistant diaryAssistant;
 
     @Autowired
     private EmotionAnalyzer emotionAnalyzer;
@@ -77,50 +71,8 @@ public class DiaryServiceImpl implements DiaryService {
         // 保存后 entity 可能会丢失 transient 字段，这里重新设置以便后续 disruptor 使用
         saved.setPlainContent(plainContent);
 
-        // 异步生成AI回应 (通过self调用以触发AOP)
-        // self.generateAiResponse(saved.getDiaryId());
-
         self.evictFootprintsCache(diary.getUserId());
         return saved;
-    }
-
-    @Async
-    @Override
-    public void generateAiResponse(String diaryId) {
-        try {
-            Diary diary = diaryRepository.findByDiaryId(diaryId);
-            if (diary == null)
-                return;
-
-            log.info("Generating AI response for diary: {}", diaryId);
-
-            CompletableFuture<String> future = new CompletableFuture<>();
-            StringBuilder sb = new StringBuilder();
-
-            String plainContent = decryptDiaryContent(diary);
-            if (StrUtil.isBlank(plainContent)) {
-                return;
-            }
-
-            diaryAssistant.generateDiaryResponse(plainContent, diary.getEntryDate().toString())
-                    .onPartialResponse(sb::append)
-                    .onCompleteResponse(res -> future.complete(sb.toString()))
-                    .onError(future::completeExceptionally)
-                    .start();
-
-            String response = future.get();
-
-            diary.setAiResponse(response);
-            diary.setStatus(1); // 1 = Analyzed
-            diary.setEmotion(analyzeContentEmotion(plainContent));
-            diaryRepository.save(diary);
-            self.evictDiaryCache(diaryId);
-            self.evictListCache(diary.getUserId());
-            self.evictFootprintsCache(diary.getUserId());
-            log.info("AI response saved for diary: {}", diaryId);
-        } catch (Exception e) {
-            log.error("Failed to generate AI response for diary: {}", diaryId, e);
-        }
     }
 
     @Override
@@ -173,8 +125,6 @@ public class DiaryServiceImpl implements DiaryService {
         if (ObjectUtil.isNotEmpty(existingDiary)) {
             diary.setId(existingDiary.getId());
             diary.setUpdateTime(LocalDateTime.now());
-            diary.setStatus(0);
-            diary.setAiResponse(null);
             diary.setCreateTime(existingDiary.getCreateTime());
             User user = userRepository.findByUserId(diary.getUserId());
             applyWriteCrypto(diary, user);

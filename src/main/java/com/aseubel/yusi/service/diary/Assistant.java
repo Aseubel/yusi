@@ -14,26 +14,6 @@ public interface Assistant {
     TokenStream chat(@MemoryId String userId, @UserMessage String message);
 
     @UserMessage("""
-            用户刚写了一篇日记。
-            
-            日期：
-            {{entryDate}}
-            
-            日记内容：
-            {{diaryContent}}
-            
-            任务：
-            请阅读日记内容，并给出一个简短的回应（100字以内）。
-            
-            回应要求：
-            1. **共情**：首先确认并验证用户的情绪。
-            2. **理解**：体现你读懂了TA的内心想法，而不仅仅是复述事情。
-            3. **提问**（可选）：如果合适，可以温柔地问一个问题，引导TA更深层地探索。
-            4. **语气**：像老朋友一样自然、温暖，不要说教。
-            """)
-    TokenStream generateDiaryResponse(@V("diaryContent") String diaryContent, @V("entryDate") String entryDate);
-
-    @UserMessage("""
             请为你（用户A的AI知己）的用户撰写一封推荐信，向TA推荐另一位用户（用户B）。
             
             用户A（你的用户）的近期心路历程：

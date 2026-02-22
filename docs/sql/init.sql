@@ -34,8 +34,6 @@ CREATE TABLE `diary` (
     `client_encrypted` TINYINT(1) DEFAULT NULL COMMENT '是否为客户端加密内容',
     `visibility` TINYINT(1) DEFAULT NULL COMMENT '可见性',
     `entry_date` DATE DEFAULT NULL COMMENT '日记日期',
-    `ai_analysis_status` INT DEFAULT NULL COMMENT 'AI分析状态',
-    `ai_response` VARCHAR(1000) DEFAULT NULL COMMENT 'AI回复',
     `emotion` VARCHAR(32) DEFAULT NULL COMMENT '情感分析结果',
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',

@@ -19,8 +19,6 @@ public interface DiaryService {
 
     Page<Diary> getDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc);
 
-    void generateAiResponse(String diaryId);
-
     /**
      * 解密日记内容
      */

@@ -81,12 +81,6 @@ public class DiaryController {
         return Response.fail("Please use /api/ai/chat/stream for chat interaction");
     }
 
-    @PostMapping("/generate-response/{diaryId}")
-    public Response<?> generateResponse(@PathVariable("diaryId") String diaryId) {
-        diaryService.generateAiResponse(diaryId);
-        return Response.success();
-    }
-
     /**
      * 获取用户足迹列表（有地理位置的日记）
      */
