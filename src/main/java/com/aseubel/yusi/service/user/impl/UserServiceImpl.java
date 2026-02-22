@@ -117,8 +117,11 @@ public class UserServiceImpl implements UserService {
 
         // Generate new access token
         String newAccessToken = jwtUtils.generateAccessToken(userId);
-        // Add the new token (this replaces the old one since we removed it above)
+        // Add the new token
         tokenService.addDeviceToken(userId, newAccessToken, "refresh");
+
+        // 更新 Redis 中的 refreshToken 过期时间
+        tokenService.saveRefreshToken(userId, refreshToken);
 
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
