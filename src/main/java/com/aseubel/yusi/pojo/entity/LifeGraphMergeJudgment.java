@@ -64,8 +64,8 @@ public class LifeGraphMergeJudgment {
     @Column(name = "type", nullable = false, length = 32)
     private String type;
 
-    @Column(name = "sim_score", precision = 5, scale = 4)
-    private BigDecimal simScore;
+    @Column(name = "sim_score", precision = 5)
+    private Double simScore;
 
     /**
      * LLM判断结果: YES/NO
