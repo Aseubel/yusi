@@ -1,5 +1,6 @@
 package com.aseubel.yusi.pojo.entity;
 
+import java.math.BigDecimal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -64,7 +65,7 @@ public class LifeGraphMergeJudgment {
     private String type;
 
     @Column(name = "sim_score", precision = 5, scale = 4)
-    private Double simScore;
+    private BigDecimal simScore;
 
     /**
      * LLM判断结果: YES/NO

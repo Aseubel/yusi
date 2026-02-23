@@ -1,5 +1,6 @@
 package com.aseubel.yusi.pojo.entity;
 
+import java.math.BigDecimal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -47,7 +48,7 @@ public class LifeGraphRelation {
     private String type;
 
     @Column(name = "confidence", nullable = false, precision = 4, scale = 3)
-    private java.math.BigDecimal confidence;
+    private BigDecimal confidence;
 
     @Column(name = "weight", nullable = false)
     private Integer weight;
