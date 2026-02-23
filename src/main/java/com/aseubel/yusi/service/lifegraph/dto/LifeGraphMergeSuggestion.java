@@ -6,6 +6,7 @@ import lombok.Data;
 @Data
 @Builder
 public class LifeGraphMergeSuggestion {
+    private Long judgmentId;
     private Long entityIdA;
     private Long entityIdB;
     private String nameA;

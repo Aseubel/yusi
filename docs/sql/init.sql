@@ -395,5 +395,54 @@ CREATE TABLE IF NOT EXISTS `chat_memory_message` (
   KEY `idx_memory_id_created` (`memory_id`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI对话记忆存储表';
 
+-- Life Graph Merge Judgment - 实体合并判断记录
+-- 用于记录已分析过的候选对，避免重复调用 LLM
+DROP TABLE IF EXISTS `life_graph_merge_judgment`;
+CREATE TABLE `life_graph_merge_judgment` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+    `entity_id_a` BIGINT NOT NULL COMMENT '实体A的ID',
+    `entity_id_b` BIGINT NOT NULL COMMENT '实体B的ID',
+    `name_a` VARCHAR(255) NOT NULL COMMENT '实体A名称',
+    `name_b` VARCHAR(255) NOT NULL COMMENT '实体B名称',
+    `type` VARCHAR(32) NOT NULL COMMENT '实体类型: Person/Location/Organization/Event/Concept',
+    `sim_score` DECIMAL(5, 4) DEFAULT NULL COMMENT '相似度分数(0-1)',
+    `merge_decision` VARCHAR(8) DEFAULT NULL COMMENT 'LLM判断结果: YES/NO',
+    `reason` VARCHAR(512) DEFAULT NULL COMMENT '判断原因',
+    `recommended_master_name` VARCHAR(255) DEFAULT NULL COMMENT '推荐保留的规范名称',
+    `status` VARCHAR(16) NOT NULL DEFAULT 'PENDING' COMMENT '状态: PENDING-待处理, ACCEPTED-已接受, REJECTED-已拒绝',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_merge_judgment_pair` (`user_id`, `entity_id_a`, `entity_id_b`),
+    KEY `idx_merge_judgment_user` (`user_id`),
+    KEY `idx_merge_judgment_status` (`status`),
+    KEY `idx_merge_judgment_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='实体合并判断记录表';
+
+-- User Notification - 用户统一消息表
+-- 用于存储各类通知消息，便于统一消息中心展示
+DROP TABLE IF EXISTS `user_notification`;
+CREATE TABLE `user_notification` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `notification_id` VARCHAR(64) NOT NULL COMMENT '消息唯一标识',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '接收用户ID',
+    `type` VARCHAR(32) NOT NULL COMMENT '消息类型: MERGE_SUGGESTION/SYSTEM/REMINDER/ANNOUNCEMENT',
+    `title` VARCHAR(255) NOT NULL COMMENT '消息标题',
+    `content` TEXT COMMENT '消息内容',
+    `is_read` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已读: 0-未读, 1-已读',
+    `ref_type` VARCHAR(32) DEFAULT NULL COMMENT '关联类型: MERGE_JUDGMENT/DIARY/ENTITY 等',
+    `ref_id` VARCHAR(64) DEFAULT NULL COMMENT '关联记录ID',
+    `extra_data` JSON DEFAULT NULL COMMENT '扩展数据(JSON格式)',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `read_at` DATETIME DEFAULT NULL COMMENT '阅读时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_notification_id` (`notification_id`),
+    KEY `idx_notification_user` (`user_id`),
+    KEY `idx_notification_user_read` (`user_id`, `is_read`),
+    KEY `idx_notification_user_type` (`user_id`, `type`),
+    KEY `idx_notification_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户统一消息表';
+
 
 SET FOREIGN_KEY_CHECKS = 1;

@@ -5,11 +5,13 @@ import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.service.lifegraph.CommunityInsightService;
 import com.aseubel.yusi.service.lifegraph.EmotionTimelineService;
+import com.aseubel.yusi.service.lifegraph.LifeGraphMergeSuggestionService;
 import com.aseubel.yusi.service.lifegraph.LifeGraphQueryService;
 import com.aseubel.yusi.service.lifegraph.LifeTimelineService;
 import com.aseubel.yusi.service.lifegraph.dto.CommunityInsight;
 import com.aseubel.yusi.service.lifegraph.dto.EmotionTimeline;
 import com.aseubel.yusi.service.lifegraph.dto.LifeChapter;
+import com.aseubel.yusi.service.lifegraph.dto.LifeGraphMergeSuggestion;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.web.bind.annotation.*;
@@ -27,6 +29,7 @@ public class LifeGraphController {
     private final LifeTimelineService timelineService;
     private final CommunityInsightService communityInsightService;
     private final EmotionTimelineService emotionTimelineService;
+    private final LifeGraphMergeSuggestionService mergeSuggestionService;
 
     @GetMapping("/search")
     public Response<String> search(@RequestParam String query) {
@@ -65,5 +68,33 @@ public class LifeGraphController {
             @RequestParam(defaultValue = "10") int limit) {
         String userId = UserContext.getUserId();
         return Response.success(emotionTimelineService.getEmotionTriggers(userId, limit));
+    }
+
+    /**
+     * 获取待处理的合并建议
+     */
+    @GetMapping("/merge-suggestions")
+    public Response<List<LifeGraphMergeSuggestion>> getMergeSuggestions(
+            @RequestParam(defaultValue = "10") int limit) {
+        String userId = UserContext.getUserId();
+        return Response.success(mergeSuggestionService.getPendingSuggestions(userId, limit));
+    }
+
+    /**
+     * 接受合并建议
+     */
+    @PostMapping("/merge-suggestions/{judgmentId}/accept")
+    public Response<Void> acceptMerge(@PathVariable Long judgmentId) {
+        mergeSuggestionService.acceptMerge(judgmentId);
+        return Response.success(null);
+    }
+
+    /**
+     * 拒绝合并建议
+     */
+    @PostMapping("/merge-suggestions/{judgmentId}/reject")
+    public Response<Void> rejectMerge(@PathVariable Long judgmentId) {
+        mergeSuggestionService.rejectMerge(judgmentId);
+        return Response.success(null);
     }
 }

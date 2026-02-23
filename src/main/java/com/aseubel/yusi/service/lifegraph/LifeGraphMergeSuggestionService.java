@@ -3,21 +3,26 @@ package com.aseubel.yusi.service.lifegraph;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
+import com.aseubel.yusi.pojo.entity.LifeGraphMergeJudgment;
 import com.aseubel.yusi.repository.LifeGraphEntityRepository;
+import com.aseubel.yusi.repository.LifeGraphMergeJudgmentRepository;
 import com.aseubel.yusi.service.ai.PromptService;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphAssistant;
 import com.aseubel.yusi.service.lifegraph.dto.LifeGraphMergeSuggestion;
+import com.aseubel.yusi.service.notification.NotificationService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -25,28 +30,77 @@ import java.util.Map;
 public class LifeGraphMergeSuggestionService {
 
     private final LifeGraphEntityRepository entityRepository;
+    private final LifeGraphMergeJudgmentRepository judgmentRepository;
     private final LifeGraphAssistant assistant;
     private final PromptService promptService;
     private final ObjectMapper objectMapper;
+    private final NotificationService notificationService;
 
+    private static final int SUGGESTION_LIMIT = 10;
+
+    /**
+     * 定时任务：每天凌晨3点执行，为所有用户生成合并建议
+     */
+    @Scheduled(cron = "0 0 3 * * ?")
+    @Transactional
+    public void scheduledMergeSuggestion() {
+        log.info("开始执行定时合并建议任务");
+        List<LifeGraphEntity> allEntities = entityRepository.findAll();
+        Set<String> processedUsers = new HashSet<>();
+        
+        for (LifeGraphEntity entity : allEntities) {
+            String userId = entity.getUserId();
+            if (processedUsers.contains(userId)) {
+                continue;
+            }
+            processedUsers.add(userId);
+            
+            try {
+                int count = suggestForUser(userId);
+                if (count > 0) {
+                    log.info("用户 {} 生成了 {} 条合并建议", userId, count);
+                }
+            } catch (Exception e) {
+                log.error("用户 {} 合并建议生成失败", userId, e);
+            }
+        }
+        log.info("定时合并建议任务完成，处理了 {} 个用户", processedUsers.size());
+    }
+
+    /**
+     * 为单个用户生成合并建议
+     */
+    public int suggestForUser(String userId) {
+        List<LifeGraphMergeSuggestion> suggestions = suggest(userId, SUGGESTION_LIMIT);
+        return suggestions.size();
+    }
+
+    /**
+     * 获取合并建议（排除已判断的候选对）
+     */
     public List<LifeGraphMergeSuggestion> suggest(String userId, int limit) {
         if (StrUtil.isBlank(userId) || limit <= 0) {
             return List.of();
         }
         
-        // 1. Generate Candidates using loose string similarity
-        List<CandidatePair> candidates = findCandidates(userId);
+        // 1. 获取已判断的实体对，用于排除
+        Set<String> judgedPairs = judgmentRepository.findJudgedPairs(userId);
+        log.debug("User {} has {} judged pairs", userId, judgedPairs.size());
+
+        // 2. 生成新候选对（排除已判断的）
+        List<CandidatePair> candidates = findCandidates(userId, judgedPairs);
         if (candidates.isEmpty()) {
+            log.debug("No new candidates for user {}", userId);
             return List.of();
         }
 
-        // 2. Prepare JSON for LLM
+        // 3. 准备 JSON 给 LLM
         String candidatesJson = toJson(candidates);
         if (candidatesJson == null) {
             return List.of();
         }
 
-        // 3. Call LLM
+        // 4. 调用 LLM
         String prompt = promptService.getPrompt(PromptKey.GRAPHRAG_MERGE_SUGGEST.getKey(), "zh-CN");
         if (prompt == null) {
             // Fallback prompt if not in DB
@@ -55,17 +109,38 @@ public class LifeGraphMergeSuggestionService {
 
         String response = assistant.analyzeMergeCandidates(prompt, candidatesJson);
         
-        // 4. Parse Response and Filter
+        // 5. 解析响应
         List<LlmMergeJudgment> judgments = parseJudgment(response);
         if (judgments == null) {
             return List.of();
         }
 
+        // 6. 保存判断结果并构建返回列表
         List<LifeGraphMergeSuggestion> results = new ArrayList<>();
+        List<LifeGraphMergeJudgment> toSave = new ArrayList<>();
+        
         for (int i = 0; i < Math.min(candidates.size(), judgments.size()); i++) {
-            LlmMergeJudgment judgment = judgments.get(i);
-            if ("YES".equalsIgnoreCase(judgment.getMerge())) {
-                CandidatePair pair = candidates.get(i);
+            LlmMergeJudgment llmJudgment = judgments.get(i);
+            CandidatePair pair = candidates.get(i);
+            
+            // 构建判断记录
+            LifeGraphMergeJudgment record = LifeGraphMergeJudgment.builder()
+                    .userId(userId)
+                    .entityIdA(pair.getIdA())
+                    .entityIdB(pair.getIdB())
+                    .nameA(pair.getNameA())
+                    .nameB(pair.getNameB())
+                    .type(pair.getType())
+                    .simScore(pair.getSimScore())
+                    .mergeDecision(llmJudgment.getMerge())
+                    .reason(llmJudgment.getReason())
+                    .recommendedMasterName(llmJudgment.getRecommendedMasterName())
+                    .status("PENDING")
+                    .build();
+            toSave.add(record);
+            
+            // 只返回建议合并的
+            if ("YES".equalsIgnoreCase(llmJudgment.getMerge())) {
                 results.add(LifeGraphMergeSuggestion.builder()
                         .entityIdA(pair.getIdA())
                         .entityIdB(pair.getIdB())
@@ -73,16 +148,82 @@ public class LifeGraphMergeSuggestionService {
                         .nameB(pair.getNameB())
                         .type(pair.getType())
                         .score(pair.getSimScore())
-                        .reason(judgment.getReason())
-                        .recommendedMasterName(judgment.getRecommendedMasterName())
+                        .reason(llmJudgment.getReason())
+                        .recommendedMasterName(llmJudgment.getRecommendedMasterName())
                         .build());
+            }
+        }
+        
+        // 7. 批量保存判断记录
+        if (!toSave.isEmpty()) {
+            judgmentRepository.saveAll(toSave);
+            log.info("Saved {} merge judgments for user {}", toSave.size(), userId);
+            
+            // 8. 为建议合并的候选对创建通知
+            for (LifeGraphMergeJudgment judgment : toSave) {
+                if ("YES".equalsIgnoreCase(judgment.getMergeDecision())) {
+                    notificationService.createMergeSuggestionNotification(
+                            userId, 
+                            judgment.getId(), 
+                            judgment.getNameA(), 
+                            judgment.getNameB(), 
+                            judgment.getType()
+                    );
+                }
             }
         }
         
         return results.size() > limit ? results.subList(0, limit) : results;
     }
 
-    private List<CandidatePair> findCandidates(String userId) {
+    /**
+     * 获取待处理的合并建议（从数据库读取，不调用LLM）
+     */
+    public List<LifeGraphMergeSuggestion> getPendingSuggestions(String userId, int limit) {
+        List<LifeGraphMergeJudgment> pending = judgmentRepository
+                .findByUserIdAndStatusOrderByCreatedAtDesc(userId, "PENDING");
+        
+        return pending.stream()
+                .filter(j -> "YES".equalsIgnoreCase(j.getMergeDecision()))
+                .limit(limit)
+                .map(j -> LifeGraphMergeSuggestion.builder()
+                        .judgmentId(j.getId())
+                        .entityIdA(j.getEntityIdA())
+                        .entityIdB(j.getEntityIdB())
+                        .nameA(j.getNameA())
+                        .nameB(j.getNameB())
+                        .type(j.getType())
+                        .score(j.getSimScore())
+                        .reason(j.getReason())
+                        .recommendedMasterName(j.getRecommendedMasterName())
+                        .build())
+                .toList();
+    }
+
+    /**
+     * 接受合并建议
+     */
+    @Transactional
+    public void acceptMerge(Long judgmentId) {
+        judgmentRepository.findById(judgmentId).ifPresent(j -> {
+            j.setStatus("ACCEPTED");
+            judgmentRepository.save(j);
+            // TODO: 执行实际的合并逻辑
+        });
+    }
+
+    /**
+     * 拒绝合并建议
+     */
+    @Transactional
+    public void rejectMerge(Long judgmentId) {
+        judgmentRepository.findById(judgmentId).ifPresent(j -> {
+            j.setStatus("REJECTED");
+            judgmentRepository.save(j);
+        });
+    }
+
+    private List<CandidatePair> findCandidates(String userId, Set<String> judgedPairs) {
         List<LifeGraphEntity> entities = entityRepository.findTop50ByUserIdOrderByMentionCountDesc(userId);
         List<CandidatePair> candidates = new ArrayList<>();
 
@@ -94,8 +235,13 @@ public class LifeGraphMergeSuggestionService {
                 LifeGraphEntity b = entities.get(j);
                 if (b.getType() != a.getType()) continue;
                 
+                // 检查是否已判断过
+                String pairKey = Math.min(a.getId(), b.getId()) + "-" + Math.max(a.getId(), b.getId());
+                if (judgedPairs.contains(pairKey)) {
+                    continue;
+                }
+                
                 double score = similarity(a.getNameNorm(), b.getNameNorm());
-                // Lower threshold to 0.7 to let LLM decide
                 if (score >= 0.7) {
                     candidates.add(new CandidatePair(a.getId(), b.getId(), a.getNameNorm(), b.getNameNorm(), a.getType().name(), score));
                 }
