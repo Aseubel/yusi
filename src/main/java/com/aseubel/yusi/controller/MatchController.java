@@ -1,5 +1,6 @@
 package com.aseubel.yusi.controller;
 
+import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.pojo.dto.match.MatchActionRequest;
@@ -9,7 +10,6 @@ import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.service.match.MatchService;
 import com.aseubel.yusi.service.user.UserService;
-import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,27 +36,27 @@ public class MatchController {
     private UserService userService;
 
     @PostMapping("/settings")
-    public User updateSettings(@RequestBody MatchSettingsRequest request) {
+    public Response<User> updateSettings(@RequestBody MatchSettingsRequest request) {
         String userId = UserContext.getUserId();
-        return userService.updateMatchSettings(userId, request.getEnabled(), request.getIntent());
+        return Response.success(userService.updateMatchSettings(userId, request.getEnabled(), request.getIntent()));
     }
 
     @GetMapping("/recommendations")
-    public List<SoulMatch> getRecommendations() {
+    public Response<List<SoulMatch>> getRecommendations() {
         String userId = UserContext.getUserId();
-        return matchService.getMatches(userId);
+        return Response.success(matchService.getMatches(userId));
     }
 
     @PostMapping("/{matchId}/action")
-    public SoulMatch handleAction(@PathVariable Long matchId, @RequestBody MatchActionRequest request) {
+    public Response<SoulMatch> handleAction(@PathVariable Long matchId, @RequestBody MatchActionRequest request) {
         String userId = UserContext.getUserId();
-        return matchService.handleMatchAction(userId, matchId, request.getAction());
+        return Response.success(matchService.handleMatchAction(userId, matchId, request.getAction()));
     }
 
     @GetMapping("/status")
-    public MatchStatusResponse getStatus() {
+    public Response<MatchStatusResponse> getStatus() {
         String userId = UserContext.getUserId();
-        return matchService.getMatchStatus(userId);
+        return Response.success(matchService.getMatchStatus(userId));
     }
 
     // Dev endpoint to trigger matching manually
