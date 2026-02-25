@@ -8,7 +8,9 @@ import com.aseubel.yusi.grpc.mcp.QueryLifeGraphResponse;
 import com.aseubel.yusi.grpc.mcp.SearchDiaryRequest;
 import com.aseubel.yusi.grpc.mcp.SearchDiaryResponse;
 import com.aseubel.yusi.pojo.entity.Diary;
+import com.aseubel.yusi.repository.DeveloperConfigRepository;
 import com.aseubel.yusi.repository.DiaryExtensionRepository;
+import com.aseubel.yusi.pojo.entity.DeveloperConfig;
 import com.aseubel.yusi.service.diary.DiaryService;
 import com.aseubel.yusi.service.lifegraph.LifeGraphQueryService;
 import io.grpc.stub.StreamObserver;
@@ -34,13 +36,28 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
     private final DiaryService diaryService;
     private final DiaryExtensionRepository diaryExtensionRepository;
     private final LifeGraphQueryService lifeGraphQueryService;
+    private final DeveloperConfigRepository developerConfigRepository;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private String getUserIdByApiKey(String apiKey) {
+        if (StrUtil.isBlank(apiKey)) {
+            return null;
+        }
+        return developerConfigRepository.findByApiKey(apiKey)
+                .map(DeveloperConfig::getUserId)
+                .orElse(null);
+    }
 
     @Override
     public void searchDiary(SearchDiaryRequest request, StreamObserver<SearchDiaryResponse> responseObserver) {
         try {
-            String userId = request.getUserId();
+            String apiKey = request.getApiKey();
+            String userId = getUserIdByApiKey(apiKey);
+            if (userId == null) {
+                throw new IllegalArgumentException("Invalid API Key");
+            }
+
             String keyword = request.getKeyword();
             String startTimeStr = request.getStartTime();
             String endTimeStr = request.getEndTime();
@@ -102,7 +119,12 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
     @Override
     public void queryLifeGraph(QueryLifeGraphRequest request, StreamObserver<QueryLifeGraphResponse> responseObserver) {
         try {
-            String userId = request.getUserId();
+            String apiKey = request.getApiKey();
+            String userId = getUserIdByApiKey(apiKey);
+            if (userId == null) {
+                throw new IllegalArgumentException("Invalid API Key");
+            }
+
             String query = request.getQuery();
             log.info("MCP Ext: Querying life graph for user {}, query: '{}'", userId, query);
 

@@ -16,7 +16,7 @@ service McpExtensionService {
 }
 
 message SearchDiaryRequest {
-  string user_id = 1;
+  string api_key = 1;
   string keyword = 2;
   // Format: yyyy-MM-dd HH:mm:ss. Can be empty.
   string start_time = 3;
@@ -37,7 +37,7 @@ message DiaryResult {
 }
 
 message QueryLifeGraphRequest {
-  string user_id = 1;
+  string api_key = 1;
   string query = 2;
 }
 
