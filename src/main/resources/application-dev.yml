@@ -11,6 +11,10 @@
 #   - EMBEDDING_MODEL_NAME: 向量模型名称
 # ============================================================
 
+grpc:
+  server:
+    port: 9090
+
 server:
   port: 20611
   tomcat:

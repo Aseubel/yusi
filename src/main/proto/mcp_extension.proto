@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package mcp.extension;
+
+option java_multiple_files = true;
+option java_package = "com.aseubel.yusi.grpc.mcp";
+option java_outer_classname = "McpExtensionProto";
+option go_package = "mcp/proto";
+
+service McpExtensionService {
+  // Searches diaries by keyword and time range
+  rpc SearchDiary(SearchDiaryRequest) returns (SearchDiaryResponse) {}
+  
+  // Queries the life graph
+  rpc QueryLifeGraph(QueryLifeGraphRequest) returns (QueryLifeGraphResponse) {}
+}
+
+message SearchDiaryRequest {
+  string user_id = 1;
+  string keyword = 2;
+  // Format: yyyy-MM-dd HH:mm:ss. Can be empty.
+  string start_time = 3;
+  // Format: yyyy-MM-dd HH:mm:ss. Can be empty.
+  string end_time = 4;
+}
+
+message SearchDiaryResponse {
+  repeated DiaryResult results = 1;
+  string error_message = 2;
+}
+
+message DiaryResult {
+  string diary_id = 1;
+  string date = 2;
+  string content = 3;
+  string emotion = 4;
+}
+
+message QueryLifeGraphRequest {
+  string user_id = 1;
+  string query = 2;
+}
+
+message QueryLifeGraphResponse {
+  string result_json = 1;
+  string error_message = 2;
+}
