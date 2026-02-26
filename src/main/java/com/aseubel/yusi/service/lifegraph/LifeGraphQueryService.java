@@ -8,6 +8,9 @@ import com.aseubel.yusi.repository.LifeGraphEntityAliasRepository;
 import com.aseubel.yusi.repository.LifeGraphEntityRepository;
 import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -15,6 +18,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +32,7 @@ public class LifeGraphQueryService {
     private final LifeGraphEntityAliasRepository aliasRepository;
     private final LifeGraphRelationRepository relationRepository;
     private final LifeGraphMentionRepository mentionRepository;
+    private final ObjectMapper objectMapper;
 
     public String localSearch(String userId, String query, int maxEntities, int maxRelations, int maxMentions) {
         if (StrUtil.isBlank(userId) || StrUtil.isBlank(query)) {
@@ -92,7 +97,17 @@ public class LifeGraphQueryService {
             LifeGraphEntity e = entityMap.get(id);
             if (e == null) continue;
             sb.append("- ").append(e.getType()).append(": ").append(e.getDisplayName())
-                    .append(" (norm=").append(e.getNameNorm()).append(")\n");
+                    .append(" (norm=").append(e.getNameNorm()).append(")");
+            
+            if (StrUtil.isNotBlank(e.getSummary())) {
+                sb.append("\n  summary: ").append(e.getSummary());
+            }
+
+            String formattedProps = formatProps(e.getProps());
+            if (StrUtil.isNotBlank(formattedProps)) {
+                sb.append("\n  props: ").append(formattedProps);
+            }
+            sb.append("\n");
         }
 
         sb.append("GRAPH_RELATIONS:\n");
@@ -116,6 +131,39 @@ public class LifeGraphQueryService {
         }
 
         return sb.toString();
+    }
+
+    private String formatProps(String propsJson) {
+        if (StrUtil.isBlank(propsJson)) {
+            return null;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(propsJson);
+            if (!node.isObject()) {
+                return null;
+            }
+            
+            ObjectNode obj = (ObjectNode) node;
+            // 移除空值，保持简洁
+            Iterator<Map.Entry<String, JsonNode>> fields = obj.fields();
+            List<String> keysToRemove = new ArrayList<>();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> entry = fields.next();
+                if (entry.getValue().isNull() || 
+                    (entry.getValue().isTextual() && entry.getValue().asText().isEmpty())) {
+                    keysToRemove.add(entry.getKey());
+                }
+            }
+            keysToRemove.forEach(obj::remove);
+            
+            if (obj.isEmpty()) {
+                return null;
+            }
+            // 返回紧凑的 JSON 字符串
+            return obj.toString();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private String normalize(String v) {
