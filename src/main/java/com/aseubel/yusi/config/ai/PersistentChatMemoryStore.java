@@ -49,7 +49,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     private final IRedisService redisService;
     private final ContextBuilderService contextBuilderService;
 
-    private static final int MAX_LOAD_MESSAGES = 20;
+    private static final int MAX_LOAD_MESSAGES = 100;
     private static final long REDIS_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
     @Override

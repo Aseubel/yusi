@@ -28,7 +28,7 @@ public class ChatMemoryProviderConfig {
     public ChatMemoryProvider chatMemoryProviderConfig() {
         ChatMemoryProvider chatMemoryProvider = memoryId -> MessageWindowChatMemory.builder()
                 .id(memoryId)
-                .maxMessages(20)
+                .maxMessages(60)
                 .chatMemoryStore(applicationContext.getBean(PersistentChatMemoryStore.class))
                 .build();
         return chatMemoryProvider;
