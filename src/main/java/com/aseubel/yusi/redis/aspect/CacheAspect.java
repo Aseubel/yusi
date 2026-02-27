@@ -42,7 +42,7 @@ public class CacheAspect {
     private String keyPrefix;
     @Value("${spring.cache.redis.time-to-live:1s}")
     private Duration ttl;
-    private static final long lockTime = 1000;
+    private static final long lockTime = 10000;
 
     private final ThreadPoolTaskExecutor threadPoolExecutor;
     private final SpelResolverHelper spelResolverHelper;
@@ -100,22 +100,8 @@ public class CacheAspect {
             + "end\n"
             + "return {value , '" + SUCCESS + "'}";
 
-    private static final String INVALID_SH = "local key = KEYS[1]\n"
-            + "local newUnlockTime = tonumber(ARGV[1])\n"
-            + "redis.call('HDEL', key, '" + OWNER + "')\n"
-            + "local value = redis.call('HGET', key, '" + VALUE + "')\n"
-            + "redis.call('HSET', key, '" + LOCK_INFO + "', 'locked')\n"
-            + "if not value or value == '' then\n"
-            + "      return {true, '" + EMPTY_VALUE_SUCCESS + "'}\n"
-            + "end\n"
-            + "if newUnlockTime > 0 then\n"
-            + "      redis.call('HSET', key, '" + UNLOCK_TIME + "', newUnlockTime)\n"
-            + "end\n"
-            + "return {'', '" + SUCCESS + "'}";
-
     private static final String SET_SH_SHA = DigestUtil.sha1Hex(SET_SH);
     private static final String GET_SH_SHA = DigestUtil.sha1Hex(GET_SH);
-    private static final String INVALID_SH_SHA = DigestUtil.sha1Hex(INVALID_SH);
     private static final String RELEASE_LOCK_SH_SHA = DigestUtil.sha1Hex(RELEASE_LOCK_SH);
 
     @Around("@annotation(updateCache)")
@@ -150,41 +136,28 @@ public class CacheAspect {
     }
 
     /**
-     * 处理单个 @UpdateCache 注解
+     * 处理单个 @UpdateCache 注解: 使用淘汰策略保障一致性
      */
     private Object processUpdateCache(ProceedingJoinPoint joinPoint, UpdateCache updateCache) throws Throwable {
         String key = keyPrefix + spelResolverHelper.resolveSpel(joinPoint, updateCache.key());
 
-        // 如果是仅失效模式（通常用于列表页缓存，或者使用通配符批量删除）
-        if (updateCache.evictOnly() || key.contains("*")) {
-            if (key.contains("*")) {
-                redisService.removeByPattern(key);
-            } else {
-                // 如果不是通配符，则直接删除该 Key
-                // 这里不使用 INVALID_SH 脚本，因为 evictOnly 意味着我们不关心缓存的锁状态，只想清除它
-                // 这样下次 QueryCache 进来时会重新加载
-                redisService.remove(key);
-            }
-            return joinPoint.proceed();
+        // 无论是哪种模式，更新时为了一致性直接清除缓存（延迟双删模式）
+        if (key.contains("*")) {
+            redisService.removeByPattern(key);
+        } else {
+            redisService.remove(key);
         }
 
-        List<Object> results = redisService.execute(INVALID_SH_SHA, INVALID_SH, RScript.ReturnType.MULTI, List.of(key),
-                System.currentTimeMillis() + lockTime);
+        Object result = joinPoint.proceed();
 
-        String sign = (String) results.get(1);
-        switch (sign) {
-            case EMPTY_VALUE_SUCCESS:
-                Object value = joinPoint.proceed();
-                // 确保序列化后写入
-                if (value != null) {
-                    String valueAsJson = objectMapper.writeValueAsString(value);
-                    redisService.addToMap(key, VALUE, valueAsJson);
-                }
-                return value;
-            case SUCCESS:
-                return joinPoint.proceed();
+        // 延迟双删保证数据一致性（防止在 DB 更新期间，其他线程将旧数据重新载入缓存）
+        if (key.contains("*")) {
+            redisService.removeByPattern(key);
+        } else {
+            redisService.remove(key);
         }
-        return joinPoint.proceed();
+
+        return result;
     }
 
     /**
@@ -198,7 +171,8 @@ public class CacheAspect {
 
         String key = keyPrefix + spelResolverHelper.resolveSpel(joinPoint, queryCache.key());
         String newUnlockTime = String.valueOf(System.currentTimeMillis() + lockTime);
-        String owner = Thread.currentThread().getName();
+        // 使用UUID替换线程名称，防止多台机器相同线程名称覆盖锁
+        String owner = java.util.UUID.randomUUID().toString();
         String currentTime = String.valueOf(System.currentTimeMillis());
 
         // 计算TTL
@@ -209,12 +183,18 @@ public class CacheAspect {
                 newUnlockTime, owner, currentTime);
 
         String sign = (String) result.get(1);
-        long maxWaitTime = System.currentTimeMillis() + 1000; // 最多等待1秒
+        long maxWaitTime = System.currentTimeMillis() + 1500; // 最多等待1.5秒
         while (sign.equals(NEED_WAIT) && System.currentTimeMillis() < maxWaitTime) {
-            Thread.sleep(200); // 休眠
+            Thread.sleep(100); // 缩短休眠间隔，提高响应性
             result = redisService.execute(GET_SH_SHA, GET_SH, RScript.ReturnType.MULTI, List.of(key), newUnlockTime,
                     owner, currentTime);
             sign = (String) result.get(1);
+        }
+
+        if (sign.equals(NEED_WAIT)) {
+            // 超时未获取到锁，直接查询源数据（兜底），避免大面积 5xx
+            log.warn("Cache fallback: Lock wait timeout for key [{}], querying db directly.", key);
+            return joinPoint.proceed();
         }
 
         // 从返回结果中获取原始的、未经处理的业务数据字符串
@@ -230,32 +210,43 @@ public class CacheAspect {
         switch (sign) {
             case NEED_QUERY:
                 // 缓存未命中，直接查询源数据并返回
-                return queryData(joinPoint, key, effectiveTtl, compress);
+                return queryData(joinPoint, key, effectiveTtl, compress, owner);
             case SUCCESS_NEED_QUERY:
-                // 缓存命中，但数据陈旧，需要异步更新
+                // 缓存命中，但数据陈旧，需要异步更新（当前项目已配置 ThreadPoolTaskExecutor 复制了 MDC 和 UserContext
+                // 等上下文，可安全异步执行）
                 threadPoolExecutor.execute(() -> {
                     try {
-                        queryData(joinPoint, key, effectiveTtl, compress);
+                        // 异步刷新的时候由于生成了新的调用对象，最好生成一个新的 owner 继续加锁，或者复用但已不再占用当前请求的主流程
+                        queryData(joinPoint, key, effectiveTtl, compress, owner);
                     } catch (Throwable e) {
-                        throw new RuntimeException(e);
+                        log.error("Async cache refresh failed for key: {}", key, e);
                     }
                 });
                 if (valueStr == null)
                     return null;
+                // 空缓存防穿透值处理 (如果写入的是特殊值)
+                if ("\"\"".equals(valueStr) || "null".equals(valueStr)) {
+                    return null;
+                }
                 return objectMapper.readValue(valueStr, returnType);
             case SUCCESS:
                 if (valueStr == null)
                     return null;
+                if ("\"\"".equals(valueStr) || "null".equals(valueStr)) {
+                    return null;
+                }
                 return objectMapper.readValue(valueStr, returnType);
         }
-        throw new RuntimeException("unknown sign: " + sign);
+        return joinPoint.proceed();
     }
 
-    private Object queryData(ProceedingJoinPoint joinPoint, String key, long ttl, boolean compress) throws Throwable {
-        String owner = Thread.currentThread().getName();
+    private Object queryData(ProceedingJoinPoint joinPoint, String key, long ttl, boolean compress, String owner)
+            throws Throwable {
         try {
             Object value = joinPoint.proceed();
-            if (ObjectUtil.isNotEmpty(value)) {
+            // ObjectUtil.isNotEmpty 会将空集合判定为空！导致空集合查库结果无法缓存（从而被穿透）。
+            // 修改为仅阻挡业务真实 null。如果需要存特殊空值防穿透，这里可以转换。
+            if (value != null) {
                 // 这样确保了存入 Redis 的是标准、可反序列化的 JSON
                 String valueAsJson = objectMapper.writeValueAsString(value);
                 // 如果启用压缩，压缩数据后再存储
@@ -265,9 +256,9 @@ public class CacheAspect {
                 redisService.execute(SET_SH_SHA, SET_SH, RScript.ReturnType.INTEGER, List.of(key), valueAsJson,
                         owner, ttl);
             } else {
-                // 查询结果为空时，释放锁避免锁永久卡住
-                redisService.execute(RELEASE_LOCK_SH_SHA, RELEASE_LOCK_SH, RScript.ReturnType.INTEGER, List.of(key),
-                        owner);
+                // 解决缓存穿透问题，缓存一个特殊的标识值防止反复穿透数据库。这里存为特殊的JSON null "" (看业务需要，这里存 "null" 也可以)
+                redisService.execute(SET_SH_SHA, SET_SH, RScript.ReturnType.INTEGER, List.of(key), "null",
+                        owner, 60); // 空值缓存时间短一点，60秒即可
             }
             return value;
         } catch (Throwable e) {
