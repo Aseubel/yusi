@@ -85,7 +85,7 @@ public class CacheAspect {
             + "if unlockTime and currentTime > tonumber(unlockTime or 0) then\n"
             + "    redis.call('HMSET', key, '" + LOCK_INFO + "', 'locked', '" + UNLOCK_TIME + "', newUnlockTime, '"
             + OWNER + "', owner)\n"
-            + "    return {value, '" + NEED_QUERY + "'}\n"
+            + "    return {value, '" + SUCCESS_NEED_QUERY + "'}\n"
             + "end\n"
             + "if not value or value == '' then\n"
             + "    if lockOwner and lockOwner ~= owner then\n"
@@ -96,7 +96,7 @@ public class CacheAspect {
             + "    return {value, '" + NEED_QUERY + "'}\n"
             + "end\n"
             + "if lockInfo and lockInfo == 'locked' then \n"
-            + "    return {value, '" + SUCCESS_NEED_QUERY + "'}\n"
+            + "    return {value, '" + SUCCESS + "'}\n"
             + "end\n"
             + "return {value , '" + SUCCESS + "'}";
 
