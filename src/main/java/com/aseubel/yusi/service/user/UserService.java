@@ -33,15 +33,15 @@ public interface UserService {
 
     /**
      * 发送找回密码验证码
-     * @param email 邮箱
+     * @param userName 用户名
      */
-    void sendForgotPasswordCode(String email);
+    void sendForgotPasswordCode(String userName);
 
     /**
      * 重置密码
-     * @param email 邮箱
+     * @param userName 用户名
      * @param code 验证码
      * @param newPassword 新密码
      */
-    void resetPassword(String email, String code, String newPassword);
+    void resetPassword(String userName, String code, String newPassword);
 }

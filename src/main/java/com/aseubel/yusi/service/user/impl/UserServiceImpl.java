@@ -207,22 +207,32 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public void sendForgotPasswordCode(String email) {
-        User user = userRepository.findByEmail(email);
+    public void sendForgotPasswordCode(String userName) {
+        User user = userRepository.findByUserName(userName);
         if (user == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "该邮箱未注册");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
         }
-        verificationCodeService.sendCode(email);
+        if (StrUtil.isBlank(user.getEmail())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "未设置邮箱或邮箱不可用，可联系管理员解决");
+        }
+        // Simple email validation
+        if (!user.getEmail().matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
+             throw new BusinessException(ErrorCode.PARAM_ERROR, "邮箱格式不正确，可联系管理员解决");
+        }
+        verificationCodeService.sendCode(user.getEmail());
     }
 
     @Override
-    public void resetPassword(String email, String code, String newPassword) {
-        if (!verificationCodeService.verifyCode(email, code)) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "验证码错误或已过期");
-        }
-        User user = userRepository.findByEmail(email);
+    public void resetPassword(String userName, String code, String newPassword) {
+        User user = userRepository.findByUserName(userName);
         if (user == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "该邮箱未注册");
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
+        }
+        if (StrUtil.isBlank(user.getEmail())) {
+             throw new BusinessException(ErrorCode.PARAM_ERROR, "未设置邮箱，无法重置密码");
+        }
+        if (!verificationCodeService.verifyCode(user.getEmail(), code)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "验证码错误或已过期");
         }
         user.setPassword(BCrypt.hashpw(newPassword, BCrypt.gensalt()));
         userRepository.save(user);

@@ -61,14 +61,14 @@ public class UserController {
     @Auth(required = false)
     @PostMapping("/forgot-password/send-code")
     public Response<Void> sendForgotPasswordCode(@Valid @RequestBody ForgotPasswordRequest request) {
-        userService.sendForgotPasswordCode(request.getEmail());
+        userService.sendForgotPasswordCode(request.getUserName());
         return Response.success();
     }
 
     @Auth(required = false)
     @PostMapping("/forgot-password/reset")
     public Response<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
-        userService.resetPassword(request.getEmail(), request.getCode(), request.getNewPassword());
+        userService.resetPassword(request.getUserName(), request.getCode(), request.getNewPassword());
         return Response.success();
     }
 
