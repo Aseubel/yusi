@@ -57,7 +57,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     public List<ChatMessage> getMessages(Object memoryId) {
         String memId = memoryId.toString();
         String cacheKey = getCacheKey(memId);
-        
+
         String json = redisService.getValue(cacheKey);
         if (json != null) {
             try {
@@ -69,10 +69,10 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
                 log.warn("Failed to parse chat memory from Redis: {}", e.getMessage());
             }
         }
-        
+
         List<ChatMemoryMessage> entities = messageRepository.findByMemoryIdOrderByCreatedAtDesc(
                 memId, PageRequest.of(0, MAX_LOAD_MESSAGES));
-        
+
         if (entities.isEmpty()) {
             return new ArrayList<>();
         }
@@ -94,30 +94,31 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     public void updateMessages(Object memoryId, List<ChatMessage> messages) {
         String memId = memoryId.toString();
         String cacheKey = getCacheKey(memId);
-        
+
         // 过滤掉 SystemMessage 后再存储到 Redis
         // SystemMessage 每次请求都会由 systemMessageProvider 动态生成，不应持久化
         List<ChatMessage> messagesWithoutSystem = messages.stream()
                 .filter(msg -> !(msg instanceof SystemMessage))
                 .collect(Collectors.toList());
-        
+
         // 更新 Redis 缓存（不包含 SystemMessage）
         redisService.setValue(cacheKey, messagesToJson(messagesWithoutSystem), REDIS_TTL_MS);
 
-        if (messagesWithoutSystem.isEmpty()) return;
+        if (messagesWithoutSystem.isEmpty())
+            return;
 
         ChatMessage lastMsg = messagesWithoutSystem.get(messagesWithoutSystem.size() - 1);
-        
+
         // 序列化消息（使用 JSON 格式保留完整信息）
         String serializedLastMsg = serializeForDb(lastMsg);
         if (serializedLastMsg == null) {
             log.debug("Skipping message with null content: {}", lastMsg.type());
             return;
         }
-        
+
         List<ChatMemoryMessage> lastDbMsgs = messageRepository.findByMemoryIdOrderByCreatedAtDesc(
                 memId, PageRequest.of(0, 1));
-        
+
         boolean shouldInsert = true;
         if (!lastDbMsgs.isEmpty()) {
             ChatMemoryMessage lastDb = lastDbMsgs.get(0);
@@ -126,7 +127,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
                 shouldInsert = false;
             }
         }
-        
+
         if (shouldInsert) {
             ChatMemoryMessage entity = ChatMemoryMessage.builder()
                     .memoryId(memId)
@@ -144,11 +145,11 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         messageRepository.deleteByMemoryId(memoryId.toString());
         redisService.remove(getCacheKey(memoryId));
     }
-    
+
     private String getCacheKey(Object memoryId) {
         return "yusi:langchain:" + memoryId.toString();
     }
-    
+
     /**
      * 序列化消息用于数据库存储
      * 使用 JSON 格式序列化所有消息类型，以保留完整信息：
@@ -160,19 +161,19 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         // 统一使用 JSON 序列化，保留消息的完整结构
         return messagesToJson(List.of(message));
     }
-    
+
     /**
      * 从数据库实体反序列化为 ChatMessage
      * 所有消息都使用 JSON 反序列化
      */
     private ChatMessage toChatMessage(ChatMemoryMessage entity) {
         String content = entity.getContent();
-        
+
         if (content == null || content.isEmpty()) {
             log.warn("Empty content for message with role: {}", entity.getRole());
             return UserMessage.from("");
         }
-        
+
         try {
             // 统一使用 JSON 反序列化
             List<ChatMessage> deserialized = messagesFromJson(content);
@@ -182,7 +183,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         } catch (Exception e) {
             log.warn("Failed to deserialize message, falling back to simple text: {}", e.getMessage());
         }
-        
+
         // 降级处理：如果 JSON 反序列化失败，根据 role 类型创建简单消息
         String role = entity.getRole();
         switch (role) {

@@ -5,6 +5,8 @@ import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.UserRepository;
+import com.aseubel.yusi.service.ai.MidTermMemorySearchService;
+import com.aseubel.yusi.service.ai.PromptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
@@ -51,6 +53,7 @@ public class ContextBuilderService {
 
     private final UserRepository userRepository;
     private final PromptService promptService;
+    private final MidTermMemorySearchService midTermMemorySearchService;
 
     /**
      * 构建 System Message 内容
@@ -68,9 +71,11 @@ public class ContextBuilderService {
         StringBuilder systemMessage = new StringBuilder();
         systemMessage.append(basePrompt).append("\n\n");
         systemMessage.append(CONTEXT_START).append("\n");
-        systemMessage.append("    ").append(CURRENT_TIME_START).append(DateUtil.now()).append(CURRENT_TIME_END).append("\n");
+        systemMessage.append("    ").append(CURRENT_TIME_START).append(DateUtil.now()).append(CURRENT_TIME_END)
+                .append("\n");
 
         injectUserProfile(systemMessage, userId);
+        injectMidTermMemories(systemMessage, userId);
         injectMemoryGuidelines(systemMessage);
 
         systemMessage.append(CONTEXT_END).append("\n");
@@ -109,6 +114,18 @@ public class ContextBuilderService {
         }
 
         sb.append("    ").append(USER_PROFILE_END).append("\n");
+    }
+
+    /**
+     * 注入近期记忆（中期记忆）
+     */
+    private void injectMidTermMemories(StringBuilder sb, String userId) {
+        String midTermMemories = midTermMemorySearchService.getRecentMemories(userId, 5);
+        if (StrUtil.isNotBlank(midTermMemories)) {
+            sb.append("    <mid_term_memories>\n");
+            sb.append("        ").append(midTermMemories.replace("\n", "\n        ")).append("\n");
+            sb.append("    </mid_term_memories>\n");
+        }
     }
 
     /**

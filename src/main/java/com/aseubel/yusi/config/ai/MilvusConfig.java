@@ -25,13 +25,22 @@ public class MilvusConfig {
 
     @Bean(name = "milvusEmbeddingStore")
     public MilvusEmbeddingStore milvusEmbeddingStoreConfig(MilvusConfigProperties properties) {
+        return buildMilvusStore(properties, "yusi_embedding_collection");
+    }
+
+    @Bean(name = "midTermMemoryStore")
+    public MilvusEmbeddingStore midTermMemoryStoreConfig(MilvusConfigProperties properties) {
+        return buildMilvusStore(properties, "yusi_mid_term_memory");
+    }
+
+    private MilvusEmbeddingStore buildMilvusStore(MilvusConfigProperties properties, String collectionName) {
         MilvusEmbeddingStore.Builder builder = MilvusEmbeddingStore.builder();
         switch (properties.getMode()) {
             case 1:
-                builder.host("localhost")
-                        .port(19530)
-                        .username("username")
-                        .password("password");
+                builder.host(properties.getHost())
+                        .port(properties.getPort())
+                        .username(properties.getUsername())
+                        .password(properties.getPassword());
                 break;
             case 2:
                 builder.uri(properties.getUri())
@@ -40,9 +49,8 @@ public class MilvusConfig {
             default:
                 throw new IllegalArgumentException("Invalid mode");
         }
-        MilvusEmbeddingStore store = builder
-
-                .collectionName("yusi_embedding_collection") // Name of the collection
+        return builder
+                .collectionName(collectionName) // Name of the collection
                 .dimension(((EmbeddingModel) applicationContext.getBean("embeddingModel")).dimension())
                 .indexType(IndexType.HNSW) // 它是目前内存索引中 查询速度 和 召回率 (Recall) 平衡最好的算法。
                 .metricType(MetricType.COSINE) // Cosine 能最好地衡量“语义相似度”
@@ -53,6 +61,5 @@ public class MilvusConfig {
                 .metadataFieldName("metadata")
                 .vectorFieldName("vector")
                 .build();
-        return store;
     }
 }

@@ -1,9 +1,7 @@
 package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.common.constant.PromptKey;
-import com.aseubel.yusi.service.ai.ContextBuilderService;
-import com.aseubel.yusi.service.ai.DiarySearchTool;
-import com.aseubel.yusi.service.ai.LifeGraphTool;
+import com.aseubel.yusi.service.ai.MemorySearchTool;
 import com.aseubel.yusi.service.ai.PromptService;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
@@ -63,9 +61,7 @@ public class AgentConfig {
         AiServices<Assistant> builder = AiServices.builder(Assistant.class)
                 .streamingChatModel((StreamingChatModel) applicationContext.getBean("streamingChatModel"))
                 .tools(
-                        applicationContext.getBean(DiarySearchTool.class),
-                        applicationContext.getBean(LifeGraphTool.class)
-                )
+                        applicationContext.getBean(MemorySearchTool.class))
                 .chatMemoryProvider((ChatMemoryProvider) applicationContext.getBean("chatMemoryProvider"));
 
         // 如果 MCP 启用，添加 MCP Tool Provider
@@ -95,7 +91,7 @@ public class AgentConfig {
             log.warn("从数据库加载情景分析系统提示词失败: {}", e.getMessage());
         }
         String systemPrompt = (dbPrompt != null && dbPrompt.length() > 50) ? dbPrompt : fallbackPrompt;
-        log.info("情景分析系统提示词来源: {}，长度: {} 字符", 
+        log.info("情景分析系统提示词来源: {}，长度: {} 字符",
                 (dbPrompt != null && dbPrompt.length() > 50) ? "DB" : "Classpath", systemPrompt.length());
 
         SituationRoomAgent agent = AiServices.builder(SituationRoomAgent.class)

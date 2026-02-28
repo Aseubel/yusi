@@ -455,6 +455,21 @@ CREATE TABLE `developer_config` (
     UNIQUE KEY `uk_developer_config_user_id` (`user_id`),
     UNIQUE KEY `uk_developer_config_api_key` (`api_key`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '开发者配置表';
+-- Mid-Term Memory - AI 中期记忆压缩存储
+-- 存储对话的压缩摘要，用于给 AI 提供长期上下文
+DROP TABLE IF EXISTS `mid_term_memory`;
+CREATE TABLE `mid_term_memory` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+    `summary` TEXT NOT NULL COMMENT 'LLM提炼的对话记忆摘要',
+    `importance` DOUBLE NOT NULL DEFAULT 1.0 COMMENT '重要性权重（用于遗忘曲线，初始值1.0）',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_mid_term_memory_user_id` (`user_id`),
+    KEY `idx_mid_term_memory_created_at` (`user_id`, `created_at`),
+    KEY `idx_mid_term_memory_importance` (`user_id`, `importance`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'AI中期对话记忆压缩表';
 
 
 SET FOREIGN_KEY_CHECKS = 1;

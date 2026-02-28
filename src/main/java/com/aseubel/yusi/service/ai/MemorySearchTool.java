@@ -18,9 +18,10 @@ public class MemorySearchTool {
 
     private final DiarySearchTool diarySearchTool;
     private final LifeGraphQueryService lifeGraphQueryService;
+    private final MidTermMemorySearchService midTermMemorySearchService;
 
     @Tool(name = "searchMemories", value = """
-            统一的"记忆检索"工具：内部会结合图谱检索（精准事实/关系路径）与向量检索（日记片段）并进行合并排序。
+            统一的"记忆检索"工具：内部会结合图谱检索（精准事实/关系路径）与向量检索（日记片段、压缩后的中期对话记忆）并进行合并排序。
 
             参数说明：
             - query: 用户的问题或要检索的主题（必填）
@@ -30,6 +31,7 @@ public class MemorySearchTool {
             返回：
             - GRAPH: 图谱实体/关系/证据
             - DIARY: 向量检索出的日记片段
+            - CONVERSATION_MEMORY: 向量检索出的中期对话记忆
             """)
     public String searchMemories(
             @ToolMemoryId String memoryId,
@@ -47,6 +49,7 @@ public class MemorySearchTool {
 
         String graph = lifeGraphQueryService.localSearch(userId, query, 5, 20, 10);
         List<String> diary = diarySearchTool.searchDiary(memoryId, query, startDate, endDate);
+        List<String> conversationMemories = midTermMemorySearchService.searchMidTermMemory(userId, query, 3);
 
         StringBuilder sb = new StringBuilder();
         if (StrUtil.isNotBlank(graph)) {
@@ -60,7 +63,17 @@ public class MemorySearchTool {
             sb.append("- ").append(s).append("\n");
         }
 
-        log.info("MemorySearchTool: userId={}, graphLen={}, diaryCount={}", userId, graph.length(), diary.size());
+        sb.append("\nCONVERSATION_MEMORY:\n");
+        if (conversationMemories.isEmpty()) {
+            sb.append("无匹配对话记忆。\n");
+        } else {
+            for (String s : conversationMemories) {
+                sb.append("- ").append(s).append("\n");
+            }
+        }
+
+        log.info("MemorySearchTool: userId={}, graphLen={}, diaryCount={}, convMemCount={}", userId, graph.length(),
+                diary.size(), conversationMemories.size());
         return sb.toString();
     }
 }

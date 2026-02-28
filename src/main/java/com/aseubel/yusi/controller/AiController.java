@@ -3,8 +3,8 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
-import com.aseubel.yusi.common.exception.AiLockException;
 import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.exception.AiLockException;
 import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.config.ai.PersistentChatMemoryStore;
 import com.aseubel.yusi.service.ai.AiLockService;
@@ -53,18 +53,18 @@ public class AiController {
     public Response<List<Map<String, String>>> getChatHistory() {
         String userId = UserContext.getUserId();
         List<ChatMessage> messages = chatMemoryStore.getMessages(userId);
-        
+
         List<Map<String, String>> history = messages.stream()
                 .filter(msg -> msg instanceof UserMessage || msg instanceof AiMessage)
                 .map(msg -> {
                     String role = msg instanceof UserMessage ? "user" : "assistant";
-                    String content = msg instanceof UserMessage 
-                            ? ((UserMessage) msg).singleText() 
+                    String content = msg instanceof UserMessage
+                            ? ((UserMessage) msg).singleText()
                             : ((AiMessage) msg).text();
                     return Map.of("role", role, "content", content != null ? content : "");
                 })
                 .collect(Collectors.toList());
-        
+
         return Response.success(history);
     }
 
@@ -86,7 +86,7 @@ public class AiController {
             try {
                 // 在异步线程中设置用户上下文，确保 Tool 能够获取到正确的 userId
                 UserContext.setUserId(userId);
-                
+
                 // 使用单例 Assistant，通过 userId 作为 memoryId 实现用户隔离
                 TokenStream tokenStream = diaryAssistant.chat(userId, message);
                 tokenStream
