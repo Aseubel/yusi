@@ -129,3 +129,12 @@ mcp:
 amap:
   key: ${AMAP_API_KEY}
   base-url: https://restapi.amap.com/v3
+
+# 阿里云邮件推送服务
+aliyun:
+  dm:
+    accessKeyId: ${ALIYUN_DM_ACCESS_KEY_ID:}
+    accessKeySecret: ${ALIYUN_DM_ACCESS_KEY_SECRET:}
+    accountName: ${ALIYUN_DM_ACCOUNT_NAME:}
+    fromAlias: ${ALIYUN_DM_FROM_ALIAS:Yusi}
+    endpoint: dm.aliyuncs.com

@@ -35,12 +35,23 @@ public class UserServiceImpl implements UserService {
     @Autowired
     private TokenService tokenService;
 
+    @Autowired
+    private com.aseubel.yusi.service.user.VerificationCodeService verificationCodeService;
+
     @Override
     public User register(User user) {
         User existingUser = userRepository.findByUserName(user.getUserName());
         if (existingUser != null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "用户名已存在");
         }
+        
+        if (StrUtil.isNotBlank(user.getEmail())) {
+            User existingEmail = userRepository.findByEmail(user.getEmail());
+            if (existingEmail != null) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "该邮箱已被注册");
+            }
+        }
+
         user.generateUserId();
         String hashedPassword = BCrypt.hashpw(user.getPassword(), BCrypt.gensalt());
         user.setPassword(hashedPassword);
@@ -193,5 +204,27 @@ public class UserServiceImpl implements UserService {
         }
 
         return userRepository.save(user);
+    }
+
+    @Override
+    public void sendForgotPasswordCode(String email) {
+        User user = userRepository.findByEmail(email);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "该邮箱未注册");
+        }
+        verificationCodeService.sendCode(email);
+    }
+
+    @Override
+    public void resetPassword(String email, String code, String newPassword) {
+        if (!verificationCodeService.verifyCode(email, code)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "验证码错误或已过期");
+        }
+        User user = userRepository.findByEmail(email);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "该邮箱未注册");
+        }
+        user.setPassword(BCrypt.hashpw(newPassword, BCrypt.gensalt()));
+        userRepository.save(user);
     }
 }

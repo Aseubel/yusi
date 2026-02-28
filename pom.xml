@@ -198,6 +198,12 @@
             </exclusions>
         </dependency>
 
+        <dependency>
+            <groupId>com.aliyun</groupId>
+            <artifactId>dm20151123</artifactId>
+            <version>1.0.6</version>
+        </dependency>
+
         <!-- gRPC Spring Boot Starter -->
         <dependency>
             <groupId>net.devh</groupId>

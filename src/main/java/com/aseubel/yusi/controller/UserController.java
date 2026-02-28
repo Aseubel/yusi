@@ -5,6 +5,8 @@ import jakarta.validation.Valid;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.pojo.dto.user.AuthResponse;
+import com.aseubel.yusi.pojo.dto.user.ForgotPasswordRequest;
+import com.aseubel.yusi.pojo.dto.user.ResetPasswordRequest;
 import com.aseubel.yusi.pojo.dto.user.LoginRequest;
 
 import com.aseubel.yusi.pojo.dto.user.RegisterRequest;
@@ -54,6 +56,20 @@ public class UserController {
             @RequestHeader("X-Refresh-Token") String refreshToken,
             @RequestHeader(value = "X-Old-Access-Token", required = false) String oldAccessToken) {
         return Response.success(userService.refreshToken(refreshToken, oldAccessToken));
+    }
+
+    @Auth(required = false)
+    @PostMapping("/forgot-password/send-code")
+    public Response<Void> sendForgotPasswordCode(@Valid @RequestBody ForgotPasswordRequest request) {
+        userService.sendForgotPasswordCode(request.getEmail());
+        return Response.success();
+    }
+
+    @Auth(required = false)
+    @PostMapping("/forgot-password/reset")
+    public Response<Void> resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        userService.resetPassword(request.getEmail(), request.getCode(), request.getNewPassword());
+        return Response.success();
     }
 
     @PostMapping("/update")

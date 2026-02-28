@@ -30,4 +30,18 @@ public interface UserService {
     Boolean checkAdmin(String userId);
 
     User updateUser(String userId, String userName, String email);
+
+    /**
+     * 发送找回密码验证码
+     * @param email 邮箱
+     */
+    void sendForgotPasswordCode(String email);
+
+    /**
+     * 重置密码
+     * @param email 邮箱
+     * @param code 验证码
+     * @param newPassword 新密码
+     */
+    void resetPassword(String email, String code, String newPassword);
 }
