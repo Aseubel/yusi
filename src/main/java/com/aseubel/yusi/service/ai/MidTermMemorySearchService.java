@@ -26,7 +26,8 @@ import com.aseubel.yusi.pojo.entity.MidTermMemory;
 @RequiredArgsConstructor
 public class MidTermMemorySearchService {
 
-    private final MilvusEmbeddingStore midTermMemoryStore;
+    @Qualifier("midTermMemoryStore")
+    private MilvusEmbeddingStore midTermMemoryStore;
     private final EmbeddingModel embeddingModel;
     private final MidTermMemoryRepository midTermMemoryRepository;
 
