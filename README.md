@@ -58,6 +58,8 @@
 | 分布式中间件 | Redisson (分布式锁、限流) |
 | 高性能事件处理 | LMAX Disruptor |
 | 安全 | JWT, AES/GCM 加密 |
+| 记忆管理 | LangChain4j MessageWindowChatMemory |
+| 协议集成 | gRPC, MCP (Model Context Protocol) |
 
 ### 前端技术栈
 
@@ -76,23 +78,28 @@
 yusi/
 ├── src/                    # Spring Boot 后端
 │   ├── main/java/com/aseubel/yusi/
-│   │   ├── common/         # 通用组件 (Response, 异常, 工具类)
-│   │   ├── config/         # 配置类 (Redis, AI, Security)
+│   │   ├── common/         # 通用组件 (Response, 异常，工具类)
+│   │   ├── config/         # 配置类 (Redis, AI, Security, Memory)
 │   │   ├── controller/     # REST API 控制器
-│   │   ├── service/        # 业务逻辑层
-│   │   ├── repository/    # 数据访问层
+│   │   ├── service/        # 业务逻辑层 (AI, Diary, LifeGraph, Memory)
+│   │   ├── repository/     # 数据访问层
 │   │   ├── pojo/           # 实体类与 DTO
-│   │   └── monitor/       # 监控模块
-│   └── resources/         # 配置与模板
-├── frontend/              # React 前端
+│   │   ├── grpc/           # gRPC 服务实现 (MCP 集成)
+│   │   └── monitor/        # 监控模块
+│   └── resources/          # 配置与模板
+├── frontend/               # React 前端
 │   ├── src/
-│   │   ├── pages/         # 页面组件
-│   │   ├── components/    # 通用组件
-│   │   ├── lib/           # API 与工具
-│   │   └── stores/        # 状态管理
-│   └── public/            # 静态资源
-├── mcp/                   # MCP 服务 (AI 工具集成)
-└── docs/                  # 文档 (PRD, SQL)
+│   │   ├── pages/          # 页面组件
+│   │   ├── components/     # 通用组件
+│   │   ├── lib/            # API 与工具
+│   │   └── stores/         # 状态管理
+│   └── public/             # 静态资源
+├── mcp/                    # MCP 服务 (AI 工具集成)
+│   ├── proto/              # Protocol Buffers 定义
+│   └── internal/           # Go 服务实现
+│       ├── grpc/           # gRPC 客户端
+│       └── tools/          # MCP 工具实现
+└── docs/                   # 文档 (PRD, SQL, API)
 ```
 
 ---
@@ -147,11 +154,36 @@ export EMBEDDING_MODEL_APIKEY="your-api-key"
 export EMBEDDING_MODEL_BASEURL="https://api.siliconflow.cn/v1"
 export EMBEDDING_MODEL_NAME="BAAI/bge-m3"
 
-# 日记加密密钥 (32字节 AES-256 Key，Base64编码)
+# 日记加密密钥 (32 字节 AES-256 Key，Base64 编码)
 export YUSI_ENCRYPTION_KEY="your-32-byte-base64-key"
+
+# MCP 服务配置（可选，用于 LLM 集成）
+export MCP_GRPC_BACKEND_TARGET="localhost:9090"
+export MCP_API_KEY="sk-ys-XXX"
 ```
 
-### 4. 启动后端
+### 4. 配置 MCP 服务（可选）
+
+MCP (Model Context Protocol) 服务允许 LLM 访问用户的记忆和日记数据：
+
+```bash
+cd mcp
+# 安装依赖
+go mod download
+# 生成 proto 文件（如修改过 proto 定义）
+./generate_proto.bat  # Windows
+./generate_proto.sh   # Linux/Mac
+# 启动服务
+go run server.go
+```
+
+MCP 服务默认端口：`11611`
+
+**MCP 提供的工具**：
+- `diarySearch`: 搜索日记内容
+- `memorySearch`: 搜索记忆（包括中期记忆和短期对话上下文）
+
+### 5. 启动后端
 
 ```bash
 ./mvnw spring-boot:run
@@ -206,6 +238,8 @@ docker build -t yusi-frontend .
 | 日记 | GET | `/api/diary/list` | 获取日记列表 |
 | 日记 | POST | `/api/diary` | 写日记 |
 | 日记 | POST | `/api/ai/chat/stream` | AI 对话 (流式) |
+| 记忆 | GET | `/api/memory/config` | 获取记忆配置信息 (Admin) |
+| 记忆 | POST | `/api/memory/summarize` | 手动触发中期记忆总结 (Admin) |
 | 情景室 | POST | `/api/room/create` | 创建情景房间 |
 | 情景室 | POST | `/api/room/join` | 加入房间 |
 | 情景室 | POST | `/api/room/submit` | 提交叙事 |
@@ -215,6 +249,51 @@ docker build -t yusi-frontend .
 | 匿名聊天 | POST | `/api/soul/chat/send` | 发送消息 |
 | 人生图谱 | GET | `/api/lifegraph/emotions` | 情感时间线 |
 | 人生图谱 | GET | `/api/lifegraph/communities` | 社区洞察 |
+| MCP | gRPC | `localhost:9090` | MCP 扩展服务 (memorySearch, diarySearch) |
+
+---
+
+## 记忆系统架构
+
+Yusi 采用分层记忆架构，模拟人类的记忆机制：
+
+### 记忆分层
+
+| 层级 | 存储内容 | 保留时长 | 存储方式 | 触发机制 |
+|------|---------|---------|---------|---------|
+| **短期记忆** | 当前会话对话历史 | 会话结束 | Redis + LangChain4j | 自动维护，默认 50 条消息窗口 |
+| **中期记忆** | 近期重要事件摘要 | 30 天 | MySQL + Milvus 向量检索 | 定时任务扫描，满足时间间隔 (1h) 和消息数量 (50 条) 时触发 AI 总结 |
+| **长期记忆** | 人生图谱、关键记忆节点 | 永久 | MySQL + 图谱 | 从日记和中期记忆中抽取实体关系 |
+
+### 中期记忆总结机制
+
+系统每 5 分钟扫描一次，当满足以下条件时触发总结：
+1. 用户最后一次对话时间超过 1 小时
+2. 未总结的消息数量达到 50 条（可配置）
+
+总结流程：
+- 调用 AI 对消息窗口进行语义压缩
+- 生成结构化的中期记忆存储
+- 标记已总结的消息并记录时间
+
+### MCP 记忆搜索
+
+通过 MCP 协议提供统一的记忆搜索接口：
+
+```bash
+# MCP 工具调用示例
+{
+  "tool": "memorySearch",
+  "arguments": {
+    "query": "我最近做了什么重要的决定？",
+    "maxResults": 10
+  }
+}
+```
+
+返回结果包含：
+- **MID_TERM_MEMORY**: AI 总结的中期记忆（向量检索）
+- **SHORT_TERM_CONTEXT**: 最近的对话上下文（按时间排序）
 
 ---
 
@@ -240,6 +319,42 @@ public Result sendMessage(...) { ... }
 - `LimitType.IP`：针对来源 IP 限流
 - `LimitType.USER`：针对用户 ID 限流
 - `LimitType.DEFAULT`：全局限流
+
+---
+
+## 配置管理
+
+### 记忆系统配置
+
+在 `application-dev.yml` 中配置记忆相关参数：
+
+```yaml
+yusi:
+  memory:
+    # 短期记忆上下文窗口大小（消息条数）
+    context-window-size: 50
+    # 中期记忆总结时间间隔（毫秒）
+    mid-term-summary-interval: 3600000  # 1 小时
+    # 中期记忆触发扫描 Cron 表达式
+    mid-term-scan-cron: "0 */5 * * * ?"  # 每 5 分钟
+```
+
+### MCP 服务配置
+
+在 `mcp/config.yaml` 中配置 MCP 服务：
+
+```yaml
+server:
+  port: 11611
+  env: "dev"
+  
+grpc:
+  backend_target: "localhost:9090"  # Java 后端 gRPC 地址
+  api_key: "sk-ys-XXX"              # 从控制台生成的 API Key
+
+log:
+  level: "debug"
+```
 
 ---
 

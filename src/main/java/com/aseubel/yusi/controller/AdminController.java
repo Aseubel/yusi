@@ -27,9 +27,13 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
+import com.aseubel.yusi.config.MemoryConfigProperties;
 import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import groovy.util.logging.Slf4j;
 import lombok.RequiredArgsConstructor;
+
+import java.util.HashMap;
+import java.util.Map;
 
 @Auth
 @Slf4j
@@ -45,6 +49,7 @@ public class AdminController {
     private final AdminService adminService;
     private final SuggestionService suggestionService;
     private final EmbeddingBatchService embeddingBatchService;
+    private final MemoryConfigProperties memoryConfigProperties;
 
     private void checkAdminPermission() {
         String userId = UserContext.getUserId();
@@ -182,5 +187,19 @@ public class AdminController {
         checkSuperAdminPermission();
         int count = embeddingBatchService.fullSync();
         return Response.success(count);
+    }
+
+    /**
+     * 获取记忆系统配置信息
+     */
+    @GetMapping("/memory/config")
+    public Response<Map<String, Object>> getMemoryConfig() {
+        checkAdminPermission();
+        Map<String, Object> config = new HashMap<>();
+        config.put("contextWindowSize", memoryConfigProperties.getContextWindowSize());
+        config.put("midTermSummaryInterval", memoryConfigProperties.getMidTermSummaryInterval());
+        config.put("midTermSummaryIntervalMinutes", memoryConfigProperties.getMidTermSummaryInterval() / 1000 / 60);
+        config.put("midTermScanCron", memoryConfigProperties.getMidTermScanCron());
+        return Response.success(config);
     }
 }

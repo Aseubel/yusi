@@ -7,12 +7,17 @@ import com.aseubel.yusi.grpc.mcp.QueryLifeGraphRequest;
 import com.aseubel.yusi.grpc.mcp.QueryLifeGraphResponse;
 import com.aseubel.yusi.grpc.mcp.SearchDiaryRequest;
 import com.aseubel.yusi.grpc.mcp.SearchDiaryResponse;
+import com.aseubel.yusi.grpc.mcp.SearchMemoryRequest;
+import com.aseubel.yusi.grpc.mcp.SearchMemoryResponse;
+import com.aseubel.yusi.grpc.mcp.MemoryResult;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.DeveloperConfigRepository;
 import com.aseubel.yusi.repository.DiaryExtensionRepository;
 import com.aseubel.yusi.pojo.entity.DeveloperConfig;
 import com.aseubel.yusi.service.diary.DiaryService;
 import com.aseubel.yusi.service.lifegraph.LifeGraphQueryService;
+import com.aseubel.yusi.service.ai.MidTermMemorySearchService;
+import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +42,8 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
     private final DiaryExtensionRepository diaryExtensionRepository;
     private final LifeGraphQueryService lifeGraphQueryService;
     private final DeveloperConfigRepository developerConfigRepository;
+    private final MidTermMemorySearchService midTermMemorySearchService;
+    private final ChatMemoryMessageRepository chatMemoryMessageRepository;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -117,7 +124,7 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
     }
 
     @Override
-    public void queryLifeGraph(QueryLifeGraphRequest request, StreamObserver<QueryLifeGraphResponse> responseObserver) {
+    public void searchMemory(SearchMemoryRequest request, StreamObserver<SearchMemoryResponse> responseObserver) {
         try {
             String apiKey = request.getApiKey();
             String userId = getUserIdByApiKey(apiKey);
@@ -126,20 +133,61 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
             }
 
             String query = request.getQuery();
-            log.info("MCP Ext: Querying life graph for user {}, query: '{}'", userId, query);
+            int maxResults = request.getMaxResults() > 0 ? request.getMaxResults() : 10;
 
-            // Local search pulls context nodes with high score relative to the query
-            String graphResult = lifeGraphQueryService.localSearch(userId, query, 5, 50, 5);
+            log.info("MCP Ext: Searching memory for user {}, query: '{}', maxResults: {}", userId, query, maxResults);
 
-            QueryLifeGraphResponse response = QueryLifeGraphResponse.newBuilder()
-                    .setResultJson(graphResult != null ? graphResult : "")
+            List<MemoryResult> results = new ArrayList<>();
+
+            // 1. 搜索中期记忆（向量检索）
+            int midTermCount = maxResults / 2;
+            List<String> midTermMemories = midTermMemorySearchService.searchMidTermMemory(userId, query, midTermCount);
+            
+            for (int i = 0; i < midTermMemories.size(); i++) {
+                String memory = midTermMemories.get(i);
+                results.add(MemoryResult.newBuilder()
+                        .setType("MID_TERM_MEMORY")
+                        .setContent(memory)
+                        .setSourceId("mid_term_" + i)
+                        .setScore(0.9 - i * 0.05)
+                        .setCreatedAt("")
+                        .build());
+            }
+
+            // 2. 获取短期记忆上下文（最近的对话消息）
+            int shortTermCount = maxResults - results.size();
+            if (shortTermCount > 0) {
+                List<com.aseubel.yusi.pojo.entity.ChatMemoryMessage> recentMessages = 
+                        chatMemoryMessageRepository.findByMemoryIdOrderByCreatedAtDesc(userId, 
+                                org.springframework.data.domain.PageRequest.of(0, shortTermCount));
+                
+                // 反转顺序，使最新的消息在最后
+                java.util.Collections.reverse(recentMessages);
+                
+                for (int i = 0; i < recentMessages.size(); i++) {
+                    com.aseubel.yusi.pojo.entity.ChatMemoryMessage msg = recentMessages.get(i);
+                    if (!"SYSTEM".equals(msg.getRole())) {
+                        results.add(MemoryResult.newBuilder()
+                                .setType("SHORT_TERM_CONTEXT")
+                                .setContent(msg.getRole() + ": " + msg.getContent())
+                                .setSourceId(msg.getId() != null ? String.valueOf(msg.getId()) : "")
+                                .setScore(0.8 - i * 0.03)
+                                .setCreatedAt(msg.getCreatedAt() != null ? msg.getCreatedAt().format(FORMATTER) : "")
+                                .build());
+                    }
+                }
+            }
+
+            SearchMemoryResponse response = SearchMemoryResponse.newBuilder()
+                    .addAllResults(results)
                     .build();
+
             responseObserver.onNext(response);
             responseObserver.onCompleted();
 
         } catch (Exception e) {
-            log.error("MCP Ext: Error querying life graph", e);
-            responseObserver.onNext(QueryLifeGraphResponse.newBuilder()
+            log.error("MCP Ext: Error searching memory", e);
+            responseObserver.onNext(SearchMemoryResponse.newBuilder()
                     .setErrorMessage(e.getMessage() != null ? e.getMessage() : "Unknown error")
                     .build());
             responseObserver.onCompleted();

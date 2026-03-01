@@ -1,5 +1,6 @@
 package com.aseubel.yusi.common.task;
 
+import com.aseubel.yusi.config.MemoryConfigProperties;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.ai.MemoryCompressionService;
@@ -23,23 +24,25 @@ public class MemoryScheduledTasks {
 
     private final UserRepository userRepository;
     private final MemoryCompressionService memoryCompressionService;
+    private final MemoryConfigProperties memoryConfigProperties;
 
     /**
-     * 每天凌晨 3 点执行记忆压缩任务
+     * 定期扫描并执行中期记忆总结
+     * 使用配置文件中的 Cron 表达式
      */
-    @Scheduled(cron = "0 0 3 * * ?")
-    public void compressMemoriesDaily() {
-        log.info("Starting daily memory compression task...");
-        List<User> activeUsers = userRepository.findAll(); // 简单起见，遍历所有用户。实际生产中可能需要只查近期活跃用户
+    @Scheduled(cron = "#{@memoryConfigProperties.midTermScanCron}")
+    public void scanAndSummarizeMidTermMemory() {
+        log.info("Starting mid-term memory scan task...");
+        List<User> activeUsers = userRepository.findAll();
 
         for (User user : activeUsers) {
             try {
-                // 读取最近 50 条消息进行提取，这可以作为一个配置项
-                memoryCompressionService.compressRecentMemory(user.getUserId(), 50);
+                memoryCompressionService.checkAndSummarizeMidTermMemory(user.getUserId());
             } catch (Exception e) {
-                log.error("Error compressing memory for user: {}", user.getUserId(), e);
+                log.error("Error summarizing mid-term memory for user: {}", user.getUserId(), e);
             }
         }
-        log.info("Finished daily memory compression task.");
+        log.info("Finished mid-term memory scan task.");
     }
+
 }

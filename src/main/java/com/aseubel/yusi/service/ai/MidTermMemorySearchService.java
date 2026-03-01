@@ -7,6 +7,7 @@ import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
 import dev.langchain4j.store.embedding.EmbeddingSearchResult;
 import dev.langchain4j.store.embedding.filter.Filter;
 import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -22,20 +23,12 @@ import com.aseubel.yusi.pojo.entity.MidTermMemory;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class MidTermMemorySearchService {
 
     private final MilvusEmbeddingStore midTermMemoryStore;
     private final EmbeddingModel embeddingModel;
     private final MidTermMemoryRepository midTermMemoryRepository;
-
-    public MidTermMemorySearchService(
-            @Qualifier("midTermMemoryStore") MilvusEmbeddingStore midTermMemoryStore,
-            EmbeddingModel embeddingModel,
-            MidTermMemoryRepository midTermMemoryRepository) {
-        this.midTermMemoryStore = midTermMemoryStore;
-        this.embeddingModel = embeddingModel;
-        this.midTermMemoryRepository = midTermMemoryRepository;
-    }
 
     /**
      * 搜索中期记忆（向量检索）

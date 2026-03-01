@@ -11,8 +11,8 @@ service McpExtensionService {
   // Searches diaries by keyword and time range
   rpc SearchDiary(SearchDiaryRequest) returns (SearchDiaryResponse) {}
   
-  // Queries the life graph
-  rpc QueryLifeGraph(QueryLifeGraphRequest) returns (QueryLifeGraphResponse) {}
+  // Searches memories including mid-term memories and short-term conversation context
+  rpc SearchMemory(SearchMemoryRequest) returns (SearchMemoryResponse) {}
 }
 
 message SearchDiaryRequest {
@@ -44,4 +44,23 @@ message QueryLifeGraphRequest {
 message QueryLifeGraphResponse {
   string result_json = 1;
   string error_message = 2;
+}
+
+message SearchMemoryRequest {
+  string api_key = 1;
+  string query = 2;
+  int32 max_results = 3;
+}
+
+message SearchMemoryResponse {
+  repeated MemoryResult results = 1;
+  string error_message = 2;
+}
+
+message MemoryResult {
+  string type = 1;  // MID_TERM_MEMORY or SHORT_TERM_CONTEXT
+  string content = 2;
+  string source_id = 3;  // memory id or message id
+  double score = 4;      // relevance score
+  string created_at = 5; // creation time
 }

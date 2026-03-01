@@ -386,14 +386,17 @@ CREATE TABLE `suggestion` (
 -- Chat Memory Storage
 DROP TABLE IF EXISTS `chat_memory_message`;
 CREATE TABLE IF NOT EXISTS `chat_memory_message` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `memory_id` varchar(64) NOT NULL COMMENT '记忆ID (通常为 userId)',
+  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+  `memory_id` varchar(64) NOT NULL COMMENT '记忆 ID (通常为 userId)',
   `role` varchar(30) NOT NULL COMMENT '消息角色 (USER, AI, SYSTEM, TOOL_EXECUTION_RESULT)',
   `content` text NOT NULL COMMENT '消息内容',
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  `is_summarized` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已总结为中期记忆',
+  `summarized_at` datetime DEFAULT NULL COMMENT '总结时间',
   PRIMARY KEY (`id`),
-  KEY `idx_memory_id_created` (`memory_id`, `created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI对话记忆存储表';
+  KEY `idx_memory_id_created` (`memory_id`, `created_at`),
+  KEY `idx_memory_id_summarized` (`memory_id`, `is_summarized`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI 对话记忆存储表';
 
 -- Life Graph Merge Judgment - 实体合并判断记录
 -- 用于记录已分析过的候选对，避免重复调用 LLM

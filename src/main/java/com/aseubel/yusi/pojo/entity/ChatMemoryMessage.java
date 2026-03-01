@@ -30,4 +30,11 @@ public class ChatMemoryMessage {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    @Column(name = "is_summarized", nullable = false)
+    @Builder.Default
+    private Boolean isSummarized = false;
+
+    @Column(name = "summarized_at")
+    private LocalDateTime summarizedAt;
 }

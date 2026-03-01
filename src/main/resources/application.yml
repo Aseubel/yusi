@@ -3,3 +3,13 @@ spring:
     name: yusi
   profiles:
     active: dev
+
+# 记忆系统配置
+yusi:
+  memory:
+    # 上下文记忆窗口大小（短期记忆的消息条数）
+    context-window-size: 50
+    # 中期记忆总结间隔（毫秒，默认 1 小时）
+    mid-term-summary-interval: 3600000
+    # 中期记忆触发扫描的 Cron 表达式（默认每 5 分钟执行一次）
+    mid-term-scan-cron: "0 */5 * * * ?"
