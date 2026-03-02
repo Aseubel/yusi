@@ -84,7 +84,10 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         Collections.reverse(entities);
         // 转换为 ChatMessage 列表
         List<ChatMessage> messages = entities.stream()
-                .map(this::toChatMessage)
+                .map(entity -> {
+                    ChatMessage msg = toChatMessage(entity);
+                    return enhanceChatMessage(msg, entity);
+                })
                 .collect(Collectors.toList());
         // 放到缓存下次快速加载
         redisService.setValue(cacheKey, messagesToJson(messages), REDIS_TTL_MS);
@@ -187,7 +190,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             // 统一使用 JSON 反序列化
             List<ChatMessage> deserialized = messagesFromJson(content);
             if (!deserialized.isEmpty()) {
-                return enhanceChatMessage(deserialized.get(0), entity);
+                return deserialized.get(0);
             }
         } catch (Exception e) {
             log.warn("Failed to deserialize message, falling back to simple text: {}", e.getMessage());
