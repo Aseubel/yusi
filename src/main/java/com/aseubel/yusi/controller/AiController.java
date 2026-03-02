@@ -6,14 +6,13 @@ import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.ratelimit.LimitType;
 import com.aseubel.yusi.common.exception.AiLockException;
 import com.aseubel.yusi.common.ratelimit.RateLimiter;
+import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.config.ai.PersistentChatMemoryStore;
+import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.service.ai.AiLockService;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.github.houbb.sensitive.word.core.SensitiveWordHelper;
 
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.ChatMessage;
-import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.service.TokenStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,10 +42,10 @@ public class AiController {
     private AiLockService aiLockService;
 
     @Autowired
-    private PersistentChatMemoryStore chatMemoryStore;
+    private ChatMemoryMessageRepository chatMemoryMessageRepository;
 
     private final ThreadPoolTaskExecutor threadPoolExecutor;
-    private static final List<String> DEFAULT_RESPONSES = List.of("抱歉哦，小予不能回答你这句话，说点别的吧", "哼，你在教我做事呀，我才不要变成那样呢～");
+    private static final List<String> DEFAULT_RESPONSES = List.of("抱歉哦，小予不能回答你这句话，说点别的吧");
 
     /**
      * 获取聊天历史记录
@@ -55,16 +54,15 @@ public class AiController {
     @GetMapping("/chat/history")
     public Response<List<Map<String, String>>> getChatHistory() {
         String userId = UserContext.getUserId();
-        List<ChatMessage> messages = chatMemoryStore.getMessages(userId);
+        // 直接从数据库获取原始消息记录，避免经过 ChatMemoryStore 的增强逻辑
+        List<ChatMemoryMessage> messages = 
+                chatMemoryMessageRepository.findByMemoryIdOrderByCreatedAtAsc(userId);
 
         List<Map<String, String>> history = messages.stream()
-                .filter(msg -> msg instanceof UserMessage || msg instanceof AiMessage)
+                .filter(msg -> "USER".equals(msg.getRole()) || "AI".equals(msg.getRole()))
                 .map(msg -> {
-                    String role = msg instanceof UserMessage ? "user" : "assistant";
-                    String content = msg instanceof UserMessage
-                            ? ((UserMessage) msg).singleText()
-                            : ((AiMessage) msg).text();
-                    return Map.of("role", role, "content", content != null ? content : "");
+                    String role = "USER".equals(msg.getRole()) ? "user" : "assistant";
+                    return Map.of("role", role, "content", msg.getContent() != null ? msg.getContent() : "");
                 })
                 .collect(Collectors.toList());
 
