@@ -95,11 +95,13 @@ public class AiController {
                     return;
                 }
 
+                String sandwichContent = String.format(PersistentChatMemoryStore.SANDWITCH_TEMPLATE, message);
+
                 // 在异步线程中设置用户上下文，确保 Tool 能够获取到正确的 userId
                 UserContext.setUserId(userId);
 
                 // 使用单例 Assistant，通过 userId 作为 memoryId 实现用户隔离
-                TokenStream tokenStream = diaryAssistant.chat(userId, message);
+                TokenStream tokenStream = diaryAssistant.chat(userId, sandwichContent);
                 tokenStream
                         .onPartialResponse(token -> {
                             try {

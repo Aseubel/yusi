@@ -36,8 +36,6 @@ public class ContextBuilderService {
 
     private static final String CONTEXT_START = "<context>";
     private static final String CONTEXT_END = "</context>";
-    private static final String CURRENT_TIME_START = "<current_time>";
-    private static final String CURRENT_TIME_END = "</current_time>";
     private static final String USER_PROFILE_START = "<user_profile>";
     private static final String USER_PROFILE_END = "</user_profile>";
     private static final String USER_ID_START = "<user_id>";
@@ -73,8 +71,6 @@ public class ContextBuilderService {
         StringBuilder systemMessage = new StringBuilder();
         systemMessage.append(basePrompt).append("\n\n");
         systemMessage.append(CONTEXT_START).append("\n");
-        systemMessage.append("    ").append(CURRENT_TIME_START).append(DateUtil.now()).append(CURRENT_TIME_END)
-                .append("\n");
 
         injectUserProfile(systemMessage, userId);
         injectMemoryGuidelines(systemMessage);
