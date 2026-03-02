@@ -17,6 +17,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static dev.langchain4j.data.message.ChatMessageDeserializer.messagesFromJson;
@@ -228,9 +230,13 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     private ChatMessage removeEnhanceContent(ChatMessage chatMessage) {
         if (chatMessage instanceof UserMessage userMessage) {
             String text = userMessage.singleText();
-
-            text = text.replaceAll("<user_input>|</user_input>", "");
-
+            // 移除 remind
+            Pattern pattern = Pattern.compile("<user_input>(.+?)</user_input>");
+            Matcher matcher = pattern.matcher(text);
+            if (matcher.find()) {
+                text = matcher.group(1);
+            }
+            // 移除时间
             int timeIndex = text.lastIndexOf(TIME_PREFIX);
             if (timeIndex != -1) {
                 // 只截取 Time 标记之前的内容
