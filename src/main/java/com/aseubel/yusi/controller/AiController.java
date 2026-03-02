@@ -13,6 +13,8 @@ import com.aseubel.yusi.service.ai.AiLockService;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.github.houbb.sensitive.word.core.SensitiveWordHelper;
 
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.service.TokenStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,6 +46,9 @@ public class AiController {
     @Autowired
     private ChatMemoryMessageRepository chatMemoryMessageRepository;
 
+    @Autowired
+    private PersistentChatMemoryStore chatMemoryStore;
+
     private final ThreadPoolTaskExecutor threadPoolExecutor;
     private static final List<String> DEFAULT_RESPONSES = List.of("抱歉哦，小予不能回答你这句话，说点别的吧");
 
@@ -59,10 +64,14 @@ public class AiController {
                 chatMemoryMessageRepository.findByMemoryIdOrderByCreatedAtAsc(userId);
 
         List<Map<String, String>> history = messages.stream()
-                .filter(msg -> "USER".equals(msg.getRole()) || "AI".equals(msg.getRole()))
+                .map(chatMemoryStore::toChatMessage)
+                .filter(msg -> msg instanceof UserMessage || msg instanceof AiMessage)
                 .map(msg -> {
-                    String role = "USER".equals(msg.getRole()) ? "user" : "assistant";
-                    return Map.of("role", role, "content", msg.getContent() != null ? msg.getContent() : "");
+                    String role = msg instanceof UserMessage ? "user" : "assistant";
+                    String content = msg instanceof UserMessage
+                            ? ((UserMessage) msg).singleText()
+                            : ((AiMessage) msg).text();
+                    return Map.of("role", role, "content", content != null ? content : "");
                 })
                 .collect(Collectors.toList());
 

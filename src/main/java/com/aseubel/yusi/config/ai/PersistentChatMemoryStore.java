@@ -175,7 +175,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
      * 从数据库实体反序列化为 ChatMessage
      * 所有消息都使用 JSON 反序列化
      */
-    private ChatMessage toChatMessage(ChatMemoryMessage entity) {
+    public ChatMessage toChatMessage(ChatMemoryMessage entity) {
         String content = entity.getContent();
 
         if (content == null || content.isEmpty()) {
