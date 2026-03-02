@@ -4,9 +4,11 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.pojo.entity.UserPersona;
+import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.repository.UserRepository;
-import com.aseubel.yusi.service.ai.MidTermMemorySearchService;
 import com.aseubel.yusi.service.ai.PromptService;
+import com.aseubel.yusi.service.user.UserPersonaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
@@ -45,15 +47,15 @@ public class ContextBuilderService {
     private static final String MEMORY_GUIDELINES_START = "<memory_guidelines>";
     private static final String MEMORY_GUIDELINES_END = "</memory_guidelines>";
     private static final String MEMORY_GUIDELINES_CONTENT = """
-            你拥有完整的长期记忆能力。请务必：
-            1. 涉及过往经历或回忆 -> 使用 [searchDiary] 工具检索 <memory_fragments>
-            2. 涉及人际关系或实体背景 -> 使用 [searchLifeGraph] 工具查询 <graph_relations>
-            3. 综合检索结果和对话历史进行回答。
+            你拥有统一的记忆检索工具 [searchMemories]。
+            当涉及过往经历、人际关系、特定事实或之前的对话细节时，请务必调用 [searchMemories] 进行查询。
+            该工具会自动聚合日记、图谱和对话记忆。
             """;
 
     private final UserRepository userRepository;
     private final PromptService promptService;
-    private final MidTermMemorySearchService midTermMemorySearchService;
+    private final ChatMemoryMessageRepository chatMemoryMessageRepository;
+    private final UserPersonaService userPersonaService;
 
     /**
      * 构建 System Message 内容
@@ -75,8 +77,8 @@ public class ContextBuilderService {
                 .append("\n");
 
         injectUserProfile(systemMessage, userId);
-        injectMidTermMemories(systemMessage, userId);
         injectMemoryGuidelines(systemMessage);
+        injectRelationshipStage(systemMessage, userId);
 
         systemMessage.append(CONTEXT_END).append("\n");
 
@@ -113,19 +115,27 @@ public class ContextBuilderService {
             sb.append("        ").append(NICKNAME_START).append(user.getUserName()).append(NICKNAME_END).append("\n");
         }
 
-        sb.append("    ").append(USER_PROFILE_END).append("\n");
-    }
-
-    /**
-     * 注入近期记忆（中期记忆）
-     */
-    private void injectMidTermMemories(StringBuilder sb, String userId) {
-        String midTermMemories = midTermMemorySearchService.getRecentMemories(userId, 5);
-        if (StrUtil.isNotBlank(midTermMemories)) {
-            sb.append("    <mid_term_memories>\n");
-            sb.append("        ").append(midTermMemories.replace("\n", "\n        ")).append("\n");
-            sb.append("    </mid_term_memories>\n");
+        // 注入用户画像/偏好 (UserPersona)
+        UserPersona persona = userPersonaService.getUserPersona(userId);
+        if (persona != null) {
+            if (StrUtil.isNotBlank(persona.getPreferredName())) {
+                sb.append("        ").append("<preferred_name>").append(persona.getPreferredName()).append("</preferred_name>").append("\n");
+            }
+            if (StrUtil.isNotBlank(persona.getLocation())) {
+                sb.append("        ").append("<location>").append(persona.getLocation()).append("</location>").append("\n");
+            }
+            if (StrUtil.isNotBlank(persona.getInterests())) {
+                sb.append("        ").append("<interests>").append(persona.getInterests()).append("</interests>").append("\n");
+            }
+            if (StrUtil.isNotBlank(persona.getTone())) {
+                sb.append("        ").append("<tone_preference>").append(persona.getTone()).append("</tone_preference>").append("\n");
+            }
+            if (StrUtil.isNotBlank(persona.getCustomInstructions())) {
+                sb.append("        ").append("<custom_instructions>").append(persona.getCustomInstructions()).append("</custom_instructions>").append("\n");
+            }
         }
+
+        sb.append("    ").append(USER_PROFILE_END).append("\n");
     }
 
     /**
@@ -135,6 +145,22 @@ public class ContextBuilderService {
         sb.append("    ").append(MEMORY_GUIDELINES_START).append("\n");
         sb.append("        ").append(MEMORY_GUIDELINES_CONTENT);
         sb.append("    ").append(MEMORY_GUIDELINES_END).append("\n");
+    }
+
+    // 在 ContextBuilderService 中注入关系阶段
+    private void injectRelationshipStage(StringBuilder sb, String userId) {
+        // 获取用户的对话轮数 (以用户发言次数作为轮数)
+        long chatTurns = chatMemoryMessageRepository.countByMemoryIdAndRole(userId, "user");
+        
+        sb.append("    <relationship_stage>\n");
+        if (chatTurns < 10) {
+            sb.append("        你们刚刚认识，这是前几次交流。请保持友好、好奇但克制的距离感，不要假装你们有很久的过去，不要凭空捏造回忆。\n");
+        } else if (chatTurns < 50) {
+            sb.append("        你们已经比较熟悉了，可以像普通朋友一样自然交流。\n");
+        } else {
+            sb.append("        你们是非常亲密的灵魂知己，拥有深厚的共同记忆，可以极其自然、默契地互动。\n");
+        }
+        sb.append("    </relationship_stage>\n");
     }
 
     /**

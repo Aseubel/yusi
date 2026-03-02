@@ -38,4 +38,8 @@ public interface ChatMemoryMessageRepository extends JpaRepository<ChatMemoryMes
      */
     @Query("SELECT MAX(m.createdAt) FROM ChatMemoryMessage m WHERE m.memoryId = :memoryId")
     LocalDateTime findLastMessageTime(String memoryId);
+
+    long countByMemoryId(String memoryId);
+
+    long countByMemoryIdAndRole(String memoryId, String role);
 }

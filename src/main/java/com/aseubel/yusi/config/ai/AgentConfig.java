@@ -2,6 +2,7 @@ package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.ai.MemorySearchTool;
+import com.aseubel.yusi.service.ai.UserPersonaTool;
 import com.aseubel.yusi.service.ai.PromptService;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
@@ -61,7 +62,8 @@ public class AgentConfig {
         AiServices<Assistant> builder = AiServices.builder(Assistant.class)
                 .streamingChatModel((StreamingChatModel) applicationContext.getBean("streamingChatModel"))
                 .tools(
-                        applicationContext.getBean(MemorySearchTool.class))
+                        applicationContext.getBean(MemorySearchTool.class),
+                        applicationContext.getBean(UserPersonaTool.class))
                 .chatMemoryProvider((ChatMemoryProvider) applicationContext.getBean("chatMemoryProvider"));
 
         // 如果 MCP 启用，添加 MCP Tool Provider
