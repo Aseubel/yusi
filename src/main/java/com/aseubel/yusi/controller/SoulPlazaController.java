@@ -3,12 +3,16 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.soulplaza.ResonateRequest;
 import com.aseubel.yusi.pojo.dto.soulplaza.SubmitCardRequest;
 import com.aseubel.yusi.pojo.dto.soulplaza.UpdateCardRequest;
 import com.aseubel.yusi.pojo.entity.SoulCard;
 import com.aseubel.yusi.pojo.entity.SoulResonance;
 import com.aseubel.yusi.service.plaza.SoulPlazaService;
+import com.github.houbb.sensitive.word.core.SensitiveWordHelper;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -26,6 +30,12 @@ public class SoulPlazaController {
     @Auth
     @PostMapping("/submit")
     public Response<SoulCard> submit(@RequestBody SubmitCardRequest request) {
+        // 检查消息是否包含敏感词
+        if (SensitiveWordHelper.contains(request.getContent())) {
+            // 包含敏感词，返回默认响应
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "内容包含敏感词！");
+        }
+
         SoulCard card = plazaService.submitToPlaza(
                 UserContext.getUserId(),
                 request.getContent(),

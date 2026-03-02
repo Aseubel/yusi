@@ -9,6 +9,8 @@ import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.config.ai.PersistentChatMemoryStore;
 import com.aseubel.yusi.service.ai.AiLockService;
 import com.aseubel.yusi.service.diary.Assistant;
+import com.github.houbb.sensitive.word.core.SensitiveWordHelper;
+
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -44,6 +46,7 @@ public class AiController {
     private PersistentChatMemoryStore chatMemoryStore;
 
     private final ThreadPoolTaskExecutor threadPoolExecutor;
+    private static final List<String> DEFAULT_RESPONSES = List.of("抱歉哦，小予不能回答你这句话，说点别的吧", "哼，你在教我做事呀，我才不要变成那样呢～");
 
     /**
      * 获取聊天历史记录
@@ -84,6 +87,14 @@ public class AiController {
 
         threadPoolExecutor.execute(() -> {
             try {
+                // 检查消息是否包含敏感词
+                if (SensitiveWordHelper.contains(message)) {
+                    // 包含敏感词，返回随机默认响应
+                    emitter.send(SseEmitter.event().data(DEFAULT_RESPONSES.get((int) (Math.random() * DEFAULT_RESPONSES.size()))));
+                    emitter.complete();
+                    return;
+                }
+
                 // 在异步线程中设置用户上下文，确保 Tool 能够获取到正确的 userId
                 UserContext.setUserId(userId);
 
