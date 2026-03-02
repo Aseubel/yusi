@@ -15,8 +15,7 @@ import com.aseubel.yusi.repository.DeveloperConfigRepository;
 import com.aseubel.yusi.repository.DiaryExtensionRepository;
 import com.aseubel.yusi.pojo.entity.DeveloperConfig;
 import com.aseubel.yusi.service.diary.DiaryService;
-import com.aseubel.yusi.service.lifegraph.LifeGraphQueryService;
-import com.aseubel.yusi.service.ai.MidTermMemorySearchService;
+import com.aseubel.yusi.service.ai.MemorySearchTool;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
@@ -40,9 +39,8 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
 
     private final DiaryService diaryService;
     private final DiaryExtensionRepository diaryExtensionRepository;
-    private final LifeGraphQueryService lifeGraphQueryService;
+    private final MemorySearchTool memorySearchTool;
     private final DeveloperConfigRepository developerConfigRepository;
-    private final MidTermMemorySearchService midTermMemorySearchService;
     private final ChatMemoryMessageRepository chatMemoryMessageRepository;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
@@ -139,31 +137,29 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
 
             List<MemoryResult> results = new ArrayList<>();
 
-            // 1. 搜索中期记忆（向量检索）
-            int midTermCount = maxResults / 2;
-            List<String> midTermMemories = midTermMemorySearchService.searchMidTermMemory(userId, query, midTermCount);
-            
-            for (int i = 0; i < midTermMemories.size(); i++) {
-                String memory = midTermMemories.get(i);
+            // 1. Long-term Memory Search (Graph + Diary + MidTerm)
+            String longTermMemory = memorySearchTool.searchMemories(userId, query, null, null);
+            if (StrUtil.isNotBlank(longTermMemory)) {
                 results.add(MemoryResult.newBuilder()
-                        .setType("MID_TERM_MEMORY")
-                        .setContent(memory)
-                        .setSourceId("mid_term_" + i)
-                        .setScore(0.9 - i * 0.05)
-                        .setCreatedAt("")
+                        .setType("LONG_TERM_MEMORY")
+                        .setContent(longTermMemory)
+                        .setScore(1.0)
                         .build());
             }
 
-            // 2. 获取短期记忆上下文（最近的对话消息）
+            // 2. ShortTerm Context (Recent Messages)
             int shortTermCount = maxResults - results.size();
+            // If longTermMemory takes 1 slot, we have maxResults - 1 slots left for shortTermCount
+            // Assuming maxResults is reasonable (e.g. 10), we will fetch some recent messages.
+            
             if (shortTermCount > 0) {
-                List<com.aseubel.yusi.pojo.entity.ChatMemoryMessage> recentMessages = 
-                        chatMemoryMessageRepository.findByMemoryIdOrderByCreatedAtDesc(userId, 
+                List<com.aseubel.yusi.pojo.entity.ChatMemoryMessage> recentMessages =
+                        chatMemoryMessageRepository.findByMemoryIdOrderByCreatedAtDesc(userId,
                                 org.springframework.data.domain.PageRequest.of(0, shortTermCount));
-                
-                // 反转顺序，使最新的消息在最后
+
+                // Reverse order so latest messages are at the end
                 java.util.Collections.reverse(recentMessages);
-                
+
                 for (int i = 0; i < recentMessages.size(); i++) {
                     com.aseubel.yusi.pojo.entity.ChatMemoryMessage msg = recentMessages.get(i);
                     if (!"SYSTEM".equals(msg.getRole())) {
