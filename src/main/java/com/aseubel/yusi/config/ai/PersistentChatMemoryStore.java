@@ -240,10 +240,9 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             int timeIndex = text.lastIndexOf(TIME_PREFIX);
             if (timeIndex != -1) {
                 // 只截取 Time 标记之前的内容
-                String cleanText = text.substring(0, timeIndex);
-                return UserMessage.from(cleanText);
+                text = text.substring(0, timeIndex);
             }
-            return userMessage; // 没有增强标记，原样返回
+            return UserMessage.from(text);
         }
         return chatMessage;
     }
