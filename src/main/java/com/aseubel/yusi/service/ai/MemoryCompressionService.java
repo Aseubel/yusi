@@ -62,7 +62,7 @@ public class MemoryCompressionService {
      */
     @Transactional
     public void checkAndSummarizeMidTermMemory(String memoryId) {
-        log.info("Checking mid-term memory summary for user: {}", memoryId);
+        log.debug("Checking mid-term memory summary for user: {}", memoryId);
 
         // 获取未总结的消息数量
         long unsummarizedCount = messageRepository.countUnsummarizedMessages(memoryId);
