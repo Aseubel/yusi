@@ -1,18 +1,15 @@
 package com.aseubel.yusi.service.lifegraph;
 
-import com.aseubel.yusi.common.disruptor.Element;
-import com.aseubel.yusi.common.disruptor.EventType;
-import com.aseubel.yusi.common.repochain.Processor;
-import com.aseubel.yusi.common.repochain.ProcessorChain;
-import com.aseubel.yusi.common.repochain.Result;
+import com.aseubel.yusi.common.event.DiaryChangedEvent;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.LifeGraphTask;
 import com.aseubel.yusi.repository.LifeGraphTaskRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -21,36 +18,29 @@ import java.util.List;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class LifeGraphTaskCreator implements Processor<Element> {
+public class LifeGraphTaskCreator {
 
     private final LifeGraphTaskRepository taskRepository;
     private final LifeGraphTaskBatchService batchService;
     private final ThreadPoolTaskExecutor threadPoolExecutor;
 
-    @Override
-    @Transactional(propagation = Propagation.REQUIRED)
-    public Result<Element> process(Element data, int index, ProcessorChain<Element> chain) {
-        if (data.getEventType() != EventType.DIARY_WRITE
-                && data.getEventType() != EventType.DIARY_MODIFY
-                && data.getEventType() != EventType.DIARY_DELETE) {
-            return chain.process(data, index);
-        }
+    @Async
+    @EventListener
+    @Transactional
+    public void onDiaryChanged(DiaryChangedEvent event) {
+        Diary diary = event.getDiary();
 
-        Diary diary = (Diary) data.getData();
-
-        switch (data.getEventType()) {
-            case DIARY_WRITE:
-            case DIARY_MODIFY:
+        switch (event.getType()) {
+            case WRITE:
+            case MODIFY:
                 createUpsertTask(diary);
                 break;
-            case DIARY_DELETE:
+            case DELETE:
                 createDeleteTask(diary);
                 break;
             default:
                 break;
         }
-
-        return chain.process(data, index);
     }
 
     private void createUpsertTask(Diary diary) {

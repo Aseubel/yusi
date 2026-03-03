@@ -2,8 +2,7 @@ package com.aseubel.yusi.controller;
 
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
-import com.aseubel.yusi.common.disruptor.DisruptorProducer;
-import com.aseubel.yusi.common.disruptor.EventType;
+import com.aseubel.yusi.common.event.DiaryChangedEvent;
 import com.aseubel.yusi.pojo.dto.ai.DiaryChatRequest;
 import com.aseubel.yusi.pojo.dto.diary.DiaryFootprint;
 import com.aseubel.yusi.pojo.dto.diary.EditDiaryRequest;
@@ -36,8 +35,8 @@ public class DiaryController {
     @Autowired
     private DiaryService diaryService;
 
-    @Resource
-    private DisruptorProducer disruptorProducer;
+    @Autowired
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @GetMapping("/list")
     public Response<PagedModel<EntityModel<Diary>>> getDiaryList(
@@ -57,21 +56,21 @@ public class DiaryController {
     @PostMapping
     public Response<?> writeDiary(@RequestBody WriteDiaryRequest request) {
         Diary diary = diaryService.addDiary(request.toDiary());
-        disruptorProducer.publish(diary, EventType.DIARY_WRITE);
+        eventPublisher.publishEvent(new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.WRITE));
         return Response.success();
     }
 
     @PutMapping
     public Response<?> editDiary(@RequestBody EditDiaryRequest request) {
         Diary diary = diaryService.editDiary(request.toDiary());
-        disruptorProducer.publish(diary, EventType.DIARY_MODIFY);
+        eventPublisher.publishEvent(new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.MODIFY));
         return Response.success();
     }
 
     @GetMapping("/{diaryId}")
     public Response<Diary> getDiary(@PathVariable("diaryId") String diaryId) {
         Diary diary = diaryService.getDiary(diaryId);
-        disruptorProducer.publish(diary, EventType.DIARY_READ);
+        eventPublisher.publishEvent(new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.READ));
         return Response.success(diary);
     }
 
