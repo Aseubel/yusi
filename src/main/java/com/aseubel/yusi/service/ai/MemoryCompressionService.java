@@ -4,6 +4,7 @@ import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.date.DateUtil;
 
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.common.event.MessageSavedEvent;
 import com.aseubel.yusi.config.MemoryConfigProperties;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
@@ -17,14 +18,37 @@ import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationContext;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * 中期记忆压缩服务
+ * <p>
+ * 触发策略（双轨）：
+ * <ul>
+ * <li><b>主触发（事件驱动）</b>：AI 回复落库后发布
+ * {@link MessageSavedEvent}，异步监听立即判断是否需要压缩。</li>
+ * <li><b>兜底触发（定时任务）</b>：每 30 分钟扫描有未总结消息的用户，补充处理未经事件覆盖的边界情况。</li>
+ * </ul>
+ * 压缩策略（双阈值）：
+ * <ul>
+ * <li><b>硬上限</b>：未总结消息数 >= contextWindowSize * 2 时，不等冷却期强制压缩（适用于持续活跃用户）。</li>
+ * <li><b>冷却期</b>：未总结消息数 >= contextWindowSize 且距最后消息超过配置间隔时触发（适用于已停止对话用户）。</li>
+ * </ul>
+ *
+ * @author Aseubel
+ * @date 2026/03/03
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -40,53 +64,111 @@ public class MemoryCompressionService {
     private final ChatModel chatModel;
 
     private final EmbeddingModel embeddingModel;
-
     private final MemoryConfigProperties memoryConfigProperties;
-
     private final PromptManager promptManager;
+    private final AiLockService aiLockService;
 
     /**
-     * 检查并执行中期记忆总结（基于时间窗口和消息数量）
-     * 当用户最后一次对话后超过配置的时间间隔，且未总结的消息达到上下文窗口大小时触发
+     * 通过 ApplicationContext 获取自身 Spring 代理，确保 @Transactional 方法生效（避免
+     * self-invocation 绕过代理）
+     */
+    private final ApplicationContext applicationContext;
+
+    /** Redis key 前缀（与 AI 请求锁 "ai:lock:" 隔离） */
+    private static final String COMPRESS_LOCK_PREFIX = "ai:compress:";
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 事件驱动触发入口
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * 监听 {@link MessageSavedEvent}，在 AI 回复所在事务提交后异步触发压缩检查
+     * 使用 AFTER_COMMIT 确保消费方能读取到已提交的消息数据
+     */
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void onMessageSaved(MessageSavedEvent event) {
+        log.debug("Received MessageSavedEvent for memoryId: {}", event.getMemoryId());
+        checkAndSummarizeMidTermMemory(event.getMemoryId());
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 核心检查方法（定时任务与事件监听共用）
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * 检查并执行中期记忆总结（基于消息量双阈值策略）
+     * <p>
+     * 触发条件（满足其一即可）：
+     * <ol>
+     * <li>未总结消息数 >= hardLimitSize（硬上限，立即压缩）</li>
+     * <li>未总结消息数 >= contextWindowSize 且距最后消息超过配置的冷却间隔</li>
+     * </ol>
      *
      * @param memoryId 用户 ID
      */
-    @Transactional
     public void checkAndSummarizeMidTermMemory(String memoryId) {
         log.debug("Checking mid-term memory summary for user: {}", memoryId);
 
-        // 获取未总结的消息数量
         long unsummarizedCount = messageRepository.countUnsummarizedMessages(memoryId);
         int contextWindowSize = memoryConfigProperties.getContextWindowSize();
+        int hardLimitSize = memoryConfigProperties.getHardLimitSize();
 
-        if (unsummarizedCount < contextWindowSize) {
-            log.debug("User {} has {} unsummarized messages, less than context window size {}",
+        boolean trigger = false;
+
+        if (unsummarizedCount >= hardLimitSize) {
+            // 硬上限策略：持续活跃用户不等冷却期
+            log.info("Hard limit reached for user: {}. Unsummarized: {} >= hardLimit: {}",
+                    memoryId, unsummarizedCount, hardLimitSize);
+            trigger = true;
+        } else if (unsummarizedCount >= contextWindowSize) {
+            // 冷却期策略：停止对话后等待配置的时间间隔
+            LocalDateTime lastMessageTime = messageRepository.findLastMessageTime(memoryId);
+            if (lastMessageTime == null) {
+                log.debug("No messages found for user: {}", memoryId);
+                return;
+            }
+            Duration elapsed = Duration.between(lastMessageTime, LocalDateTime.now());
+            Duration interval = memoryConfigProperties.getMidTermSummaryIntervalDuration();
+            if (elapsed.compareTo(interval) >= 0) {
+                log.info("Cooldown reached for user: {}. Elapsed: {} min, Interval: {} min",
+                        memoryId, elapsed.toMinutes(), interval.toMinutes());
+                trigger = true;
+            } else {
+                log.debug("Cooldown not reached for user: {}. Elapsed: {} min < Interval: {} min",
+                        memoryId, elapsed.toMinutes(), interval.toMinutes());
+            }
+        } else {
+            log.debug("User {} has {} unsummarized messages, below contextWindowSize {}",
                     memoryId, unsummarizedCount, contextWindowSize);
+        }
+
+        if (!trigger) {
             return;
         }
 
-        // 获取最后一条消息的时间
-        LocalDateTime lastMessageTime = messageRepository.findLastMessageTime(memoryId);
-        if (lastMessageTime == null) {
-            log.debug("No messages found for user: {}", memoryId);
+        // 分布式锁防并发（key 与 AI 请求锁隔离）
+        String lockKey = COMPRESS_LOCK_PREFIX + memoryId;
+        if (!aiLockService.tryAcquireLock(lockKey)) {
+            log.debug("Compression already running for user: {}, skipping", memoryId);
             return;
         }
 
-        LocalDateTime now = LocalDateTime.now();
-        long minutesSinceLastMessage = java.time.Duration.between(lastMessageTime, now).toMinutes();
-        long summaryIntervalMinutes = memoryConfigProperties.getMidTermSummaryInterval() / 1000 / 60;
-
-        // 检查是否超过总结时间间隔
-        if (minutesSinceLastMessage < summaryIntervalMinutes) {
-            log.debug("Last message was {} minutes ago, less than summary interval {} minutes",
-                    minutesSinceLastMessage, summaryIntervalMinutes);
-            return;
+        try {
+            doSummarize(memoryId, contextWindowSize);
+        } finally {
+            aiLockService.releaseLock(lockKey);
         }
+    }
 
-        log.info("Triggering mid-term memory summary for user: {}. Unsummarized: {}, Minutes since last message: {}",
-                memoryId, unsummarizedCount, minutesSinceLastMessage);
+    // ─────────────────────────────────────────────────────────────────────────
+    // 内部实现
+    // ─────────────────────────────────────────────────────────────────────────
 
-        // 获取所有未总结的消息（从上次总结开始）
+    /**
+     * 执行实际的记忆压缩流程
+     */
+    private void doSummarize(String memoryId, int contextWindowSize) {
         List<ChatMemoryMessage> unsummarizedMessages = messageRepository
                 .findByMemoryIdAndIsSummarizedOrderByCreatedAtAsc(memoryId, false,
                         PageRequest.of(0, contextWindowSize));
@@ -96,7 +178,7 @@ public class MemoryCompressionService {
             return;
         }
 
-        // 按时间正序排列拼装对话
+        // 过滤 SYSTEM 消息，拼装对话历史
         String conversationHistory = unsummarizedMessages.stream()
                 .filter(m -> !"SYSTEM".equals(m.getRole()))
                 .map(m -> m.getRole() + ": " + m.getContent())
@@ -106,41 +188,31 @@ public class MemoryCompressionService {
         String prompt = promptTemplate + "\n\n对话记录:\n" + conversationHistory;
 
         try {
-            String summaryText = chatModel.chat(dev.langchain4j.data.message.UserMessage.from(prompt)).aiMessage()
-                    .text();
+            // Step 1: LLM 调用（事务外，避免长时间持有 DB 连接）
+            String summaryText = chatModel.chat(dev.langchain4j.data.message.UserMessage.from(prompt))
+                    .aiMessage().text();
 
             if (summaryText == null || summaryText.trim().isEmpty() || summaryText.contains("无关键信息")) {
                 log.info("No significant memory extracted for user: {}", memoryId);
-                // 即使没有提取到重要信息，也标记为已总结
-                markMessagesAsSummarized(unsummarizedMessages);
+                // 即使无关键信息，也标记为已总结，防止重复处理
+                getSelf().markMessagesAsSummarizedTx(unsummarizedMessages);
                 return;
             }
 
-            // 保存到 MySQL
-            MidTermMemory activeMemory = MidTermMemory.builder()
-                    .userId(memoryId)
-                    .summary(summaryText.trim())
-                    .importance(1.0) // 初始重要性为 1.0
-                    .createdAt(LocalDateTime.now())
-                    .updatedAt(LocalDateTime.now())
-                    .build();
+            String trimmedSummary = summaryText.trim();
 
-            activeMemory = midTermMemoryRepository.save(activeMemory);
-            log.info("Saved compressed memory to MySQL for user: {}. ID: {}", memoryId, activeMemory.getId());
+            // Step 2: MySQL 持久化 + 消息标记（同一事务）
+            Long savedMemoryId = getSelf().persistMidTermMemoryTx(memoryId, trimmedSummary, unsummarizedMessages);
 
-            // 存储到 Milvus 向量库
+            // Step 3: 计算 embedding 并存入 Milvus（事务外，不影响 DB 一致性）
             Metadata metadata = new Metadata();
             metadata.put("userId", memoryId);
-            metadata.put("memoryId", String.valueOf(activeMemory.getId()));
+            metadata.put("memoryId", String.valueOf(savedMemoryId));
             metadata.put("createdAt", DateUtil.formatDate(DateUtil.date()));
-
-            TextSegment segment = TextSegment.from(summaryText.trim(), metadata);
+            TextSegment segment = TextSegment.from(trimmedSummary, metadata);
             midTermMemoryStore.add(embeddingModel.embed(segment).content(), segment);
 
-            log.info("Saved compressed memory to Milvus for user: {}", memoryId);
-
-            // 标记消息为已总结
-            markMessagesAsSummarized(unsummarizedMessages);
+            log.info("Compressed memory saved to Milvus for user: {}", memoryId);
 
         } catch (Exception e) {
             log.error("Failed to compress memory for user: {}", memoryId, e);
@@ -148,7 +220,36 @@ public class MemoryCompressionService {
     }
 
     /**
-     * 标记消息为已总结
+     * 将 MidTermMemory 保存到 MySQL 并标记消息为已总结（同一事务）
+     *
+     * @return 新保存的 MidTermMemory ID（供 Milvus metadata 使用）
+     */
+    @Transactional
+    public Long persistMidTermMemoryTx(String memoryId, String summaryText, List<ChatMemoryMessage> messages) {
+        MidTermMemory activeMemory = MidTermMemory.builder()
+                .userId(memoryId)
+                .summary(summaryText)
+                .importance(1.0)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+        activeMemory = midTermMemoryRepository.save(activeMemory);
+        log.info("Saved compressed memory to MySQL for user: {}. ID: {}", memoryId, activeMemory.getId());
+
+        markMessagesAsSummarized(messages);
+        return activeMemory.getId();
+    }
+
+    /**
+     * 仅标记消息为已总结（无有效摘要时使用）
+     */
+    @Transactional
+    public void markMessagesAsSummarizedTx(List<ChatMemoryMessage> messages) {
+        markMessagesAsSummarized(messages);
+    }
+
+    /**
+     * 私有标记方法，仅在已有事务上下文中调用（由 @Transactional 代理方法委托）
      */
     private void markMessagesAsSummarized(List<ChatMemoryMessage> messages) {
         LocalDateTime now = LocalDateTime.now();
@@ -158,5 +259,12 @@ public class MemoryCompressionService {
         }
         messageRepository.saveAll(messages);
         log.info("Marked {} messages as summarized", messages.size());
+    }
+
+    /**
+     * 获取自身的 Spring AOP 代理实例，确保 {@code @Transactional} 方法的事务拦截生效
+     */
+    private MemoryCompressionService getSelf() {
+        return applicationContext.getBean(MemoryCompressionService.class);
     }
 }

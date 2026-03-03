@@ -4,6 +4,8 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Duration;
+
 /**
  * 记忆系统配置属性
  *
@@ -29,7 +31,22 @@ public class MemoryConfigProperties {
 
     /**
      * 中期记忆触发扫描的 Cron 表达式
-     * 默认每 5 分钟执行一次扫描
+     * 事件驱动为主触发，定时任务作兜底，默认每 30 分钟执行一次
      */
-    private String midTermScanCron = "0 */5 * * * ?";
+    private String midTermScanCron = "0 */30 * * * ?";
+
+    /**
+     * 以 Duration 形式返回中期记忆总结间隔，避免调用方手工换算毫秒
+     */
+    public Duration getMidTermSummaryIntervalDuration() {
+        return Duration.ofMillis(midTermSummaryInterval);
+    }
+
+    /**
+     * 消息量硬上限（达到此数量时不等冷却期直接触发压缩）
+     * 默认为上下文窗口大小的 2 倍
+     */
+    public int getHardLimitSize() {
+        return contextWindowSize * 2;
+    }
 }

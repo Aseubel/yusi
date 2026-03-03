@@ -31,7 +31,8 @@ public interface ChatMemoryMessageRepository extends JpaRepository<ChatMemoryMes
     /**
      * 查找指定用户未总结的消息（按创建时间升序）
      */
-    List<ChatMemoryMessage> findByMemoryIdAndIsSummarizedOrderByCreatedAtAsc(String memoryId, Boolean isSummarized, Pageable pageable);
+    List<ChatMemoryMessage> findByMemoryIdAndIsSummarizedOrderByCreatedAtAsc(String memoryId, Boolean isSummarized,
+            Pageable pageable);
 
     /**
      * 查找最后一条消息的创建时间
@@ -42,4 +43,11 @@ public interface ChatMemoryMessageRepository extends JpaRepository<ChatMemoryMes
     long countByMemoryId(String memoryId);
 
     long countByMemoryIdAndRole(String memoryId, String role);
+
+    /**
+     * 查询所有有未总结消息的 memoryId（去重）
+     * 供定时任务精准过滤，替代全用户扫描
+     */
+    @Query("SELECT DISTINCT m.memoryId FROM ChatMemoryMessage m WHERE m.isSummarized = false")
+    List<String> findMemoryIdsWithUnsummarizedMessages();
 }
