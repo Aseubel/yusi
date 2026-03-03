@@ -9,7 +9,7 @@ import com.aseubel.yusi.repository.LifeGraphEntityRepository;
 import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphMergeJudgmentRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
-import com.aseubel.yusi.service.ai.PromptService;
+import com.aseubel.yusi.service.ai.PromptManager;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphAssistant;
 import com.aseubel.yusi.service.lifegraph.dto.LifeGraphMergeSuggestion;
 import com.aseubel.yusi.service.notification.NotificationService;
@@ -38,7 +38,7 @@ public class LifeGraphMergeSuggestionService {
     private final LifeGraphRelationRepository relationRepository;
     private final LifeGraphMentionRepository mentionRepository;
     private final LifeGraphAssistant assistant;
-    private final PromptService promptService;
+    private final PromptManager promptManager;
     private final ObjectMapper objectMapper;
     private final NotificationService notificationService;
 
@@ -105,24 +105,7 @@ public class LifeGraphMergeSuggestionService {
             return List.of();
         }
 
-        // 4. 调用 LLM
-        String schemaInstruction = "\n\n请务必只输出严格的 JSON 数组，格式如下：\n" +
-                "[\n" +
-                "  {\n" +
-                "    \"merge\": \"YES或NO\",\n" +
-                "    \"reason\": \"原因说明\",\n" +
-                "    \"recommendedMasterName\": \"推荐名\"\n" +
-                "  }\n" +
-                "]";
-
-        String prompt = promptService.getPrompt(PromptKey.GRAPHRAG_MERGE_SUGGEST.getKey(), "zh-CN");
-        if (prompt == null || prompt.length() < 10) {
-            // Fallback prompt if not in DB
-            prompt = "你将获得若干“疑似重复实体”的候选对。请评估每一对候选人是否指向同一个实际事物。如果是指代同一事物，请给出是否建议合并（YES/NO）、原因、推荐保留的规范名。"
-                    + schemaInstruction;
-        } else if (!prompt.contains("\"merge\"") && !prompt.contains("recommendedMasterName")) {
-            prompt += schemaInstruction;
-        }
+        String prompt = promptManager.getPrompt(PromptKey.GRAPHRAG_MERGE_SUGGEST);
 
         String response = assistant.analyzeMergeCandidates(prompt, candidatesJson);
 

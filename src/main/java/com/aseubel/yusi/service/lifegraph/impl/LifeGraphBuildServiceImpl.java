@@ -11,9 +11,10 @@ import com.aseubel.yusi.pojo.entity.LifeGraphRelation;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.LifeGraphEntityAliasRepository;
 import com.aseubel.yusi.repository.LifeGraphEntityRepository;
+
 import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
-import com.aseubel.yusi.service.ai.PromptService;
+import com.aseubel.yusi.service.ai.PromptManager;
 import com.aseubel.yusi.service.lifegraph.LifeGraphBuildService;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphExtractor;
 import com.aseubel.yusi.service.lifegraph.dto.LifeGraphExtractionResult;
@@ -42,7 +43,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
     private final LifeGraphEntityAliasRepository aliasRepository;
     private final LifeGraphRelationRepository relationRepository;
     private final LifeGraphMentionRepository mentionRepository;
-    private final PromptService promptService;
+    private final PromptManager promptManager;
     private final LifeGraphExtractor extractor;
     private final ObjectMapper objectMapper;
 
@@ -53,12 +54,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         }
 
         String userId = diary.getUserId();
-        String locale = "zh-CN";
-
-        String prompt = promptService.getPrompt(PromptKey.GRAPHRAG_EXTRACT.getKey(), locale);
-        if (prompt == null || prompt.length() < 50 || prompt.contains("智能日记助手")) {
-            prompt = defaultExtractPrompt();
-        }
+        String prompt = promptManager.getPrompt(PromptKey.GRAPHRAG_EXTRACT);
 
         String knownEntities = buildKnownEntities(userId);
         String entryDate = diary.getEntryDate() != null ? diary.getEntryDate().toString() : "";
@@ -525,56 +521,4 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         return s.substring(0, max);
     }
 
-    private String defaultExtractPrompt() {
-        return """
-                你正在为用户构建“人生图谱”（GraphRAG）。请从日记中抽取实体、关系与证据片段，并输出严格 JSON。
-
-                输出要求：
-                1) 只输出一个 JSON 对象，不要输出任何额外文字
-                2) JSON 结构：
-                {
-                  "entities": [
-                    {
-                      "type": "Person|Event|Place|Emotion|Topic|Item",
-                      "displayName": "原文中的称呼或新实体名称",
-                      "nameNorm": "归一化名称（尽量映射到已知实体库的规范名；若为新实体则给出合理规范名）",
-                      "aliases": ["别名1","别名2"],
-                      "summary": "实体的一句话摘要，描述该实体在用户生活中的意义",
-                      "emotion": "该实体关联的主要情绪（如：Joy/Sadness/Anxiety/Love/Anger/Fear/Hope/Calm/Confusion/Neutral）",
-                      "importance": 0.5,
-                      "confidence": 0.0,
-                      "props": {}
-                    }
-                  ],
-                  "relations": [
-                    {
-                      "source": "__USER__|nameNorm",
-                      "target": "nameNorm",
-                      "type": "RELATED_TO|HAPPENED_AT|TRIGGERED|PARTICIPATED|MENTIONED_IN",
-                      "confidence": 0.0,
-                      "props": {},
-                      "evidenceSnippet": "可选，<=200字"
-                    }
-                  ],
-                  "mentions": [
-                    {
-                      "entity": "nameNorm",
-                      "snippet": "证据片段，<=200字",
-                      "props": {}
-                    }
-                  ]
-                }
-
-                字段说明：
-                - summary: 必填，用一句话概括该实体对用户的意义
-                - emotion: 可选，该实体在上下文中引发的主要情绪
-                - importance: 0.1-1.0，评估该实体对用户的重要程度
-
-                抽取原则：
-                1) 若无法确定映射：优先使用已知实体库；仍不确定则创建新实体，但把可能别名放到 aliases
-                2) 关系置信度：LLM 自动抽取建议在 0.6-0.9 区间
-                3) summary 要具体，避免泛泛而谈
-                4) importance 要综合考虑：提及频率、情感强度、对用户生活的影响程度
-                """;
-    }
 }

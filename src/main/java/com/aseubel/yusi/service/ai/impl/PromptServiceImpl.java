@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.ai.impl;
 
+import com.aseubel.yusi.common.event.PromptUpdatedEvent;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.entity.PromptTemplate;
@@ -18,6 +19,15 @@ public class PromptServiceImpl implements PromptService {
     @Autowired
     private PromptRepository promptRepository;
 
+    @Autowired
+    private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
+    private void publishUpdateEvent(String promptName) {
+        if (promptName != null) {
+            eventPublisher.publishEvent(new PromptUpdatedEvent(this, promptName));
+        }
+    }
+
     @Override
     public String getPrompt(String name) {
         return getPrompt(name, "zh-CN");
@@ -27,11 +37,11 @@ public class PromptServiceImpl implements PromptService {
     public String getPrompt(String name, String locale) {
         Optional<PromptTemplate> promptOpt = promptRepository
                 .findTopByNameAndLocaleAndActiveTrueOrderByIsDefaultDescPriorityDescUpdatedAtDesc(name, locale);
-        
+
         if (promptOpt.isEmpty()) {
             return null;
         }
-        
+
         return promptOpt.map(PromptTemplate::getTemplate).orElse(null);
     }
 
@@ -52,7 +62,9 @@ public class PromptServiceImpl implements PromptService {
                     });
         }
         prompt.setUpdatedBy(updatedBy);
-        return promptRepository.save(prompt);
+        PromptTemplate saved = promptRepository.save(prompt);
+        publishUpdateEvent(saved.getName());
+        return saved;
     }
 
     @Override
@@ -90,7 +102,9 @@ public class PromptServiceImpl implements PromptService {
         if (prompt.getPriority() != null)
             existing.setPriority(prompt.getPriority());
         existing.setUpdatedBy(updatedBy);
-        return promptRepository.save(existing);
+        PromptTemplate saved = promptRepository.save(existing);
+        publishUpdateEvent(saved.getName());
+        return saved;
     }
 
     @Override
@@ -100,6 +114,7 @@ public class PromptServiceImpl implements PromptService {
         existing.setActive(true);
         existing.setUpdatedBy(updatedBy);
         promptRepository.save(existing);
+        publishUpdateEvent(existing.getName());
     }
 
     @Override
@@ -107,5 +122,6 @@ public class PromptServiceImpl implements PromptService {
         PromptTemplate existing = promptRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Prompt不存在"));
         promptRepository.delete(existing);
+        publishUpdateEvent(existing.getName());
     }
 }

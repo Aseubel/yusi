@@ -7,16 +7,13 @@ import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.pojo.entity.UserPersona;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.repository.UserRepository;
-import com.aseubel.yusi.service.ai.PromptService;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.io.ClassPathResource;
+
 import org.springframework.stereotype.Service;
 
 import dev.langchain4j.data.message.SystemMessage;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
 /**
  * 上下文构建服务
@@ -51,7 +48,7 @@ public class ContextBuilderService {
             """;
 
     private final UserRepository userRepository;
-    private final PromptService promptService;
+    private final PromptManager promptManager;
     private final ChatMemoryMessageRepository chatMemoryMessageRepository;
     private final UserPersonaService userPersonaService;
 
@@ -115,19 +112,24 @@ public class ContextBuilderService {
         UserPersona persona = userPersonaService.getUserPersona(userId);
         if (persona != null) {
             if (StrUtil.isNotBlank(persona.getPreferredName())) {
-                sb.append("        ").append("<preferred_name>").append(persona.getPreferredName()).append("</preferred_name>").append("\n");
+                sb.append("        ").append("<preferred_name>").append(persona.getPreferredName())
+                        .append("</preferred_name>").append("\n");
             }
             if (StrUtil.isNotBlank(persona.getLocation())) {
-                sb.append("        ").append("<location>").append(persona.getLocation()).append("</location>").append("\n");
+                sb.append("        ").append("<location>").append(persona.getLocation()).append("</location>")
+                        .append("\n");
             }
             if (StrUtil.isNotBlank(persona.getInterests())) {
-                sb.append("        ").append("<interests>").append(persona.getInterests()).append("</interests>").append("\n");
+                sb.append("        ").append("<interests>").append(persona.getInterests()).append("</interests>")
+                        .append("\n");
             }
             if (StrUtil.isNotBlank(persona.getTone())) {
-                sb.append("        ").append("<tone_preference>").append(persona.getTone()).append("</tone_preference>").append("\n");
+                sb.append("        ").append("<tone_preference>").append(persona.getTone()).append("</tone_preference>")
+                        .append("\n");
             }
             if (StrUtil.isNotBlank(persona.getCustomInstructions())) {
-                sb.append("        ").append("<custom_instructions>").append(persona.getCustomInstructions()).append("</custom_instructions>").append("\n");
+                sb.append("        ").append("<custom_instructions>").append(persona.getCustomInstructions())
+                        .append("</custom_instructions>").append("\n");
             }
         }
 
@@ -147,7 +149,7 @@ public class ContextBuilderService {
     private void injectRelationshipStage(StringBuilder sb, String userId) {
         // 获取用户的对话轮数 (以用户发言次数作为轮数)
         long chatTurns = chatMemoryMessageRepository.countByMemoryIdAndRole(userId, "user");
-        
+
         sb.append("    <relationship_stage>\n");
         if (chatTurns < 10) {
             sb.append("        你们刚刚认识，这是前几次交流。请保持友好、好奇但克制的距离感，不要假装你们有很久的过去，不要凭空捏造回忆。\n");
@@ -161,62 +163,8 @@ public class ContextBuilderService {
 
     /**
      * 加载基础提示词
-     * 优先从数据库加载，其次从 classpath 加载，最后使用降级方案
-     *
-     * @return 基础提示词内容
      */
     private String loadBasePrompt() {
-        String dbPrompt = loadFromDatabase();
-        if (dbPrompt != null) {
-            return dbPrompt;
-        }
-
-        String classpathPrompt = loadFromClasspath();
-        if (classpathPrompt != null) {
-            return classpathPrompt;
-        }
-
-        log.warn("Using fallback prompt");
-        return "你是 Yusi，一位温暖、富有同理心的 AI 灵魂伴侣。";
-    }
-
-    /**
-     * 从数据库加载提示词
-     */
-    private String loadFromDatabase() {
-        try {
-            String prompt = promptService.getPrompt(PromptKey.CHAT.getKey());
-            if (isValidPrompt(prompt)) {
-                log.info("Loaded base prompt from DB, length: {}", prompt.length());
-                return prompt;
-            }
-        } catch (Exception e) {
-            log.warn("Failed to load prompt from DB: {}, falling back to classpath resource", e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * 从 classpath 加载提示词
-     */
-    private String loadFromClasspath() {
-        try {
-            ClassPathResource resource = new ClassPathResource("chat-prompt.txt");
-            String prompt = resource.getContentAsString(StandardCharsets.UTF_8);
-            if (isValidPrompt(prompt)) {
-                log.info("Loaded base prompt from classpath, length: {}", prompt.length());
-                return prompt;
-            }
-        } catch (IOException e) {
-            log.warn("Failed to load prompt from classpath: {}", e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * 验证提示词是否有效
-     */
-    private boolean isValidPrompt(String prompt) {
-        return prompt != null && prompt.length() > 10;
+        return promptManager.getPrompt(PromptKey.CHAT);
     }
 }

@@ -36,7 +36,12 @@ public enum PromptKey {
     /**
      * GraphRAG: QA Prompt (Multi-hop reasoning)
      */
-    GRAPHRAG_QA("graphrag-qa");
+    GRAPHRAG_QA("graphrag-qa"),
+
+    /**
+     * Memory compression extraction Prompt
+     */
+    MEMORY_EXTRACT("memory-extract");
 
     private final String key;
 }

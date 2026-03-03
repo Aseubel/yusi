@@ -2,6 +2,8 @@ package com.aseubel.yusi.service.ai;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.date.DateUtil;
+
+import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.config.MemoryConfigProperties;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
@@ -41,18 +43,7 @@ public class MemoryCompressionService {
 
     private final MemoryConfigProperties memoryConfigProperties;
 
-    private static final String COMPRESSION_PROMPT = """
-            请你作为一位极其敏锐的观察者，阅读以下用户与 AI 的对话记录。
-            你的任务是：提取出这段对话中用户最重要的信息、经历、情绪或观点。
-
-            提取规则：
-            1. 请以第三人称（或"用户"）的视角进行客观总结。
-            2. 仅保留能够构成长久回忆的**关键事件**，忽略寒暄、无关紧要的闲聊等。
-            3. 提取结果必须精简、具体。
-
-            输出格式（只输出总结的结果，不要其他的任何废话）：
-            """;
-
+    private final PromptManager promptManager;
 
     /**
      * 检查并执行中期记忆总结（基于时间窗口和消息数量）
@@ -69,7 +60,7 @@ public class MemoryCompressionService {
         int contextWindowSize = memoryConfigProperties.getContextWindowSize();
 
         if (unsummarizedCount < contextWindowSize) {
-            log.debug("User {} has {} unsummarized messages, less than context window size {}", 
+            log.debug("User {} has {} unsummarized messages, less than context window size {}",
                     memoryId, unsummarizedCount, contextWindowSize);
             return;
         }
@@ -87,17 +78,17 @@ public class MemoryCompressionService {
 
         // 检查是否超过总结时间间隔
         if (minutesSinceLastMessage < summaryIntervalMinutes) {
-            log.debug("Last message was {} minutes ago, less than summary interval {} minutes", 
+            log.debug("Last message was {} minutes ago, less than summary interval {} minutes",
                     minutesSinceLastMessage, summaryIntervalMinutes);
             return;
         }
 
-        log.info("Triggering mid-term memory summary for user: {}. Unsummarized: {}, Minutes since last message: {}", 
+        log.info("Triggering mid-term memory summary for user: {}. Unsummarized: {}, Minutes since last message: {}",
                 memoryId, unsummarizedCount, minutesSinceLastMessage);
 
         // 获取所有未总结的消息（从上次总结开始）
         List<ChatMemoryMessage> unsummarizedMessages = messageRepository
-                .findByMemoryIdAndIsSummarizedOrderByCreatedAtAsc(memoryId, false, 
+                .findByMemoryIdAndIsSummarizedOrderByCreatedAtAsc(memoryId, false,
                         PageRequest.of(0, contextWindowSize));
 
         if (CollUtil.isEmpty(unsummarizedMessages)) {
@@ -111,7 +102,8 @@ public class MemoryCompressionService {
                 .map(m -> m.getRole() + ": " + m.getContent())
                 .collect(Collectors.joining("\n"));
 
-        String prompt = COMPRESSION_PROMPT + "\n\n对话记录:\n" + conversationHistory;
+        String promptTemplate = promptManager.getPrompt(PromptKey.MEMORY_EXTRACT);
+        String prompt = promptTemplate + "\n\n对话记录:\n" + conversationHistory;
 
         try {
             String summaryText = chatModel.chat(dev.langchain4j.data.message.UserMessage.from(prompt)).aiMessage()

@@ -3,7 +3,7 @@ package com.aseubel.yusi.config.ai;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.ai.MemorySearchTool;
 import com.aseubel.yusi.service.ai.UserPersonaTool;
-import com.aseubel.yusi.service.ai.PromptService;
+import com.aseubel.yusi.service.ai.PromptManager;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.room.SituationRoomAgent;
@@ -15,15 +15,11 @@ import dev.langchain4j.service.tool.ToolProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ClassPathResource;
 
 /**
  * Agent 配置类 - 实现 Agentic RAG 模式 + MCP 集成
@@ -49,7 +45,7 @@ public class AgentConfig {
     @Autowired
     private ApplicationContext applicationContext;
 
-    private final PromptService promptService;
+    private final PromptManager promptManager;
 
     @Value("${mcp.enabled:false}")
     private boolean mcpEnabled;
@@ -83,22 +79,10 @@ public class AgentConfig {
     }
 
     @Bean(name = "situationRoomAgent")
-    public SituationRoomAgent situationRoomAgent() throws IOException {
-        ClassPathResource resource = new ClassPathResource("logic-prompt.txt");
-        String fallbackPrompt = resource.getContentAsString(StandardCharsets.UTF_8);
-        String dbPrompt = null;
-        try {
-            dbPrompt = promptService.getPrompt(PromptKey.LOGIC.name());
-        } catch (Exception e) {
-            log.warn("从数据库加载情景分析系统提示词失败: {}", e.getMessage());
-        }
-        String systemPrompt = (dbPrompt != null && dbPrompt.length() > 50) ? dbPrompt : fallbackPrompt;
-        log.info("情景分析系统提示词来源: {}，长度: {} 字符",
-                (dbPrompt != null && dbPrompt.length() > 50) ? "DB" : "Classpath", systemPrompt.length());
-
+    public SituationRoomAgent situationRoomAgent() {
         SituationRoomAgent agent = AiServices.builder(SituationRoomAgent.class)
                 .streamingChatModel((StreamingChatModel) applicationContext.getBean("logicModel"))
-                .systemMessageProvider(chatMemoryId -> systemPrompt)
+                .systemMessageProvider(chatMemoryId -> promptManager.getPrompt(PromptKey.LOGIC))
                 .build();
         return agent;
     }
