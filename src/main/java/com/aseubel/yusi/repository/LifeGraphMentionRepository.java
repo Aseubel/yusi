@@ -9,5 +9,8 @@ import java.util.List;
 @Repository
 public interface LifeGraphMentionRepository extends JpaRepository<LifeGraphMention, Long> {
     List<LifeGraphMention> findTop200ByUserIdAndEntityIdOrderByCreatedAtDesc(String userId, Long entityId);
+
+    List<LifeGraphMention> findByUserIdAndDiaryId(String userId, String diaryId);
+
     int deleteByUserIdAndDiaryId(String userId, String diaryId);
 }

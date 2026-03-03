@@ -1,6 +1,8 @@
 package com.aseubel.yusi.service.lifegraph.impl;
 
 import cn.hutool.core.util.StrUtil;
+import jakarta.transaction.Transactional;
+
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntityAlias;
@@ -29,6 +31,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -73,8 +76,8 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             return;
         }
 
-        mentionRepository.deleteByUserIdAndDiaryId(userId, diary.getDiaryId());
-        relationRepository.deleteByUserIdAndEvidenceDiaryId(userId, diary.getDiaryId());
+        // 使用单独的方法进行彻底的关联清理与计数核减
+        deleteByDiary(userId, diary.getDiaryId());
 
         Map<String, Long> resolvedEntityIds = new HashMap<>();
 
@@ -103,10 +106,40 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
     }
 
     @Override
+    @Transactional
     public void deleteByDiary(String userId, String diaryId) {
         if (StrUtil.isBlank(userId) || StrUtil.isBlank(diaryId)) {
             return;
         }
+
+        // 1. 获取这篇日记提到的所有 Mention，提取出相关的 EntityId
+        List<LifeGraphMention> mentions = mentionRepository.findByUserIdAndDiaryId(userId, diaryId);
+        Set<Long> entityIds = mentions.stream()
+                .map(LifeGraphMention::getEntityId)
+                .collect(java.util.stream.Collectors.toSet());
+
+        // 2. 将这篇日记产生过影响的实体，执行 mentionCount - 1（逆向退回抽卡）
+        for (Long entityId : entityIds) {
+            entityRepository.findById(entityId).ifPresent(entity -> {
+                if (entity.getType() != LifeGraphEntity.EntityType.User && !"__USER__".equals(entity.getNameNorm())) {
+                    int newCount = (entity.getMentionCount() == null ? 0 : entity.getMentionCount()) - 1;
+                    if (newCount <= 0) {
+                        // 如果不再有任何提及，物理删除实体、以及它配套的别名大全，保持图谱干净
+                        entityRepository.delete(entity);
+                        List<com.aseubel.yusi.pojo.entity.LifeGraphEntityAlias> aliases = aliasRepository
+                                .findByUserIdAndEntityId(userId, entity.getId());
+                        if (!aliases.isEmpty()) {
+                            aliasRepository.deleteAll(aliases);
+                        }
+                    } else {
+                        entity.setMentionCount(newCount);
+                        entityRepository.save(entity);
+                    }
+                }
+            });
+        }
+
+        // 3. 删除底层的这篇日记直接证据关联记录
         mentionRepository.deleteByUserIdAndDiaryId(userId, diaryId);
         relationRepository.deleteByUserIdAndEvidenceDiaryId(userId, diaryId);
     }
@@ -166,7 +199,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         }
 
         String mergedProps = mergeProps(entity.getProps(), e.getProps());
-        
+
         // 存储 AI 分析的 emotion 和 importance 到 props
         if (StrUtil.isNotBlank(e.getEmotion())) {
             Map<String, Object> emotionProp = new HashMap<>();
@@ -178,7 +211,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             importanceProp.put("importance", e.getImportance());
             mergedProps = mergeProps(mergedProps, importanceProp);
         }
-        
+
         if (type == LifeGraphEntity.EntityType.Place && diary.getLatitude() != null && diary.getLongitude() != null) {
             Map<String, Object> geo = new HashMap<>();
             Map<String, Object> coordinates = new HashMap<>();
@@ -206,7 +239,8 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         return saved.getId();
     }
 
-    private LifeGraphEntity resolveEntityByAliasOrNorm(String userId, LifeGraphEntity.EntityType type, String nameNorm) {
+    private LifeGraphEntity resolveEntityByAliasOrNorm(String userId, LifeGraphEntity.EntityType type,
+            String nameNorm) {
         LifeGraphEntity byAlias = aliasRepository.findByUserIdAndAliasNorm(userId, nameNorm)
                 .flatMap(a -> entityRepository.findById(a.getEntityId()))
                 .orElse(null);
@@ -530,7 +564,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                     }
                   ]
                 }
-                
+
                 字段说明：
                 - summary: 必填，用一句话概括该实体对用户的意义
                 - emotion: 可选，该实体在上下文中引发的主要情绪
