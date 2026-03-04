@@ -234,6 +234,13 @@
             <artifactId>sensitive-word</artifactId>
             <version>${sensitive-word.version}</version>
         </dependency>
+
+        <!-- Guava for RateLimiter fallback -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>33.0.0-jre</version>
+        </dependency>
     </dependencies>
 
     <build>

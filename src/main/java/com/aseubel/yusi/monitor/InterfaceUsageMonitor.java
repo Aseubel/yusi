@@ -1,16 +1,22 @@
 package com.aseubel.yusi.monitor;
 
+import com.aseubel.yusi.pojo.entity.InterfaceDailyUsage;
 import com.aseubel.yusi.redis.service.IRedisService;
 import com.aseubel.yusi.repository.InterfaceDailyUsageRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RMap;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static com.aseubel.yusi.redis.common.RedisKey.USAGE_PREFIX;
 import static com.aseubel.yusi.redis.common.RedisKey.SEPARATOR;
@@ -22,9 +28,19 @@ public class InterfaceUsageMonitor {
 
     private final IRedisService redissonService;
     private final InterfaceDailyUsageRepository repository;
+    private final ThreadPoolTaskExecutor threadPoolExecutor;
+
+    // 批量写入缓冲区
+    private final ConcurrentHashMap<String, AtomicLong> usageBuffer = new ConcurrentHashMap<>();
+    
+    // 批量写入阈值
+    private static final int BATCH_SIZE_THRESHOLD = 100;
+    
+    // 缓冲区计数器
+    private final AtomicLong bufferCount = new AtomicLong(0);
 
     /**
-     * Record interface usage to Redis
+     * 记录接口使用情况到 Redis（带批量缓冲）
      */
     public void recordUsage(String userId, String ip, String interfaceName) {
         try {
@@ -37,29 +53,27 @@ public class InterfaceUsageMonitor {
             String redisKey = USAGE_PREFIX + dateStr;
             String field = userId + SEPARATOR + ip + SEPARATOR + interfaceName;
 
-            // Use Redisson's addAndGet for atomic increment
-            // Note: IRedisService needs to expose getMap properly or we cast/use
-            // RedissonClient directly
-            // Assuming redissonService.getMap returns RMap
+            // 先写入本地缓冲区
+            AtomicLong count = usageBuffer.computeIfAbsent(redisKey + ":" + field, k -> new AtomicLong(0));
+            long currentCount = count.incrementAndGet();
+            bufferCount.incrementAndGet();
+
+            // 使用 Redisson 的 addAndGet 进行原子递增
             RMap<String, Object> map = redissonService.getMap(redisKey);
             map.addAndGet(field, 1L);
 
-            // Set expiration if new (e.g., 2 days)
-            // We can check if it's a new key by checking TTL, but simplify by setting
-            // expire occasionally or just let it be
-            // A simple way is to set expire every time or just assume it's set.
-            // Better: Set expire if we just created it. But addAndGet doesn't tell us.
-            // Let's rely on the sync task to cleanup or set expire there.
-            // Or just set it blindly with a long TTL (48h) every time? A bit wasteful on
-            // network.
-            // Let's do it in the sync task.
+            // 当缓冲区达到阈值时，批量同步到数据库
+            if (bufferCount.get() >= BATCH_SIZE_THRESHOLD) {
+                syncBufferToDatabaseAsync();
+            }
+
         } catch (Exception e) {
             log.error("Failed to record interface usage", e);
         }
     }
 
     /**
-     * Sync Redis data to Database every 30 minutes
+     * 每 30 分钟同步一次数据到数据库
      */
     @Scheduled(cron = "0 0/30 * * * ?")
     public void syncToDatabase() {
@@ -70,7 +84,127 @@ public class InterfaceUsageMonitor {
         syncDate(yesterday);
         syncDate(today);
 
+        // 同步缓冲区数据
+        syncBufferToDatabase();
+
         log.debug("Interface usage sync completed.");
+    }
+
+    /**
+     * 异步批量同步缓冲区数据到数据库
+     */
+    private void syncBufferToDatabaseAsync() {
+        // 使用独立线程异步处理，避免阻塞主线程
+        threadPoolExecutor.execute(() -> {
+            try {
+                syncBufferToDatabase();
+            } catch (Exception e) {
+                log.error("异步批量同步失败", e);
+            }
+        });
+    }
+
+    /**
+     * 批量同步缓冲区数据到数据库
+     */
+    private synchronized void syncBufferToDatabase() {
+        if (bufferCount.get() == 0) {
+            return;
+        }
+
+        log.debug("开始批量同步缓冲区数据，当前缓冲记录数：{}", bufferCount.get());
+
+        try {
+            // 按日期分组批量处理
+            Map<String, List<UsageRecord>> groupedByDate = new ConcurrentHashMap<>();
+            
+            for (Map.Entry<String, AtomicLong> entry : usageBuffer.entrySet()) {
+                String key = entry.getKey();
+                long count = entry.getValue().get();
+                
+                if (count == 0) {
+                    continue;
+                }
+
+                // 解析 key: redisKey:field
+                int lastColonIndex = key.lastIndexOf(':');
+                if (lastColonIndex == -1) {
+                    continue;
+                }
+
+                String redisKey = key.substring(0, lastColonIndex);
+                String field = key.substring(lastColonIndex + 1);
+
+                // 提取日期
+                String dateStr = redisKey.replace(USAGE_PREFIX, "");
+                
+                String[] parts = field.split(SEPARATOR);
+                if (parts.length != 3) {
+                    log.warn("Invalid usage field format: {}", field);
+                    continue;
+                }
+
+                String userId = parts[0];
+                String ip = parts[1];
+                String interfaceName = parts[2];
+
+                UsageRecord record = new UsageRecord(userId, ip, interfaceName, count);
+                groupedByDate.computeIfAbsent(dateStr, k -> new ArrayList<>()).add(record);
+            }
+
+            // 批量写入数据库
+            for (Map.Entry<String, List<UsageRecord>> entry : groupedByDate.entrySet()) {
+                String dateStr = entry.getKey();
+                List<UsageRecord> records = entry.getValue();
+                
+                try {
+                    LocalDate date = LocalDate.parse(dateStr, DateTimeFormatter.ISO_LOCAL_DATE);
+                    
+                    // 转换为实体对象
+                    List<InterfaceDailyUsage> entities = records.stream()
+                        .map(record -> InterfaceDailyUsage.builder()
+                            .userId(record.userId)
+                            .ip(record.ip)
+                            .interfaceName(record.interfaceName)
+                            .usageDate(date)
+                            .requestCount(record.count)
+                            .build())
+                        .toList();
+                    
+                    // 使用真正的批量 SQL 操作
+                    repository.batchUpsertUsageNative(entities);
+                    
+                    log.debug("批量同步日期 {} 的 {} 条记录", dateStr, records.size());
+                    
+                } catch (Exception e) {
+                    log.error("批量同步日期 {} 失败", dateStr, e);
+                }
+            }
+
+            // 清空缓冲区
+            usageBuffer.clear();
+            bufferCount.set(0);
+            
+        } catch (Exception e) {
+            log.error("批量同步缓冲区数据失败", e);
+        }
+    }
+
+    /**
+     * 内部记录类，用于批量处理
+     */
+    private static class UsageRecord {
+        String userId;
+        String ip;
+        String interfaceName;
+        long count;
+
+        UsageRecord(String userId, String ip, String interfaceName, long count) {
+            this.userId = userId;
+            this.ip = ip;
+            this.interfaceName = interfaceName;
+            this.count = count;
+        }
     }
 
     private void syncDate(LocalDate date) {
@@ -84,11 +218,14 @@ public class InterfaceUsageMonitor {
 
             RMap<String, Object> map = redissonService.getMap(redisKey);
 
-            // Set expiration to ensure cleanup (e.g., 2 days from now)
+            // 设置过期时间，确保清理（例如 2 天）
             map.expire(java.time.Duration.ofDays(2));
 
-            // Iterate and sync
-            // RMap entrySet iteration uses HSCAN
+            // 批量收集数据
+            List<UsageEntry> batchEntries = new ArrayList<>();
+            int batchSize = 0;
+
+            // RMap 的 entrySet 迭代使用 HSCAN
             for (Map.Entry<String, Object> entry : map.entrySet()) {
                 try {
                     String field = entry.getKey();
@@ -121,13 +258,74 @@ public class InterfaceUsageMonitor {
                     String ip = parts[1];
                     String interfaceName = parts[2];
 
-                    repository.upsertUsage(userId, ip, interfaceName, date, count);
+                    batchEntries.add(new UsageEntry(userId, ip, interfaceName, count));
+                    batchSize++;
+
+                    // 每 100 条批量写入一次
+                    if (batchSize >= 100) {
+                        flushBatchToDatabase(batchEntries, date);
+                        batchEntries.clear();
+                        batchSize = 0;
+                    }
+
                 } catch (Exception e) {
-                    log.error("Failed to sync entry: {}", entry.getKey(), e);
+                    log.error("Failed to process entry: {}", entry.getKey(), e);
                 }
             }
+
+            // 处理剩余数据
+            if (!batchEntries.isEmpty()) {
+                flushBatchToDatabase(batchEntries, date);
+            }
+
         } catch (Exception e) {
             log.error("Failed to sync date: {}", dateStr, e);
+        }
+    }
+
+    /**
+     * 批量刷新数据到数据库
+     */
+    private void flushBatchToDatabase(List<UsageEntry> entries, LocalDate date) {
+        if (entries.isEmpty()) {
+            return;
+        }
+
+        try {
+            // 转换为实体对象
+            List<InterfaceDailyUsage> records = entries.stream()
+                .map(entry -> InterfaceDailyUsage.builder()
+                    .userId(entry.userId)
+                    .ip(entry.ip)
+                    .interfaceName(entry.interfaceName)
+                    .usageDate(date)
+                    .requestCount(entry.count)
+                    .build())
+                .toList();
+            
+            // 使用真正的批量 SQL 操作
+            repository.batchUpsertUsageNative(records);
+            
+            log.debug("批量写入 {} 条记录到数据库", records.size());
+        } catch (Exception e) {
+            log.error("批量写入数据库失败", e);
+        }
+    }
+
+    /**
+     * 内部类，用于批量处理
+     */
+    private static class UsageEntry {
+        String userId;
+        String ip;
+        String interfaceName;
+        long count;
+
+        UsageEntry(String userId, String ip, String interfaceName, long count) {
+            this.userId = userId;
+            this.ip = ip;
+            this.interfaceName = interfaceName;
+            this.count = count;
         }
     }
 }
