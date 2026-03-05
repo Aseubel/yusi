@@ -32,9 +32,6 @@ services:
       - ALIYUN_DM_ACCOUNT_NAME=YOUR_ALIYUN_ACCOUNT_NAME
       - ALIYUN_DM_FROM_ALIAS=Yusi
       # Model
-      - CHAT_MODEL_APIKEY=YOUR_CHAT_APIKEY
-      - CHAT_MODEL_NAME=deepseek-chat
-      - CHAT_MODEL_BASEURL=https://api.deepseek.com
       - EMBEDDING_MODEL_APIKEY=YOUR_EMBEDDING_APIKEY
       - EMBEDDING_MODEL_BASEURL=https://api.siliconflow.cn/v1
       - EMBEDDING_MODEL_NAME=BAAI/bge-m3

@@ -28,10 +28,63 @@ model:
     baseurl: ${EMBEDDING_MODEL_BASEURL}
     apikey: ${EMBEDDING_MODEL_APIKEY}
     model: ${EMBEDDING_MODEL_NAME}
-  chat:
-    baseurl: ${CHAT_MODEL_BASEURL}
-    apikey: ${CHAT_MODEL_APIKEY}
-    model: ${CHAT_MODEL_NAME}
+  routing:
+    default-language: zh
+    default-scene: chat
+    strategy-channel: yusi:model:group:strategy:channel
+    state-channel: yusi:model:state:channel
+    instance-state-map-key: yusi:model:state:instances
+    group-strategy-map-key: yusi:model:group:strategies
+    failure-threshold: 3
+    recovery-success-threshold: 2
+    recovery-probe-interval-ms: 15000
+    models:
+      - id: qwen-main
+        baseurl: ${CHAT_MODEL_BASEURL}
+        apikey: ${CHAT_MODEL_APIKEY}
+        model: ${CHAT_MODEL_NAME}
+        weight: 100
+        priority: 1
+        languages: [zh, en, ja]
+        scenes: [chat, situation-analysis, memory-extract]
+    groups:
+      chat-zh:
+        strategy: ROUND_ROBIN
+        members: [qwen-main]
+      analysis-zh:
+        strategy: LEAST_LATENCY
+        members: [qwen-main]
+      memory-zh:
+        strategy: FAIL_OVER
+        members: [qwen-main]
+      chat-en:
+        strategy: WEIGHTED_RANDOM
+        members: [qwen-main]
+      chat-ja:
+        strategy: WEIGHTED_RANDOM
+        members: [qwen-main]
+    matrix:
+      zh:
+        chat: chat-zh
+        situation-analysis: analysis-zh
+        memory-extract: memory-zh
+      en:
+        chat: chat-en
+        situation-analysis: analysis-zh
+        memory-extract: memory-zh
+      ja:
+        chat: chat-ja
+        situation-analysis: analysis-zh
+        memory-extract: memory-zh
+    bindings:
+      streamingChatModel:
+        scene: chat
+      logicModel:
+        scene: situation-analysis
+      chatModel:
+        scene: situation-analysis
+      jsonChatModel:
+        scene: memory-extract
 
 yusi:
   security:

@@ -10,6 +10,8 @@ import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.chat.ChatModel;
@@ -178,6 +180,14 @@ public class MemoryCompressionService {
             return;
         }
 
+        // 获取此用户最近一次的中期记忆摘要
+        List<MidTermMemory> previousMemories = midTermMemoryRepository.findByUserIdOrderByCreatedAtDesc(memoryId,
+                PageRequest.of(0, 1));
+        String previousSummary = "";
+        if (CollUtil.isNotEmpty(previousMemories)) {
+            previousSummary = previousMemories.get(0).getSummary();
+        }
+
         // 过滤 SYSTEM 消息，拼装对话历史
         String conversationHistory = unsummarizedMessages.stream()
                 .filter(m -> !"SYSTEM".equals(m.getRole()))
@@ -185,12 +195,21 @@ public class MemoryCompressionService {
                 .collect(Collectors.joining("\n"));
 
         String promptTemplate = promptManager.getPrompt(PromptKey.MEMORY_EXTRACT);
-        String prompt = promptTemplate + "\n\n对话记录:\n" + conversationHistory;
+
+        StringBuilder promptBuilder = new StringBuilder(promptTemplate);
+        if (previousSummary != null && !previousSummary.isEmpty()) {
+            promptBuilder.append("\n\n之前的记忆摘要:\n").append(previousSummary);
+        }
+        promptBuilder.append("\n\n对话记录:\n").append(conversationHistory);
+
+        String prompt = promptBuilder.toString();
 
         try {
             // Step 1: LLM 调用（事务外，避免长时间持有 DB 连接）
+            ModelRouteContextHolder.set(ModelRouteContext.builder().scene("memory-extract").language("zh").build());
             String summaryText = chatModel.chat(dev.langchain4j.data.message.UserMessage.from(prompt))
                     .aiMessage().text();
+            ModelRouteContextHolder.clear();
 
             if (summaryText == null || summaryText.trim().isEmpty() || summaryText.contains("无关键信息")) {
                 log.info("No significant memory extracted for user: {}", memoryId);
@@ -215,6 +234,7 @@ public class MemoryCompressionService {
             log.info("Compressed memory saved to Milvus for user: {}", memoryId);
 
         } catch (Exception e) {
+            ModelRouteContextHolder.clear();
             log.error("Failed to compress memory for user: {}", memoryId, e);
         }
     }

@@ -10,6 +10,8 @@ import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.config.ai.PersistentChatMemoryStore;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.service.ai.AiLockService;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.github.houbb.sensitive.word.core.SensitiveWordHelper;
 
@@ -26,6 +28,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -81,7 +84,8 @@ public class AiController {
     @Auth
     @RateLimiter(key = "chatStream", time = 60, count = 20, limitType = LimitType.USER)
     @GetMapping(value = "/chat/stream", produces = "text/event-stream")
-    public SseEmitter chatStream(@RequestParam String message) {
+    public SseEmitter chatStream(@RequestParam String message,
+            @RequestHeader(value = "Accept-Language", required = false) String language) {
         String userId = UserContext.getUserId();
 
         // Try to acquire lock for this user
@@ -106,6 +110,10 @@ public class AiController {
 
                 // 在异步线程中设置用户上下文，确保 Tool 能够获取到正确的 userId
                 UserContext.setUserId(userId);
+                ModelRouteContextHolder.set(ModelRouteContext.builder()
+                        .language(normalizeLanguage(language))
+                        .scene("chat")
+                        .build());
 
                 // 使用单例 Assistant，通过 userId 作为 memoryId 实现用户隔离
                 TokenStream tokenStream = diaryAssistant.chat(userId, sandwichContent);
@@ -119,11 +127,13 @@ public class AiController {
                         })
                         .onCompleteResponse(response -> {
                             UserContext.clear();
+                            ModelRouteContextHolder.clear();
                             aiLockService.releaseLock(userId);
                             emitter.complete();
                         })
                         .onError(error -> {
                             UserContext.clear();
+                            ModelRouteContextHolder.clear();
                             aiLockService.releaseLock(userId);
                             emitter.completeWithError(error);
                         })
@@ -131,6 +141,7 @@ public class AiController {
             } catch (Exception e) {
                 log.error("Error during AI chat stream", e);
                 UserContext.clear();
+                ModelRouteContextHolder.clear();
                 aiLockService.releaseLock(userId);
                 emitter.completeWithError(e);
             }
@@ -142,5 +153,22 @@ public class AiController {
         emitter.onError(e -> aiLockService.releaseLock(userId));
 
         return emitter;
+    }
+
+    private String normalizeLanguage(String language) {
+        if (language == null || language.isBlank()) {
+            return "zh";
+        }
+        String value = language.toLowerCase(Locale.ROOT);
+        if (value.startsWith("zh")) {
+            return "zh";
+        }
+        if (value.startsWith("ja")) {
+            return "ja";
+        }
+        if (value.startsWith("en")) {
+            return "en";
+        }
+        return "zh";
     }
 }
