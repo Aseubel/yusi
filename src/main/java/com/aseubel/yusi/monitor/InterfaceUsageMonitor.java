@@ -172,7 +172,7 @@ public class InterfaceUsageMonitor {
                         .toList();
                     
                     // 使用真正的批量 SQL 操作
-                    repository.batchUpsertUsageNative(entities);
+                    repository.batchUpsertUsage(entities);
                     
                     log.debug("批量同步日期 {} 的 {} 条记录", dateStr, records.size());
                     
@@ -304,7 +304,7 @@ public class InterfaceUsageMonitor {
                 .toList();
             
             // 使用真正的批量 SQL 操作
-            repository.batchUpsertUsageNative(records);
+            repository.batchUpsertUsage(records);
             
             log.debug("批量写入 {} 条记录到数据库", records.size());
         } catch (Exception e) {

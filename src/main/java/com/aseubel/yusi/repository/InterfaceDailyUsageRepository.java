@@ -40,20 +40,4 @@ public interface InterfaceDailyUsageRepository extends JpaRepository<InterfaceDa
             updated_at = NOW()
             """, nativeQuery = true)
     void batchUpsertUsage(List<InterfaceDailyUsage> records);
-
-    /**
-     * 批量插入或更新接口使用记录（使用原生 SQL）
-     * 更高效的实现方式，避免 JPA 的批量操作性能问题
-     */
-    @Modifying
-    @Transactional
-    @Query(value = """
-            INSERT INTO interface_daily_usage (user_id, ip, interface_name, usage_date, request_count, created_at, updated_at)
-            VALUES 
-            (:#{#records.![userId]}, :#{#records.![ip]}, :#{#records.![interfaceName]}, :#{#records.![usageDate]}, :#{#records.![requestCount]}, NOW(), NOW())
-            ON DUPLICATE KEY UPDATE 
-            request_count = VALUES(request_count),
-            updated_at = NOW()
-            """, nativeQuery = true)
-    void batchUpsertUsageNative(List<InterfaceDailyUsage> records);
 }

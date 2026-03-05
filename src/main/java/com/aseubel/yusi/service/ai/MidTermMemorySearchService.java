@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
+import jakarta.annotation.Resource;
 import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -26,6 +27,7 @@ import com.aseubel.yusi.pojo.entity.MidTermMemory;
 @RequiredArgsConstructor
 public class MidTermMemorySearchService {
 
+    @Resource
     @Qualifier("midTermMemoryStore")
     private MilvusEmbeddingStore midTermMemoryStore;
     private final EmbeddingModel embeddingModel;
