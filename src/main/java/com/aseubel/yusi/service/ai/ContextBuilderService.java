@@ -46,6 +46,8 @@ public class ContextBuilderService {
             当涉及过往经历、人际关系、特定事实或之前的对话细节时，请务必调用 [searchMemories] 进行查询。
             该工具会自动聚合日记、图谱和对话记忆。
             """;
+    private static final String TIME_CONTEXT_START = "<time_context>";
+    private static final String TIME_CONTEXT_END = "</time_context>";
 
     private final UserRepository userRepository;
     private final PromptManager promptManager;
@@ -69,6 +71,7 @@ public class ContextBuilderService {
         systemMessage.append(basePrompt).append("\n\n");
         systemMessage.append(CONTEXT_START).append("\n");
 
+        injectTimeContext(systemMessage);
         injectUserProfile(systemMessage, userId);
         injectMemoryGuidelines(systemMessage);
         injectRelationshipStage(systemMessage, userId);
@@ -90,6 +93,17 @@ public class ContextBuilderService {
     public SystemMessage buildSystemMessage(Object memoryId) {
         String content = buildSystemMessageStr(memoryId);
         return SystemMessage.from(content);
+    }
+
+    /**
+     * 注入时间上下文信息
+     */
+    private void injectTimeContext(StringBuilder sb) {
+        sb.append("    ").append(TIME_CONTEXT_START).append("\n");
+        sb.append("        ").append("<current_time>").append(DateUtil.now()).append("</current_time>").append("\n");
+        sb.append("        ").append("<current_date>").append(DateUtil.date().toString()).append("</current_date>").append("\n");
+        sb.append("        ").append("<timezone>").append(java.util.TimeZone.getDefault().getID()).append("</timezone>").append("\n");
+        sb.append("    ").append(TIME_CONTEXT_END).append("\n");
     }
 
     /**

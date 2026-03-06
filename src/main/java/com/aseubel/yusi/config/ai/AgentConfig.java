@@ -88,15 +88,12 @@ public class AgentConfig {
     }
 
     @Bean(name = "emotionAnalyzer")
-    public EmotionAnalyzer emotionAnalyzer() {
-        // 使用轻量级模型进行情感分析，提高响应速度
-        log.info("正在配置 EmotionAnalyzer 情感分析服务");
-
-        EmotionAnalyzer analyzer = AiServices.builder(EmotionAnalyzer.class)
-                .chatModel((ChatModel) applicationContext.getBean("chatModel"))
-                .build();
+    public EmotionAnalyzer emotionAnalyzer(
+            com.aseubel.yusi.service.plaza.impl.EmotionAnalyzerImpl emotionAnalyzerImpl) {
+        // 使用自定义的情感分析实现，直接调用 LLM API，避免 langchain4j AiServices 的开销
+        log.info("正在配置 EmotionAnalyzer 情感分析服务（使用自定义实现）");
 
         log.info("EmotionAnalyzer 已配置完成，可用于广场内容情感分析");
-        return analyzer;
+        return emotionAnalyzerImpl;
     }
 }
