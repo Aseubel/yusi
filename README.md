@@ -5,6 +5,7 @@
   <img src="https://img.shields.io/badge/Spring%20Boot-3.4.5-green" alt="Spring Boot">
   <img src="https://img.shields.io/badge/React-18-blue" alt="React">
   <img src="https://img.shields.io/badge/License-MIT-yellow" alt="License">
+  <a href="https://deepwiki.com/Aseubel/yusi"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
 </p>
 
 ## 产品理念
