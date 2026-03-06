@@ -46,12 +46,15 @@ model:
         weight: 100
         priority: 1
         languages: [zh, en, ja]
-        scenes: [chat, situation-analysis, memory-extract]
+        scenes: [chat, situation-analysis, memory-extract, emotion-analysis]
     groups:
       chat-zh:
         strategy: ROUND_ROBIN
         members: [qwen-main]
       analysis-zh:
+        strategy: LEAST_LATENCY
+        members: [qwen-main]
+      emotion-zh:
         strategy: LEAST_LATENCY
         members: [qwen-main]
       memory-zh:
@@ -67,14 +70,17 @@ model:
       zh:
         chat: chat-zh
         situation-analysis: analysis-zh
+        emotion-analysis: emotion-zh
         memory-extract: memory-zh
       en:
         chat: chat-en
         situation-analysis: analysis-zh
+        emotion-analysis: emotion-zh
         memory-extract: memory-zh
       ja:
         chat: chat-ja
         situation-analysis: analysis-zh
+        emotion-analysis: emotion-zh
         memory-extract: memory-zh
     bindings:
       streamingChatModel:
@@ -83,6 +89,8 @@ model:
         scene: situation-analysis
       chatModel:
         scene: situation-analysis
+      emotionModel:
+        scene: emotion-analysis
       jsonChatModel:
         scene: memory-extract
 

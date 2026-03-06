@@ -171,6 +171,12 @@ public class InterfaceUsageMonitor {
                             .build())
                         .toList();
                     
+                    // 检查是否有有效记录，避免空列表导致 SQL 错误
+                    if (entities.isEmpty()) {
+                        log.debug("日期 {} 没有有效记录需要写入数据库", dateStr);
+                        continue;
+                    }
+                    
                     // 使用真正的批量 SQL 操作
                     repository.batchUpsertUsage(entities);
                     
@@ -302,6 +308,12 @@ public class InterfaceUsageMonitor {
                     .requestCount(entry.count)
                     .build())
                 .toList();
+            
+            // 检查是否有有效记录，避免空列表导致 SQL 错误
+            if (records.isEmpty()) {
+                log.debug("没有有效记录需要写入数据库");
+                return;
+            }
             
             // 使用真正的批量 SQL 操作
             repository.batchUpsertUsage(records);

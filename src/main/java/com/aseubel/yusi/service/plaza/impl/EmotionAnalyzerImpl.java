@@ -21,7 +21,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class EmotionAnalyzerImpl implements EmotionAnalyzer {
 
-    private final ChatModel chatModel;
+    // 使用专门的情感分析模型，避免使用复杂的 situation-analysis 场景
+    private final ChatModel emotionModel;
 
     // 有效的情感类别列表
     private static final Set<String> VALID_EMOTIONS = Set.of(
@@ -38,9 +39,9 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
             // 构建简洁的 prompt
             String prompt = buildEmotionPrompt(content);
             
-            // 直接调用 ChatModel
+            // 直接调用专门的情感分析模型
             UserMessage userMessage = UserMessage.from(prompt);
-            AiMessage aiMessage = chatModel.chat(userMessage).aiMessage();
+            AiMessage aiMessage = emotionModel.chat(userMessage).aiMessage();
             
             String result = aiMessage.text();
             
@@ -72,18 +73,9 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
 
     /**
      * 构建情感分析的 prompt
-     * 使用简洁的格式减少 token 消耗
+     * 使用极简格式减少 token 消耗，提升响应速度
      */
     private String buildEmotionPrompt(String content) {
-        return String.format("""
-                请分析以下内容的主要情感倾向，只返回情感类别的英文名称。
-
-                内容：%s
-
-                从以下情感类别中选择一个最匹配的：
-                Joy (喜悦)、Sadness (悲伤)、Anxiety (焦虑)、Love (爱意)、Anger (愤怒)、Fear (恐惧)、Hope (希望)、Calm (平静)、Confusion (困惑)、Neutral (中性)
-
-                只返回情感类别的英文名称，不要返回任何其他内容。
-                """, content);
+        return String.format("分析情感，只返回类别名：Joy/Sadness/Anxiety/Love/Anger/Fear/Hope/Calm/Confusion/Neutral\n\n内容：%s", content);
     }
 }

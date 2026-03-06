@@ -31,9 +31,8 @@ public interface InterfaceDailyUsageRepository extends JpaRepository<InterfaceDa
     @Query(value = """
             INSERT INTO interface_daily_usage (user_id, ip, interface_name, usage_date, request_count, created_at, updated_at)
             VALUES 
-            (:#{#records.[0].userId}, :#{#records.[0].ip}, :#{#records.[0].interfaceName}, :#{#records.[0].usageDate}, :#{#records.[0].requestCount}, NOW(), NOW())
-            <#list records[1..] as record>
-            , (:#{#record.userId}, :#{#record.ip}, :#{#record.interfaceName}, :#{#record.usageDate}, :#{#record.requestCount}, NOW(), NOW())
+            <#list records as record>
+            (:#{#record.userId}, :#{#record.ip}, :#{#record.interfaceName}, :#{#record.usageDate}, :#{#record.requestCount}, NOW(), NOW())<#sep>,</#sep>
             </#list>
             ON DUPLICATE KEY UPDATE 
             request_count = VALUES(request_count),

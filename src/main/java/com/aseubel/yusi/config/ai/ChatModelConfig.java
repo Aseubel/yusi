@@ -27,6 +27,12 @@ public class ChatModelConfig {
         return modelProxyFactory.createChatProxy("chatModel", "zh", "situation-analysis");
     }
 
+    @Bean(name = "emotionModel")
+    public ChatModel emotionModel(ModelProxyFactory modelProxyFactory) {
+        // 情感分析使用轻量级场景，避免使用复杂的 situation-analysis 场景
+        return modelProxyFactory.createChatProxy("emotionModel", "zh", "emotion-analysis");
+    }
+
     @Bean(name = "jsonChatModel")
     public ChatModel jsonChatModel(ModelProxyFactory modelProxyFactory) {
         return modelProxyFactory.createChatProxy("jsonChatModel", "zh", "memory-extract");
