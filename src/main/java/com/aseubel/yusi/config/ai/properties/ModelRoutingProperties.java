@@ -36,6 +36,8 @@ public class ModelRoutingProperties {
 
     private long recoveryProbeIntervalMs = 15_000L;
 
+    private double halfOpenProbeRatio = 0.1;
+
     private List<ModelDefinition> models = new ArrayList<>();
 
     private Map<String, GroupDefinition> groups = new HashMap<>();
