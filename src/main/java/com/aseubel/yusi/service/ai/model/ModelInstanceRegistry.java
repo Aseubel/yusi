@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -48,22 +47,15 @@ public class ModelInstanceRegistry {
             if (!definition.isEnabled() || definition.getId() == null || definition.getId().isBlank()) {
                 continue;
             }
-            OpenAiChatRequestParameters.Builder requestBuilder = OpenAiChatRequestParameters.builder();
-            if (!definition.getCustomParameters().isEmpty()) {
-                requestBuilder.customParameters(definition.getCustomParameters());
-            }
-            OpenAiChatRequestParameters requestParameters = requestBuilder.build();
             OpenAiChatModel chatModel = OpenAiChatModel.builder()
                     .baseUrl(definition.getBaseurl())
                     .apiKey(definition.getApikey())
                     .modelName(definition.getModel())
-                    .defaultRequestParameters(requestParameters)
                     .build();
             OpenAiStreamingChatModel streamingChatModel = OpenAiStreamingChatModel.builder()
                     .baseUrl(definition.getBaseurl())
                     .apiKey(definition.getApikey())
                     .modelName(definition.getModel())
-                    .defaultRequestParameters(requestParameters)
                     .build();
             ModelInstance instance = ModelInstance.builder()
                     .id(definition.getId())

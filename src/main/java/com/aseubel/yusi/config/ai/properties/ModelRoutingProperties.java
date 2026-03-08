@@ -42,9 +42,7 @@ public class ModelRoutingProperties {
 
     private Map<String, GroupDefinition> groups = new HashMap<>();
 
-    private Map<String, Map<String, String>> matrix = new HashMap<>();
-
-    private Map<String, BindingDefinition> bindings = new HashMap<>();
+    private Map<String, Map<String, SceneDefinition>> matrix = new HashMap<>();
 
     @Data
     public static class ModelDefinition {
@@ -57,7 +55,6 @@ public class ModelRoutingProperties {
         private List<String> languages = new ArrayList<>();
         private List<String> scenes = new ArrayList<>();
         private boolean enabled = true;
-        private Map<String, Object> customParameters = new HashMap<>();
     }
 
     @Data
@@ -67,9 +64,12 @@ public class ModelRoutingProperties {
     }
 
     @Data
-    public static class BindingDefinition {
-        private String scene;
-        private String language;
+    public static class SceneDefinition {
         private String group;
+        private Integer maxTokens;
+        private Double temperature;
+        private Double topP;
+        private Integer maxCompletionTokens;
+        private Map<String, Object> customParameters = new HashMap<>();
     }
 }

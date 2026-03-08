@@ -79,17 +79,6 @@ model:
         situation-analysis: analysis-zh
         emotion-analysis: emotion-zh
         memory-extract: memory-zh
-    bindings:
-      streamingChatModel:
-        scene: chat
-      logicModel:
-        scene: situation-analysis
-      chatModel:
-        scene: situation-analysis
-      emotionModel:
-        scene: emotion-analysis
-      jsonChatModel:
-        scene: memory-extract
 
 yusi:
   security:

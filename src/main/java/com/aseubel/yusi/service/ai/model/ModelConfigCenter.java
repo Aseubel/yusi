@@ -147,10 +147,14 @@ public class ModelConfigCenter {
                 if (sceneMap == null) {
                     return;
                 }
-                sceneMap.forEach((scene, group) -> {
-                    if (!config.getGroups().containsKey(group)) {
+                sceneMap.forEach((scene, sceneDef) -> {
+                    if (sceneDef == null || sceneDef.getGroup() == null || sceneDef.getGroup().isBlank()) {
                         throw new BusinessException(ErrorCode.PARAM_ERROR,
-                                "matrix[" + normalize(lang) + "." + normalize(scene) + "] 引用了不存在的分组: " + group);
+                                "matrix[" + normalize(lang) + "." + normalize(scene) + "] 的 group 不能为空");
+                    }
+                    if (!config.getGroups().containsKey(sceneDef.getGroup())) {
+                        throw new BusinessException(ErrorCode.PARAM_ERROR,
+                                "matrix[" + normalize(lang) + "." + normalize(scene) + "] 引用了不存在的分组: " + sceneDef.getGroup());
                     }
                 });
             });

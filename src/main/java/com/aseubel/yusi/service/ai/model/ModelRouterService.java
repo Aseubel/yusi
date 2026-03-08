@@ -56,38 +56,37 @@ public class ModelRouterService {
         });
     }
 
-    public String resolveBindingGroup(String binding, String language, String scene) {
-        ModelRoutingProperties properties = modelConfigCenter.getEffectiveConfig();
-        ModelRoutingProperties.BindingDefinition definition = properties.getBindings().get(binding);
-        if (definition != null && definition.getGroup() != null && !definition.getGroup().isBlank()) {
-            return definition.getGroup();
-        }
-        String resolvedLanguage = normalize(valueOrDefault(language,
-                definition == null ? properties.getDefaultLanguage() : definition.getLanguage()));
-        String resolvedScene = normalize(valueOrDefault(scene, definition == null ? properties.getDefaultScene() : definition.getScene()));
-        return resolveGroup(resolvedLanguage, resolvedScene);
-    }
-
     public String resolveGroup(String language, String scene) {
         ModelRoutingProperties properties = modelConfigCenter.getEffectiveConfig();
-        Map<String, String> sceneMap = properties.getMatrix().get(language);
+        Map<String, ModelRoutingProperties.SceneDefinition> sceneMap = properties.getMatrix().get(language);
         if (sceneMap != null) {
-            String group = sceneMap.get(scene);
-            if (group != null && !group.isBlank()) {
-                return group;
+            ModelRoutingProperties.SceneDefinition sceneDef = sceneMap.get(scene);
+            if (sceneDef != null && sceneDef.getGroup() != null && !sceneDef.getGroup().isBlank()) {
+                return sceneDef.getGroup();
             }
         }
-        Map<String, String> defaultSceneMap = properties.getMatrix().get(normalize(properties.getDefaultLanguage()));
+        Map<String, ModelRoutingProperties.SceneDefinition> defaultSceneMap = properties.getMatrix().get(normalize(properties.getDefaultLanguage()));
         if (defaultSceneMap != null) {
-            String fallback = defaultSceneMap.get(scene);
-            if (fallback != null && !fallback.isBlank()) {
-                return fallback;
+            ModelRoutingProperties.SceneDefinition fallback = defaultSceneMap.get(scene);
+            if (fallback != null && fallback.getGroup() != null && !fallback.getGroup().isBlank()) {
+                return fallback.getGroup();
             }
         }
         if (!properties.getGroups().isEmpty()) {
             return properties.getGroups().keySet().iterator().next();
         }
         throw new IllegalStateException("No model group configured");
+    }
+
+    public ModelRoutingProperties.SceneDefinition resolveSceneDefinition(String language, String scene) {
+        ModelRoutingProperties properties = modelConfigCenter.getEffectiveConfig();
+        String normalizedLanguage = normalize(valueOrDefault(language, properties.getDefaultLanguage()));
+        String normalizedScene = normalize(valueOrDefault(scene, properties.getDefaultScene()));
+        Map<String, ModelRoutingProperties.SceneDefinition> sceneMap = properties.getMatrix().get(normalizedLanguage);
+        if (sceneMap != null) {
+            return sceneMap.get(normalizedScene);
+        }
+        return null;
     }
 
     private String valueOrDefault(String value, String defaultValue) {
