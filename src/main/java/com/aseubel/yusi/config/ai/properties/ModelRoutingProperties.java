@@ -55,6 +55,10 @@ public class ModelRoutingProperties {
         private List<String> languages = new ArrayList<>();
         private List<String> scenes = new ArrayList<>();
         private boolean enabled = true;
+        /**
+         * 请求超时时间（秒），默认60秒
+         */
+        private Integer timeoutSeconds = 60;
     }
 
     @Data

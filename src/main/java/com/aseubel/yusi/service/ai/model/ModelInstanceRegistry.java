@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
+import java.time.Duration;
 
 @Component
 @RequiredArgsConstructor
@@ -47,15 +48,19 @@ public class ModelInstanceRegistry {
             if (!definition.isEnabled() || definition.getId() == null || definition.getId().isBlank()) {
                 continue;
             }
+            Duration timeout = Duration.ofSeconds(
+                    definition.getTimeoutSeconds() != null ? definition.getTimeoutSeconds() : 60);
             OpenAiChatModel chatModel = OpenAiChatModel.builder()
                     .baseUrl(definition.getBaseurl())
                     .apiKey(definition.getApikey())
                     .modelName(definition.getModel())
+                    .timeout(timeout)
                     .build();
             OpenAiStreamingChatModel streamingChatModel = OpenAiStreamingChatModel.builder()
                     .baseUrl(definition.getBaseurl())
                     .apiKey(definition.getApikey())
                     .modelName(definition.getModel())
+                    .timeout(timeout)
                     .build();
             ModelInstance instance = ModelInstance.builder()
                     .id(definition.getId())

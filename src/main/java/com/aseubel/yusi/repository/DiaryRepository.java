@@ -39,4 +39,11 @@ public interface DiaryRepository extends JpaRepository<Diary, Long> {
      */
     @Query("SELECT d FROM Diary d WHERE d.userId = :userId AND d.latitude IS NOT NULL AND d.longitude IS NOT NULL ORDER BY d.createTime DESC")
     List<Diary> findAllWithLocationByUserId(@Param("userId") String userId);
+
+    /**
+     * 更新日记的情感标签（异步情感分析后调用）
+     */
+    @Query("UPDATE Diary d SET d.emotion = :emotion WHERE d.diaryId = :diaryId")
+    @org.springframework.transaction.annotation.Transactional
+    void updateEmotion(@Param("diaryId") String diaryId, @Param("emotion") String emotion);
 }

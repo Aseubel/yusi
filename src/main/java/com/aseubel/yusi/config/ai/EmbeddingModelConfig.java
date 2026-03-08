@@ -16,6 +16,8 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Duration;
+
 import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
 
 /**
@@ -35,6 +37,7 @@ public class EmbeddingModelConfig {
                 .baseUrl(properties.getBaseUrl())
                 .apiKey(properties.getApikey())
                 .modelName(properties.getModel())
+                .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
                 .build();
     }
 
