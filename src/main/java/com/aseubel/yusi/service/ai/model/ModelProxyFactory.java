@@ -89,13 +89,20 @@ public class ModelProxyFactory {
             if (sceneDef == null || !hasSceneParameters(sceneDef)) {
                 return method.invoke(delegate, args);
             }
+            // 处理 ChatRequest 参数，同时保留其他参数（如 StreamingResponseHandler）
             if (args != null && args.length > 0 && args[0] instanceof ChatRequest chatRequest) {
                 ChatRequestParameters overrideParams = buildOverrideParameters(sceneDef);
                 ChatRequest newRequest = ChatRequest.builder()
                         .messages(chatRequest.messages())
                         .parameters(mergeParameters(chatRequest.parameters(), overrideParams))
                         .build();
-                return method.invoke(delegate, new Object[] { newRequest });
+                // 构建新的参数数组，保留原有其他参数
+                Object[] newArgs = new Object[args.length];
+                newArgs[0] = newRequest;
+                for (int i = 1; i < args.length; i++) {
+                    newArgs[i] = args[i];
+                }
+                return method.invoke(delegate, newArgs);
             }
             return method.invoke(delegate, args);
         }
