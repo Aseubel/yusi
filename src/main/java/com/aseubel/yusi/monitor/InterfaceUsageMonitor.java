@@ -38,6 +38,9 @@ public class InterfaceUsageMonitor {
     
     // 缓冲区计数器
     private final AtomicLong bufferCount = new AtomicLong(0);
+    
+    // field 内部分隔符，使用不会在数据中出现的字符
+    private static final String FIELD_SEPARATOR = "\u0001";
 
     /**
      * 记录接口使用情况到 Redis（带批量缓冲）
@@ -51,7 +54,7 @@ public class InterfaceUsageMonitor {
 
             String dateStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
             String redisKey = USAGE_PREFIX + dateStr;
-            String field = userId + SEPARATOR + ip + SEPARATOR + interfaceName;
+            String field = userId + FIELD_SEPARATOR + ip + FIELD_SEPARATOR + interfaceName;
 
             // 先写入本地缓冲区
             AtomicLong count = usageBuffer.computeIfAbsent(redisKey + ":" + field, k -> new AtomicLong(0));
@@ -138,7 +141,10 @@ public class InterfaceUsageMonitor {
                 // 提取日期
                 String dateStr = redisKey.replace(USAGE_PREFIX, "");
                 
-                String[] parts = field.split(SEPARATOR);
+                // 兼容新旧分隔符格式
+                String[] parts = field.contains(FIELD_SEPARATOR) 
+                    ? field.split(FIELD_SEPARATOR) 
+                    : field.split(SEPARATOR);
                 if (parts.length != 3) {
                     log.warn("Invalid usage field format: {}", field);
                     continue;
@@ -254,7 +260,9 @@ public class InterfaceUsageMonitor {
                         continue;
                     }
 
-                    String[] parts = field.split(SEPARATOR);
+                    String[] parts = field.contains(FIELD_SEPARATOR)
+                        ? field.split(FIELD_SEPARATOR)
+                        : field.split(SEPARATOR);
                     if (parts.length != 3) {
                         log.warn("Invalid usage field format: {}", field);
                         continue;

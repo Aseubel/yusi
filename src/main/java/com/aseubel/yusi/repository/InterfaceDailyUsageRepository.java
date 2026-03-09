@@ -13,6 +13,10 @@ import java.util.List;
 @Repository
 public interface InterfaceDailyUsageRepository extends JpaRepository<InterfaceDailyUsage, Long> {
 
+    /**
+     * 插入或更新接口使用记录
+     * 使用 ON DUPLICATE KEY UPDATE 实现 upsert
+     */
     @Modifying
     @Transactional
     @Query(value = """
@@ -24,19 +28,12 @@ public interface InterfaceDailyUsageRepository extends JpaRepository<InterfaceDa
 
     /**
      * 批量插入或更新接口使用记录
-     * 使用 ON DUPLICATE KEY UPDATE 实现批量 upsert
+     * 注意：由于 Spring Data JPA 原生SQL不支持模板语法，这里使用循环调用单条方法
      */
-    @Modifying
-    @Transactional
-    @Query(value = """
-            INSERT INTO interface_daily_usage (user_id, ip, interface_name, usage_date, request_count, created_at, updated_at)
-            VALUES 
-            <#list records as record>
-            (:#{#record.userId}, :#{#record.ip}, :#{#record.interfaceName}, :#{#record.usageDate}, :#{#record.requestCount}, NOW(), NOW())<#sep>,</#sep>
-            </#list>
-            ON DUPLICATE KEY UPDATE 
-            request_count = VALUES(request_count),
-            updated_at = NOW()
-            """, nativeQuery = true)
-    void batchUpsertUsage(List<InterfaceDailyUsage> records);
+    default void batchUpsertUsage(List<InterfaceDailyUsage> records) {
+        for (InterfaceDailyUsage record : records) {
+            upsertUsage(record.getUserId(), record.getIp(), record.getInterfaceName(), 
+                       record.getUsageDate(), record.getRequestCount());
+        }
+    }
 }
