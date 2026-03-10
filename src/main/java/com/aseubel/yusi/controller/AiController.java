@@ -6,6 +6,7 @@ import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.ratelimit.LimitType;
 import com.aseubel.yusi.common.exception.AiLockException;
 import com.aseubel.yusi.common.ratelimit.RateLimiter;
+import com.aseubel.yusi.common.utils.SensitiveWordUtils;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.config.ai.PersistentChatMemoryStore;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
@@ -13,7 +14,6 @@ import com.aseubel.yusi.service.ai.AiLockService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.diary.Assistant;
-import com.github.houbb.sensitive.word.core.SensitiveWordHelper;
 
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -53,7 +53,8 @@ public class AiController {
     private PersistentChatMemoryStore chatMemoryStore;
 
     private final ThreadPoolTaskExecutor threadPoolExecutor;
-    private static final List<String> DEFAULT_RESPONSES = List.of("抱歉哦，小予不能回答你这句话，说点别的吧");
+
+    private final SensitiveWordUtils sensitiveWordUtils;
 
     /**
      * 获取聊天历史记录
@@ -98,10 +99,9 @@ public class AiController {
 
         threadPoolExecutor.execute(() -> {
             try {
-                // 检查消息是否包含敏感词
-                if (SensitiveWordHelper.contains(message)) {
-                    // 包含敏感词，返回随机默认响应
-                    emitter.send(SseEmitter.event().data(DEFAULT_RESPONSES.get((int) (Math.random() * DEFAULT_RESPONSES.size()))));
+                String violationMessage = sensitiveWordUtils.checkAndHandleViolation(userId, message);
+                if (violationMessage != null) {
+                    emitter.send(SseEmitter.event().data(violationMessage));
                     emitter.complete();
                     return;
                 }

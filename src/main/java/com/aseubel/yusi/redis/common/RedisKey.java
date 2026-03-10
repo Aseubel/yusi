@@ -23,4 +23,7 @@ public class RedisKey {
     public static final String MODEL_GROUP_STRATEGY_CHANNEL = MODEL_PREFIX + "group:strategy:channel";
     public static final String MODEL_RUNTIME_CONFIG_KEY = MODEL_PREFIX + "runtime:config";
     public static final String MODEL_CONFIG_CHANNEL = MODEL_PREFIX + "config:channel";
+
+    public static final String VIOLATION_PREFIX = REDIS_KEY_PREFIX + "violation" + SEPARATOR;
+    public static final String VIOLATION_COUNT_KEY = VIOLATION_PREFIX + "count:%s";
 }
