@@ -58,6 +58,7 @@ CREATE TABLE `diary` (
     `address` VARCHAR(255) DEFAULT NULL COMMENT '详细地址',
     `place_name` VARCHAR(255) DEFAULT NULL COMMENT '地点名称（如：星巴克咖啡、公司）',
     `place_id` VARCHAR(255) DEFAULT NULL COMMENT '地图 POI ID（用于去重和关联）',
+    `images` TEXT NULL COMMENT '图片列表（JSON数组格式存储OSS objectKey）',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_diary_diary_id` (`diary_id`),
     KEY `idx_diary_user_id` (`user_id`),
@@ -409,6 +410,7 @@ CREATE TABLE IF NOT EXISTS `chat_memory_message` (
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
   `is_summarized` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已总结为中期记忆',
   `summarized_at` datetime DEFAULT NULL COMMENT '总结时间',
+  `images` TEXT NULL COMMENT '图片列表（JSON数组格式存储OSS objectKey）',
   PRIMARY KEY (`id`),
   KEY `idx_memory_id_created` (`memory_id`, `created_at`),
   KEY `idx_memory_id_summarized` (`memory_id`, `is_summarized`)

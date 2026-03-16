@@ -121,6 +121,13 @@ public class Diary {
     @Column(name = "emotion")
     private String emotion;
 
+    /**
+     * 图片列表（JSON数组格式存储OSS objectKey）
+     * 图片不参与内容加密，单独存储
+     */
+    @Column(name = "images", columnDefinition = "TEXT")
+    private String images;
+
     public String generateId() {
         this.diaryId = UuidUtils.genUuidSimple();
         return this.diaryId;

@@ -28,6 +28,9 @@ public class ChatMemoryMessage {
     @Column(name = "content", nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "images", columnDefinition = "TEXT")
+    private String images;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 

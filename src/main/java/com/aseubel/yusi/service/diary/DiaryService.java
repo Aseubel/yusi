@@ -5,10 +5,6 @@ import org.springframework.data.domain.Page;
 
 import java.util.List;
 
-/**
- * @author Aseubel
- * @date 2025/5/7 上午9:57
- */
 public interface DiaryService {
 
     Diary addDiary(Diary diary);
@@ -19,9 +15,6 @@ public interface DiaryService {
 
     Page<Diary> getDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc);
 
-    /**
-     * 解密日记内容
-     */
     String decryptDiaryContent(Diary diary);
 
     void evictDiaryCache(String diaryId);
@@ -30,8 +23,7 @@ public interface DiaryService {
 
     void evictFootprintsCache(String userId);
 
-    /**
-     * 获取用户足迹列表（有地理位置的日记）
-     */
     List<Diary> getFootprints(String userId);
+
+    String convertImagesToUrls(String imagesJson);
 }

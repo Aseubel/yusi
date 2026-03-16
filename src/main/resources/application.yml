@@ -2,9 +2,8 @@ spring:
   config:
     name: yusi
   profiles:
-    active: dev
+    active: prod
 
-# 记忆系统配置
 yusi:
   memory:
     # 上下文记忆窗口大小（短期记忆的消息条数）
@@ -13,3 +12,10 @@ yusi:
     mid-term-summary-interval: 3600000
     # 中期记忆触发扫描的 Cron 表达式（默认每 30 分钟执行一次）
     mid-term-scan-cron: "0 */30 * * * ?"
+  oss:
+    region: ${OSS_REGION:cn-hangzhou}
+    bucket-name: ${OSS_BUCKET_NAME:}
+    endpoint: ${OSS_ENDPOINT:oss-cn-hangzhou.aliyuncs.com}
+    url-expire-seconds: ${OSS_URL_EXPIRE_SECONDS:3600}
+    max-file-size: ${OSS_MAX_FILE_SIZE:10485760}
+    image-folder: ${OSS_IMAGE_FOLDER:yusi/images/}

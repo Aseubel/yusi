@@ -1,5 +1,6 @@
 package com.aseubel.yusi.controller;
 
+import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.event.DiaryChangedEvent;
@@ -70,6 +71,9 @@ public class DiaryController {
     @GetMapping("/{diaryId}")
     public Response<Diary> getDiary(@PathVariable("diaryId") String diaryId) {
         Diary diary = diaryService.getDiary(diaryId);
+        if (diary != null && StrUtil.isNotBlank(diary.getImages())) {
+            diary.setImages(diaryService.convertImagesToUrls(diary.getImages()));
+        }
         eventPublisher.publishEvent(new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.READ));
         return Response.success(diary);
     }

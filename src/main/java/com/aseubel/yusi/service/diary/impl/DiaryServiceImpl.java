@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.diary.impl;
 
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 
 import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
@@ -12,6 +13,7 @@ import com.aseubel.yusi.redis.annotation.UpdateCache;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.diary.DiaryService;
+import com.aseubel.yusi.service.oss.OssService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -24,10 +26,6 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/**
- * @author Aseubel
- * @date 2025/5/7 上午9:57
- */
 @Slf4j
 @Service
 public class DiaryServiceImpl implements DiaryService {
@@ -40,6 +38,9 @@ public class DiaryServiceImpl implements DiaryService {
 
     @Autowired
     private CryptoService cryptoService;
+
+    @Autowired
+    private OssService ossService;
 
     @Autowired
     @Lazy
@@ -230,6 +231,21 @@ public class DiaryServiceImpl implements DiaryService {
             diary.setContent(AesGcmCryptoUtils.decryptText(diary.getContent(), cryptoService.serverAesKeyBytes()));
         } catch (Exception e) {
             return;
+        }
+    }
+
+    @Override
+    public String convertImagesToUrls(String imagesJson) {
+        if (StrUtil.isBlank(imagesJson)) {
+            return imagesJson;
+        }
+        try {
+            List<String> objectKeys = JSONUtil.toList(imagesJson, String.class);
+            List<String> urls = ossService.generatePresignedUrls(objectKeys);
+            return JSONUtil.toJsonStr(urls);
+        } catch (Exception e) {
+            log.error("Failed to convert images to urls: {}", imagesJson, e);
+            return imagesJson;
         }
     }
 }
