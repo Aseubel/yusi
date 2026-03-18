@@ -53,6 +53,11 @@ public class EditDiaryRequest implements Serializable {
     private String placeName;
     private String placeId;
 
+    /**
+     * 图片列表（JSON数组格式存储OSS objectKey）
+     */
+    private String images;
+
     public Diary toDiary() {
         return Diary.builder()
                 .userId(userId)
@@ -68,6 +73,7 @@ public class EditDiaryRequest implements Serializable {
                 .address(address)
                 .placeName(placeName)
                 .placeId(placeId)
+                .images(images)
                 .build();
     }
 }

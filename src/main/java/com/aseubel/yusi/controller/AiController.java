@@ -18,8 +18,9 @@ import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.oss.OssService;
 
-import dev.langchain4j.data.image.Image;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.Content;
+import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.service.TokenStream;
 import lombok.RequiredArgsConstructor;
@@ -80,10 +81,13 @@ public class AiController {
                     
                     if (msg instanceof UserMessage userMsg) {
                         item.put("content", userMsg.singleText());
-                        List<Image> images = userMsg.images();
-                        if (images != null && !images.isEmpty()) {
-                            List<String> imageUrls = images.stream()
-                                    .map(img -> img.url() != null ? img.url().toString() : null)
+                        List<ImageContent> imageContents = userMsg.contents().stream()
+                                .filter(c -> c instanceof ImageContent)
+                                .map(c -> (ImageContent) c)
+                                .collect(Collectors.toList());
+                        if (!imageContents.isEmpty()) {
+                            List<String> imageUrls = imageContents.stream()
+                                    .map(img -> img.image().url().toString())
                                     .filter(java.util.Objects::nonNull)
                                     .collect(Collectors.toList());
                             if (!imageUrls.isEmpty()) {
@@ -124,11 +128,11 @@ public class AiController {
                     emitter.complete();
                     return;
                 }
-
+                // 构建三明治模板内容，用于强调systemprompt
                 String sandwichContent = String.format(PersistentChatMemoryStore.SANDWITCH_TEMPLATE, message);
-                
+                // 构建用户消息
                 UserMessage userMessage = buildUserMessage(sandwichContent, images);
-                
+                // 设置模型路由上下文
                 ModelRouteContextHolder.set(ModelRouteContext.builder()
                         .language(normalizeLanguage(language))
                         .scene("chat")
@@ -176,22 +180,22 @@ public class AiController {
         if (images == null || images.isEmpty()) {
             return UserMessage.from(text);
         }
+        // 验证图片key
+        ossService.validateObjectKeys(images);
         
-        List<Image> imageList = images.stream()
+        List<Content> imageContents = images.stream()
                 .filter(StrUtil::isNotBlank)
                 .map(objectKey -> {
                     String url = ossService.generatePresignedUrl(objectKey);
-                    return Image.builder()
-                            .url(URI.create(url))
-                            .build();
+                    return ImageContent.from(URI.create(url));
                 })
                 .collect(Collectors.toList());
         
-        if (imageList.isEmpty()) {
+        if (imageContents.isEmpty()) {
             return UserMessage.from(text);
         }
         
-        return UserMessage.from(imageList, text);
+        return UserMessage.from(text, imageContents);
     }
 
     private String normalizeLanguage(String language) {

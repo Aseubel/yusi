@@ -51,6 +51,11 @@ public class WriteDiaryRequest implements Serializable {
     private String address;
     private String placeName;
     private String placeId;
+    
+    /**
+     * 图片列表（JSON数组格式存储OSS objectKey）
+     */
+    private String images;
 
     public Diary toDiary() {
         return Diary.builder()
@@ -66,6 +71,7 @@ public class WriteDiaryRequest implements Serializable {
                 .address(address)
                 .placeName(placeName)
                 .placeId(placeId)
+                .images(images)
                 .build();
     }
 }

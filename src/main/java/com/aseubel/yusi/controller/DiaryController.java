@@ -51,6 +51,13 @@ public class DiaryController {
             throw new IllegalArgumentException("用户ID不能为空");
         }
         Page<Diary> diaryPage = diaryService.getDiaryList(userId, pageNum, pageSize, sortBy, asc);
+        if (diaryPage.hasContent()) {
+            diaryPage.getContent().forEach(diary -> {
+                if (StrUtil.isNotBlank(diary.getImages())) {
+                    diary.setImages(diaryService.convertImagesToUrls(diary.getImages()));
+                }
+            });
+        }
         return Response.success(assembler.toModel(diaryPage));
     }
 

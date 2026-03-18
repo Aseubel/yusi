@@ -115,6 +115,9 @@ public class DiaryServiceImpl implements DiaryService {
     public Diary editDiary(Diary diary) {
         Diary existingDiary = diaryRepository.findByDiaryId(diary.getDiaryId());
         if (ObjectUtil.isNotEmpty(existingDiary)) {
+            // Delete removed images from OSS
+            deleteRemovedImages(existingDiary.getImages(), diary.getImages());
+            
             diary.setId(existingDiary.getId());
             diary.setUpdateTime(LocalDateTime.now());
             diary.setCreateTime(existingDiary.getCreateTime());
@@ -129,6 +132,29 @@ public class DiaryServiceImpl implements DiaryService {
             return saved;
         }
         return null;
+    }
+
+    private void deleteRemovedImages(String oldImagesJson, String newImagesJson) {
+        if (StrUtil.isBlank(oldImagesJson)) {
+            return;
+        }
+        try {
+            List<String> oldImages = JSONUtil.toList(oldImagesJson, String.class);
+            List<String> newImages = StrUtil.isBlank(newImagesJson) ? 
+                new java.util.ArrayList<>() : JSONUtil.toList(newImagesJson, String.class);
+            
+            List<String> deletedImages = oldImages.stream()
+                .filter(img -> !newImages.contains(img))
+                .collect(java.util.stream.Collectors.toList());
+                
+            if (!deletedImages.isEmpty()) {
+                // Async deletion would be better, but we do it synchronously for simplicity
+                ossService.deleteImages(deletedImages);
+                log.info("Deleted orphaned images from OSS: {}", deletedImages);
+            }
+        } catch (Exception e) {
+            log.error("Failed to delete removed images from OSS during diary edit", e);
+        }
     }
 
     @UpdateCache(key = "'diary:detail:' + #diaryId", evictOnly = true)

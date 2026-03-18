@@ -29,8 +29,8 @@
     
     <properties>
         <java.version>21</java.version>
-        <langchain4j.version>1.8.0</langchain4j.version>
-        <langchain4j-external.version>1.8.0-beta15</langchain4j-external.version>
+        <langchain4j.version>1.12.2</langchain4j.version>
+        <langchain4j-external.version>1.12.2-beta22</langchain4j-external.version>
         <shardingsphere.version>5.5.0</shardingsphere.version>
         <java-uuid-generator.version>5.0.0</java-uuid-generator.version>
         <lombok.version>1.18.30</lombok.version>
