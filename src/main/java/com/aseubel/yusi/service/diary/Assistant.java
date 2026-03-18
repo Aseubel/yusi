@@ -2,13 +2,14 @@ package com.aseubel.yusi.service.diary;
 
 import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.TokenStream;
+import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
 
 public interface Assistant {
 
-    TokenStream chat(@MemoryId String userId, @dev.langchain4j.service.UserMessage String message);
+    TokenStream chat(@MemoryId String userId, @UserMessage String message);
 
-    TokenStream chatWithMessage(@MemoryId String userId, dev.langchain4j.data.message.UserMessage message);
+    TokenStream chatWithMessage(@MemoryId String userId, @UserMessage UserMessage message);
 
     @dev.langchain4j.service.UserMessage("""
             请为你（用户A的AI知己）的用户撰写一封推荐信，向TA推荐另一位用户（用户B）。
