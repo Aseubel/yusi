@@ -72,8 +72,7 @@ public class OssService {
     public String generatePresignedUrl(String objectKey, int expireSeconds) {
         try {
             String url = "https://" + ossProperties.getBucketName() + "." + 
-                ossProperties.getEndpoint() + "/" + objectKey + 
-                "?x-oss-expires=" + expireSeconds;
+                ossProperties.getEndpoint() + "/" + objectKey;
             log.debug("Generated URL for: {}", objectKey);
             return url;
         } catch (Exception e) {
