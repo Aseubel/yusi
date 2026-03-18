@@ -5,6 +5,7 @@ import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aliyun.sdk.service.oss2.OSSClient;
 import com.aliyun.sdk.service.oss2.models.*;
+import com.aliyun.sdk.service.oss2.transport.BinaryData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -12,7 +13,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -37,12 +37,13 @@ public class OssService {
         String objectKey = ossProperties.getImageFolder() + userId + "/" + 
             UUID.randomUUID().toString().replace("-", "") + extension;
         
-        try (InputStream inputStream = file.getInputStream()) {
+        try {
+            byte[] bytes = file.getBytes();
+            
             PutObjectRequest request = PutObjectRequest.newBuilder()
                 .bucket(ossProperties.getBucketName())
                 .key(objectKey)
-                // Temporary dummy
-                // .body(inputStream)
+                .body(BinaryData.fromBytes(bytes))
                 .contentType(file.getContentType())
                 .build();
             
@@ -69,8 +70,16 @@ public class OssService {
     }
 
     public String generatePresignedUrl(String objectKey, int expireSeconds) {
-        // Temporary dummy so it compiles
-        return "temp-url";
+        try {
+            String url = "https://" + ossProperties.getBucketName() + "." + 
+                ossProperties.getEndpoint() + "/" + objectKey + 
+                "?x-oss-expires=" + expireSeconds;
+            log.debug("Generated URL for: {}", objectKey);
+            return url;
+        } catch (Exception e) {
+            log.error("Failed to generate URL for: {}", objectKey, e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "生成图片访问链接失败");
+        }
     }
 
     public List<String> generatePresignedUrls(List<String> objectKeys) {
