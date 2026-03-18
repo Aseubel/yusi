@@ -49,17 +49,20 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     @UpdateCache(key = "'plaza:feed:*'", evictOnly = true)
     @UpdateCache(key = "'plaza:my:' + #userId + ':*'", evictOnly = true)
     public SoulCard submitToPlaza(String userId, String content, String originId, CardType type) {
-        if (content == null || content.length() < 5) {
+        // 过滤掉图片和HTML内容
+        String filteredContent = stripImagesAndHtml(content);
+        
+        if (filteredContent == null || filteredContent.trim().length() < 5) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "内容太短");
         }
 
         // 使用AI进行情感分析
-        String emotion = analyzeContentEmotion(content);
+        String emotion = analyzeContentEmotion(filteredContent);
         log.info("情感分析结果 - userId: {}, emotion: {}", userId, emotion);
 
         SoulCard card = SoulCard.builder()
                 .userId(userId)
-                .content(content) // Anonymized content
+                .content(filteredContent) // 过滤后的内容
                 .originId(originId)
                 .type(type)
                 .emotion(emotion)
@@ -68,6 +71,21 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
                 .build();
 
         return cardRepository.save(card);
+    }
+
+    /**
+     * 过滤掉HTML标签和图片相关内容
+     */
+    private String stripImagesAndHtml(String content) {
+        if (content == null) {
+            return null;
+        }
+        String filtered = content;
+        filtered = filtered.replaceAll("<img[^>]*>", "");
+        filtered = filtered.replaceAll("<figure[^>]*>[\\s\\S]*?</figure>", "");
+        filtered = filtered.replaceAll("<div[^>]*class=\"[^\"]*image[^\"]*\"[^>]*>[\\s\\S]*?</div>", "");
+        filtered = filtered.replaceAll("!\\[.*?\\]\\(.*?\\)", "");
+        return filtered;
     }
 
     /**
@@ -256,13 +274,16 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权修改此卡片");
         }
 
-        if (content == null || content.length() < 5) {
+        // 过滤掉图片和HTML内容
+        String filteredContent = stripImagesAndHtml(content);
+        
+        if (filteredContent == null || filteredContent.trim().length() < 5) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "内容太短");
         }
 
         // 重新分析情绪
-        String emotion = analyzeContentEmotion(content);
-        card.setContent(content);
+        String emotion = analyzeContentEmotion(filteredContent);
+        card.setContent(filteredContent);
         card.setEmotion(emotion);
 
         return cardRepository.save(card);

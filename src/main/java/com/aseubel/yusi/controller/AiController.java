@@ -6,6 +6,8 @@ import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.ratelimit.LimitType;
 import com.aseubel.yusi.common.exception.AiLockException;
+import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.common.utils.SensitiveWordUtils;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
@@ -113,6 +115,10 @@ public class AiController {
         String userId = UserContext.getUserId();
         String message = request.getMessage();
         List<String> images = request.getImages();
+
+        if (images != null && images.size() > 3) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "图片数量不能超过3张");
+        }
 
         if (!aiLockService.tryAcquireLock(userId)) {
             throw new AiLockException("您有一个AI请求正在处理中，请等待完成后再试");

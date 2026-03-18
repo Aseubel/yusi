@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.oss;
 import com.aseubel.yusi.config.oss.OssProperties;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.common.utils.UuidUtils;
 import com.aliyun.sdk.service.oss2.OSSClient;
 import com.aliyun.sdk.service.oss2.models.*;
 import com.aliyun.sdk.service.oss2.transport.BinaryData;
@@ -35,7 +36,7 @@ public class OssService {
         String originalFilename = file.getOriginalFilename();
         String extension = getFileExtension(originalFilename);
         String objectKey = ossProperties.getImageFolder() + userId + "/" + 
-            UUID.randomUUID().toString().replace("-", "") + extension;
+            UuidUtils.genUuidSimple() + extension;
         
         try {
             byte[] bytes = file.getBytes();
