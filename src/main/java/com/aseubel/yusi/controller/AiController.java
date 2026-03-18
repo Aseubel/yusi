@@ -130,15 +130,15 @@ public class AiController {
                 }
                 // 构建三明治模板内容，用于强调systemprompt
                 String sandwichContent = String.format(PersistentChatMemoryStore.SANDWITCH_TEMPLATE, message);
-                // 构建用户消息
-                UserMessage userMessage = buildUserMessage(sandwichContent, images);
+                // 构建图片内容列表
+                List<ImageContent> imageContents = buildImageContents(images);
                 // 设置模型路由上下文
                 ModelRouteContextHolder.set(ModelRouteContext.builder()
                         .language(normalizeLanguage(language))
                         .scene("chat")
                         .build());
 
-                TokenStream tokenStream = diaryAssistant.chatWithMessage(userId, userMessage);
+                TokenStream tokenStream = diaryAssistant.chatWithMessage(userId, sandwichContent, imageContents);
                 tokenStream
                         .onPartialResponse(token -> {
                             try {
@@ -176,26 +176,20 @@ public class AiController {
         return emitter;
     }
 
-    private UserMessage buildUserMessage(String text, List<String> images) {
+    private List<ImageContent> buildImageContents(List<String> images) {
         if (images == null || images.isEmpty()) {
-            return UserMessage.from(text);
+            return List.of();
         }
         // 验证图片key
         ossService.validateObjectKeys(images);
         
-        List<Content> imageContents = images.stream()
+        return images.stream()
                 .filter(StrUtil::isNotBlank)
                 .map(objectKey -> {
                     String url = ossService.generatePresignedUrl(objectKey);
                     return ImageContent.from(URI.create(url));
                 })
                 .collect(Collectors.toList());
-        
-        if (imageContents.isEmpty()) {
-            return UserMessage.from(text);
-        }
-        
-        return UserMessage.from(text, imageContents);
     }
 
     private String normalizeLanguage(String language) {
