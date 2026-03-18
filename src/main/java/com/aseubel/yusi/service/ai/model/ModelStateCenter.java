@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RMap;
 import org.redisson.api.RTopic;
 import org.redisson.api.RedissonClient;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
@@ -36,8 +37,11 @@ public class ModelStateCenter {
         private volatile long nextProbeAt;
         private volatile String lastError;
         private volatile Phase phase = Phase.UP;
+        private volatile Phase previousPhase = Phase.UP;
         private final AtomicBoolean probing = new AtomicBoolean(false);
     }
+
+    private static final long SYNC_INTERVAL_MS = 30_000L;
 
     private final ModelRoutingProperties properties;
     private final ModelConfigCenter modelConfigCenter;
@@ -48,11 +52,31 @@ public class ModelStateCenter {
     @PostConstruct
     public void init() {
         redissonClient.getTopic(properties.getStateChannel()).addListener(ModelStateEvent.class, (channel, message) -> {
-            if (message == null || message.getState() == null || message.getInstanceId() == null) {
+            if (message == null || message.getInstanceId() == null) {
                 return;
             }
             remoteStateCache.put(message.getInstanceId(), message.getState());
         });
+
+        RMap<String, ModelRuntimeState> stateMap = redissonClient.getMap(properties.getInstanceStateMapKey());
+        for (Map.Entry<String, ModelRuntimeState> entry : stateMap.readAllMap().entrySet()) {
+            ModelRuntimeState state = entry.getValue();
+            if (state != null && state.getInstanceId() != null) {
+                LocalWindow window = localWindows.computeIfAbsent(entry.getKey(), id -> new LocalWindow());
+                window.totalRequests = state.getTotalRequests();
+                window.successRequests = state.getSuccessRequests();
+                window.failureRequests = state.getFailureRequests();
+                window.avgLatencyMs = state.getAvgLatencyMs();
+                window.consecutiveFailures = state.getConsecutiveFailures();
+                window.consecutiveSuccesses = state.getConsecutiveSuccesses();
+                window.phase = Phase.valueOf(state.getPhase());
+                window.previousPhase = window.phase;
+                window.nextProbeAt = state.getNextProbeAt();
+                window.lastError = state.getLastError();
+                log.info("Restored state for instance {}: phase={}, totalRequests={}",
+                        entry.getKey(), window.phase, window.totalRequests);
+            }
+        }
     }
 
     public boolean allowRequest(String instanceId) {
@@ -63,7 +87,9 @@ public class ModelStateCenter {
         }
         if (window.phase == Phase.DOWN && now >= window.nextProbeAt) {
             if (window.probing.compareAndSet(false, true)) {
+                window.previousPhase = window.phase;
                 window.phase = Phase.HALF_OPEN;
+                publishState(instanceId, "", window, "PHASE_CHANGE");
                 return true;
             }
             return false;
@@ -84,10 +110,11 @@ public class ModelStateCenter {
             window.avgLatencyMs = window.avgLatencyMs == 0 ? latencyMs : (window.avgLatencyMs * 0.8 + latencyMs * 0.2);
             if (window.phase == Phase.HALF_OPEN
                     && window.consecutiveSuccesses >= modelConfigCenter.getEffectiveConfig().getRecoverySuccessThreshold()) {
+                window.previousPhase = window.phase;
                 window.phase = Phase.UP;
                 window.nextProbeAt = 0L;
+                publishState(instanceId, modelName, window, "PHASE_CHANGE");
             }
-            publishState(instanceId, modelName, window, "SUCCESS");
         }
         window.probing.set(false);
     }
@@ -103,11 +130,12 @@ public class ModelStateCenter {
             window.lastError = throwable == null ? "" : throwable.getMessage();
             if (window.phase == Phase.HALF_OPEN
                     || window.consecutiveFailures >= modelConfigCenter.getEffectiveConfig().getFailureThreshold()) {
+                window.previousPhase = window.phase;
                 window.phase = Phase.DOWN;
                 window.nextProbeAt = System.currentTimeMillis()
                         + modelConfigCenter.getEffectiveConfig().getRecoveryProbeIntervalMs();
+                publishState(instanceId, modelName, window, "PHASE_CHANGE");
             }
-            publishState(instanceId, modelName, window, "FAILURE");
         }
         window.probing.set(false);
     }
@@ -140,6 +168,17 @@ public class ModelStateCenter {
                 .values()
                 .stream()
                 .toList();
+    }
+
+    @Scheduled(fixedDelay = SYNC_INTERVAL_MS)
+    public void syncToRedis() {
+        RMap<String, ModelRuntimeState> stateMap = redissonClient.getMap(properties.getInstanceStateMapKey());
+        for (Map.Entry<String, LocalWindow> entry : localWindows.entrySet()) {
+            LocalWindow window = entry.getValue();
+            ModelRuntimeState state = toState(entry.getKey(), "", window);
+            stateMap.put(entry.getKey(), state);
+        }
+        log.debug("Synced {} model states to Redis", localWindows.size());
     }
 
     private void publishState(String instanceId, String modelName, LocalWindow window, String action) {
