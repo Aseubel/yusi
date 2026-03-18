@@ -19,3 +19,5 @@ yusi:
     url-expire-seconds: ${OSS_URL_EXPIRE_SECONDS:3600}
     max-file-size: ${OSS_MAX_FILE_SIZE:10485760}
     image-folder: ${OSS_IMAGE_FOLDER:yusi/images/}
+    access-key-id: ${OSS_ACCESS_KEY_ID:}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET:}

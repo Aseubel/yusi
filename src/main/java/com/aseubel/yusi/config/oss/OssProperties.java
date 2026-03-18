@@ -18,4 +18,8 @@ public class OssProperties {
     private Long maxFileSize = 10485760L;
 
     private String imageFolder = "images/";
+
+    private String accessKeyId;
+
+    private String accessKeySecret;
 }
