@@ -5,20 +5,25 @@ import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.utils.ImageUtils;
 import com.aseubel.yusi.common.utils.UuidUtils;
+import com.aseubel.yusi.pojo.entity.ImageFile;
+import com.aseubel.yusi.repository.ImageFileRepository;
 import com.aliyun.sdk.service.oss2.OSSClient;
 import com.aliyun.sdk.service.oss2.models.*;
 import com.aliyun.sdk.service.oss2.transport.BinaryData;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -29,6 +34,7 @@ public class OssService {
     private final OSSClient ossClient;
     private final OssProperties ossProperties;
     private final StringRedisTemplate redisTemplate;
+    private final ImageFileRepository imageFileRepository;
 
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of(
         "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"
@@ -52,6 +58,18 @@ public class OssService {
 
             byte[] compressed = ImageUtils.compressImage(bytes);
 
+            String fileMd5 = calculateMd5(compressed);
+
+            var existingFile = imageFileRepository.findByFileMd5(fileMd5);
+            if (existingFile.isPresent()) {
+                String existObjectKey = existingFile.get().getObjectKey();
+                if (objectKeyExists(existObjectKey)) {
+                    log.info("Skip upload - file already exists with MD5: {}, objectKey: {}", fileMd5, existObjectKey);
+                    saveImageFileAsync(existObjectKey, fileMd5, userId, originalFilename, (long) compressed.length, file.getContentType());
+                    return existObjectKey;
+                }
+            }
+
             PutObjectRequest request = PutObjectRequest.newBuilder()
                 .bucket(ossProperties.getBucketName())
                 .key(objectKey)
@@ -63,7 +81,9 @@ public class OssService {
             log.info("Image uploaded successfully: {}, original size: {}, compressed size: {}",
                 objectKey, bytes.length, compressed.length);
 
-            cacheMd5ForSkipUpload(objectKey, bytes);
+            cacheMd5ForSkipUpload(objectKey, fileMd5);
+
+            saveImageFileAsync(objectKey, fileMd5, userId, originalFilename, (long) compressed.length, file.getContentType());
 
             return objectKey;
         } catch (IOException e) {
@@ -132,12 +152,22 @@ public class OssService {
     }
 
     public String checkSkipUpload(String fileMd5) {
+        var imageFile = imageFileRepository.findByFileMd5(fileMd5);
+        if (imageFile.isPresent()) {
+            String objectKey = imageFile.get().getObjectKey();
+            if (objectKeyExists(objectKey)) {
+                log.info("Skip upload - found in database, MD5: {}, objectKey: {}", fileMd5, objectKey);
+                return objectKey;
+            }
+        }
+
         String cacheKey = MD5_CACHE_KEY_PREFIX + fileMd5;
         String cachedObjectKey = redisTemplate.opsForValue().get(cacheKey);
         if (cachedObjectKey != null && objectKeyExists(cachedObjectKey)) {
-            log.info("Skip upload for MD5: {}, objectKey: {}", fileMd5, cachedObjectKey);
+            log.info("Skip upload - found in cache, MD5: {}, objectKey: {}", fileMd5, cachedObjectKey);
             return cachedObjectKey;
         }
+
         return null;
     }
 
@@ -240,36 +270,74 @@ public class OssService {
                 "分片上传不完整，已上传 " + uploadedCount + "/" + totalChunks);
         }
 
+        Path tempDir = null;
         try {
+            tempDir = Files.createTempDirectory("yusi-merge-");
+
+            ByteArrayOutputStream mergedOutput = new ByteArrayOutputStream();
+
+            for (int i = 0; i < totalChunks; i++) {
+                String chunkObjectKey = ossProperties.getImageFolder() + "chunks/" + fileMd5 + "/" + i;
+                byte[] chunkData = downloadChunk(chunkObjectKey);
+                mergedOutput.write(chunkData);
+            }
+
+            byte[] mergedBytes = mergedOutput.toByteArray();
+
             String extension = getFileExtension(fileName);
             String finalObjectKey = ossProperties.getImageFolder() + userId + "/" +
                 UuidUtils.genUuidSimple() + extension;
 
-            String firstChunkKey = CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":0";
-            String storedChunkObjectKey = redisTemplate.opsForValue().get(firstChunkKey);
+            byte[] compressedBytes = ImageUtils.compressImage(mergedBytes);
 
-            if (storedChunkObjectKey == null) {
-                throw new BusinessException(ErrorCode.INTERNAL_ERROR, "未找到上传的分片");
-            }
-
-            HeadObjectRequest headRequest = HeadObjectRequest.newBuilder()
+            PutObjectRequest request = PutObjectRequest.newBuilder()
                 .bucket(ossProperties.getBucketName())
-                .key(storedChunkObjectKey)
+                .key(finalObjectKey)
+                .body(BinaryData.fromBytes(compressedBytes))
+                .contentType(getMimeType(extension))
                 .build();
-            ossClient.headObject(headRequest);
+
+            ossClient.putObject(request);
 
             cacheMd5ForSkipUpload(finalObjectKey, fileMd5);
+
+            saveImageFileAsync(finalObjectKey, fileMd5, userId, fileName, (long) compressedBytes.length, getMimeType(extension));
 
             cleanupChunks(fileMd5, totalChunks);
             cleanupUploadId(fileMd5);
 
-            log.info("Image merged successfully: {}, total chunks: {}", finalObjectKey, totalChunks);
+            log.info("Image merged successfully: {}, total chunks: {}, original size: {}, compressed size: {}",
+                finalObjectKey, totalChunks, mergedBytes.length, compressedBytes.length);
             return finalObjectKey;
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
             log.error("Failed to merge chunks for MD5: {}", fileMd5, e);
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "分片合并失败");
+        } finally {
+            if (tempDir != null) {
+                try {
+                    Files.walk(tempDir)
+                        .sorted(Comparator.reverseOrder())
+                        .map(Path::toFile)
+                        .forEach(File::delete);
+                } catch (IOException e) {
+                    log.warn("Failed to cleanup temp directory: {}", tempDir);
+                }
+            }
+        }
+    }
+
+    private byte[] downloadChunk(String objectKey) throws IOException {
+        GetObjectRequest request = GetObjectRequest.newBuilder()
+            .bucket(ossProperties.getBucketName())
+            .key(objectKey)
+            .build();
+
+        CompletableFuture<GetObjectResult> future = ossClient.getObjectAsync(request);
+        GetObjectResult result = future.join();
+        try (InputStream inputStream = result.getBody().getInputStream()) {
+            return inputStream.readAllBytes();
         }
     }
 
@@ -296,14 +364,29 @@ public class OssService {
         redisTemplate.delete(CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":uploadId");
     }
 
-    private void cacheMd5ForSkipUpload(String objectKey, byte[] fileBytes) {
+    @Async
+    public void saveImageFileAsync(String objectKey, String fileMd5, String userId, String fileName,
+                                    Long fileSize, String contentType) {
         try {
-            String md5 = calculateMd5(fileBytes);
-            String cacheKey = MD5_CACHE_KEY_PREFIX + md5;
-            redisTemplate.opsForValue().set(cacheKey, objectKey, MD5_CACHE_EXPIRE_DAYS, TimeUnit.DAYS);
-            log.debug("Cached MD5 {} for objectKey {}", md5, objectKey);
+            if (imageFileRepository.existsByFileMd5(fileMd5)) {
+                log.debug("ImageFile already exists for MD5: {}", fileMd5);
+                return;
+            }
+
+            ImageFile imageFile = ImageFile.builder()
+                .fileMd5(fileMd5)
+                .objectKey(objectKey)
+                .userId(userId)
+                .fileName(fileName)
+                .fileSize(fileSize)
+                .contentType(contentType)
+                .createTime(LocalDateTime.now())
+                .build();
+
+            imageFileRepository.save(imageFile);
+            log.debug("ImageFile saved asynchronously: objectKey={}, MD5={}", objectKey, fileMd5);
         } catch (Exception e) {
-            log.warn("Failed to cache MD5 for objectKey: {}", objectKey, e);
+            log.error("Failed to save ImageFile asynchronously: objectKey={}, MD5={}", objectKey, fileMd5, e);
         }
     }
 
@@ -315,7 +398,7 @@ public class OssService {
 
     private String calculateMd5(byte[] data) {
         try {
-            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            MessageDigest md = MessageDigest.getInstance("MD5");
             byte[] digest = md.digest(data);
             StringBuilder sb = new StringBuilder();
             for (byte b : digest) {
