@@ -23,7 +23,6 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -328,16 +327,14 @@ public class OssService {
         }
     }
 
-    private byte[] downloadChunk(String objectKey) throws IOException {
+    private byte[] downloadChunk(String objectKey) throws Exception {
         GetObjectRequest request = GetObjectRequest.newBuilder()
             .bucket(ossProperties.getBucketName())
             .key(objectKey)
             .build();
 
-        CompletableFuture<GetObjectResult> future = ossClient.getObjectAsync(request);
-        GetObjectResult result = future.join();
-        try (InputStream inputStream = result.getBody().getInputStream()) {
-            return inputStream.readAllBytes();
+        try (GetObjectResult result = ossClient.getObject(request)) {
+            return result.body().readAllBytes();
         }
     }
 
