@@ -22,4 +22,11 @@ public interface LifeGraphEntityRepository extends JpaRepository<LifeGraphEntity
     List<LifeGraphEntity> findTop50ByUserIdOrderByMentionCountDesc(String userId);
 
     List<LifeGraphEntity> findByUserIdAndType(String userId, LifeGraphEntity.EntityType type);
+
+    Page<LifeGraphEntity> findByUserId(String userId, Pageable pageable);
+
+    long countByUserId(String userId);
+
+    List<LifeGraphEntity> findByUserId(String userId);
 }
+
