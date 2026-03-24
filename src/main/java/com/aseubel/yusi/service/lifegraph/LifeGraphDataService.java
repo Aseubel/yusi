@@ -177,21 +177,21 @@ public class LifeGraphDataService {
             entity.setProps(props);
         }
 
-        entity = entityRepository.save(entity);
+        final LifeGraphEntity savedEntity = entityRepository.save(entity);
 
         if (changedIdentity) {
-            List<LifeGraphEntity> siblings = entityRepository.findByUserIdAndNameNorm(userId, entity.getNameNorm());
+            List<LifeGraphEntity> siblings = entityRepository.findByUserIdAndNameNorm(userId, savedEntity.getNameNorm());
             LifeGraphEntity target = siblings.stream()
-                    .filter(e -> e.getType() == entity.getType() && !e.getId().equals(entity.getId()))
+                    .filter(e -> e.getType() == savedEntity.getType() && !e.getId().equals(savedEntity.getId()))
                     .findFirst()
                     .orElse(null);
 
             if (target != null) {
-                return performMerge(entity, target);
+                return performMerge(savedEntity, target);
             }
         }
 
-        return entity;
+        return savedEntity;
     }
 
     private LifeGraphEntity performMerge(LifeGraphEntity source, LifeGraphEntity target) {

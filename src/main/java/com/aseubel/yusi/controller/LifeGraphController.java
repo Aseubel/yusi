@@ -145,6 +145,7 @@ public class LifeGraphController {
             Long version = body.get("version") != null ? Long.valueOf(body.get("version").toString()) : null;
             LifeGraphEntity entity = dataService.updateEntity(userId, id,
                     (String) body.get("displayName"),
+                    (String) body.get("type"),
                     (String) body.get("summary"),
                     (String) body.get("props"),
                     version);
