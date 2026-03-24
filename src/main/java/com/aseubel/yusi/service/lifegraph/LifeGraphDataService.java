@@ -139,7 +139,7 @@ public class LifeGraphDataService {
     }
 
     @Transactional
-    public LifeGraphEntity updateEntity(String userId, Long entityId, String displayName, String summary,
+    public LifeGraphEntity updateEntity(String userId, Long entityId, String displayName, String type, String summary,
                                          String props, Long version) {
         LifeGraphEntity entity = entityRepository.findById(entityId)
                 .orElseThrow(() -> new EntityNotFoundException("Entity not found: " + entityId));
@@ -153,9 +153,22 @@ public class LifeGraphDataService {
             throw new ObjectOptimisticLockingFailureException(LifeGraphEntity.class, entityId);
         }
 
+        boolean changedIdentity = false;
+        if (StrUtil.isNotBlank(type)) {
+            LifeGraphEntity.EntityType newType = LifeGraphEntity.EntityType.valueOf(type);
+            if (entity.getType() != newType) {
+                entity.setType(newType);
+                changedIdentity = true;
+            }
+        }
+
         if (StrUtil.isNotBlank(displayName)) {
-            entity.setDisplayName(displayName);
-            entity.setNameNorm(normalize(displayName));
+            String newNorm = normalize(displayName);
+            if (!newNorm.equals(entity.getNameNorm()) || !displayName.equals(entity.getDisplayName())) {
+                entity.setDisplayName(displayName);
+                entity.setNameNorm(newNorm);
+                changedIdentity = true;
+            }
         }
         if (summary != null) {
             entity.setSummary(summary);
@@ -164,7 +177,54 @@ public class LifeGraphDataService {
             entity.setProps(props);
         }
 
-        return entityRepository.save(entity);
+        entity = entityRepository.save(entity);
+
+        if (changedIdentity) {
+            List<LifeGraphEntity> siblings = entityRepository.findByUserIdAndNameNorm(userId, entity.getNameNorm());
+            LifeGraphEntity target = siblings.stream()
+                    .filter(e -> e.getType() == entity.getType() && !e.getId().equals(entity.getId()))
+                    .findFirst()
+                    .orElse(null);
+
+            if (target != null) {
+                return performMerge(entity, target);
+            }
+        }
+
+        return entity;
+    }
+
+    private LifeGraphEntity performMerge(LifeGraphEntity source, LifeGraphEntity target) {
+        // Merge counters and summaries
+        target.setMentionCount((target.getMentionCount() == null ? 0 : target.getMentionCount()) 
+                + (source.getMentionCount() == null ? 0 : source.getMentionCount()));
+        
+        target.setRelationCount((target.getRelationCount() == null ? 0 : target.getRelationCount()) 
+                + (source.getRelationCount() == null ? 0 : source.getRelationCount()));
+
+        if (StrUtil.isBlank(target.getSummary()) && StrUtil.isNotBlank(source.getSummary())) {
+            target.setSummary(source.getSummary());
+        } else if (StrUtil.isNotBlank(target.getSummary()) && StrUtil.isNotBlank(source.getSummary())) {
+            target.setSummary(target.getSummary() + "\n" + source.getSummary());
+        }
+
+        // Redirect relations
+        List<LifeGraphRelation> outRels = relationRepository.findByUserIdAndSourceIdIn(source.getUserId(), List.of(source.getId()));
+        for (LifeGraphRelation r : outRels) {
+            r.setSourceId(target.getId());
+        }
+        relationRepository.saveAll(outRels);
+
+        List<LifeGraphRelation> inRels = relationRepository.findByUserIdAndTargetIdIn(source.getUserId(), List.of(source.getId()));
+        for (LifeGraphRelation r : inRels) {
+            r.setTargetId(target.getId());
+        }
+        relationRepository.saveAll(inRels);
+
+        entityRepository.save(target);
+        entityRepository.delete(source);
+
+        return target;
     }
 
     @Transactional
