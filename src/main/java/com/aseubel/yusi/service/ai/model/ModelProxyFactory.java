@@ -75,6 +75,8 @@ public class ModelProxyFactory {
                             System.currentTimeMillis() - start, root);
                     excluded.add(selected.getId());
                     lastError = root;
+                    log.warn("AI model invocation failed, attempt {}/{}, model: {}, error: {}",
+                            i + 1, 4, selected.getModelName(), root.getMessage());
                 }
             }
             if (lastError != null) {

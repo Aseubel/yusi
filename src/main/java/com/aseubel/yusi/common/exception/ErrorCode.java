@@ -10,6 +10,7 @@ public enum ErrorCode {
     SUCCESS(200, 200, "success"),
     SYSTEM_ERROR(500, 500, "系统错误"),
     INTERNAL_ERROR(50001, 500, "内部服务错误"),
+    OPERATION_FAILED(50002, 500, "操作失败"),
     UNAUTHORIZED(401, 401, "未授权"),
     FORBIDDEN(403, 403, "禁止访问"),
 
