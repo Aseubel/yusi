@@ -49,8 +49,11 @@ public class SituationReportService {
             String jsonReport = future.get();
             log.info("AI Analysis Result: {}", jsonReport);
 
+            // 清理可能存在的 markdown 标记
+            String cleanJson = cleanJsonMarkup(jsonReport);
+
             // 解析结果
-            SituationReport report = objectMapper.readValue(jsonReport, SituationReport.class);
+            SituationReport report = objectMapper.readValue(cleanJson, SituationReport.class);
             report.setScenarioId(room.getScenarioId());
 
             // 过滤出允许公开的回答
@@ -149,5 +152,22 @@ public class SituationReportService {
             if (lower.contains(k))
                 set.add(k);
         return set;
+    }
+
+    private String cleanJsonMarkup(String raw) {
+        if (raw == null) return raw;
+        String trimmed = raw.trim();
+        if (trimmed.startsWith("```json")) {
+            int endIndex = trimmed.lastIndexOf("```");
+            if (endIndex > 6) {
+                return trimmed.substring(6, endIndex).trim();
+            }
+        } else if (trimmed.startsWith("```")) {
+            int endIndex = trimmed.lastIndexOf("```");
+            if (endIndex > 3) {
+                return trimmed.substring(3, endIndex).trim();
+            }
+        }
+        return raw;
     }
 }
