@@ -13,6 +13,7 @@ import com.aseubel.yusi.pojo.dto.situation.SituationRoomDetailResponse;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
 import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.redis.service.IRedisService;
 import com.aseubel.yusi.repository.SituationRoomRepository;
 import com.aseubel.yusi.repository.SituationScenarioRepository;
 import com.aseubel.yusi.service.room.SituationRoomService;
@@ -20,16 +21,18 @@ import com.aseubel.yusi.service.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.redisson.api.RLock;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -44,6 +47,10 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     private final UserService userService;
 
     private final SituationReportService reportService;
+
+    private final IRedisService redisService;
+
+    private static final String REPORT_LOCK_PREFIX = "room:report:lock:";
 
     @Override
     public SituationRoom createRoom(String ownerId, int maxMembers) {
@@ -190,17 +197,42 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     }
 
     @Override
+    @Transactional
     public SituationReport getReport(String code) {
-        SituationRoom room = getRoom(code);
-        if (room.getStatus() != RoomStatus.COMPLETED)
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "未完成");
-        if (room.getReport() != null) {
-            return room.getReport();
+        String lockKey = REPORT_LOCK_PREFIX + code;
+        RLock lock = redisService.getLock(lockKey);
+        boolean locked = false;
+        try {
+            locked = lock.tryLock(0, 120, TimeUnit.SECONDS);
+            if (!locked) {
+                SituationRoom room = roomRepository.findById(code)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "房间不存在"));
+                if (room.getReport() != null) {
+                    return room.getReport();
+                }
+                throw new BusinessException(ErrorCode.OPERATION_FAILED, "报告正在生成中，请稍后刷新");
+            }
+
+            SituationRoom room = roomRepository.findByIdWithLock(code)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "房间不存在"));
+            if (room.getStatus() != RoomStatus.COMPLETED)
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "未完成");
+            if (room.getReport() != null) {
+                return room.getReport();
+            }
+
+            SituationReport report = reportService.analyze(room);
+            room.setReport(report);
+            roomRepository.save(room);
+            return report;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(ErrorCode.OPERATION_FAILED, "获取锁失败");
+        } finally {
+            if (locked && lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
         }
-        SituationReport report = reportService.analyze(room);
-        room.setReport(report);
-        roomRepository.save(room);
-        return report;
     }
 
     @Override

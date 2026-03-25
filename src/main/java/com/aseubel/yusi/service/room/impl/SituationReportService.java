@@ -27,7 +27,6 @@ public class SituationReportService {
 
     public SituationReport analyze(SituationRoom room) {
         try {
-            // 准备数据
             SituationScenario scenario = scenarioRepository.findById(room.getScenarioId()).orElse(null);
             if (ObjectUtil.isEmpty(scenario)) {
                 throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND,
@@ -37,7 +36,6 @@ public class SituationReportService {
             String scenarioString = scenario.getContentString();
             String userAnswersJson = objectMapper.writeValueAsString(room.getSubmissions());
 
-            // 调用 AI
             CompletableFuture<String> future = new CompletableFuture<>();
             StringBuilder sb = new StringBuilder();
             situationRoomAgent.analyzeReport(scenarioString, userAnswersJson)
@@ -49,14 +47,11 @@ public class SituationReportService {
             String jsonReport = future.get();
             log.info("AI Analysis Result: {}", jsonReport);
 
-            // 清理可能存在的 markdown 标记
-            String cleanJson = cleanJsonMarkup(jsonReport);
+            String cleanJson = extractValidJson(jsonReport);
 
-            // 解析结果
             SituationReport report = objectMapper.readValue(cleanJson, SituationReport.class);
             report.setScenarioId(room.getScenarioId());
 
-            // 过滤出允许公开的回答
             List<SituationReport.PublicSubmission> publicSubmissions = report.extractPublicSubmissions(room);
             report.setPublicSubmissions(publicSubmissions);
 
@@ -69,9 +64,12 @@ public class SituationReportService {
         }
     }
 
-    private String cleanJsonMarkup(String raw) {
-        if (raw == null) return raw;
+    private String extractValidJson(String raw) {
+        if (raw == null) {
+            throw new BusinessException(ErrorCode.OPERATION_FAILED, "AI返回为空");
+        }
         String trimmed = raw.trim();
+
         if (trimmed.startsWith("```json")) {
             int endIndex = trimmed.lastIndexOf("```");
             if (endIndex > 6) {
@@ -83,6 +81,24 @@ public class SituationReportService {
                 return trimmed.substring(3, endIndex).trim();
             }
         }
-        return raw;
+
+        int jsonStart = trimmed.indexOf("{");
+        int jsonEnd = trimmed.lastIndexOf("}");
+        if (jsonStart != -1 && jsonEnd != -1 && jsonEnd > jsonStart) {
+            String possibleJson = trimmed.substring(jsonStart, jsonEnd + 1);
+            try {
+                objectMapper.readTree(possibleJson);
+                return possibleJson;
+            } catch (Exception e) {
+                log.warn("Extracted JSON candidate is invalid: {}", possibleJson.substring(0, Math.min(100, possibleJson.length())));
+            }
+        }
+
+        if (trimmed.contains("Thinking Process:") || trimmed.contains("```")) {
+            log.error("AI returned thinking process or markdown instead of pure JSON: {}", trimmed.substring(0, Math.min(500, trimmed.length())));
+            throw new BusinessException(ErrorCode.OPERATION_FAILED, "AI返回格式错误，请稍后重试");
+        }
+
+        return trimmed;
     }
 }
