@@ -151,26 +151,15 @@ public class SituationRoomServiceImpl implements SituationRoomService {
 
         if (room.allSubmitted()) {
             room.setStatus(RoomStatus.COMPLETED);
-            roomRepository.save(room); // Save status first
-
-            // Trigger analysis asynchronously
+            roomRepository.save(room);
             CompletableFuture.runAsync(() -> {
                 try {
-                    log.info("Starting async analysis for room: {}", room.getCode());
-                    SituationReport report = reportService.analyze(room);
-
-                    // Reload room to avoid stale object state issues (though in this simple case it
-                    // might be okay, safer to reload)
-                    roomRepository.findById(room.getCode()).ifPresent(r -> {
-                        r.setReport(report);
-                        roomRepository.save(r);
-                        log.info("Async analysis completed for room: {}", room.getCode());
-                    });
+                    getReport(code);
                 } catch (Exception e) {
-                    log.error("Async analysis failed for room: " + room.getCode(), e);
+                    log.error("Async analysis failed for room: {}", code, e);
                 }
             });
-            return room; // Return immediately
+            return room;
         }
         return roomRepository.save(room);
     }
