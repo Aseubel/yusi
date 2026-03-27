@@ -34,8 +34,9 @@ public interface UserService {
     /**
      * 发送找回密码验证码
      * @param userName 用户名
+     * @return 用户的邮箱（脱敏处理）
      */
-    void sendForgotPasswordCode(String userName);
+    String sendForgotPasswordCode(String userName);
 
     /**
      * 重置密码

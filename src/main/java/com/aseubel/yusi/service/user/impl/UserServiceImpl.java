@@ -207,7 +207,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public void sendForgotPasswordCode(String userName) {
+    public String sendForgotPasswordCode(String userName) {
         User user = userRepository.findByUserName(userName);
         if (user == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
@@ -220,6 +220,18 @@ public class UserServiceImpl implements UserService {
              throw new BusinessException(ErrorCode.PARAM_ERROR, "邮箱格式不正确，可联系管理员解决");
         }
         verificationCodeService.sendCode(user.getEmail());
+        return maskEmail(user.getEmail());
+    }
+
+    private String maskEmail(String email) {
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 1) {
+            return email;
+        }
+        String localPart = email.substring(0, atIndex);
+        String domain = email.substring(atIndex);
+        String maskedLocal = localPart.charAt(0) + "***";
+        return maskedLocal + domain;
     }
 
     @Override

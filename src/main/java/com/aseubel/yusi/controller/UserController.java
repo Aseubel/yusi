@@ -60,9 +60,9 @@ public class UserController {
 
     @Auth(required = false)
     @PostMapping("/forgot-password/send-code")
-    public Response<Void> sendForgotPasswordCode(@Valid @RequestBody ForgotPasswordRequest request) {
-        userService.sendForgotPasswordCode(request.getUserName());
-        return Response.success();
+    public Response<String> sendForgotPasswordCode(@Valid @RequestBody ForgotPasswordRequest request) {
+        String maskedEmail = userService.sendForgotPasswordCode(request.getUserName());
+        return Response.success(maskedEmail);
     }
 
     @Auth(required = false)
