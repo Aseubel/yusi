@@ -230,7 +230,8 @@ public class UserServiceImpl implements UserService {
         }
         String localPart = email.substring(0, atIndex);
         String domain = email.substring(atIndex);
-        String maskedLocal = localPart.charAt(0) + "***";
+        int keepChars = Math.min(3, localPart.length());
+        String maskedLocal = localPart.substring(0, keepChars) + "***";
         return maskedLocal + domain;
     }
 
