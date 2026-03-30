@@ -3,6 +3,7 @@ package com.aseubel.yusi.config.ai;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.ai.MemorySearchTool;
 import com.aseubel.yusi.service.ai.UserPersonaTool;
+import com.aseubel.yusi.service.ai.MemoryCompressionAssistant;
 import com.aseubel.yusi.service.ai.PromptManager;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
@@ -81,7 +82,7 @@ public class AgentConfig {
     @Bean(name = "situationRoomAgent")
     public SituationRoomAgent situationRoomAgent() {
         SituationRoomAgent agent = AiServices.builder(SituationRoomAgent.class)
-                .streamingChatModel((StreamingChatModel) applicationContext.getBean("logicModel"))
+                .streamingChatModel((StreamingChatModel) applicationContext.getBean("streamingChatModel"))
                 .systemMessageProvider(chatMemoryId -> promptManager.getPrompt(PromptKey.LOGIC))
                 .build();
         return agent;
@@ -95,5 +96,13 @@ public class AgentConfig {
 
         log.info("EmotionAnalyzer 已配置完成，可用于广场内容情感分析");
         return emotionAnalyzerImpl;
+    }
+
+    @Bean(name = "memoryCompressionAssistant")
+    public MemoryCompressionAssistant memoryCompressionAssistant(UserPersonaTool userPersonaTool) {
+        return AiServices.builder(MemoryCompressionAssistant.class)
+                .chatModel((ChatModel) applicationContext.getBean("chatModel"))
+                .tools(userPersonaTool)
+                .build();
     }
 }

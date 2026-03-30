@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.room.impl;
 
 import cn.hutool.core.util.ObjectUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
@@ -38,11 +39,19 @@ public class SituationReportService {
 
             CompletableFuture<String> future = new CompletableFuture<>();
             StringBuilder sb = new StringBuilder();
-            situationRoomAgent.analyzeReport(scenarioString, userAnswersJson)
-                    .onPartialResponse(sb::append)
-                    .onCompleteResponse(res -> future.complete(sb.toString()))
-                    .onError(future::completeExceptionally)
-                    .start();
+
+            try {
+                com.aseubel.yusi.service.ai.model.ModelRouteContextHolder.set(
+                        com.aseubel.yusi.service.ai.model.ModelRouteContext.builder()
+                                .scene(PromptKey.LOGIC.getKey()).language("zh").build());
+                situationRoomAgent.analyzeReport(scenarioString, userAnswersJson)
+                        .onPartialResponse(sb::append)
+                        .onCompleteResponse(res -> future.complete(sb.toString()))
+                        .onError(future::completeExceptionally)
+                        .start();
+            } finally {
+                com.aseubel.yusi.service.ai.model.ModelRouteContextHolder.clear();
+            }
 
             String jsonReport = future.get();
             log.info("AI Analysis Result: {}", jsonReport);
@@ -90,12 +99,14 @@ public class SituationReportService {
                 objectMapper.readTree(possibleJson);
                 return possibleJson;
             } catch (Exception e) {
-                log.warn("Extracted JSON candidate is invalid: {}", possibleJson.substring(0, Math.min(100, possibleJson.length())));
+                log.warn("Extracted JSON candidate is invalid: {}",
+                        possibleJson.substring(0, Math.min(100, possibleJson.length())));
             }
         }
 
         if (trimmed.contains("Thinking Process:") || trimmed.contains("```")) {
-            log.error("AI returned thinking process or markdown instead of pure JSON: {}", trimmed.substring(0, Math.min(500, trimmed.length())));
+            log.error("AI returned thinking process or markdown instead of pure JSON: {}",
+                    trimmed.substring(0, Math.min(500, trimmed.length())));
             throw new BusinessException(ErrorCode.OPERATION_FAILED, "AI返回格式错误，请稍后重试");
         }
 

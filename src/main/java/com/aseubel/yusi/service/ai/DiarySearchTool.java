@@ -18,7 +18,18 @@ import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.service.vector.request.AnnSearchReq;
+import io.milvus.v2.service.vector.request.HybridSearchReq;
+import io.milvus.v2.service.vector.request.data.EmbeddedText;
+import io.milvus.v2.service.vector.request.data.FloatVec;
+import io.milvus.v2.service.vector.request.ranker.RRFRanker;
+import io.milvus.v2.service.vector.response.SearchResp;
+
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
@@ -42,13 +53,16 @@ import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metad
 public class DiarySearchTool {
 
     private final MilvusEmbeddingStore milvusEmbeddingStore;
+    private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
     private final UserRepository userRepository;
 
     public DiarySearchTool(MilvusEmbeddingStore milvusEmbeddingStore,
-                          EmbeddingModel embeddingModel,
-                          UserRepository userRepository) {
+            MilvusClientV2 milvusClientV2,
+            EmbeddingModel embeddingModel,
+            UserRepository userRepository) {
         this.milvusEmbeddingStore = milvusEmbeddingStore;
+        this.milvusClientV2 = milvusClientV2;
         this.embeddingModel = embeddingModel;
         this.userRepository = userRepository;
     }
@@ -121,27 +135,44 @@ public class DiarySearchTool {
                 currentUserId, query, startDate, endDate);
 
         try {
-            // 构建过滤条件
-            Filter filter = buildFilter(currentUserId, startDate, endDate);
+            // 构建过滤条件字符串 (Milvus expr 格式)
+            String expr = buildMilvusExpr(currentUserId, startDate, endDate);
 
             // 生成查询的 Embedding
             Embedding queryEmbedding = embeddingModel.embed(query).content();
 
-            // 构建搜索请求
-            EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
-                    .queryEmbedding(queryEmbedding)
-                    .filter(filter)
-                    .maxResults(5)
-                    .minScore(0.6) // 稍微降低阈值以获取更多相关结果
+            // 1. 构建稠密向量搜索请求
+            AnnSearchReq denseReq = AnnSearchReq.builder()
+                    .vectorFieldName("vector")
+                    .vectors(Collections.singletonList(new FloatVec(queryEmbedding.vector())))
+                    .params("{\"metric_type\": \"COSINE\"}")
+                    .limit(10) // 增加TopK以供Rerank
+                    .filter(expr)
                     .build();
 
-            // 执行搜索
-            EmbeddingSearchResult<TextSegment> searchResult = milvusEmbeddingStore.search(searchRequest);
+            // 2. 构建稀疏向量搜索请求 (使用Milvus直接文本搜索能力进行BM25检索)
+            AnnSearchReq sparseReq = AnnSearchReq.builder()
+                    .vectorFieldName("text_sparse")
+                    .vectors(Collections.singletonList(new EmbeddedText(query)))
+                    .params("{\"metric_type\": \"BM25\"}")
+                    .limit(10)
+                    .filter(expr)
+                    .build();
 
-            // 提取并返回结果
-            List<EmbeddingMatch<TextSegment>> matches = searchResult.matches();
+            // 3. 构建混合搜索请求
+            HybridSearchReq hybridSearchReq = HybridSearchReq.builder()
+                    .collectionName("yusi_embedding_collection")
+                    .searchRequests(Arrays.asList(denseReq, sparseReq))
+                    .ranker(RRFRanker.builder().k(60).build()) // RRF重排序，60为常用的平滑参数k
+                    .limit(5) // 最终返回Top 5
+                    .outFields(Collections.singletonList("text"))
+                    .build();
 
-            if (matches.isEmpty()) {
+            // 4. 执行混合搜索
+            SearchResp searchResp = milvusClientV2.hybridSearch(hybridSearchReq);
+            List<List<SearchResp.SearchResult>> searchResults = searchResp.getSearchResults();
+
+            if (searchResults == null || searchResults.isEmpty() || searchResults.get(0).isEmpty()) {
                 log.info("DiarySearchTool: 未找到匹配的日记内容");
                 if (startDate != null || endDate != null) {
                     return List.of("在指定的时间范围内没有找到相关的日记记录。");
@@ -149,11 +180,12 @@ public class DiarySearchTool {
                 return List.of("没有找到与该主题相关的日记记录。");
             }
 
-            List<String> results = matches.stream()
-                    .map(match -> {
-                        TextSegment segment = match.embedded();
-                        String content = segment.text();
-                        double score = match.score();
+            // 提取并返回结果
+            List<String> results = searchResults.get(0).stream()
+                    .map(result -> {
+                        Map<String, Object> entity = result.getEntity();
+                        String content = entity.containsKey("text") ? entity.get("text").toString() : "";
+                        double score = result.getScore();
                         log.debug("DiarySearchTool: 匹配结果 score={}, content='{}'", score,
                                 content.substring(0, Math.min(50, content.length())));
                         return content;
@@ -170,26 +202,22 @@ public class DiarySearchTool {
     }
 
     /**
-     * 构建 Milvus 过滤条件
+     * 构建 Milvus 查询表达式 (Expr)
      * 
      * 始终包含 userId 过滤（安全基线），可选添加日期范围过滤
      */
-    private Filter buildFilter(String userId, String startDate, String endDate) {
-        // 安全基线：必须过滤 userId
-        Filter filter = metadataKey("userId").isEqualTo(userId);
+    private String buildMilvusExpr(String userId, String startDate, String endDate) {
+        StringBuilder expr = new StringBuilder(String.format("metadata[\"userId\"] == '%s'", userId));
 
-        // 添加日期范围过滤（如果指定）
         if (startDate != null && !startDate.isEmpty()) {
-            filter = Filter.and(filter, metadataKey("entryDate").isGreaterThanOrEqualTo(startDate));
+            expr.append(String.format(" and metadata[\"entryDate\"] >= '%s'", startDate));
         }
 
         if (endDate != null && !endDate.isEmpty()) {
-            filter = Filter.and(filter, metadataKey("entryDate").isLessThanOrEqualTo(endDate));
+            expr.append(String.format(" and metadata[\"entryDate\"] <= '%s'", endDate));
         }
 
-        log.debug("DiarySearchTool: 构建过滤条件 userId={}, startDate={}, endDate={}",
-                userId, startDate, endDate);
-
-        return filter;
+        log.debug("DiarySearchTool: 构建过滤条件 expr={}", expr.toString());
+        return expr.toString();
     }
 }

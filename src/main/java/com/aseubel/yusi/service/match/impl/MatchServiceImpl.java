@@ -1,17 +1,26 @@
 package com.aseubel.yusi.service.match.impl;
 
 import cn.hutool.core.collection.CollUtil;
+
+import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.common.utils.ModelUtils;
 import com.aseubel.yusi.pojo.dto.match.MatchStatusResponse;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.pojo.entity.UserPersona;
+import com.aseubel.yusi.service.user.UserPersonaService;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.SoulMatchRepository;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.diary.Assistant;
+import com.aseubel.yusi.service.match.MatchAssistant;
 import com.aseubel.yusi.service.match.MatchService;
 import com.aseubel.yusi.service.user.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -40,12 +49,21 @@ public class MatchServiceImpl implements MatchService {
     private DiaryRepository diaryRepository;
 
     @Autowired
-    private Assistant diaryAssistant;
+    private UserPersonaService userPersonaService;
+
+    @Autowired
+    @Qualifier("matchAssistant")
+    private MatchAssistant matchAssistant;
 
     @Override
     @Scheduled(cron = "0 0 2 * * ?") // Every day at 2 AM
     public void runDailyMatching() {
         log.info("Starting daily matching process...");
+        // 设置模型路由上下文
+        ModelRouteContextHolder.set(ModelRouteContext.builder()
+                .language(ModelUtils.normalizeLanguage("zh"))
+                .scene(PromptKey.SOUL_MATCH.getKey())
+                .build());
         List<User> candidates = userService.getMatchEnabledUsers();
         if (CollUtil.isEmpty(candidates) || candidates.size() < 2) {
             log.info("Not enough candidates for matching.");
@@ -56,37 +74,111 @@ public class MatchServiceImpl implements MatchService {
         Collections.shuffle(candidates);
 
         /*
-         * 当前策略: 简单随机配对
+         * 当前策略: 基于规则的智能启发式匹配
          * 
-         * TODO: 实现基于日记分析的智能匹配算法
-         * 1. 获取用户日记的向量嵌入 (从Milvus)
-         * 2. 计算用户间的向量相似度
-         * 3. 按意图(intent)分组，优先匹配相同意图用户
-         * 4. 避免近期已配对的用户重复匹配
-         * 5. 基于GraphRAG图谱结构相似度进行深层匹配 (v3.0)
-         * 
-         * @see PRD v3.0 Section 3.1 灵魂匹配升级
+         * 规则：
+         * 1. 过滤近期已配对的用户
+         * 2. 每天每个用户最多匹配 1 次 (控制AI成本)
+         * 3. 意图(intent)相同优先匹配
+         * 4. 基于用户日记数量决定活跃度权重
          */
+        LocalDateTime startOfDay = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0).withNano(0);
         List<String> processedUserIds = new ArrayList<>();
 
         for (User userA : candidates) {
             if (processedUserIds.contains(userA.getUserId()))
                 continue;
 
-            // Find a partner (currently random, TODO: use similarity-based matching)
+            // 检查今天是否已经匹配过
+            long todayMatches = soulMatchRepository.countMatchesSince(userA.getUserId(), startOfDay);
+            if (todayMatches >= 1) {
+                processedUserIds.add(userA.getUserId());
+                continue;
+            }
+
+            // 获取 userA 的所有历史匹配，避免重复匹配
+            List<SoulMatch> userAMatchesA = soulMatchRepository.findByUserAId(userA.getUserId());
+            List<SoulMatch> userAMatchesB = soulMatchRepository.findByUserBId(userA.getUserId());
+            List<String> historyPartnerIds = new ArrayList<>();
+            userAMatchesA.forEach(m -> historyPartnerIds.add(m.getUserBId()));
+            userAMatchesB.forEach(m -> historyPartnerIds.add(m.getUserAId()));
+
+            // Find a partner
             User partner = null;
+            int bestScore = -1;
+
             for (User potential : candidates) {
                 if (potential.getUserId().equals(userA.getUserId()))
                     continue;
                 if (processedUserIds.contains(potential.getUserId()))
                     continue;
 
-                // TODO: Check diary count >= 3 before matching
-                // TODO: Calculate similarity score and rank candidates
-                // TODO: if (alreadyMatchedRecently(userA, potential)) continue;
+                // 检查对方今天是否已匹配
+                long potentialTodayMatches = soulMatchRepository.countMatchesSince(potential.getUserId(), startOfDay);
+                if (potentialTodayMatches >= 1) {
+                    continue;
+                }
 
-                partner = potential;
-                break;
+                // 避免重复匹配
+                if (historyPartnerIds.contains(potential.getUserId())) {
+                    continue;
+                }
+
+                // 计算匹配分数
+                int score = 0;
+
+                // 1. 意图相同加分 (50分)
+                if (userA.getMatchIntent() != null && userA.getMatchIntent().equals(potential.getMatchIntent())) {
+                    score += 50;
+                }
+
+                // 2. 活跃度相近加分 (这里用日记数量模拟)
+                long diariesA = diaryRepository.countByUserId(userA.getUserId());
+                long diariesB = diaryRepository.countByUserId(potential.getUserId());
+                if (Math.abs(diariesA - diariesB) < 10) {
+                    score += 20;
+                }
+
+                // 3. 用户画像(Persona)加分
+                UserPersona personaA = userPersonaService.getUserPersona(userA.getUserId());
+                UserPersona personaB = userPersonaService.getUserPersona(potential.getUserId());
+
+                // 4. 让 AI Agent 综合评估给分 (权重更高)
+                int aiScore = 0;
+                try {
+                    String profileA = getProfileSummaryWithPersona(userA.getUserId(), personaA);
+                    String profileB = getProfileSummaryWithPersona(potential.getUserId(), personaB);
+                    String scoreStr = matchAssistant.evaluateMatchScore(userA.getUserId(), profileA, profileB);
+                    aiScore = Integer.parseInt(scoreStr.trim());
+                    log.debug("AI 匹配打分 - UserA: {}, UserB: {}, 分数: {}", userA.getUserId(), potential.getUserId(),
+                            aiScore);
+                } catch (Exception e) {
+                    log.warn("AI 匹配打分失败, 回退到基础规则打分", e);
+                    if (personaA != null && personaB != null) {
+                        // 如果都在同一个城市
+                        if (personaA.getLocation() != null && personaB.getLocation() != null
+                                && !personaA.getLocation().isEmpty()
+                                && personaA.getLocation().equals(personaB.getLocation())) {
+                            score += 30;
+                        }
+                        // 兴趣爱好有重叠（简单的字符串包含检查）
+                        if (personaA.getInterests() != null && personaB.getInterests() != null) {
+                            String[] interestsA = personaA.getInterests().split("[,，、 ]+");
+                            for (String interest : interestsA) {
+                                if (!interest.trim().isEmpty() && personaB.getInterests().contains(interest.trim())) {
+                                    score += 10;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                score += aiScore;
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    partner = potential;
+                }
             }
 
             if (partner != null) {
@@ -109,8 +201,8 @@ public class MatchServiceImpl implements MatchService {
         // So letterAtoB = generate(profileA, profileB)
 
         // Asynchronously generate letters
-        CompletableFuture<String> futureA = generateLetter(profileA, profileB);
-        CompletableFuture<String> futureB = generateLetter(profileB, profileA); // Recommend A to B
+        CompletableFuture<String> futureA = generateLetter(userA.getUserId(), profileA, profileB);
+        CompletableFuture<String> futureB = generateLetter(userB.getUserId(), profileB, profileA); // Recommend A to B
 
         try {
             CompletableFuture.allOf(futureA, futureB).join();
@@ -133,6 +225,26 @@ public class MatchServiceImpl implements MatchService {
         }
     }
 
+    private String getProfileSummaryWithPersona(String userId, UserPersona persona) {
+        StringBuilder summary = new StringBuilder();
+        if (persona != null) {
+            if (persona.getInterests() != null && !persona.getInterests().isEmpty()) {
+                summary.append("兴趣爱好: ").append(persona.getInterests()).append("\n");
+            }
+            // UserPersona doesn't have getPersonality(), let's use getTone() or
+            // customInstructions
+            if (persona.getTone() != null && !persona.getTone().isEmpty()) {
+                summary.append("偏好语气: ").append(persona.getTone()).append("\n");
+            }
+            if (persona.getLocation() != null && !persona.getLocation().isEmpty()) {
+                summary.append("所在城市: ").append(persona.getLocation()).append("\n");
+            }
+        }
+        summary.append("近期日记摘要:\n");
+        summary.append(getProfileSummary(userId));
+        return summary.toString();
+    }
+
     private String getProfileSummary(String userId) {
         List<Diary> diaries = diaryRepository.findTop3ByUserIdOrderByCreateTimeDesc(userId);
         if (CollUtil.isEmpty(diaries)) {
@@ -143,11 +255,11 @@ public class MatchServiceImpl implements MatchService {
                 .collect(Collectors.joining("\n\n"));
     }
 
-    private CompletableFuture<String> generateLetter(String myProfile, String partnerProfile) {
+    private CompletableFuture<String> generateLetter(String userId, String myProfile, String partnerProfile) {
         CompletableFuture<String> future = new CompletableFuture<>();
         StringBuilder sb = new StringBuilder();
         try {
-            diaryAssistant.generateRecommendationLetter(myProfile, partnerProfile)
+            matchAssistant.generateRecommendationLetter(userId, myProfile, partnerProfile)
                     .onPartialResponse(sb::append)
                     .onCompleteResponse(res -> future.complete(sb.toString()))
                     .onError(future::completeExceptionally)

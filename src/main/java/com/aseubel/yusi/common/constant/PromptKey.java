@@ -36,7 +36,12 @@ public enum PromptKey {
     /**
      * Memory compression extraction Prompt
      */
-    MEMORY_EXTRACT("memory-extract");
+    MEMORY_EXTRACT("memory-extract"),
+
+    /**
+     * Soul Match Prompt
+     */
+    SOUL_MATCH("soul-match");
 
     private final String key;
 }

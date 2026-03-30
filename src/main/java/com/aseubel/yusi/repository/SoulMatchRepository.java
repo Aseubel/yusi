@@ -25,4 +25,7 @@ public interface SoulMatchRepository extends JpaRepository<SoulMatch, Long> {
     
     @Query("SELECT s FROM SoulMatch s WHERE (s.userAId = ?1 OR s.userBId = ?1) AND s.isMatched = true")
     List<SoulMatch> findSuccessfulMatches(String userId);
+
+    @Query("SELECT COUNT(s) FROM SoulMatch s WHERE (s.userAId = ?1 OR s.userBId = ?1) AND s.createTime >= ?2")
+    long countMatchesSince(String userId, java.time.LocalDateTime since);
 }

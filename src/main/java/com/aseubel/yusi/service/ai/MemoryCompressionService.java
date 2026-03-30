@@ -65,6 +65,9 @@ public class MemoryCompressionService {
     @Qualifier("jsonChatModel")
     private final ChatModel chatModel;
 
+    @Qualifier("memoryCompressionAssistant")
+    private final MemoryCompressionAssistant memoryCompressionAssistant;
+
     private final EmbeddingModel embeddingModel;
     private final MemoryConfigProperties memoryConfigProperties;
     private final PromptManager promptManager;
@@ -207,8 +210,10 @@ public class MemoryCompressionService {
         try {
             // Step 1: LLM 调用（事务外，避免长时间持有 DB 连接）
             ModelRouteContextHolder.set(ModelRouteContext.builder().scene("memory-extract").language("zh").build());
-            String summaryText = chatModel.chat(dev.langchain4j.data.message.UserMessage.from(prompt))
-                    .aiMessage().text();
+
+            // 使用绑了 updateUserPersona 工具的 Assistant 提取记忆
+            String summaryText = memoryCompressionAssistant.extractMemory(memoryId, prompt);
+
             ModelRouteContextHolder.clear();
 
             if (summaryText == null || summaryText.trim().isEmpty() || summaryText.contains("无关键信息")) {

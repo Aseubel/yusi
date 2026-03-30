@@ -12,11 +12,6 @@ import org.springframework.context.annotation.Configuration;
 @EnableConfigurationProperties(ModelRoutingProperties.class)
 public class ChatModelConfig {
 
-    @Bean(name = "logicModel")
-    public StreamingChatModel logicModel(ModelProxyFactory modelProxyFactory) {
-        return modelProxyFactory.createStreamingProxy("zh", "situation-analysis");
-    }
-
     @Bean(name = "streamingChatModel")
     public StreamingChatModel streamingChatModel(ModelProxyFactory modelProxyFactory) {
         return modelProxyFactory.createStreamingProxy("zh", "chat");
@@ -24,16 +19,6 @@ public class ChatModelConfig {
 
     @Bean(name = "chatModel")
     public ChatModel chatModel(ModelProxyFactory modelProxyFactory) {
-        return modelProxyFactory.createChatProxy("zh", "situation-analysis");
-    }
-
-    @Bean(name = "emotionModel")
-    public ChatModel emotionModel(ModelProxyFactory modelProxyFactory) {
-        return modelProxyFactory.createChatProxy("zh", "emotion-analysis");
-    }
-
-    @Bean(name = "jsonChatModel")
-    public ChatModel jsonChatModel(ModelProxyFactory modelProxyFactory) {
-        return modelProxyFactory.createChatProxy("zh", "memory-extract");
+        return modelProxyFactory.createChatProxy("zh", "chat");
     }
 }

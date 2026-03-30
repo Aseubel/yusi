@@ -97,4 +97,14 @@ public interface EmbeddingTaskRepository extends JpaRepository<EmbeddingTask, Lo
     @Transactional
     @Query("UPDATE EmbeddingTask t SET t.status = 'PENDING', t.retryCount = 0, t.errorMessage = null, t.updatedAt = :now")
     int resetAllToPending(@Param("now") LocalDateTime now);
+
+    /**
+     * 插入缺失的日记任务（用于全量同步）
+     */
+    @Modifying
+    @Transactional
+    @Query(value = "INSERT INTO embedding_task (diary_id, user_id, task_type, status, retry_count, max_retries, created_at, updated_at, next_retry_at) " +
+            "SELECT diary_id, user_id, 'UPSERT', 'PENDING', 0, 5, :now, :now, :now FROM diary " +
+            "WHERE NOT EXISTS (SELECT 1 FROM embedding_task WHERE diary_id = diary.diary_id)", nativeQuery = true)
+    int insertMissingTasks(@Param("now") LocalDateTime now);
 }

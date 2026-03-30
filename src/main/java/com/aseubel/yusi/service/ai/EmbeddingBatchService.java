@@ -264,10 +264,10 @@ public class EmbeddingBatchService {
     }
 
     /**
-     * 全量同步：清空 Milvus 并重置所有任务为 PENDING
+     * 全量同步：清空 Milvus 并重置所有任务为 PENDING，同时补充缺失的任务
      * 用于重新构建索引或修复数据不一致
      *
-     * @return 同步的任务数量
+     * @return 同步的任务数量（重置数 + 新增数）
      */
     @Transactional
     public int fullSync() {
@@ -282,10 +282,15 @@ public class EmbeddingBatchService {
             throw new RuntimeException("清空 Milvus collection 失败: " + e.getMessage(), e);
         }
 
+        LocalDateTime now = LocalDateTime.now();
         // 2. 重置所有任务为 PENDING
-        int updatedCount = taskRepository.resetAllToPending(LocalDateTime.now());
+        int updatedCount = taskRepository.resetAllToPending(now);
         log.info("已重置 {} 个任务为 PENDING 状态", updatedCount);
 
-        return updatedCount;
+        // 3. 补充缺失的日记任务
+        int insertedCount = taskRepository.insertMissingTasks(now);
+        log.info("已补充插入 {} 个缺失的 Embedding 任务", insertedCount);
+
+        return updatedCount + insertedCount;
     }
 }

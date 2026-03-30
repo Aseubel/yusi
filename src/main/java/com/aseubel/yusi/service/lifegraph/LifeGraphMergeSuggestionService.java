@@ -107,7 +107,15 @@ public class LifeGraphMergeSuggestionService {
 
         String prompt = promptManager.getPrompt(PromptKey.GRAPHRAG_MERGE_SUGGEST);
 
-        String response = assistant.analyzeMergeCandidates(prompt, candidatesJson);
+        String response;
+        try {
+            com.aseubel.yusi.service.ai.model.ModelRouteContextHolder.set(
+                    com.aseubel.yusi.service.ai.model.ModelRouteContext.builder()
+                            .scene("situation-analysis").language("zh").build());
+            response = assistant.analyzeMergeCandidates(prompt, candidatesJson);
+        } finally {
+            com.aseubel.yusi.service.ai.model.ModelRouteContextHolder.clear();
+        }
 
         // 5. 解析响应
         List<LlmMergeJudgment> judgments = parseJudgment(response);

@@ -4,11 +4,13 @@ import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.common.ratelimit.LimitType;
 import com.aseubel.yusi.common.exception.AiLockException;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.ratelimit.RateLimiter;
+import com.aseubel.yusi.common.utils.ModelUtils;
 import com.aseubel.yusi.common.utils.SensitiveWordUtils;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.config.ai.PersistentChatMemoryStore;
@@ -71,8 +73,7 @@ public class AiController {
     @GetMapping("/chat/history")
     public Response<List<Map<String, Object>>> getChatHistory() {
         String userId = UserContext.getUserId();
-        List<ChatMemoryMessage> messages = 
-                chatMemoryMessageRepository.findByMemoryIdOrderByCreatedAtAsc(userId);
+        List<ChatMemoryMessage> messages = chatMemoryMessageRepository.findByMemoryIdOrderByCreatedAtAsc(userId);
 
         List<Map<String, Object>> history = messages.stream()
                 .map(chatMemoryStore::toChatMessage)
@@ -80,7 +81,7 @@ public class AiController {
                 .map(msg -> {
                     Map<String, Object> item = new java.util.HashMap<>();
                     item.put("role", msg instanceof UserMessage ? "user" : "assistant");
-                    
+
                     if (msg instanceof UserMessage userMsg) {
                         item.put("content", userMsg.singleText());
                         List<ImageContent> imageContents = userMsg.contents().stream()
@@ -99,7 +100,7 @@ public class AiController {
                     } else if (msg instanceof AiMessage aiMsg) {
                         item.put("content", aiMsg.text() != null ? aiMsg.text() : "");
                     }
-                    
+
                     return item;
                 })
                 .collect(Collectors.toList());
@@ -140,8 +141,8 @@ public class AiController {
                 List<ImageContent> imageContents = buildImageContents(images);
                 // 设置模型路由上下文
                 ModelRouteContextHolder.set(ModelRouteContext.builder()
-                        .language(normalizeLanguage(language))
-                        .scene("chat")
+                        .language(ModelUtils.normalizeLanguage(language))
+                        .scene(PromptKey.CHAT.getKey())
                         .build());
 
                 TokenStream tokenStream = diaryAssistant.chatWithMessage(userId, sandwichContent, imageContents);
@@ -188,7 +189,7 @@ public class AiController {
         }
         // 验证图片key
         ossService.validateObjectKeys(images);
-        
+
         return images.stream()
                 .filter(StrUtil::isNotBlank)
                 .map(objectKey -> {
@@ -198,20 +199,4 @@ public class AiController {
                 .collect(Collectors.toList());
     }
 
-    private String normalizeLanguage(String language) {
-        if (language == null || language.isBlank()) {
-            return "zh";
-        }
-        String value = language.toLowerCase(Locale.ROOT);
-        if (value.startsWith("zh")) {
-            return "zh";
-        }
-        if (value.startsWith("ja")) {
-            return "ja";
-        }
-        if (value.startsWith("en")) {
-            return "en";
-        }
-        return "zh";
-    }
 }

@@ -15,6 +15,8 @@ import com.aseubel.yusi.repository.LifeGraphEntityRepository;
 import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.service.ai.PromptManager;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.lifegraph.LifeGraphBuildService;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphExtractor;
 import com.aseubel.yusi.service.lifegraph.dto.LifeGraphExtractionResult;
@@ -65,8 +67,14 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                 ? (diary.getLatitude() + "," + diary.getLongitude())
                 : "";
 
-        String raw = extractor.extract(prompt, knownEntities, entryDate, title, placeName, address, coordinates,
-                plainContent);
+        String raw;
+        try {
+            ModelRouteContextHolder.set(ModelRouteContext.builder().scene("memory-extract").language("zh").build());
+            raw = extractor.extract(prompt, knownEntities, entryDate, title, placeName, address, coordinates,
+                    plainContent);
+        } finally {
+            ModelRouteContextHolder.clear();
+        }
         LifeGraphExtractionResult result = parseExtractionResult(raw);
         if (result == null) {
             return;

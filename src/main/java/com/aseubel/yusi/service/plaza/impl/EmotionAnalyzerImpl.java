@@ -1,6 +1,8 @@
 package com.aseubel.yusi.service.plaza.impl;
 
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.chat.ChatModel;
@@ -22,7 +24,7 @@ import java.util.Set;
 public class EmotionAnalyzerImpl implements EmotionAnalyzer {
 
     // 使用专门的情感分析模型，避免使用复杂的 situation-analysis 场景
-    private final ChatModel emotionModel;
+    private final ChatModel chatModel;
 
     // 有效的情感类别列表
     private static final Set<String> VALID_EMOTIONS = Set.of(
@@ -38,13 +40,20 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
         try {
             // 构建简洁的 prompt
             String prompt = buildEmotionPrompt(content);
-            
+
             // 直接调用专门的情感分析模型
             UserMessage userMessage = UserMessage.from(prompt);
-            AiMessage aiMessage = emotionModel.chat(userMessage).aiMessage();
-            
+            AiMessage aiMessage;
+            try {
+                ModelRouteContextHolder
+                        .set(ModelRouteContext.builder().scene("emotion-analysis").language("zh").build());
+                aiMessage = chatModel.chat(userMessage).aiMessage();
+            } finally {
+                ModelRouteContextHolder.clear();
+            }
+
             String result = aiMessage.text();
-            
+
             // 清理结果（去除空白和换行）
             String cleanedResult = result.trim().replaceAll("[\\n\\r]", "");
 
@@ -76,6 +85,7 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
      * 使用极简格式减少 token 消耗，提升响应速度
      */
     private String buildEmotionPrompt(String content) {
-        return String.format("分析情感，只返回类别名：Joy/Sadness/Anxiety/Love/Anger/Fear/Hope/Calm/Confusion/Neutral\n\n内容：%s", content);
+        return String.format("分析情感，只返回类别名：Joy/Sadness/Anxiety/Love/Anger/Fear/Hope/Calm/Confusion/Neutral\n\n内容：%s",
+                content);
     }
 }
