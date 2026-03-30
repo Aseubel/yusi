@@ -83,7 +83,26 @@ public class AiController {
                     item.put("role", msg instanceof UserMessage ? "user" : "assistant");
 
                     if (msg instanceof UserMessage userMsg) {
-                        item.put("content", userMsg.singleText());
+                        String textContent = userMsg.contents().stream()
+                                .filter(c -> c instanceof dev.langchain4j.data.message.TextContent)
+                                .map(c -> ((dev.langchain4j.data.message.TextContent) c).text())
+                                .collect(Collectors.joining("\n"));
+
+                        if (textContent.isEmpty() && userMsg.contents().size() == 1
+                                && userMsg.contents().get(0) instanceof dev.langchain4j.data.message.TextContent) {
+                            textContent = ((dev.langchain4j.data.message.TextContent) userMsg.contents().get(0)).text();
+                        } else if (textContent.isEmpty() && !userMsg.contents().isEmpty()) {
+                            // Try to get text from singleText() if we couldn't find any TextContent
+                            // directly
+                            try {
+                                textContent = userMsg.singleText();
+                            } catch (Exception e) {
+                                // Ignore exception, keep textContent empty
+                            }
+                        }
+
+                        item.put("content", textContent);
+
                         List<ImageContent> imageContents = userMsg.contents().stream()
                                 .filter(c -> c instanceof ImageContent)
                                 .map(c -> (ImageContent) c)
@@ -95,6 +114,30 @@ public class AiController {
                                     .collect(Collectors.toList());
                             if (!imageUrls.isEmpty()) {
                                 item.put("images", imageUrls);
+                            }
+                        } else {
+                            // Backup check for images in string format if deserialization failed to map to
+                            // ImageContent
+                            String dbImagesStr = null;
+                            for (ChatMemoryMessage entity : messages) {
+                                // Simple string matching to find corresponding entity (not perfect but works
+                                // for fallback)
+                                if (entity.getRole().equals("USER") && entity.getContent() != null
+                                        && entity.getContent().contains(textContent)) {
+                                    dbImagesStr = entity.getImages();
+                                    break;
+                                }
+                            }
+
+                            if (StrUtil.isNotBlank(dbImagesStr)) {
+                                try {
+                                    List<String> urls = cn.hutool.json.JSONUtil.toList(dbImagesStr, String.class);
+                                    if (!urls.isEmpty()) {
+                                        item.put("images", urls);
+                                    }
+                                } catch (Exception e) {
+                                    // ignore JSON parse error
+                                }
                             }
                         }
                     } else if (msg instanceof AiMessage aiMsg) {
