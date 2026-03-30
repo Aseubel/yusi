@@ -36,8 +36,7 @@ public class OssService {
     private final ImageFileRepository imageFileRepository;
 
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of(
-        "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp"
-    );
+            "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp");
 
     private static final String CHUNK_UPLOAD_KEY_PREFIX = "yusi:chunk:";
     private static final String MD5_CACHE_KEY_PREFIX = "yusi:md5:";
@@ -50,7 +49,7 @@ public class OssService {
         String originalFilename = file.getOriginalFilename();
         String extension = getFileExtension(originalFilename);
         String objectKey = ossProperties.getImageFolder() + userId + "/" +
-            UuidUtils.genUuidSimple() + extension;
+                UuidUtils.genUuidSimple() + extension;
 
         try {
             byte[] bytes = file.getBytes();
@@ -64,25 +63,27 @@ public class OssService {
                 String existObjectKey = existingFile.get().getObjectKey();
                 if (objectKeyExists(existObjectKey)) {
                     log.info("Skip upload - file already exists with MD5: {}, objectKey: {}", fileMd5, existObjectKey);
-                    saveImageFileAsync(existObjectKey, fileMd5, userId, originalFilename, (long) compressed.length, file.getContentType());
+                    saveImageFileAsync(existObjectKey, fileMd5, userId, originalFilename, (long) compressed.length,
+                            file.getContentType());
                     return existObjectKey;
                 }
             }
 
             PutObjectRequest request = PutObjectRequest.newBuilder()
-                .bucket(ossProperties.getBucketName())
-                .key(objectKey)
-                .body(BinaryData.fromBytes(compressed))
-                .contentType(file.getContentType())
-                .build();
+                    .bucket(ossProperties.getBucketName())
+                    .key(objectKey)
+                    .body(BinaryData.fromBytes(compressed))
+                    .contentType(file.getContentType())
+                    .build();
 
             ossClient.putObject(request);
             log.info("Image uploaded successfully: {}, original size: {}, compressed size: {}",
-                objectKey, bytes.length, compressed.length);
+                    objectKey, bytes.length, compressed.length);
 
             cacheMd5ForSkipUpload(objectKey, fileMd5);
 
-            saveImageFileAsync(objectKey, fileMd5, userId, originalFilename, (long) compressed.length, file.getContentType());
+            saveImageFileAsync(objectKey, fileMd5, userId, originalFilename, (long) compressed.length,
+                    file.getContentType());
 
             return objectKey;
         } catch (IOException e) {
@@ -105,8 +106,7 @@ public class OssService {
 
     public String generatePresignedUrl(String objectKey, int expireSeconds) {
         try {
-            String url = "https://" + ossProperties.getBucketName() + "." +
-                ossProperties.getEndpoint() + "/" + objectKey;
+            String url = "https://" + ossProperties.getDomain() + "/" + objectKey;
             log.debug("Generated URL for: {}", objectKey);
             return url;
         } catch (Exception e) {
@@ -125,9 +125,9 @@ public class OssService {
 
     public void deleteImage(String objectKey) {
         DeleteObjectRequest request = DeleteObjectRequest.newBuilder()
-            .bucket(ossProperties.getBucketName())
-            .key(objectKey)
-            .build();
+                .bucket(ossProperties.getBucketName())
+                .key(objectKey)
+                .build();
 
         ossClient.deleteObject(request);
         log.info("Image deleted: {}", objectKey);
@@ -173,9 +173,9 @@ public class OssService {
     public boolean objectKeyExists(String objectKey) {
         try {
             HeadObjectRequest request = HeadObjectRequest.newBuilder()
-                .bucket(ossProperties.getBucketName())
-                .key(objectKey)
-                .build();
+                    .bucket(ossProperties.getBucketName())
+                    .key(objectKey)
+                    .build();
             ossClient.headObject(request);
             return true;
         } catch (Exception e) {
@@ -184,7 +184,7 @@ public class OssService {
     }
 
     public String uploadChunk(MultipartFile chunk, String fileMd5, Integer chunkIndex,
-                               Integer totalChunks, String userId) {
+            Integer totalChunks, String userId) {
         try {
             String uploadId = getOrCreateUploadId(fileMd5, totalChunks, userId);
 
@@ -199,11 +199,11 @@ public class OssService {
             String chunkObjectKey = ossProperties.getImageFolder() + "chunks/" + fileMd5 + "/" + chunkIndex;
 
             PutObjectRequest request = PutObjectRequest.newBuilder()
-                .bucket(ossProperties.getBucketName())
-                .key(chunkObjectKey)
-                .body(BinaryData.fromBytes(chunkBytes))
-                .contentType("application/octet-stream")
-                .build();
+                    .bucket(ossProperties.getBucketName())
+                    .key(chunkObjectKey)
+                    .body(BinaryData.fromBytes(chunkBytes))
+                    .contentType("application/octet-stream")
+                    .build();
 
             ossClient.putObject(request);
 
@@ -229,10 +229,10 @@ public class OssService {
 
         String newUploadId = UUID.randomUUID().toString();
         redisTemplate.opsForValue().set(uploadIdKey, newUploadId + ":" + totalChunks + ":" + userId,
-            CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
+                CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
 
         redisTemplate.opsForValue().set(CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":totalChunks",
-            String.valueOf(totalChunks), CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
+                String.valueOf(totalChunks), CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
 
         return newUploadId;
     }
@@ -259,14 +259,14 @@ public class OssService {
     private void updateChunkProgress(String fileMd5, int totalChunks) {
         int uploaded = getUploadedChunkCount(fileMd5);
         redisTemplate.opsForValue().set(CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":uploadedCount",
-            String.valueOf(uploaded), CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
+                String.valueOf(uploaded), CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
     }
 
     public String mergeChunks(String fileMd5, Integer totalChunks, String userId, String fileName, Long totalSize) {
         int uploadedCount = getUploadedChunkCount(fileMd5);
         if (uploadedCount != totalChunks) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
-                "分片上传不完整，已上传 " + uploadedCount + "/" + totalChunks);
+                    "分片上传不完整，已上传 " + uploadedCount + "/" + totalChunks);
         }
 
         Path tempDir = null;
@@ -285,28 +285,29 @@ public class OssService {
 
             String extension = getFileExtension(fileName);
             String finalObjectKey = ossProperties.getImageFolder() + userId + "/" +
-                UuidUtils.genUuidSimple() + extension;
+                    UuidUtils.genUuidSimple() + extension;
 
             byte[] compressedBytes = ImageUtils.compressImage(mergedBytes);
 
             PutObjectRequest request = PutObjectRequest.newBuilder()
-                .bucket(ossProperties.getBucketName())
-                .key(finalObjectKey)
-                .body(BinaryData.fromBytes(compressedBytes))
-                .contentType(getMimeType(extension))
-                .build();
+                    .bucket(ossProperties.getBucketName())
+                    .key(finalObjectKey)
+                    .body(BinaryData.fromBytes(compressedBytes))
+                    .contentType(getMimeType(extension))
+                    .build();
 
             ossClient.putObject(request);
 
             cacheMd5ForSkipUpload(finalObjectKey, fileMd5);
 
-            saveImageFileAsync(finalObjectKey, fileMd5, userId, fileName, (long) compressedBytes.length, getMimeType(extension));
+            saveImageFileAsync(finalObjectKey, fileMd5, userId, fileName, (long) compressedBytes.length,
+                    getMimeType(extension));
 
             cleanupChunks(fileMd5, totalChunks);
             cleanupUploadId(fileMd5);
 
             log.info("Image merged successfully: {}, total chunks: {}, original size: {}, compressed size: {}",
-                finalObjectKey, totalChunks, mergedBytes.length, compressedBytes.length);
+                    finalObjectKey, totalChunks, mergedBytes.length, compressedBytes.length);
             return finalObjectKey;
         } catch (BusinessException e) {
             throw e;
@@ -317,9 +318,9 @@ public class OssService {
             if (tempDir != null) {
                 try {
                     Files.walk(tempDir)
-                        .sorted(Comparator.reverseOrder())
-                        .map(Path::toFile)
-                        .forEach(File::delete);
+                            .sorted(Comparator.reverseOrder())
+                            .map(Path::toFile)
+                            .forEach(File::delete);
                 } catch (IOException e) {
                     log.warn("Failed to cleanup temp directory: {}", tempDir);
                 }
@@ -329,9 +330,9 @@ public class OssService {
 
     private byte[] downloadChunk(String objectKey) throws Exception {
         GetObjectRequest request = GetObjectRequest.newBuilder()
-            .bucket(ossProperties.getBucketName())
-            .key(objectKey)
-            .build();
+                .bucket(ossProperties.getBucketName())
+                .key(objectKey)
+                .build();
 
         try (GetObjectResult result = ossClient.getObject(request)) {
             return result.body().readAllBytes();
@@ -363,7 +364,7 @@ public class OssService {
 
     @Async
     public void saveImageFileAsync(String objectKey, String fileMd5, String userId, String fileName,
-                                    Long fileSize, String contentType) {
+            Long fileSize, String contentType) {
         try {
             if (imageFileRepository.existsByFileMd5(fileMd5)) {
                 log.debug("ImageFile already exists for MD5: {}", fileMd5);
@@ -371,14 +372,14 @@ public class OssService {
             }
 
             ImageFile imageFile = ImageFile.builder()
-                .fileMd5(fileMd5)
-                .objectKey(objectKey)
-                .userId(userId)
-                .fileName(fileName)
-                .fileSize(fileSize)
-                .contentType(contentType)
-                .createTime(LocalDateTime.now())
-                .build();
+                    .fileMd5(fileMd5)
+                    .objectKey(objectKey)
+                    .userId(userId)
+                    .fileName(fileName)
+                    .fileSize(fileSize)
+                    .contentType(contentType)
+                    .createTime(LocalDateTime.now())
+                    .build();
 
             imageFileRepository.save(imageFile);
             log.debug("ImageFile saved asynchronously: objectKey={}, MD5={}", objectKey, fileMd5);
@@ -414,13 +415,13 @@ public class OssService {
 
         if (file.getSize() > ossProperties.getMaxFileSize()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
-                "图片大小超过限制: " + (ossProperties.getMaxFileSize() / 1024 / 1024) + "MB");
+                    "图片大小超过限制: " + (ossProperties.getMaxFileSize() / 1024 / 1024) + "MB");
         }
 
         String contentType = file.getContentType();
         if (contentType == null || !ALLOWED_IMAGE_TYPES.contains(contentType)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
-                "不支持的图片格式，仅支持: JPEG, PNG, GIF, WebP, BMP");
+                    "不支持的图片格式，仅支持: JPEG, PNG, GIF, WebP, BMP");
         }
     }
 

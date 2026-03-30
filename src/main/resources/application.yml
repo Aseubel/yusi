@@ -13,6 +13,7 @@ yusi:
     # 中期记忆触发扫描的 Cron 表达式（默认每 30 分钟执行一次）
     mid-term-scan-cron: "0 */30 * * * ?"
   oss:
+    domain: ${OSS_DOMAIN:}
     region: ${OSS_REGION:cn-hangzhou}
     bucket-name: ${OSS_BUCKET_NAME:}
     endpoint: ${OSS_ENDPOINT:oss-cn-hangzhou.aliyuncs.com}

@@ -7,6 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "yusi.oss")
 public class OssProperties {
 
+    private String domain;
+
     private String region;
 
     private String bucketName;
