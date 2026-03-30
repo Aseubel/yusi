@@ -62,9 +62,6 @@ public class MemoryCompressionService {
     @Qualifier("midTermMemoryStore")
     private final MilvusEmbeddingStore midTermMemoryStore;
 
-    @Qualifier("jsonChatModel")
-    private final ChatModel chatModel;
-
     @Qualifier("memoryCompressionAssistant")
     private final MemoryCompressionAssistant memoryCompressionAssistant;
 
@@ -209,10 +206,9 @@ public class MemoryCompressionService {
 
         try {
             // Step 1: LLM 调用（事务外，避免长时间持有 DB 连接）
-            ModelRouteContextHolder.set(ModelRouteContext.builder().scene("memory-extract").language("zh").build());
+            ModelRouteContextHolder.set(ModelRouteContext.builder().scene(PromptKey.MEMORY_EXTRACT.getKey()).language("zh").build());
 
-            // 使用绑了 updateUserPersona 工具的 Assistant 提取记忆
-            String summaryText = memoryCompressionAssistant.extractMemory(memoryId, prompt);
+            String summaryText = memoryCompressionAssistant.extractMemory(prompt);
 
             ModelRouteContextHolder.clear();
 

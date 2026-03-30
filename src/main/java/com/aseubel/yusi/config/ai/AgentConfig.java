@@ -102,7 +102,6 @@ public class AgentConfig {
     public MemoryCompressionAssistant memoryCompressionAssistant(UserPersonaTool userPersonaTool) {
         return AiServices.builder(MemoryCompressionAssistant.class)
                 .chatModel((ChatModel) applicationContext.getBean("chatModel"))
-                .tools(userPersonaTool)
                 .build();
     }
 }
