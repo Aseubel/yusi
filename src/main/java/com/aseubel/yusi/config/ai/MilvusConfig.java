@@ -38,18 +38,12 @@ public class MilvusConfig {
 
     @Bean(name = "milvusClientV2")
     public MilvusClientV2 milvusClientV2(MilvusConfigProperties properties) {
-        var builder = ConnectConfig.builder();
-        if (properties.getMode() == 1) {
-            builder.uri("http://" + properties.getHost() + ":" + properties.getPort());
-            if (properties.getUsername() != null && !properties.getUsername().isEmpty()) {
-                builder.token(properties.getUsername() + ":" + properties.getPassword());
-            }
-        } else {
-            builder.uri(properties.getUri());
-            if (properties.getToken() != null && !properties.getToken().isEmpty()) {
-                builder.token(properties.getToken());
-            }
-        }
+        var builder = ConnectConfig.builder()
+                .uri(properties.getUri())
+                .token(properties.getToken())
+                .username(properties.getUsername())
+                .password(properties.getPassword());
+        
         return new MilvusClientV2(builder.build());
     }
 
@@ -124,21 +118,14 @@ public class MilvusConfig {
 
     private MilvusEmbeddingStore buildMilvusStore(MilvusConfigProperties properties, String collectionName) {
         MilvusEmbeddingStore.Builder builder = MilvusEmbeddingStore.builder();
-        switch (properties.getMode()) {
-            case 1:
-                builder.host(properties.getHost())
-                        .port(properties.getPort())
-                        .username(properties.getUsername())
-                        .password(properties.getPassword());
-                break;
-            case 2:
-                builder.uri(properties.getUri())
-                        .token(properties.getToken());
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid mode");
-        }
+
         return builder
+                .host(properties.getHost())
+                .port(properties.getPort())
+                .username(properties.getUsername())
+                .password(properties.getPassword())
+                .uri(properties.getUri())
+                .token(properties.getToken())
                 .collectionName(collectionName) // Name of the collection
                 .dimension(((EmbeddingModel) applicationContext.getBean("embeddingModel")).dimension())
                 .indexType(IndexType.HNSW) // 它是目前内存索引中 查询速度 和 召回率 (Recall) 平衡最好的算法。

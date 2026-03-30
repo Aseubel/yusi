@@ -6,8 +6,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @Data
 @ConfigurationProperties(prefix = "milvus", ignoreInvalidFields = true)
 public class MilvusConfigProperties {
-    // 连接认证，1为使用host:port + 用户名密码，2为使用uri + token
-    private int mode = 1;
 
     private String uri = "";
 

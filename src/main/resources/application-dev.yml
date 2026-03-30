@@ -154,7 +154,6 @@ redis:
       keep-alive: true
 
 milvus:
-  mode: 
   uri: 
   token: 
   host:
