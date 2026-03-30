@@ -23,7 +23,7 @@ public interface MatchAssistant {
                         3. **引用**：可以模糊引用双方的某种倾向（如"你们都喜欢独处"），但严禁泄露具体隐私细节。
                         4. **格式**：以"向你推荐一位'灵魂伙伴'"开头，语气神秘而充满期待。150字左右。
                         """)
-        String generateRecommendationLetter(@MemoryId String userId, @V("userAProfile") String userAProfile,
+        String generateRecommendationLetter(@V("userAProfile") String userAProfile,
                         @V("userBProfile") String userBProfile);
 
         @UserMessage("""
@@ -41,6 +41,6 @@ public interface MatchAssistant {
                         3. 如果双方有共同爱好或性格互补，分数应高于70。
                         4. 只输出一个整数数字，不要输出任何其他文字。
                         """)
-        String evaluateMatchScore(@MemoryId String userId, @V("userAProfile") String userAProfile,
+        String evaluateMatchScore(@V("userAProfile") String userAProfile,
                         @V("userBProfile") String userBProfile);
 }

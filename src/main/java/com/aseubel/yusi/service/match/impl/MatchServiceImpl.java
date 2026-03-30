@@ -147,7 +147,7 @@ public class MatchServiceImpl implements MatchService {
                 try {
                     String profileA = getProfileSummaryWithPersona(userA.getUserId(), personaA);
                     String profileB = getProfileSummaryWithPersona(potential.getUserId(), personaB);
-                    String scoreStr = matchAssistant.evaluateMatchScore(userA.getUserId(), profileA, profileB);
+                    String scoreStr = matchAssistant.evaluateMatchScore(profileA, profileB);
                     aiScore = Integer.parseInt(scoreStr.trim());
                     log.debug("AI 匹配打分 - UserA: {}, UserB: {}, 分数: {}", userA.getUserId(), potential.getUserId(),
                             aiScore);
@@ -260,7 +260,7 @@ public class MatchServiceImpl implements MatchService {
     private CompletableFuture<String> generateLetter(String userId, String myProfile, String partnerProfile) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return matchAssistant.generateRecommendationLetter(userId, myProfile, partnerProfile);
+                return matchAssistant.generateRecommendationLetter(myProfile, partnerProfile);
             } catch (Exception e) {
                 log.error("Failed to generate recommendation letter for user {}", userId, e);
                 throw new RuntimeException("Failed to generate recommendation letter", e);
