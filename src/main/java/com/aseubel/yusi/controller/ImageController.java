@@ -112,8 +112,7 @@ public class ImageController {
                 request.getTotalChunks(),
                 request.getUserId(),
                 request.getFileName(),
-                request.getTotalSize()
-        );
+                request.getTotalSize());
 
         String url = ossService.generatePresignedUrl(objectKey);
 
@@ -141,6 +140,7 @@ public class ImageController {
         return Response.success(response);
     }
 
+    @Auth(required = false)
     @GetMapping("/url")
     public Response<String> getPresignedUrl(@RequestParam("objectKey") String objectKey) {
         String url = ossService.generatePresignedUrl(objectKey);
