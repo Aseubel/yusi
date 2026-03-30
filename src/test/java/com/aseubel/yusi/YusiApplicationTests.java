@@ -10,10 +10,8 @@ import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.output.Response;
-import dev.langchain4j.store.embedding.EmbeddingMatch;
-import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
-import dev.langchain4j.store.embedding.EmbeddingSearchResult;
-import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
+import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.service.vector.request.DeleteReq;
 import jakarta.annotation.Resource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,7 +37,7 @@ class YusiApplicationTests {
     private EmbeddingModel embeddingModel;
 
     @Resource
-    private MilvusEmbeddingStore milvusEmbeddingStore;
+    private MilvusClientV2 milvusClientV2;
 
     @Resource
     private Assistant diaryRAGAssistant;
@@ -89,20 +87,9 @@ class YusiApplicationTests {
         // 转换为文本段
         List<TextSegment> diaryTextSegments = Collections
                 .singletonList(TextSegment.from(diary.getContent(), Metadata.metadata("userId", diary.getUserId())));
-        // 移除旧的embedding
-        milvusEmbeddingStore.remove(diary.getDiaryId());
-        // 转换文本段为Embedding
-        List<Embedding> embeddings = embeddingModel.embedAll(diaryTextSegments).content();
-        milvusEmbeddingStore.addAll(Collections.singletonList(diary.getDiaryId()), embeddings, diaryTextSegments);
+
         // 生成查询向量
         Response<Embedding> searchEmbeddings = embeddingModel.embed("今天是个超棒的日子！我和朋友一起出去玩啦！");
-        EmbeddingSearchRequest build = EmbeddingSearchRequest.builder()
-                .queryEmbedding(searchEmbeddings.content())
-                .build();
-        EmbeddingSearchResult<TextSegment> results = milvusEmbeddingStore.search(build);
-        for (EmbeddingMatch<TextSegment> result : results.matches()) {
-            System.out.println(result.embedded().text() + " 分数为：" + result.score());
-        }
     }
 
     @Test
@@ -119,6 +106,9 @@ class YusiApplicationTests {
 
     @Test
     void embeddingCleanTest() {
-        milvusEmbeddingStore.removeAll();
+        milvusClientV2.delete(DeleteReq.builder()
+                .collectionName("yusi_embedding_collection")
+                .filter("id != ''")
+                .build());
     }
 }

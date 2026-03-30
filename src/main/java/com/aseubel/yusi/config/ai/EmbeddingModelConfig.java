@@ -7,9 +7,6 @@ import dev.langchain4j.model.TokenCountEstimator;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiEmbeddingModel;
 import dev.langchain4j.model.openai.OpenAiTokenCountEstimator;
-import dev.langchain4j.rag.content.retriever.ContentRetriever;
-import dev.langchain4j.rag.content.retriever.EmbeddingStoreContentRetriever;
-import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
@@ -17,8 +14,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Duration;
-
-import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
 
 /**
  * @author Aseubel
@@ -39,32 +34,6 @@ public class EmbeddingModelConfig {
                 .modelName(properties.getModel())
                 .timeout(Duration.ofSeconds(properties.getTimeoutSeconds()))
                 .build();
-    }
-
-    /**
-     * 【已废弃】传统的 ContentRetriever 实现
-     * 
-     * 已切换到 Agentic RAG 模式，使用 DiarySearchTool 替代。
-     * 保留此代码以备未来回退需求。
-     * 
-     * @see com.aseubel.yusi.service.ai.DiarySearchTool
-     * @deprecated 使用 DiarySearchTool 进行带时间范围过滤的检索
-     */
-    @Deprecated
-    // @Bean(name = "contentRetriever") // 已禁用，切换到 Agentic RAG 模式
-    public ContentRetriever contentRetriever() {
-        ContentRetriever contentRetriever = EmbeddingStoreContentRetriever.builder()
-                .embeddingStore((MilvusEmbeddingStore) applicationContext.getBean("milvusEmbeddingStore"))
-                .embeddingModel((EmbeddingModel) applicationContext.getBean("embeddingModel"))
-                .maxResults(5)
-                .minScore(0.8)
-                // 根据查询动态指定用户id
-                .dynamicFilter(query -> {
-                    String userId = (String) query.metadata().chatMemoryId();
-                    return metadataKey("userId").isEqualTo(userId);
-                })
-                .build();
-        return contentRetriever;
     }
 
     @Bean(name = "tokenCountEstimator")

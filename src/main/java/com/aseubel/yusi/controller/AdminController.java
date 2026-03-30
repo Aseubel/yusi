@@ -28,7 +28,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 
 import com.aseubel.yusi.config.MemoryConfigProperties;
-import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import groovy.util.logging.Slf4j;
 import lombok.RequiredArgsConstructor;
 
@@ -44,7 +43,6 @@ import java.util.Map;
 public class AdminController {
 
     private final UserService userService;
-    private final MilvusEmbeddingStore milvusEmbeddingStore;
 
     private final AdminService adminService;
     private final SuggestionService suggestionService;
@@ -69,7 +67,8 @@ public class AdminController {
         User user = userService.getUserByUserId(userId);
         int permissionLevel = user != null && user.getPermissionLevel() != null ? user.getPermissionLevel() : 0;
         if (permissionLevel < 99) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "Permission denied: Super admin access required (level >= 99)");
+            throw new BusinessException(ErrorCode.FORBIDDEN,
+                    "Permission denied: Super admin access required (level >= 99)");
         }
     }
 
@@ -98,7 +97,7 @@ public class AdminController {
         if (level < 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "Level must be non-negative");
         }
-        
+
         int currentAdminLevel = getCurrentUserPermissionLevel();
         adminService.validatePermissionChange(currentUserId, userId, level, currentAdminLevel);
         adminService.updateUserPermission(userId, level);
@@ -156,7 +155,8 @@ public class AdminController {
     }
 
     @PostMapping("/suggestions/{suggestionId}/status")
-    public Response<Void> updateSuggestionStatus(@PathVariable String suggestionId, @RequestBody Map<String, String> payload) {
+    public Response<Void> updateSuggestionStatus(@PathVariable String suggestionId,
+            @RequestBody Map<String, String> payload) {
         checkAdminPermission();
         String status = payload.get("status");
         if (status == null || status.trim().isEmpty()) {

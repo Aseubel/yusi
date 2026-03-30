@@ -8,13 +8,7 @@ import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
 import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.store.embedding.EmbeddingMatch;
-import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
-import dev.langchain4j.store.embedding.EmbeddingSearchResult;
-import dev.langchain4j.store.embedding.filter.Filter;
-import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -31,8 +25,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
-
-import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
 
 /**
  * 日记检索工具 - 使用 LangChain4j @Tool 注解实现 Agentic RAG
@@ -52,16 +44,13 @@ import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metad
 @Component
 public class DiarySearchTool {
 
-    private final MilvusEmbeddingStore milvusEmbeddingStore;
     private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
     private final UserRepository userRepository;
 
-    public DiarySearchTool(MilvusEmbeddingStore milvusEmbeddingStore,
-            MilvusClientV2 milvusClientV2,
+    public DiarySearchTool(MilvusClientV2 milvusClientV2,
             EmbeddingModel embeddingModel,
             UserRepository userRepository) {
-        this.milvusEmbeddingStore = milvusEmbeddingStore;
         this.milvusClientV2 = milvusClientV2;
         this.embeddingModel = embeddingModel;
         this.userRepository = userRepository;

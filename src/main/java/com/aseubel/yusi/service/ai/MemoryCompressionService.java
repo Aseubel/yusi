@@ -12,11 +12,12 @@ import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
-import dev.langchain4j.data.document.Metadata;
-import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonArray;
+import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.service.vector.request.InsertReq;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -59,8 +60,7 @@ public class MemoryCompressionService {
     private final ChatMemoryMessageRepository messageRepository;
     private final MidTermMemoryRepository midTermMemoryRepository;
 
-    @Qualifier("midTermMemoryStore")
-    private final MilvusEmbeddingStore midTermMemoryStore;
+    private final MilvusClientV2 milvusClientV2;
 
     @Qualifier("memoryCompressionAssistant")
     private final MemoryCompressionAssistant memoryCompressionAssistant;
@@ -206,7 +206,8 @@ public class MemoryCompressionService {
 
         try {
             // Step 1: LLM 调用（事务外，避免长时间持有 DB 连接）
-            ModelRouteContextHolder.set(ModelRouteContext.builder().scene(PromptKey.MEMORY_EXTRACT.getKey()).language("zh").build());
+            ModelRouteContextHolder
+                    .set(ModelRouteContext.builder().scene(PromptKey.MEMORY_EXTRACT.getKey()).language("zh").build());
 
             String summaryText = memoryCompressionAssistant.extractMemory(prompt);
 
@@ -224,13 +225,28 @@ public class MemoryCompressionService {
             // Step 2: MySQL 持久化 + 消息标记（同一事务）
             Long savedMemoryId = getSelf().persistMidTermMemoryTx(memoryId, trimmedSummary, unsummarizedMessages);
 
-            // Step 3: 计算 embedding 并存入 Milvus（事务外，不影响 DB 一致性）
-            Metadata metadata = new Metadata();
-            metadata.put("userId", memoryId);
-            metadata.put("memoryId", String.valueOf(savedMemoryId));
-            metadata.put("createdAt", DateUtil.formatDate(DateUtil.date()));
-            TextSegment segment = TextSegment.from(trimmedSummary, metadata);
-            midTermMemoryStore.add(embeddingModel.embed(segment).content(), segment);
+            // Step 3: 计算 embedding 并存入 Milvus（使用 V2 客户端，原生插入）
+            JsonObject metadata = new JsonObject();
+            metadata.addProperty("userId", memoryId);
+            metadata.addProperty("memoryId", String.valueOf(savedMemoryId));
+            metadata.addProperty("createdAt", DateUtil.formatDate(DateUtil.date()));
+
+            JsonObject row = new JsonObject();
+            row.addProperty("id", cn.hutool.core.util.IdUtil.fastUUID());
+            row.addProperty("text", trimmedSummary);
+
+            JsonArray vectorArray = new JsonArray();
+            for (float v : embeddingModel.embed(trimmedSummary).content().vector()) {
+                vectorArray.add(v);
+            }
+            row.add("vector", vectorArray);
+            row.add("metadata", metadata);
+
+            InsertReq insertReq = InsertReq.builder()
+                    .collectionName("yusi_mid_term_memory")
+                    .data(java.util.Collections.singletonList(row))
+                    .build();
+            milvusClientV2.insert(insertReq);
 
             log.info("Compressed memory saved to Milvus for user: {}", memoryId);
 

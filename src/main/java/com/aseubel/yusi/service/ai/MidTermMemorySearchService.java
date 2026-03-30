@@ -1,23 +1,23 @@
 package com.aseubel.yusi.service.ai;
 
-import dev.langchain4j.data.segment.TextSegment;
+import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.store.embedding.EmbeddingMatch;
-import dev.langchain4j.store.embedding.EmbeddingSearchRequest;
-import dev.langchain4j.store.embedding.EmbeddingSearchResult;
-import dev.langchain4j.store.embedding.filter.Filter;
-import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
+import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.service.vector.request.AnnSearchReq;
+import io.milvus.v2.service.vector.request.HybridSearchReq;
+import io.milvus.v2.service.vector.request.data.EmbeddedText;
+import io.milvus.v2.service.vector.request.data.FloatVec;
+import io.milvus.v2.service.vector.request.ranker.RRFRanker;
+import io.milvus.v2.service.vector.response.SearchResp;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.Resource;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
-
-import static dev.langchain4j.store.embedding.filter.MetadataFilterBuilder.metadataKey;
 
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
@@ -27,14 +27,12 @@ import com.aseubel.yusi.pojo.entity.MidTermMemory;
 @RequiredArgsConstructor
 public class MidTermMemorySearchService {
 
-    @Resource
-    @Qualifier("midTermMemoryStore")
-    private MilvusEmbeddingStore midTermMemoryStore;
+    private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
     private final MidTermMemoryRepository midTermMemoryRepository;
 
     /**
-     * 搜索中期记忆（向量检索）
+     * 搜索中期记忆（向量检索 + 稀疏检索的混合检索）
      *
      * @param userId 用户的 ID
      * @param query  搜索的查询词
@@ -45,25 +43,52 @@ public class MidTermMemorySearchService {
         log.info("Searching mid-term memory for user: {}, query: {}", userId, query);
 
         try {
-            Filter filter = metadataKey("userId").isEqualTo(userId);
+            String expr = String.format("metadata[\"userId\"] == '%s'", userId);
 
-            EmbeddingSearchRequest searchRequest = EmbeddingSearchRequest.builder()
-                    .queryEmbedding(embeddingModel.embed(query).content())
-                    .filter(filter)
-                    .maxResults(topK)
-                    .minScore(0.5)
+            // 生成查询的 Embedding
+            Embedding queryEmbedding = embeddingModel.embed(query).content();
+
+            // 1. 构建稠密向量搜索请求
+            AnnSearchReq denseReq = AnnSearchReq.builder()
+                    .vectorFieldName("vector")
+                    .vectors(Collections.singletonList(new FloatVec(queryEmbedding.vector())))
+                    .params("{\"metric_type\": \"COSINE\"}")
+                    .limit(topK * 2) // 增加TopK以供Rerank
+                    .filter(expr)
                     .build();
 
-            EmbeddingSearchResult<TextSegment> searchResult = midTermMemoryStore.search(searchRequest);
-            List<EmbeddingMatch<TextSegment>> matches = searchResult.matches();
+            // 2. 构建稀疏向量搜索请求 (使用Milvus直接文本搜索能力进行BM25检索)
+            AnnSearchReq sparseReq = AnnSearchReq.builder()
+                    .vectorFieldName("text_sparse")
+                    .vectors(Collections.singletonList(new EmbeddedText(query)))
+                    .params("{\"metric_type\": \"BM25\"}")
+                    .limit(topK * 2)
+                    .filter(expr)
+                    .build();
 
-            if (matches.isEmpty()) {
+            // 3. 构建混合搜索请求
+            HybridSearchReq hybridSearchReq = HybridSearchReq.builder()
+                    .collectionName("yusi_mid_term_memory")
+                    .searchRequests(Arrays.asList(denseReq, sparseReq))
+                    .ranker(RRFRanker.builder().k(60).build()) // RRF重排序，60为常用的平滑参数k
+                    .limit(topK) // 最终返回TopK
+                    .outFields(Collections.singletonList("text"))
+                    .build();
+
+            // 4. 执行混合搜索
+            SearchResp searchResp = milvusClientV2.hybridSearch(hybridSearchReq);
+            List<List<SearchResp.SearchResult>> searchResults = searchResp.getSearchResults();
+
+            if (searchResults == null || searchResults.isEmpty() || searchResults.get(0).isEmpty()) {
                 log.info("No matching mid-term memory found.");
                 return Collections.emptyList();
             }
 
-            return matches.stream()
-                    .map(match -> match.embedded().text())
+            return searchResults.get(0).stream()
+                    .map(result -> {
+                        Map<String, Object> entity = result.getEntity();
+                        return entity.containsKey("text") ? entity.get("text").toString() : "";
+                    })
                     .collect(Collectors.toList());
 
         } catch (Exception e) {

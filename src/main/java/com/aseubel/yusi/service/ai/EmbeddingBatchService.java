@@ -12,13 +12,13 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.vector.request.InsertReq;
+import io.milvus.v2.service.vector.request.DeleteReq;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
 import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.store.embedding.milvus.MilvusEmbeddingStore;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -49,7 +49,6 @@ public class EmbeddingBatchService {
     private final EmbeddingTaskRepository taskRepository;
     private final DiaryRepository diaryRepository;
     private final UserRepository userRepository;
-    private final MilvusEmbeddingStore milvusEmbeddingStore;
     private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
     private final DocumentSplitter documentSplitter;
@@ -178,7 +177,10 @@ public class EmbeddingBatchService {
             // 批量删除旧 Embedding
             for (String id : toRemoveIds) {
                 try {
-                    milvusEmbeddingStore.remove(id);
+                    milvusClientV2.delete(DeleteReq.builder()
+                            .collectionName("yusi_embedding_collection")
+                            .filter("id like '" + id + "_%'")
+                            .build());
                 } catch (Exception e) {
                     log.warn("删除旧 Embedding {} 失败: {}", id, e.getMessage());
                 }
@@ -240,7 +242,10 @@ public class EmbeddingBatchService {
      */
     private void processDeleteTask(EmbeddingTask task, LocalDateTime now) {
         try {
-            milvusEmbeddingStore.remove(task.getDiaryId());
+            milvusClientV2.delete(DeleteReq.builder()
+                    .collectionName("yusi_embedding_collection")
+                    .filter("id like '" + task.getDiaryId() + "_%'")
+                    .build());
             taskRepository.markAsCompleted(task.getId(), now);
             log.info("删除日记 {} 的 Embedding 成功", task.getDiaryId());
         } catch (Exception e) {
@@ -307,7 +312,10 @@ public class EmbeddingBatchService {
 
         // 1. 清空 Milvus collection
         try {
-            milvusEmbeddingStore.removeAll();
+            milvusClientV2.delete(DeleteReq.builder()
+                    .collectionName("yusi_embedding_collection")
+                    .filter("id != ''")
+                    .build());
             log.info("Milvus collection 清空完成");
         } catch (Exception e) {
             log.error("清空 Milvus collection 失败", e);
