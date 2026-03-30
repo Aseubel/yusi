@@ -120,8 +120,6 @@ public class MilvusConfig {
         MilvusEmbeddingStore.Builder builder = MilvusEmbeddingStore.builder();
 
         return builder
-                .host(properties.getHost())
-                .port(properties.getPort())
                 .username(properties.getUsername())
                 .password(properties.getPassword())
                 .uri(properties.getUri())
