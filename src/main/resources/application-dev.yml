@@ -154,9 +154,9 @@ redis:
       keep-alive: true
 
 milvus:
-  mode: 2
-  uri: https://in03-cf10f8f6eef3a63.serverless.aws-eu-central-1.cloud.zilliz.com
-  token: 064cde8da209e07bec713d60083a689eee36c6711b2228a271900f8f10d59ff3f9bb8b96ba9a494d6353593fe7794a17b775c125
+  mode: 
+  uri: 
+  token: 
   host:
   port:
   username:
