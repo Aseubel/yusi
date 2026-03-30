@@ -52,7 +52,6 @@ public class MatchServiceImpl implements MatchService {
     private UserPersonaService userPersonaService;
 
     @Autowired
-    @Qualifier("matchAssistant")
     private MatchAssistant matchAssistant;
 
     @Override
