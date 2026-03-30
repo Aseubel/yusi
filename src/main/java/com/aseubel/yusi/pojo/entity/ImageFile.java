@@ -9,6 +9,8 @@ import java.time.LocalDateTime;
 @Entity
 @Builder
 @ToString
+@NoArgsConstructor
+@AllArgsConstructor
 @Table(name = "image_file", indexes = {
     @Index(name = "idx_file_md5", columnList = "fileMd5"),
     @Index(name = "idx_user_id", columnList = "userId")

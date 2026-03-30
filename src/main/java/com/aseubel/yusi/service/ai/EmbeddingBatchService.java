@@ -8,6 +8,10 @@ import com.aseubel.yusi.repository.EmbeddingTaskRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.diary.DiaryService;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.service.vector.request.InsertReq;
 import dev.langchain4j.data.document.Document;
 import dev.langchain4j.data.document.DocumentSplitter;
 import dev.langchain4j.data.document.Metadata;
@@ -46,6 +50,7 @@ public class EmbeddingBatchService {
     private final DiaryRepository diaryRepository;
     private final UserRepository userRepository;
     private final MilvusEmbeddingStore milvusEmbeddingStore;
+    private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
     private final DocumentSplitter documentSplitter;
     private final DiaryService diaryService;
@@ -182,8 +187,35 @@ public class EmbeddingBatchService {
             // 批量调用 Embedding API
             List<Embedding> embeddings = embeddingModel.embedAll(allSegments).content();
 
-            // 批量写入 Milvus
-            milvusEmbeddingStore.addAll(allIds, embeddings, allSegments);
+            // 批量写入 Milvus（使用 V2 客户端，避免 text_sparse 字段校验问题）
+            List<JsonObject> insertData = new ArrayList<>();
+            for (int i = 0; i < allSegments.size(); i++) {
+                JsonObject row = new JsonObject();
+                row.addProperty("id", allIds.get(i));
+                row.addProperty("text", allSegments.get(i).text());
+
+                JsonArray vectorArray = new JsonArray();
+                for (float v : embeddings.get(i).vector()) {
+                    vectorArray.add(v);
+                }
+                row.add("vector", vectorArray);
+
+                JsonObject metadata = new JsonObject();
+                allSegments.get(i).metadata().toMap().forEach((k, v) -> {
+                    if (v != null) {
+                        metadata.addProperty(k, v.toString());
+                    }
+                });
+                row.add("metadata", metadata);
+
+                insertData.add(row);
+            }
+
+            InsertReq insertReq = InsertReq.builder()
+                    .collectionName("yusi_embedding_collection")
+                    .data(insertData)
+                    .build();
+            milvusClientV2.insert(insertReq);
 
             // 标记所有成功的任务
             for (EmbeddingTask task : successTasks) {

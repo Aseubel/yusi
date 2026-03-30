@@ -200,26 +200,59 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     private ChatMessage enhanceChatMessage(ChatMessage chatMessage, ChatMemoryMessage entity) {
         LocalDateTime time = entity.getCreatedAt();
         if (chatMessage instanceof UserMessage userMessage) {
-            return UserMessage.from(userMessage.singleText() + TIME_PREFIX + time);
+            boolean hasMultipleContents = userMessage.contents().size() > 1 || 
+                    (userMessage.contents().size() == 1 && !(userMessage.contents().get(0) instanceof TextContent));
+            
+            if (hasMultipleContents) {
+                List<Content> newContents = new ArrayList<>();
+                for (Content content : userMessage.contents()) {
+                    if (content instanceof TextContent textContent) {
+                        newContents.add(new TextContent(textContent.text() + TIME_PREFIX + time));
+                    } else {
+                        newContents.add(content);
+                    }
+                }
+                return new UserMessage(userMessage.name(), newContents);
+            } else {
+                return UserMessage.from(userMessage.name(), userMessage.singleText() + TIME_PREFIX + time);
+            }
         }
         return chatMessage;
     }
 
     private ChatMessage removeEnhanceContent(ChatMessage chatMessage) {
         if (chatMessage instanceof UserMessage userMessage) {
-            String text = userMessage.singleText();
-            Pattern pattern = Pattern.compile("<user_input>(.+?)</user_input>");
-            Matcher matcher = pattern.matcher(text);
-            if (matcher.find()) {
-                text = matcher.group(1);
+            boolean hasMultipleContents = userMessage.contents().size() > 1 || 
+                    (userMessage.contents().size() == 1 && !(userMessage.contents().get(0) instanceof TextContent));
+            
+            if (hasMultipleContents) {
+                List<Content> newContents = new ArrayList<>();
+                for (Content content : userMessage.contents()) {
+                    if (content instanceof TextContent textContent) {
+                        newContents.add(new TextContent(extractCleanText(textContent.text())));
+                    } else {
+                        newContents.add(content);
+                    }
+                }
+                return new UserMessage(userMessage.name(), newContents);
+            } else {
+                return UserMessage.from(userMessage.name(), extractCleanText(userMessage.singleText()));
             }
-            int timeIndex = text.lastIndexOf(TIME_PREFIX);
-            if (timeIndex != -1) {
-                text = text.substring(0, timeIndex);
-            }
-            return UserMessage.from(text);
         }
         return chatMessage;
+    }
+
+    private String extractCleanText(String text) {
+        Pattern pattern = Pattern.compile("(?s)<user_input>(.+?)</user_input>");
+        Matcher matcher = pattern.matcher(text);
+        if (matcher.find()) {
+            text = matcher.group(1);
+        }
+        int timeIndex = text.lastIndexOf(TIME_PREFIX);
+        if (timeIndex != -1) {
+            text = text.substring(0, timeIndex);
+        }
+        return text;
     }
 
     private String extractImages(ChatMessage message) {
