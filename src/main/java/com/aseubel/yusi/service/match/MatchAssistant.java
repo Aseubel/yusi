@@ -1,7 +1,6 @@
 package com.aseubel.yusi.service.match;
 
 import dev.langchain4j.service.MemoryId;
-import dev.langchain4j.service.TokenStream;
 import dev.langchain4j.service.UserMessage;
 import dev.langchain4j.service.V;
 
@@ -9,10 +8,10 @@ public interface MatchAssistant {
         @UserMessage("""
                         请为你（用户A的AI知己）的用户撰写一封推荐信，向TA推荐另一位用户（用户B）。
 
-                        用户A（你的用户）的近期心路历程：
+                        用户A（你的用户）的近期心路历程和画像：
                         {{userAProfile}}
 
-                        用户B（推荐对象）的近期心路历程：
+                        用户B（推荐对象）的近期心路历程和画像：
                         {{userBProfile}}
 
                         任务：
@@ -24,16 +23,16 @@ public interface MatchAssistant {
                         3. **引用**：可以模糊引用双方的某种倾向（如"你们都喜欢独处"），但严禁泄露具体隐私细节。
                         4. **格式**：以"向你推荐一位'灵魂伙伴'"开头，语气神秘而充满期待。150字左右。
                         """)
-        TokenStream generateRecommendationLetter(@MemoryId String userId, @V("userAProfile") String userAProfile,
+        String generateRecommendationLetter(@MemoryId String userId, @V("userAProfile") String userAProfile,
                         @V("userBProfile") String userBProfile);
 
         @UserMessage("""
                         你是一个资深的灵魂匹配专家。请根据以下两位用户的画像和日记摘要，评估他们之间的契合度，并给出一个 0 到 100 之间的整数分数。
 
-                        用户A画像：
+                        用户A画像及日记摘要：
                         {{userAProfile}}
 
-                        用户B画像：
+                        用户B画像及日记摘要：
                         {{userBProfile}}
 
                         要求：

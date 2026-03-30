@@ -192,8 +192,11 @@ public class MatchServiceImpl implements MatchService {
     private void createMatch(User userA, User userB) {
         log.info("Creating match for {} and {}", userA.getUserName(), userB.getUserName());
 
-        String profileA = getProfileSummary(userA.getUserId());
-        String profileB = getProfileSummary(userB.getUserId());
+        UserPersona personaA = userPersonaService.getUserPersona(userA.getUserId());
+        UserPersona personaB = userPersonaService.getUserPersona(userB.getUserId());
+
+        String profileA = getProfileSummaryWithPersona(userA.getUserId(), personaA);
+        String profileB = getProfileSummaryWithPersona(userB.getUserId(), personaB);
 
         // Generate Letter A to B (User A sees this recommending B)
         // Wait, prompt says: "Recommend User B to User A".
@@ -255,18 +258,14 @@ public class MatchServiceImpl implements MatchService {
     }
 
     private CompletableFuture<String> generateLetter(String userId, String myProfile, String partnerProfile) {
-        CompletableFuture<String> future = new CompletableFuture<>();
-        StringBuilder sb = new StringBuilder();
-        try {
-            matchAssistant.generateRecommendationLetter(userId, myProfile, partnerProfile)
-                    .onPartialResponse(sb::append)
-                    .onCompleteResponse(res -> future.complete(sb.toString()))
-                    .onError(future::completeExceptionally)
-                    .start();
-        } catch (Exception e) {
-            future.completeExceptionally(e);
-        }
-        return future;
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return matchAssistant.generateRecommendationLetter(userId, myProfile, partnerProfile);
+            } catch (Exception e) {
+                log.error("Failed to generate recommendation letter for user {}", userId, e);
+                throw new RuntimeException("Failed to generate recommendation letter", e);
+            }
+        });
     }
 
     @Override
