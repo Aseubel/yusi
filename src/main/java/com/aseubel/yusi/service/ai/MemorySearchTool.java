@@ -44,36 +44,43 @@ public class MemorySearchTool {
             return "无法验证用户身份，请重新登录后再试。";
         }
         if (StrUtil.isBlank(query)) {
-            return "query 不能为空。";
+            return "query 不能为空。现在请根据现有信息回复用户。";
         }
 
-        String graph = lifeGraphQueryService.localSearch(userId, query, 5, 20, 10);
-        List<String> diary = diarySearchTool.searchDiary(memoryId, query, startDate, endDate);
-        List<String> conversationMemories = midTermMemorySearchService.searchMidTermMemory(userId, query, 3);
+        try {
+            String graph = lifeGraphQueryService.localSearch(userId, query, 5, 20, 10);
+            List<String> diary = diarySearchTool.searchDiary(memoryId, query, startDate, endDate);
+            List<String> conversationMemories = midTermMemorySearchService.searchMidTermMemory(userId, query, 3);
 
-        StringBuilder sb = new StringBuilder();
-        if (StrUtil.isNotBlank(graph)) {
-            sb.append("GRAPH:\n").append(graph).append("\n");
-        } else {
-            sb.append("GRAPH:\n").append("无匹配图谱结果。\n\n");
-        }
+            StringBuilder sb = new StringBuilder();
+            if (StrUtil.isNotBlank(graph)) {
+                sb.append("GRAPH:\n").append(graph).append("\n");
+            } else {
+                sb.append("GRAPH:\n").append("无匹配图谱结果。\n\n");
+            }
 
-        sb.append("DIARY:\n");
-        for (String s : diary) {
-            sb.append("- ").append(s).append("\n");
-        }
-
-        sb.append("\nCONVERSATION_MEMORY:\n");
-        if (conversationMemories.isEmpty()) {
-            sb.append("无匹配对话记忆。\n");
-        } else {
-            for (String s : conversationMemories) {
+            sb.append("DIARY:\n");
+            for (String s : diary) {
                 sb.append("- ").append(s).append("\n");
             }
-        }
 
-        log.info("MemorySearchTool: userId={}, graphLen={}, diaryCount={}, convMemCount={}", userId, graph.length(),
-                diary.size(), conversationMemories.size());
-        return sb.toString();
+            sb.append("\nCONVERSATION_MEMORY:\n");
+            if (conversationMemories.isEmpty()) {
+                sb.append("无匹配对话记忆。\n");
+            } else {
+                for (String s : conversationMemories) {
+                    sb.append("- ").append(s).append("\n");
+                }
+            }
+
+            log.info("MemorySearchTool: userId={}, graphLen={}, diaryCount={}, convMemCount={}", userId, graph.length(),
+                    diary.size(), conversationMemories.size());
+            
+            sb.append("\n\n请根据以上检索到的记忆，用你的语气回答用户的问题。");
+            return sb.toString();
+        } catch (Exception e) {
+            log.error("Search memory error", e);
+            return "检索记忆失败。现在请直接用你的语气回答用户的问题。";
+        }
     }
 }

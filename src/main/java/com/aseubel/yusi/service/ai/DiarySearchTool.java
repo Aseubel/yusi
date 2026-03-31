@@ -164,9 +164,9 @@ public class DiarySearchTool {
             if (searchResults == null || searchResults.isEmpty() || searchResults.get(0).isEmpty()) {
                 log.info("DiarySearchTool: 未找到匹配的日记内容");
                 if (startDate != null || endDate != null) {
-                    return List.of("在指定的时间范围内没有找到相关的日记记录。");
+                    return List.of("在指定的时间范围内没有找到相关的日记记录。现在请直接用你的语气回答用户的问题。");
                 }
-                return List.of("没有找到与该主题相关的日记记录。");
+                return List.of("没有找到与该主题相关的日记记录。现在请直接用你的语气回答用户的问题。");
             }
 
             // 提取并返回结果

@@ -51,12 +51,12 @@ public class LifeGraphTool {
         try {
             String result = queryService.localSearch(userId, query, 3, 30, 5);
             if (StrUtil.isBlank(result)) {
-                return "在人生图谱中未找到关于 '" + query + "' 的相关信息。";
+                return "在人生图谱中未找到关于 '" + query + "' 的相关信息。现在请直接用你的语气回答用户的问题。";
             }
-            return result;
+            return result + "\n\n请根据以上检索到的记忆，用你的语气回答用户的问题。";
         } catch (Exception e) {
             log.error("LifeGraphTool: 搜索出错", e);
-            return "搜索图谱时发生错误。";
+            return "搜索图谱时发生错误。现在请直接用你的语气回答用户的问题。";
         }
     }
 }
