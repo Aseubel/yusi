@@ -148,16 +148,16 @@ public class AiController {
                         if (aiMsg.text() != null && !aiMsg.text().isEmpty()) {
                             item.put("content", aiMsg.text());
                         } else if (aiMsg.hasToolExecutionRequests()) {
-                            String toolNames = aiMsg.toolExecutionRequests().stream()
-                                    .map(ToolExecutionRequest::name)
-                                    .collect(Collectors.joining(", "));
-                            item.put("content", "正在调用工具：" + toolNames + "...");
+                            // String toolNames = aiMsg.toolExecutionRequests().stream()
+                            // .map(ToolExecutionRequest::name)
+                            // .collect(Collectors.joining(", "));
+                            // item.put("content", "正在调用工具：" + toolNames + "...");
                         } else {
-                            item.put("content", "");
+                            // item.put("content", "");
                         }
                     } else if (msg instanceof ToolExecutionResultMessage toolMsg) {
-                        item.put("role", "assistant");
-                        item.put("content", "工具执行结果：" + toolMsg.text());
+                        // item.put("role", "assistant");
+                        // item.put("content", "工具执行结果：" + toolMsg.text());
                     }
 
                     return item;
