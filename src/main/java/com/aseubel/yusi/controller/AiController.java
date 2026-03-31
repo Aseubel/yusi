@@ -22,9 +22,12 @@ import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.oss.OssService;
 
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.ImageContent;
+import dev.langchain4j.data.message.TextContent;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.service.TokenStream;
 import lombok.RequiredArgsConstructor;
@@ -77,20 +80,21 @@ public class AiController {
 
         List<Map<String, Object>> history = messages.stream()
                 .map(chatMemoryStore::toChatMessage)
-                .filter(msg -> msg instanceof UserMessage || msg instanceof AiMessage)
+                .filter(msg -> msg instanceof UserMessage || msg instanceof AiMessage
+                        || msg instanceof ToolExecutionResultMessage)
                 .map(msg -> {
                     Map<String, Object> item = new java.util.HashMap<>();
                     item.put("role", msg instanceof UserMessage ? "user" : "assistant");
 
                     if (msg instanceof UserMessage userMsg) {
                         String textContent = userMsg.contents().stream()
-                                .filter(c -> c instanceof dev.langchain4j.data.message.TextContent)
-                                .map(c -> ((dev.langchain4j.data.message.TextContent) c).text())
+                                .filter(c -> c instanceof TextContent)
+                                .map(c -> ((TextContent) c).text())
                                 .collect(Collectors.joining("\n"));
 
                         if (textContent.isEmpty() && userMsg.contents().size() == 1
-                                && userMsg.contents().get(0) instanceof dev.langchain4j.data.message.TextContent) {
-                            textContent = ((dev.langchain4j.data.message.TextContent) userMsg.contents().get(0)).text();
+                                && userMsg.contents().get(0) instanceof TextContent) {
+                            textContent = ((TextContent) userMsg.contents().get(0)).text();
                         } else if (textContent.isEmpty() && !userMsg.contents().isEmpty()) {
                             // Try to get text from singleText() if we couldn't find any TextContent
                             // directly
@@ -141,10 +145,26 @@ public class AiController {
                             }
                         }
                     } else if (msg instanceof AiMessage aiMsg) {
-                        item.put("content", aiMsg.text() != null ? aiMsg.text() : "");
+                        if (aiMsg.text() != null && !aiMsg.text().isEmpty()) {
+                            item.put("content", aiMsg.text());
+                        } else if (aiMsg.hasToolExecutionRequests()) {
+                            String toolNames = aiMsg.toolExecutionRequests().stream()
+                                    .map(ToolExecutionRequest::name)
+                                    .collect(Collectors.joining(", "));
+                            item.put("content", "正在调用工具：" + toolNames + "...");
+                        } else {
+                            item.put("content", "");
+                        }
+                    } else if (msg instanceof ToolExecutionResultMessage toolMsg) {
+                        item.put("role", "assistant");
+                        item.put("content", "工具执行结果：" + toolMsg.text());
                     }
 
                     return item;
+                })
+                .filter(item -> {
+                    Object content = item.get("content");
+                    return (content != null && !content.toString().trim().isEmpty()) || item.containsKey("images");
                 })
                 .collect(Collectors.toList());
 

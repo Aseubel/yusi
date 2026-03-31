@@ -166,9 +166,19 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
                 ChatMessage msg = deserialized.get(0);
                 
                 if (msg instanceof UserMessage userMsg && StrUtil.isNotBlank(entity.getImages())) {
-                    List<Content> imageContents = parseImageContents(entity.getImages());
-                    if (!imageContents.isEmpty()) {
-                        return UserMessage.from(userMsg.singleText(), imageContents);
+                    boolean hasImages = userMsg.contents().stream().anyMatch(c -> c instanceof ImageContent);
+                    if (!hasImages) {
+                        List<Content> imageContents = parseImageContents(entity.getImages());
+                        if (!imageContents.isEmpty()) {
+                            String text = userMsg.contents().stream()
+                                    .filter(c -> c instanceof TextContent)
+                                    .map(c -> ((TextContent) c).text())
+                                    .findFirst().orElse("");
+                            List<Content> newContents = new ArrayList<>();
+                            newContents.add(TextContent.from(text));
+                            newContents.addAll(imageContents);
+                            return UserMessage.from(newContents);
+                        }
                     }
                 }
                 return msg;
