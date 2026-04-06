@@ -14,8 +14,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
         // 配置消息代理
+        ThreadPoolTaskScheduler taskScheduler = new ThreadPoolTaskScheduler();
+        taskScheduler.initialize();
+        
         config.enableSimpleBroker("/topic")
-                .setTaskScheduler(new ThreadPoolTaskScheduler())
+                .setTaskScheduler(taskScheduler)
                 .setHeartbeatValue(new long[]{10000, 10000});
         config.setApplicationDestinationPrefixes("/app");
     }
