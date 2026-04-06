@@ -14,6 +14,7 @@ import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -32,6 +33,12 @@ public class SoulChatController {
 
     @Autowired
     private SoulMatchRepository matchRepository;
+
+    @Autowired
+    private SimpMessagingTemplate messagingTemplate;
+
+    @Autowired
+    private WebSocketController webSocketController;
 
     @PostMapping("/send")
     public Response<SoulMessage> sendMessage(@RequestBody SendMessageRequest request) {
@@ -63,7 +70,15 @@ public class SoulChatController {
                 .createTime(LocalDateTime.now())
                 .build();
 
-        return Response.success(messageRepository.save(message));
+        SoulMessage saved = messageRepository.save(message);
+
+        // 更新发送者在线状态
+        webSocketController.updateUserStatus(senderId, request.getMatchId(), true);
+
+        // 广播消息到 WebSocket 主题
+        messagingTemplate.convertAndSend("/topic/soul-chat/" + request.getMatchId(), saved);
+
+        return Response.success(saved);
     }
 
     @GetMapping("/history")
