@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.plaza.impl;
 
+import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
@@ -46,7 +47,7 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
             AiMessage aiMessage;
             try {
                 ModelRouteContextHolder
-                        .set(ModelRouteContext.builder().scene("emotion-analysis").language("zh").build());
+                        .set(ModelRouteContext.builder().scene(PromptKey.EMOTION_ANALYSIS.getKey()).language("zh").build());
                 aiMessage = chatModel.chat(userMessage).aiMessage();
             } finally {
                 ModelRouteContextHolder.clear();

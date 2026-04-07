@@ -95,7 +95,7 @@ public class ModelProxyFactory {
                     context.getLanguage(), context.getScene());
             if (sceneDef == null || !hasSceneParameters(sceneDef)) {
                 // 无 scene 参数时也需要处理脱敏
-                return invokeWithMasking(delegate, method, args);
+                return invokeWithMasking(context, delegate, method, args);
             }
             // 处理 ChatRequest 参数，同时保留其他参数（如 StreamingResponseHandler）
             if (args != null && args.length > 0 && args[0] instanceof ChatRequest chatRequest) {
@@ -110,9 +110,9 @@ public class ModelProxyFactory {
                 for (int i = 1; i < args.length; i++) {
                     newArgs[i] = args[i];
                 }
-                return invokeWithMasking(delegate, method, newArgs);
+                return invokeWithMasking(context, delegate, method, newArgs);
             }
-            return invokeWithMasking(delegate, method, args);
+            return invokeWithMasking(context, delegate, method, args);
         }
 
         // ── 脱敏核心逻辑 ──────────────────────────────────────
@@ -125,7 +125,11 @@ public class ModelProxyFactory {
          * 1. 语义一致性 — SystemPrompt、聊天历史、用户消息、Tool 结果全部统一脱敏
          * 2. 无线程问题 — 拦截发生在最终 HTTP 调用前
          */
-        private Object invokeWithMasking(Object delegate, Method method, Object[] args) throws Throwable {
+        private Object invokeWithMasking(ModelRouteContext context, Object delegate, Method method, Object[] args) throws Throwable {
+            if ("LOGIC".equalsIgnoreCase(context.getGroup())) {
+                return method.invoke(delegate, args);
+            }
+
             if (args == null || args.length == 0 || !(args[0] instanceof ChatRequest chatRequest)) {
                 return method.invoke(delegate, args);
             }
@@ -181,7 +185,13 @@ public class ModelProxyFactory {
                 if (msg instanceof SystemMessage sm) {
                     sb.append(sm.text()).append("\n");
                 } else if (msg instanceof UserMessage um) {
-                    sb.append(um.singleText()).append("\n");
+                    if (um.contents() != null) {
+                        for (Content content : um.contents()) {
+                            if (content instanceof TextContent tc) {
+                                sb.append(tc.text()).append("\n");
+                            }
+                        }
+                    }
                 } else if (msg instanceof AiMessage am && am.text() != null) {
                     sb.append(am.text()).append("\n");
                 } else if (msg instanceof ToolExecutionResultMessage tm) {

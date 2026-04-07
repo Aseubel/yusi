@@ -41,7 +41,12 @@ public enum PromptKey {
     /**
      * Soul Match Prompt
      */
-    SOUL_MATCH("soul-match");
+    SOUL_MATCH("soul-match"),
+
+    /**
+     * Emotion Analysis Prompt
+     */
+    EMOTION_ANALYSIS("emotion-analysis");
 
     private final String key;
 }

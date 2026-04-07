@@ -50,7 +50,6 @@ public enum SensitiveEntityType {
             return null;
         return switch (natureTag) {
             case "nr" -> PERSON;
-            case "ns" -> LOCATION;
             case "nt" -> ORGANIZATION;
             default -> null;
         };
