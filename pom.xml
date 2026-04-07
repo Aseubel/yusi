@@ -262,6 +262,13 @@
             <artifactId>milvus-sdk-java</artifactId>
             <version>${milvus-sdk.version}</version>
         </dependency>
+
+        <!-- HanLP 本地NLP实体识别，用于调用外部大模型API前脱敏 -->
+        <dependency>
+            <groupId>com.hankcs</groupId>
+            <artifactId>hanlp</artifactId>
+            <version>portable-1.8.4</version>
+        </dependency>
     </dependencies>
 
     <build>
