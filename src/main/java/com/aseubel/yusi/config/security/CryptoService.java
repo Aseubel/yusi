@@ -5,6 +5,9 @@ import cn.hutool.core.util.StrUtil;
 import javax.crypto.Cipher;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
+import javax.crypto.spec.OAEPParameterSpec;
+import javax.crypto.spec.PSource;
+import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
 
@@ -45,8 +48,14 @@ public class CryptoService {
         }
 
         try {
-            Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
-            cipher.init(Cipher.DECRYPT_MODE, backupPrivateKey);
+            Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPPadding");
+            OAEPParameterSpec oaepParams = new OAEPParameterSpec(
+                    "SHA-256",
+                    "MGF1",
+                    MGF1ParameterSpec.SHA256,
+                    PSource.PSpecified.DEFAULT
+            );
+            cipher.init(Cipher.DECRYPT_MODE, backupPrivateKey, oaepParams);
             return cipher.doFinal(encrypted);
         } catch (Exception e) {
             throw new IllegalStateException("RSA-OAEP decryption failed", e);

@@ -13,6 +13,10 @@ import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.key.KeyManagementService;
 import com.aseubel.yusi.service.user.UserService;
+import com.aseubel.yusi.service.diary.DiaryService;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -40,6 +44,10 @@ public class KeyManagementServiceImpl implements KeyManagementService {
     private final DiaryRepository diaryRepository;
     private final CryptoService cryptoService;
     private final UserService userService;
+
+    @Autowired
+    @Lazy
+    private DiaryService diaryService;
 
     @Override
     public KeySettingsResponse getKeySettings(String userId) {
@@ -159,6 +167,13 @@ public class KeyManagementServiceImpl implements KeyManagementService {
         if (!toUpdate.isEmpty()) {
             diaryRepository.saveAll(toUpdate);
             log.info("Re-encrypted {} diaries for user {}", toUpdate.size(), userId);
+            
+            // clear caches
+            diaryService.evictListCache(userId);
+            diaryService.evictFootprintsCache(userId);
+            for (Diary d : toUpdate) {
+                diaryService.evictDiaryCache(d.getDiaryId());
+            }
         }
 
         user.setKeyMode(request.getNewKeyMode());
