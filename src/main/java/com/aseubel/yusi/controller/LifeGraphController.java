@@ -63,19 +63,32 @@ public class LifeGraphController {
         return Response.success(communityInsightService.getCommunityDetail(userId, communityId));
     }
 
+    /**
+     * @deprecated 此接口已废弃，调用AI分析消耗token过高三方原因
+     * 获取情绪时间线数据
+     */
+    @Deprecated
     @GetMapping("/emotions")
     public Response<EmotionTimeline> getEmotionTimeline(
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate) {
-        String userId = UserContext.getUserId();
-        return Response.success(emotionTimelineService.getEmotionTimeline(userId, startDate, endDate));
+        return Response.<EmotionTimeline>builder()
+                .code(410)
+                .info("此接口已废弃，会消耗大量AI token，请勿调用")
+                .build();
     }
 
+    /**
+     * @deprecated 此接口已废弃
+     */
+    @Deprecated
     @GetMapping("/emotions/triggers")
     public Response<List<EmotionTimeline.EmotionTrigger>> getEmotionTriggers(
             @RequestParam(defaultValue = "10") int limit) {
-        String userId = UserContext.getUserId();
-        return Response.success(emotionTimelineService.getEmotionTriggers(userId, limit));
+        return Response.<List<EmotionTimeline.EmotionTrigger>>builder()
+                .code(410)
+                .info("此接口已废弃，会消耗大量AI token，请勿调用")
+                .build();
     }
 
     @GetMapping("/merge-suggestions")
