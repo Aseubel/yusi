@@ -1,4 +1,9 @@
 #!/bin/bash
+# 同步代码
+git pull
+
+# 清除docker镜像缓存
+docker system prune -af
 
 # Define JDK version and installation path
 JDK_VERSION="21"
