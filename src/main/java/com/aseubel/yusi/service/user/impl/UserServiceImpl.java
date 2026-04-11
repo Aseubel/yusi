@@ -39,16 +39,19 @@ public class UserServiceImpl implements UserService {
     private com.aseubel.yusi.service.user.VerificationCodeService verificationCodeService;
 
     @Override
-    public User register(User user) {
+    public User register(User user, String code) {
         User existingUser = userRepository.findByUserName(user.getUserName());
         if (existingUser != null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "用户名已存在");
         }
-        
+
         if (StrUtil.isNotBlank(user.getEmail())) {
             User existingEmail = userRepository.findByEmail(user.getEmail());
             if (existingEmail != null) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "该邮箱已被注册");
+            }
+            if (!verificationCodeService.verifyCode(user.getEmail(), code)) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "验证码错误或已过期");
             }
         }
 
@@ -56,6 +59,18 @@ public class UserServiceImpl implements UserService {
         String hashedPassword = BCrypt.hashpw(user.getPassword(), BCrypt.gensalt());
         user.setPassword(hashedPassword);
         return userRepository.save(user);
+    }
+
+    @Override
+    public void sendRegisterCode(String email) {
+        if (!email.matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "邮箱格式不正确");
+        }
+        User existingEmail = userRepository.findByEmail(email);
+        if (existingEmail != null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "该邮箱已被注册");
+        }
+        verificationCodeService.sendCode(email, "注册");
     }
 
     @Override
@@ -219,7 +234,7 @@ public class UserServiceImpl implements UserService {
         if (!user.getEmail().matches("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$")) {
              throw new BusinessException(ErrorCode.PARAM_ERROR, "邮箱格式不正确，可联系管理员解决");
         }
-        verificationCodeService.sendCode(user.getEmail());
+        verificationCodeService.sendCode(user.getEmail(), "找回密码");
         return maskEmail(user.getEmail());
     }
 

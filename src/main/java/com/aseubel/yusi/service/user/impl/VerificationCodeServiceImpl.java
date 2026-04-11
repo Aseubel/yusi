@@ -26,15 +26,13 @@ public class VerificationCodeServiceImpl implements VerificationCodeService {
     private static final long EXPIRE_MINUTES = 5;
 
     @Override
-    public void sendCode(String email) {
-        // 生成6位数字验证码
+    public void sendCode(String email, String bizType) {
         String code = RandomUtil.randomNumbers(6);
         String key = KEY_PREFIX + email;
 
-        // 存储到Redis，5分钟过期 (单位毫秒)
         redisService.setValue(key, code, EXPIRE_MINUTES * 60 * 1000);
-        
-        emailService.sendVerificationCode(email, code);
+
+        emailService.sendVerificationCode(email, code, bizType);
     }
 
     @Override

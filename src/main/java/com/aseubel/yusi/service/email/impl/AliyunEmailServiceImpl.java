@@ -17,7 +17,7 @@ public class AliyunEmailServiceImpl implements EmailService {
     private AliyunDmProperties properties;
 
     @Override
-    public void sendVerificationCode(String to, String code) {
+    public void sendVerificationCode(String to, String code, String bizType) {
         if (properties.getAccessKeyId() == null || properties.getAccessKeyId().isEmpty() ||
             properties.getAccessKeySecret() == null || properties.getAccessKeySecret().isEmpty()) {
             log.warn("Aliyun DM credentials are not configured. Skipping email sending. Code: {}", code);
@@ -38,7 +38,7 @@ public class AliyunEmailServiceImpl implements EmailService {
                     .setReplyToAddress(false)
                     .setToAddress(to)
                     .setFromAlias(properties.getFromAlias())
-                    .setSubject("Yusi 找回密码验证码")
+                    .setSubject("Yusi " + bizType + "验证码")
                     .setHtmlBody("<div>您的验证码是：<b>" + code + "</b></div><div>该验证码5分钟内有效，请勿泄露给他人。</div>");
 
             client.singleSendMail(request);

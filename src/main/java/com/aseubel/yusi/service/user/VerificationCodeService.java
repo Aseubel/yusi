@@ -4,8 +4,9 @@ public interface VerificationCodeService {
     /**
      * 生成验证码并发送
      * @param email 邮箱
+     * @param bizType 业务类型
      */
-    void sendCode(String email);
+    void sendCode(String email, String bizType);
 
     /**
      * 验证验证码

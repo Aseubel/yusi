@@ -10,6 +10,7 @@ import com.aseubel.yusi.pojo.dto.user.ResetPasswordRequest;
 import com.aseubel.yusi.pojo.dto.user.LoginRequest;
 
 import com.aseubel.yusi.pojo.dto.user.RegisterRequest;
+import com.aseubel.yusi.pojo.dto.user.SendRegisterCodeRequest;
 import com.aseubel.yusi.pojo.dto.user.UpdateUserRequest;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.service.user.UserService;
@@ -41,7 +42,14 @@ public class UserController {
                 .password(request.getPassword())
                 .email(request.getEmail())
                 .build();
-        return Response.success(userService.register(user));
+        return Response.success(userService.register(user, request.getCode()));
+    }
+
+    @Auth(required = false)
+    @PostMapping("/register/send-code")
+    public Response<Void> sendRegisterCode(@Valid @RequestBody SendRegisterCodeRequest request) {
+        userService.sendRegisterCode(request.getEmail());
+        return Response.success();
     }
 
     @Auth(required = false)

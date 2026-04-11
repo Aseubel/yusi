@@ -11,7 +11,9 @@ import java.util.List;
  */
 public interface UserService {
 
-    User register(User user);
+    User register(User user, String code);
+
+    void sendRegisterCode(String email);
 
     AuthResponse login(String userName, String password);
 
