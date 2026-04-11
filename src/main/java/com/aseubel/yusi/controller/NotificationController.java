@@ -62,7 +62,8 @@ public class NotificationController {
      */
     @PostMapping("/{notificationId}/read")
     public Response<Boolean> markAsRead(@PathVariable Long notificationId) {
-        return Response.success(notificationService.markAsRead(notificationId));
+        String userId = UserContext.getUserId();
+        return Response.success(notificationService.markAsRead(userId, notificationId));
     }
 
     /**
@@ -79,7 +80,8 @@ public class NotificationController {
      */
     @DeleteMapping("/{notificationId}")
     public Response<Void> deleteNotification(@PathVariable Long notificationId) {
-        notificationService.deleteNotification(notificationId);
+        String userId = UserContext.getUserId();
+        notificationService.deleteNotification(userId, notificationId);
         return Response.success(null);
     }
 }

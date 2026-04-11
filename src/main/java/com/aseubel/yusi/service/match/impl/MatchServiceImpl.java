@@ -9,6 +9,8 @@ import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.pojo.entity.UserPersona;
+import com.aseubel.yusi.redis.annotation.QueryCache;
+import com.aseubel.yusi.redis.annotation.UpdateCache;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.SoulMatchRepository;
@@ -269,6 +271,7 @@ public class MatchServiceImpl implements MatchService {
     }
 
     @Override
+    @QueryCache(key = "'match:list:' + #userId", ttl = 60)
     public List<SoulMatch> getMatches(String userId) {
         List<SoulMatch> matchesA = soulMatchRepository.findByUserAId(userId);
         List<SoulMatch> matchesB = soulMatchRepository.findByUserBId(userId);
@@ -279,6 +282,8 @@ public class MatchServiceImpl implements MatchService {
     }
 
     @Override
+    @UpdateCache(key = "'match:list:' + #userId + ':*'", evictOnly = true)
+    @UpdateCache(key = "'match:status:' + #userId", evictOnly = true)
     public SoulMatch handleMatchAction(String userId, Long matchId, Integer action) {
         SoulMatch match = soulMatchRepository.findById(matchId).orElse(null);
         if (match == null)
