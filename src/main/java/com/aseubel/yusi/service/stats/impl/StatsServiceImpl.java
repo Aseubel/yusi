@@ -26,7 +26,7 @@ public class StatsServiceImpl implements StatsService {
     private final StringRedisTemplate redisTemplate;
 
     private static final String STATS_CACHE_KEY = "yusi:stats:platform";
-    private static final Duration CACHE_TTL = Duration.ofMinutes(5);
+    private static final Duration CACHE_TTL = Duration.ofMinutes(30);
 
     @Override
     public PlatformStatsResponse getPlatformStats() {
