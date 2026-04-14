@@ -42,6 +42,7 @@ public class MilvusConfig {
                 MilvusClientV2 client = new MilvusClientV2(builder.build());
                 initHybridCollection(client, "yusi_embedding_collection");
                 initHybridCollection(client, "yusi_mid_term_memory");
+                initHybridCollection(client, "yusi_match_profile");
                 return client;
         }
 

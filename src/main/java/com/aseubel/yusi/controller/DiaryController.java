@@ -3,7 +3,6 @@ package com.aseubel.yusi.controller;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
-import com.aseubel.yusi.common.event.DiaryChangedEvent;
 import com.aseubel.yusi.pojo.dto.ai.DiaryChatRequest;
 import com.aseubel.yusi.pojo.dto.diary.DiaryFootprint;
 import com.aseubel.yusi.pojo.dto.diary.EditDiaryRequest;
@@ -15,7 +14,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.web.PagedResourcesAssembler;
 import org.springframework.hateoas.EntityModel;
@@ -33,11 +31,8 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/diary")
 public class DiaryController {
 
-    @Autowired
+    @Resource
     private DiaryService diaryService;
-
-    @Autowired
-    private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @GetMapping("/list")
     public Response<PagedModel<EntityModel<Diary>>> getDiaryList(
@@ -63,15 +58,13 @@ public class DiaryController {
 
     @PostMapping
     public Response<?> writeDiary(@RequestBody WriteDiaryRequest request) {
-        Diary diary = diaryService.addDiary(request.toDiary());
-        eventPublisher.publishEvent(new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.WRITE));
+        diaryService.addDiary(request.toDiary());
         return Response.success();
     }
 
     @PutMapping
     public Response<?> editDiary(@RequestBody EditDiaryRequest request) {
-        Diary diary = diaryService.editDiary(request.toDiary());
-        eventPublisher.publishEvent(new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.MODIFY));
+        diaryService.editDiary(request.toDiary());
         return Response.success();
     }
 
@@ -81,7 +74,6 @@ public class DiaryController {
         if (diary != null && StrUtil.isNotBlank(diary.getImages())) {
             diary.setImages(diaryService.convertImagesToUrls(diary.getImages()));
         }
-        eventPublisher.publishEvent(new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.READ));
         return Response.success(diary);
     }
 
@@ -114,3 +106,4 @@ public class DiaryController {
         return Response.success(footprints);
     }
 }
+

@@ -3,20 +3,25 @@ package com.aseubel.yusi.service.diary.impl;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
-
+import com.aseubel.yusi.common.event.DiaryChangedEvent;
+import com.aseubel.yusi.common.event.DiaryCognitionIngestEvent;
 import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
+import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.redis.annotation.QueryCache;
 import com.aseubel.yusi.redis.annotation.UpdateCache;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.UserRepository;
+import com.aseubel.yusi.service.ai.mask.MaskResult;
+import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.diary.DiaryService;
 import com.aseubel.yusi.service.oss.OssService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -43,6 +48,12 @@ public class DiaryServiceImpl implements DiaryService {
     private OssService ossService;
 
     @Autowired
+    private SensitiveDataMaskService sensitiveDataMaskService;
+
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
+
+    @Autowired
     @Lazy
     private DiaryService self;
 
@@ -62,6 +73,7 @@ public class DiaryServiceImpl implements DiaryService {
         Diary saved = diaryRepository.save(diary);
         // 保存后 entity 可能会丢失 transient 字段，这里重新设置以便后续 disruptor 使用
         saved.setPlainContent(plainContent);
+        publishDiaryEvents(saved, plainContent, DiaryChangedEvent.Type.WRITE);
 
         self.evictFootprintsCache(diary.getUserId());
         return saved;
@@ -117,7 +129,7 @@ public class DiaryServiceImpl implements DiaryService {
         if (ObjectUtil.isNotEmpty(existingDiary)) {
             // Delete removed images from OSS
             deleteRemovedImages(existingDiary.getImages(), diary.getImages());
-            
+
             diary.setId(existingDiary.getId());
             diary.setUpdateTime(LocalDateTime.now());
             diary.setCreateTime(existingDiary.getCreateTime());
@@ -127,6 +139,7 @@ public class DiaryServiceImpl implements DiaryService {
             Diary saved = diaryRepository.save(diary);
             // 保存后 entity 可能会丢失 transient 字段，这里重新设置以便后续 disruptor 使用
             saved.setPlainContent(plainContent);
+            publishDiaryEvents(saved, plainContent, DiaryChangedEvent.Type.MODIFY);
             self.evictListCache(diary.getUserId());
             self.evictFootprintsCache(diary.getUserId());
             return saved;
@@ -140,13 +153,13 @@ public class DiaryServiceImpl implements DiaryService {
         }
         try {
             List<String> oldImages = JSONUtil.toList(oldImagesJson, String.class);
-            List<String> newImages = StrUtil.isBlank(newImagesJson) ? 
-                new java.util.ArrayList<>() : JSONUtil.toList(newImagesJson, String.class);
-            
+            List<String> newImages = StrUtil.isBlank(newImagesJson) ? new java.util.ArrayList<>()
+                    : JSONUtil.toList(newImagesJson, String.class);
+
             List<String> deletedImages = oldImages.stream()
-                .filter(img -> !newImages.contains(img))
-                .collect(java.util.stream.Collectors.toList());
-                
+                    .filter(img -> !newImages.contains(img))
+                    .collect(java.util.stream.Collectors.toList());
+
             if (!deletedImages.isEmpty()) {
                 // Async deletion would be better, but we do it synchronously for simplicity
                 ossService.deleteImages(deletedImages);
@@ -273,5 +286,31 @@ public class DiaryServiceImpl implements DiaryService {
             log.error("Failed to convert images to urls: {}", imagesJson, e);
             return imagesJson;
         }
+    }
+
+    private void publishDiaryEvents(Diary diary, String plainContent, DiaryChangedEvent.Type type) {
+        if (diary == null) {
+            return;
+        }
+        eventPublisher.publishEvent(new DiaryChangedEvent(this, diary, type));
+
+        if (StrUtil.isBlank(plainContent)) {
+            return;
+        }
+        MaskResult maskResult = sensitiveDataMaskService.mask(plainContent);
+        String maskedText = maskResult != null ? maskResult.getMaskedText() : null;
+        if (StrUtil.isBlank(maskedText)) {
+            return;
+        }
+        eventPublisher.publishEvent(new DiaryCognitionIngestEvent(this, CognitionIngestCommand.builder()
+                .userId(diary.getUserId())
+                .sourceType("DIARY")
+                .sourceId(diary.getDiaryId())
+                .maskedText(maskedText)
+                .title(diary.getTitle())
+                .placeName(diary.getPlaceName())
+                .timestamp(diary.getUpdateTime())
+                .confidenceHint(1.0)
+                .build()));
     }
 }

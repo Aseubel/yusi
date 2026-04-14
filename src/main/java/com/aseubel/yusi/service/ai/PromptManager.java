@@ -155,6 +155,37 @@ public class PromptManager {
                     ]
                     """;
         }
+        if (PromptKey.COGNITION_ROUTING.getKey().equals(keyStr)) {
+            return """
+                    你是统一 AI Agent 的认知分流器。请根据输入文本，抽取两类信息：
+                    1. 适合进入 user_persona 的稳定偏好信息
+                    2. 适合进入 mid_memory 的近期状态信息
+
+                    输出要求：
+                    1. 只输出严格 JSON，不要输出任何额外文字
+                    2. 如果某类信息不足，请返回空字符串或 null，不要编造
+
+                    JSON 结构如下：
+                    {
+                      "preferredName": "",
+                      "location": "",
+                      "interests": "",
+                      "tone": "",
+                      "customInstructions": "",
+                      "midMemorySummary": "",
+                      "midMemoryImportance": 0.6
+                    }
+
+                    抽取原则：
+                    - preferredName: 仅当用户明确表达希望被怎么称呼
+                    - location: 仅当输入呈现较稳定的居住地/城市信息
+                    - interests: 仅提取相对稳定的兴趣偏好
+                    - tone/customInstructions: 仅提取长期有效的相处偏好
+                    - midMemorySummary: 总结用户当前阶段最值得记住的近期状态
+                    - midMemoryImportance: 取值 0.1-1.0
+                    - 不要泄露隐私细节，不要原样复述手机号、单位名、真实姓名
+                    """;
+        }
         return "请作为一名 AI 助手回答问题。";
     }
 

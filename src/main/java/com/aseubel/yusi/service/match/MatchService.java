@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.match;
 
+import com.aseubel.yusi.pojo.dto.match.MatchRecommendationResponse;
 import com.aseubel.yusi.pojo.dto.match.MatchStatusResponse;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import java.util.List;
@@ -19,7 +20,7 @@ public interface MatchService {
     /**
      * Get matches for a user (either A or B).
      */
-    List<SoulMatch> getMatches(String userId);
+    List<MatchRecommendationResponse> getMatches(String userId);
 
     /**
      * Handle user action (Interested / Skip).
@@ -28,7 +29,7 @@ public interface MatchService {
      * @param matchId Match ID
      * @param action  1: Interested, 2: Skipped
      */
-    SoulMatch handleMatchAction(String userId, Long matchId, Integer action);
+    MatchRecommendationResponse handleMatchAction(String userId, Long matchId, Integer action);
 
     /**
      * Get match status for a user.

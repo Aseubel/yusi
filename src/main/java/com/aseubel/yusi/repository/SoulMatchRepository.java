@@ -28,4 +28,12 @@ public interface SoulMatchRepository extends JpaRepository<SoulMatch, Long> {
 
     @Query("SELECT COUNT(s) FROM SoulMatch s WHERE (s.userAId = ?1 OR s.userBId = ?1) AND s.createTime >= ?2")
     long countMatchesSince(String userId, java.time.LocalDateTime since);
+
+    @Query("""
+            SELECT s FROM SoulMatch s
+            WHERE (s.userAId = ?1 AND s.userBId = ?2)
+               OR (s.userAId = ?2 AND s.userBId = ?1)
+            ORDER BY s.createTime DESC
+            """)
+    List<SoulMatch> findPairHistory(String userAId, String userBId);
 }

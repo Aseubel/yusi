@@ -46,7 +46,12 @@ public enum PromptKey {
     /**
      * Emotion Analysis Prompt
      */
-    EMOTION_ANALYSIS("emotion-analysis");
+    EMOTION_ANALYSIS("emotion-analysis"),
+
+    /**
+     * Unified cognition routing prompt
+     */
+    COGNITION_ROUTING("cognition-routing");
 
     private final String key;
 }

@@ -2,14 +2,17 @@ package com.aseubel.yusi.service.ai;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.date.DateUtil;
-
+import com.aseubel.yusi.common.event.ChatCognitionIngestEvent;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.common.event.MessageSavedEvent;
 import com.aseubel.yusi.config.MemoryConfigProperties;
+import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
+import com.aseubel.yusi.service.ai.mask.MaskResult;
+import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import dev.langchain4j.model.chat.ChatModel;
@@ -22,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -69,6 +73,8 @@ public class MemoryCompressionService {
     private final MemoryConfigProperties memoryConfigProperties;
     private final PromptManager promptManager;
     private final AiLockService aiLockService;
+    private final SensitiveDataMaskService sensitiveDataMaskService;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * 通过 ApplicationContext 获取自身 Spring 代理，确保 @Transactional 方法生效（避免
@@ -274,6 +280,7 @@ public class MemoryCompressionService {
         log.info("Saved compressed memory to MySQL for user: {}. ID: {}", memoryId, activeMemory.getId());
 
         markMessagesAsSummarized(messages);
+        publishChatCognitionEvent(memoryId, activeMemory);
         return activeMemory.getId();
     }
 
@@ -303,5 +310,24 @@ public class MemoryCompressionService {
      */
     private MemoryCompressionService getSelf() {
         return applicationContext.getBean(MemoryCompressionService.class);
+    }
+
+    private void publishChatCognitionEvent(String userId, MidTermMemory memory) {
+        if (memory == null || userId == null) {
+            return;
+        }
+        MaskResult maskResult = sensitiveDataMaskService.mask(memory.getSummary());
+        String maskedText = maskResult != null ? maskResult.getMaskedText() : memory.getSummary();
+        if (maskedText == null || maskedText.isBlank()) {
+            return;
+        }
+        eventPublisher.publishEvent(new ChatCognitionIngestEvent(this, CognitionIngestCommand.builder()
+                .userId(userId)
+                .sourceType("CHAT_SUMMARY")
+                .sourceId(String.valueOf(memory.getId()))
+                .maskedText(maskedText)
+                .timestamp(memory.getUpdatedAt())
+                .confidenceHint(memory.getImportance())
+                .build()));
     }
 }

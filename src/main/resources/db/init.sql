@@ -186,6 +186,10 @@ CREATE TABLE `soul_match` (
     `user_b_id` VARCHAR(255) DEFAULT NULL COMMENT '用户B ID',
     `letter_a_to_b` VARCHAR(2000) DEFAULT NULL COMMENT 'A写给B的信',
     `letter_b_to_a` VARCHAR(2000) DEFAULT NULL COMMENT 'B写给A的信',
+    `reason` VARCHAR(1000) DEFAULT NULL COMMENT '本次匹配的共鸣原因',
+    `timing_reason` VARCHAR(1000) DEFAULT NULL COMMENT '本次匹配的时机原因',
+    `ice_breaker` VARCHAR(1000) DEFAULT NULL COMMENT '用于破冰的建议语',
+    `score` INT DEFAULT NULL COMMENT '本次匹配精排分数',
     `status_a` INT DEFAULT NULL COMMENT '用户A状态 (0: Pending, 1: Interested, 2: Skipped)',
     `status_b` INT DEFAULT NULL COMMENT '用户B状态 (0: Pending, 1: Interested, 2: Skipped)',
     `is_matched` TINYINT(1) DEFAULT NULL COMMENT '是否匹配成功 (True if both Interested)',
@@ -197,6 +201,22 @@ CREATE TABLE `soul_match` (
     KEY `idx_soul_match_is_matched` (`is_matched`),
     KEY `idx_soul_match_create_time` (`create_time`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '灵魂匹配表';
+
+DROP TABLE IF EXISTS `match_profile`;
+
+CREATE TABLE `match_profile` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+    `profile_text` TEXT NULL COMMENT '匹配画像全文',
+    `life_graph_summary` TEXT NULL COMMENT '长期结构摘要',
+    `persona_summary` TEXT NULL COMMENT '稳定偏好摘要',
+    `mid_memory_summary` TEXT NULL COMMENT '近期状态摘要',
+    `version` BIGINT NOT NULL DEFAULT 0 COMMENT '画像版本号',
+    `updated_at` DATETIME NULL COMMENT '最近更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_match_profile_user_id` (`user_id`),
+    KEY `idx_match_profile_updated_at` (`updated_at`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '统一Agent匹配画像表';
 
 DROP TABLE IF EXISTS `soul_message`;
 
@@ -385,6 +405,7 @@ CREATE TABLE `life_graph_task` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '人生图谱抽取任务表';
 
 DROP TABLE IF EXISTS `suggestion`;
+
 CREATE TABLE `suggestion` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `suggestion_id` VARCHAR(64) NOT NULL COMMENT '建议唯一标识',
@@ -400,27 +421,29 @@ CREATE TABLE `suggestion` (
     UNIQUE KEY `uk_suggestion_id` (`suggestion_id`),
     KEY `idx_status` (`status`),
     KEY `idx_create_time` (`create_time`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户建议/反馈表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户建议/反馈表';
 
 -- Chat Memory Storage
 DROP TABLE IF EXISTS `chat_memory_message`;
+
 CREATE TABLE IF NOT EXISTS `chat_memory_message` (
-  `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
-  `memory_id` varchar(64) NOT NULL COMMENT '记忆 ID (通常为 userId)',
-  `role` varchar(30) NOT NULL COMMENT '消息角色 (USER, AI, SYSTEM, TOOL_EXECUTION_RESULT)',
-  `content` text NOT NULL COMMENT '消息内容',
-  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `is_summarized` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已总结为中期记忆',
-  `summarized_at` datetime DEFAULT NULL COMMENT '总结时间',
-  `images` TEXT NULL COMMENT '图片列表（JSON数组格式存储OSS objectKey）',
-  PRIMARY KEY (`id`),
-  KEY `idx_memory_id_created` (`memory_id`, `created_at`),
-  KEY `idx_memory_id_summarized` (`memory_id`, `is_summarized`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI 对话记忆存储表';
+    `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
+    `memory_id` varchar(64) NOT NULL COMMENT '记忆 ID (通常为 userId)',
+    `role` varchar(30) NOT NULL COMMENT '消息角色 (USER, AI, SYSTEM, TOOL_EXECUTION_RESULT)',
+    `content` text NOT NULL COMMENT '消息内容',
+    `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `is_summarized` tinyint(1) NOT NULL DEFAULT 0 COMMENT '是否已总结为中期记忆',
+    `summarized_at` datetime DEFAULT NULL COMMENT '总结时间',
+    `images` TEXT NULL COMMENT '图片列表（JSON数组格式存储OSS objectKey）',
+    PRIMARY KEY (`id`),
+    KEY `idx_memory_id_created` (`memory_id`, `created_at`),
+    KEY `idx_memory_id_summarized` (`memory_id`, `is_summarized`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'AI 对话记忆存储表';
 
 -- Life Graph Merge Judgment - 实体合并判断记录
 -- 用于记录已分析过的候选对，避免重复调用 LLM
 DROP TABLE IF EXISTS `life_graph_merge_judgment`;
+
 CREATE TABLE `life_graph_merge_judgment` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
@@ -437,15 +460,20 @@ CREATE TABLE `life_graph_merge_judgment` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_merge_judgment_pair` (`user_id`, `entity_id_a`, `entity_id_b`),
+    UNIQUE KEY `uk_merge_judgment_pair` (
+        `user_id`,
+        `entity_id_a`,
+        `entity_id_b`
+    ),
     KEY `idx_merge_judgment_user` (`user_id`),
     KEY `idx_merge_judgment_status` (`status`),
     KEY `idx_merge_judgment_created` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='实体合并判断记录表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '实体合并判断记录表';
 
 -- User Notification - 用户统一消息表
 -- 用于存储各类通知消息，便于统一消息中心展示
 DROP TABLE IF EXISTS `user_notification`;
+
 CREATE TABLE `user_notification` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `notification_id` VARCHAR(64) NOT NULL COMMENT '消息唯一标识',
@@ -465,9 +493,10 @@ CREATE TABLE `user_notification` (
     KEY `idx_notification_user_read` (`user_id`, `is_read`),
     KEY `idx_notification_user_type` (`user_id`, `type`),
     KEY `idx_notification_created` (`created_at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户统一消息表';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户统一消息表';
 
 DROP TABLE IF EXISTS `developer_config`;
+
 CREATE TABLE `developer_config` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `user_id` VARCHAR(255) NOT NULL COMMENT '用户业务ID',
@@ -480,6 +509,7 @@ CREATE TABLE `developer_config` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '开发者配置表';
 
 DROP TABLE IF EXISTS `model_runtime_config`;
+
 CREATE TABLE `model_runtime_config` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `config_key` VARCHAR(64) NOT NULL DEFAULT 'active' COMMENT '配置标识（默认 active）',
@@ -495,6 +525,7 @@ CREATE TABLE `model_runtime_config` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '模型治理运行时配置表';
 
 DROP TABLE IF EXISTS `model_config_change_log`;
+
 CREATE TABLE `model_config_change_log` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `change_id` VARCHAR(64) NOT NULL COMMENT '变更唯一标识',
@@ -515,6 +546,7 @@ CREATE TABLE `model_config_change_log` (
 -- Mid-Term Memory - AI 中期记忆压缩存储
 -- 存储对话的压缩摘要，用于给 AI 提供长期上下文
 DROP TABLE IF EXISTS `mid_term_memory`;
+
 CREATE TABLE `mid_term_memory` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
@@ -529,6 +561,7 @@ CREATE TABLE `mid_term_memory` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'AI中期对话记忆压缩表';
 
 DROP TABLE IF EXISTS `image_file`;
+
 CREATE TABLE IF NOT EXISTS `image_file` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `file_md5` VARCHAR(64) NOT NULL COMMENT '文件MD5/SHA256哈希',
@@ -544,6 +577,6 @@ CREATE TABLE IF NOT EXISTS `image_file` (
     UNIQUE KEY `uk_image_file_md5` (`file_md5`),
     KEY `idx_image_file_user_id` (`user_id`),
     KEY `idx_image_file_object_key` (`object_key`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图片文件存储映射表(用于秒传和去重)';
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '图片文件存储映射表(用于秒传和去重)';
 
 SET FOREIGN_KEY_CHECKS = 1;

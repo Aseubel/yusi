@@ -40,6 +40,18 @@ public class SoulMatch {
     @Column(name = "letter_b_to_a", length = 2000)
     private String letterBtoA;
 
+    @Column(name = "reason", length = 1000)
+    private String reason;
+
+    @Column(name = "timing_reason", length = 1000)
+    private String timingReason;
+
+    @Column(name = "ice_breaker", length = 1000)
+    private String iceBreaker;
+
+    @Column(name = "score")
+    private Integer score;
+
     // 0: Pending, 1: Interested, 2: Skipped
     @Column(name = "status_a")
     private Integer statusA;

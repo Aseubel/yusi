@@ -1,7 +1,10 @@
 package com.aseubel.yusi.service.plaza.impl;
 
+import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.event.EmotionPlazaCognitionIngestEvent;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
 import com.aseubel.yusi.pojo.contant.CardType;
 import com.aseubel.yusi.pojo.contant.ResonanceType;
 import com.aseubel.yusi.pojo.entity.SoulCard;
@@ -11,11 +14,14 @@ import com.aseubel.yusi.repository.SoulResonanceRepository;
 import com.aseubel.yusi.redis.annotation.QueryCache;
 import com.aseubel.yusi.redis.annotation.UpdateCache;
 import com.aseubel.yusi.redis.service.IRedisService;
+import com.aseubel.yusi.service.ai.mask.MaskResult;
+import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.plaza.SoulPlazaService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -39,6 +45,8 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     private final SoulResonanceRepository resonanceRepository;
     private final EmotionAnalyzer emotionAnalyzer;
     private final IRedisService redissonService;
+    private final SensitiveDataMaskService sensitiveDataMaskService;
+    private final ApplicationEventPublisher eventPublisher;
 
     // 有效的情感类别列表
     private static final Set<String> VALID_EMOTIONS = Set.of(
@@ -51,7 +59,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     public SoulCard submitToPlaza(String userId, String content, String originId, CardType type) {
         // 过滤掉图片和HTML内容
         String filteredContent = stripImagesAndHtml(content);
-        
+
         if (filteredContent == null || filteredContent.trim().length() < 5) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "内容太短");
         }
@@ -70,7 +78,9 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
                 .createdAt(LocalDateTime.now())
                 .build();
 
-        return cardRepository.save(card);
+        SoulCard saved = cardRepository.save(card);
+        publishEmotionPlazaEvent(saved);
+        return saved;
     }
 
     /**
@@ -121,6 +131,26 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
             log.error("情感分析失败，使用默认值Neutral: {}", e.getMessage());
             return "Neutral";
         }
+    }
+
+    private void publishEmotionPlazaEvent(SoulCard card) {
+        if (card == null || StrUtil.isBlank(card.getContent())) {
+            return;
+        }
+        MaskResult maskResult = sensitiveDataMaskService.mask(card.getContent());
+        String maskedText = maskResult != null ? maskResult.getMaskedText() : card.getContent();
+        if (StrUtil.isBlank(maskedText)) {
+            return;
+        }
+        eventPublisher.publishEvent(new EmotionPlazaCognitionIngestEvent(this, CognitionIngestCommand.builder()
+                .userId(card.getUserId())
+                .sourceType("EMOTION_PLAZA")
+                .sourceId(String.valueOf(card.getId()))
+                .maskedText(maskedText)
+                .topic(card.getEmotion())
+                .timestamp(card.getCreatedAt())
+                .confidenceHint(0.45)
+                .build()));
     }
 
     @Override
@@ -276,7 +306,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
 
         // 过滤掉图片和HTML内容
         String filteredContent = stripImagesAndHtml(content);
-        
+
         if (filteredContent == null || filteredContent.trim().length() < 5) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "内容太短");
         }

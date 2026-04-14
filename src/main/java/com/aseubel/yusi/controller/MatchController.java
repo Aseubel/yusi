@@ -4,9 +4,9 @@ import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.pojo.dto.match.MatchActionRequest;
+import com.aseubel.yusi.pojo.dto.match.MatchRecommendationResponse;
 import com.aseubel.yusi.pojo.dto.match.MatchSettingsRequest;
 import com.aseubel.yusi.pojo.dto.match.MatchStatusResponse;
-import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.service.match.MatchService;
 import com.aseubel.yusi.service.user.UserService;
@@ -42,13 +42,14 @@ public class MatchController {
     }
 
     @GetMapping("/recommendations")
-    public Response<List<SoulMatch>> getRecommendations() {
+    public Response<List<MatchRecommendationResponse>> getRecommendations() {
         String userId = UserContext.getUserId();
         return Response.success(matchService.getMatches(userId));
     }
 
     @PostMapping("/{matchId}/action")
-    public Response<SoulMatch> handleAction(@PathVariable Long matchId, @RequestBody MatchActionRequest request) {
+    public Response<MatchRecommendationResponse> handleAction(@PathVariable Long matchId,
+            @RequestBody MatchActionRequest request) {
         String userId = UserContext.getUserId();
         return Response.success(matchService.handleMatchAction(userId, matchId, request.getAction()));
     }
