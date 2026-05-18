@@ -1,7 +1,7 @@
 package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.config.ai.properties.MilvusConfigProperties;
-import dev.langchain4j.model.embedding.EmbeddingModel;
+import com.aseubel.yusi.config.ai.properties.EmbeddingModelConfigProperties;
 import io.milvus.v2.client.ConnectConfig;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.common.DataType;
@@ -11,9 +11,7 @@ import io.milvus.v2.service.collection.request.CreateCollectionReq;
 import io.milvus.v2.service.collection.request.HasCollectionReq;
 import io.milvus.v2.service.index.request.CreateIndexReq;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -25,14 +23,12 @@ import java.util.Collections;
  */
 @Slf4j
 @Configuration
-@EnableConfigurationProperties(MilvusConfigProperties.class)
+@EnableConfigurationProperties({ MilvusConfigProperties.class, EmbeddingModelConfigProperties.class })
 public class MilvusConfig {
 
-        @Autowired
-        private ApplicationContext applicationContext;
-
         @Bean(name = "milvusClientV2")
-        public MilvusClientV2 milvusClientV2(MilvusConfigProperties properties) {
+        public MilvusClientV2 milvusClientV2(MilvusConfigProperties properties,
+                        EmbeddingModelConfigProperties embeddingProperties) {
                 var builder = ConnectConfig.builder()
                                 .uri(properties.getUri())
                                 .token(properties.getToken())
@@ -40,20 +36,19 @@ public class MilvusConfig {
                                 .password(properties.getPassword());
 
                 MilvusClientV2 client = new MilvusClientV2(builder.build());
-                initHybridCollection(client, "yusi_embedding_collection");
-                initHybridCollection(client, "yusi_mid_term_memory");
-                initHybridCollection(client, "yusi_match_profile");
+                initHybridCollection(client, "yusi_embedding_collection", embeddingProperties.getDimension());
+                initHybridCollection(client, "yusi_mid_term_memory", embeddingProperties.getDimension());
+                initHybridCollection(client, "yusi_match_profile", embeddingProperties.getDimension());
                 return client;
         }
 
-        private void initHybridCollection(MilvusClientV2 client, String collectionName) {
+        private void initHybridCollection(MilvusClientV2 client, String collectionName, int dimension) {
                 Boolean hasCollection = client.hasCollection(HasCollectionReq.builder()
                                 .collectionName(collectionName)
                                 .build());
 
                 if (!hasCollection) {
                         log.info("初始化 Milvus 混合检索集合: {}", collectionName);
-                        int dimension = ((EmbeddingModel) applicationContext.getBean("embeddingModel")).dimension();
 
                         CreateCollectionReq.CollectionSchema schema = CreateCollectionReq.CollectionSchema.builder()
                                         .build();

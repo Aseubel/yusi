@@ -9,6 +9,7 @@
 #   - EMBEDDING_MODEL_APIKEY: 向量模型 API Key
 #   - EMBEDDING_MODEL_BASEURL: 向量模型地址
 #   - EMBEDDING_MODEL_NAME: 向量模型名称
+#   - EMBEDDING_MODEL_DIMENSION: 向量维度，必须与 EMBEDDING_MODEL_NAME 的输出维度一致
 # ============================================================
 
 grpc:
@@ -28,6 +29,7 @@ model:
     baseurl: ${EMBEDDING_MODEL_BASEURL}
     apikey: ${EMBEDDING_MODEL_APIKEY}
     model: ${EMBEDDING_MODEL_NAME}
+    dimension: ${EMBEDDING_MODEL_DIMENSION:1024}
   routing:
     default-language: zh
     default-scene: chat

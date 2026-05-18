@@ -10,6 +10,7 @@ public class EmbeddingModelConfigProperties {
     private String baseUrl;
     private String apikey;
     private String model;
+    private Integer dimension = 1024;
     
     /**
      * 请求超时时间（秒），默认60秒
