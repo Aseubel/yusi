@@ -1,17 +1,3 @@
-# ============================================================
-# Yusi Development Configuration
-# ============================================================
-# 必需的环境变量 (在启动前必须设置):
-#   - YUSI_ENCRYPTION_KEY: 日记加密密钥 (至少16字符, 用于AES/GCM加密)
-#   - CHAT_MODEL_APIKEY: AI 聊天模型 API Key
-#   - CHAT_MODEL_BASEURL: AI 聊天模型地址
-#   - CHAT_MODEL_NAME: AI 聊天模型名称
-#   - EMBEDDING_MODEL_APIKEY: 向量模型 API Key
-#   - EMBEDDING_MODEL_BASEURL: 向量模型地址
-#   - EMBEDDING_MODEL_NAME: 向量模型名称
-#   - EMBEDDING_MODEL_DIMENSION: 向量维度，必须与 EMBEDDING_MODEL_NAME 的输出维度一致
-# ============================================================
-
 grpc:
   server:
     port: 9090
@@ -91,6 +77,23 @@ yusi:
       server-aes-key-base64: ${YUSI_ENCRYPTION_KEY}
       backup-rsa-public-key-spki-base64: ${YUSI_BACKUP_RSA_PUBLIC_KEY_SPKI_BASE64}
       backup-rsa-private-key-pkcs8-base64: ${YUSI_BACKUP_RSA_PRIVATE_KEY_PKCS8_BASE64}
+  memory:
+    # 上下文记忆窗口大小（短期记忆的消息条数）
+    context-window-size: 20
+    # 中期记忆总结间隔（毫秒，默认 1 小时）
+    mid-term-summary-interval: 3600000
+    # 中期记忆触发扫描的 Cron 表达式（默认每 30 分钟执行一次）
+    mid-term-scan-cron: "0 */30 * * * ?"
+  oss:
+    domain: ${YUSI_OSS_DOMAIN}
+    region: ${YUSI_OSS_REGION}
+    bucket-name: ${YUSI_OSS_BUCKET_NAME}
+    endpoint: ${YUSI_OSS_ENDPOINT}
+    url-expire-seconds: ${YUSI_OSS_URL_EXPIRE_SECONDS:3600}
+    max-file-size: ${YUSI_OSS_MAX_FILE_SIZE:10485760}
+    image-folder: ${YUSI_OSS_IMAGE_FOLDER:yusi/images/}
+    access-key-id: ${YUSI_OSS_ACCESS_KEY_ID}
+    access-key-secret: ${YUSI_OSS_ACCESS_KEY_SECRET}
 
 # 线程池配置
 thread:
@@ -156,12 +159,12 @@ redis:
       keep-alive: true
 
 milvus:
-  uri: 
-  token: 
-  host:
-  port:
-  username:
-  password:
+  uri: ${MILVUS_URI}
+  token: ${MILVUS_TOKEN}
+  host: ${MILVUS_HOST}
+  port: ${MILVUS_PORT}
+  username: ${MILVUS_USERNAME}
+  password: ${MILVUS_PASSWORD}
 
 # 日志
 logging:
