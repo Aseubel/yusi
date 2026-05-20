@@ -1,0 +1,116 @@
+grpc:
+  server:
+    port: 0
+
+server:
+  port: 0
+
+spring:
+  datasource:
+    username: yusi_test
+    password: yusi_test
+    url: jdbc:mysql://127.0.0.1:13306/yusi_test?useUnicode=true&characterEncoding=utf8&allowPublicKeyRetrieval=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=false
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      pool-name: YusiTest_HikariCP
+      minimum-idle: 1
+      maximum-pool-size: 4
+      connection-timeout: 10000
+      connection-test-query: SELECT 1
+    type: com.zaxxer.hikari.HikariDataSource
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: create-drop
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 60MB
+      enabled: true
+
+redis:
+  sdk:
+    config:
+      host: 127.0.0.1
+      port: 16379
+      password: ""
+      pool-size: 4
+      min-idle-size: 1
+      idle-timeout: 10000
+      connect-timeout: 3000
+      retry-attempts: 1
+      retry-interval: 500
+      ping-interval: 0
+      keep-alive: true
+
+model:
+  embedding:
+    baseurl: http://localhost
+    apikey: dummy
+    model: dummy
+    dimension: 1024
+  chat:
+    baseurl: http://localhost
+    apikey: dummy
+    model: dummy
+  routing:
+    default-language: zh
+    default-scene: chat
+    models: []
+    groups: {}
+    matrix: {}
+
+milvus:
+  uri: http://127.0.0.1:19530
+  token:
+  host: 127.0.0.1
+  port: 19530
+  username:
+  password:
+
+yusi:
+  admin:
+    userId: admin
+  security:
+    crypto:
+      server-aes-key-base64: MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=
+      backup-rsa-public-key-spki-base64: MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxfHlQfD7lbq9nnAeBYCWcryHDdFR41sfjRLnDB9gE4+q5YVXNMP0FS5xkz4qLns1W++6NQXf3yNZkGSkeAOvX22LrFgqHG1tCWNU1EB38hke14FTwULLv3ll6cuEajmYDYKc+4n2JCgx/pcd0r4Btvm4d6p0E63/m9+RCdGrnEjiyH6/xQQtxwbzzDR4BN8yEsTShYC/wuXVdNdgc91K0hmGyntzqEVoIWy0xgkTu+tv83Vi62djSWqhQuMOOzD55UefmqzkQfpDN0xIkY/J28EqKWN85h+MmXUnZGAMTY6e4CCx013Ms33RXkYJiMTigDeesLgdxEDo4dWb7FHhYwIDAQAB
+      backup-rsa-private-key-pkcs8-base64: MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDF8eVB8PuVur2ecB4FgJZyvIcN0VHjWx+NEucMH2ATj6rlhVc0w/QVLnGTPiouezVb77o1Bd/fI1mQZKR4A69fbYusWCocbW0JY1TUQHfyGR7XgVPBQsu/eWXpy4RqOZgNgpz7ifYkKDH+lx3SvgG2+bh3qnQTrf+b35EJ0aucSOLIfr/FBC3HBvPMNHgE3zISxNKFgL/C5dV012Bz3UrSGYbKe3OoRWghbLTGCRO762/zdWLrZ2NJaqFC4w47MPnlR5+arORB+kM3TEiRj8nbwSopY3zmH4yZdSdkYAxNjp7gILHTXcyzfdFeRgmIxOKAN56wuB3EQOjh1ZvsUeFjAgMBAAECggEAARFC/ZWwgdzI4IQzrMXNr4ofFBZZlnZl7DenwppjEF2WcLDFCQgLIduFUUV7m1Zxk7CjBZnxGMNrVO5bp4RhVbl2rmqJafN6ShucquhZYuJ7Fq9cUto9mHK8ym0GiF0Nu+qQZa6e5LXYbUpVNeW44VnWc2kaQX8HpwS1nld3WL0aX/JXBgIXFl132Pd/iZTC8XLqjI0b5CM40IRqmje0G1DyCau4XlqHBE8+Q6N3Ttka2zLg0xtNklaxwbrV9aJg4YDXwWch22AiynlxjxwiWEHkuu7p87KoFhk+uqS3X66hdmFvzkb1fblsCGW/VgJBqjEAvW/Sau5gk8CICw1mwQKBgQD/zY5ggjgKURfpSem03JpoCjIwTwYzoWZtTfNwa3yJetCAVjHCU9GhCZ0MJiTFQpdMhdPsXxwarh9Fmx12XppqYctfWXPki8aKQCD++KYQgnwiFvFOGKCXq8KShDZ4yeTiCYg+27e75IYbZxKwy9Y4HpYAwHwIul+TdRozT3/NrwKBgQDGGO4M22Ldl3LkcQpP1xfsvGcsUErYRDpe93gBYmdsUevWMxmD2rS+u1RxBObxyHRPWiMmiaUgC8Mbmo9HEuJJ47pm2g9vv6qnZO7B3hP2QLlodAZV0PmotNQ9hWEKtCZaGmAnf99UqOUNnfbdAVFqe6am6KtQZwvJ045j+KnojQKBgGnWtw4fUuiR3P7dYiE/FXPupA1w5PP/181p70uYbZLEifhPsY7h915WB/C654PmpYs35BNs1sgDO1UldO9A/Ur+45K0BEuPuboCBqT4ZF14X7wLGhRiBDA9FOhiY9deUaFkqEa5yi+nwgUchJM6A4x8uzvcaHWEB3+PeCO6xPppAoGAJtdohZjWj8BMRMJtVS5FgKOIT0YHBtSJ5Wj8XLkgsjp11W/7hsDxQ5yTd/2QEsRNGeoAjmPavqfPv6/UfAkV2YsPV29WK4EXQu8laVnT7CrQr8xgGZ959DxQiSeH2YNtKamWROhrr7vV/Y+FgdvqTMil6oAgZwltZEtY1f1Bw1kCgYBaXy6r7eHcF2Q6OPy8f4yMThhFPvE5f88a8l7uz/lCvkCKv+/8sywbMmdaa99fZPz3zPM+E5VXtmAcIf437YB3DNIBWKszb6GpXXF5wwiceFLnNzWSwj9DkAqMcIcDtfATMPb/kjYCcqfg6NNLQ2s5p5pdtvbmkGAMUcJ50pg2oQ==
+  memory:
+    context-window-size: 20
+    mid-term-summary-interval: 3600000
+    mid-term-scan-cron: "0 */30 * * * ?"
+  oss:
+    domain:
+    region: cn-hangzhou
+    bucket-name:
+    endpoint: oss-cn-hangzhou.aliyuncs.com
+    url-expire-seconds: 3600
+    max-file-size: 10485760
+    image-folder: yusi/images/
+    access-key-id:
+    access-key-secret:
+
+mcp:
+  enabled: false
+
+amap:
+  key:
+  base-url: https://restapi.amap.com/v3
+
+aliyun:
+  dm:
+    accessKeyId:
+    accessKeySecret:
+    accountName:
+    fromAlias: Yusi
+    endpoint: dm.aliyuncs.com
+
+logging:
+  level:
+    root: warn

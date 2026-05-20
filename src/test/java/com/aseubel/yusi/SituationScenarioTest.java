@@ -1,37 +1,25 @@
 package com.aseubel.yusi;
 
 import com.aseubel.yusi.pojo.entity.SituationScenario;
+import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.SituationScenarioRepository;
+import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.room.SituationRoomService;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.milvus.v2.client.MilvusClientV2;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
-import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.ActiveProfiles;
 
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
-@TestPropertySource(properties = {
-        "yusi.admin.userId=admin",
-        "model.embedding.baseurl=http://localhost",
-        "model.embedding.apikey=dummy",
-        "model.embedding.model=dummy",
-        "model.chat.baseurl=http://localhost",
-        "model.chat.apikey=dummy",
-        "model.chat.model=dummy",
-        "YUSI_ENCRYPTION_KEY=1234567890123456",
-        "spring.datasource.url=jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL",
-        "spring.datasource.driver-class-name=org.h2.Driver",
-        "spring.datasource.username=sa",
-        "spring.datasource.password=",
-        "spring.jpa.database-platform=org.hibernate.dialect.H2Dialect",
-        "spring.jpa.hibernate.ddl-auto=create-drop"
-})
+@ActiveProfiles("test")
 class SituationScenarioTest {
 
     @Autowired
@@ -40,11 +28,26 @@ class SituationScenarioTest {
     @Autowired
     private SituationScenarioRepository scenarioRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
     @MockBean(name = "milvusClientV2")
     private MilvusClientV2 milvusClientV2;
 
     @MockBean(name = "embeddingModel")
     private EmbeddingModel embeddingModel;
+
+    @BeforeEach
+    void setUpAdmin() {
+        if (userRepository.findByUserId("admin") == null) {
+            userRepository.save(User.builder()
+                    .userId("admin")
+                    .userName("admin")
+                    .password("password")
+                    .permissionLevel(10)
+                    .build());
+        }
+    }
 
     @Test
     void testSubmitAndReviewScenario() {
