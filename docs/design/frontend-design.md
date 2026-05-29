@@ -626,7 +626,7 @@ VitePWA:
 ### 12.1 构建
 
 ```bash
-npm run build  # tsc -b && vite build
+pnpm run build  # tsc -b && vite build
 ```
 
 ### 12.2 Docker 部署

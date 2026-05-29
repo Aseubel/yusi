@@ -196,8 +196,8 @@ MCP 服务默认端口：`11611`
 
 ```bash
 cd frontend
-npm install
-npm run dev
+pnpm install
+pnpm run dev
 ```
 
 前端默认端口：`5173`
@@ -222,7 +222,7 @@ docker build -t yusi-backend .
 
 # 构建前端
 cd frontend
-npm run build
+pnpm run build
 docker build -t yusi-frontend .
 ```
 
