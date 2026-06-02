@@ -78,9 +78,9 @@ public class MatchServiceImpl implements MatchService {
     private final ObjectMapper objectMapper;
 
     @Override
-    @Scheduled(cron = "0 0 2 * * ?") // Every day at 2 AM
+    @Scheduled(cron = "0 0 20 ? * FRI", zone = "Asia/Shanghai") // Every Friday at 8 PM China time (UTC+8)
     public void runDailyMatching() {
-        log.info("Starting daily matching process...");
+        log.info("Starting weekly matching process...");
         ModelRouteContextHolder.set(ModelRouteContext.builder()
                 .language(ModelUtils.normalizeLanguage("zh"))
                 .scene(PromptKey.SOUL_MATCH.getKey())
@@ -174,7 +174,7 @@ public class MatchServiceImpl implements MatchService {
         } finally {
             ModelRouteContextHolder.clear();
         }
-        log.info("Daily matching process completed.");
+        log.info("Weekly matching process completed.");
     }
 
     private void createMatch(User userA, User userB, MatchProfile profileA, MatchProfile profileB,
