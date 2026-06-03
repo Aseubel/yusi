@@ -33,4 +33,11 @@ public class MidTermMemory {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    /**
+     * 记忆有效期截止时间。
+     * 过期后自动降低匹配和对话上下文中的权重，null 表示永不过期。
+     */
+    @Column(name = "valid_until")
+    private LocalDateTime validUntil;
 }

@@ -4,8 +4,11 @@ import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -15,5 +18,12 @@ public interface MidTermMemoryRepository
     List<MidTermMemory> findByUserIdOrderByCreatedAtDesc(String userId, Pageable pageable);
 
     List<MidTermMemory> findByUserId(String userId);
+
+    /**
+     * 查找有效的（未过期的）中期记忆，按创建时间倒序。
+     * 使用显式 JPQL 避免 Spring Data 方法名解析的 And/Or 优先级陷阱。
+     */
+    @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND (m.validUntil > :now OR m.validUntil IS NULL) ORDER BY m.createdAt DESC")
+    List<MidTermMemory> findValidByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now, Pageable pageable);
 
 }

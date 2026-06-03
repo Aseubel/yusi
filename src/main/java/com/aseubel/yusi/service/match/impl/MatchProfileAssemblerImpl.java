@@ -145,8 +145,8 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
     }
 
     private String buildMidMemorySummary(String userId) {
-        List<MidTermMemory> memories = midTermMemoryRepository.findByUserIdOrderByCreatedAtDesc(userId,
-                PageRequest.of(0, 6));
+        List<MidTermMemory> memories = midTermMemoryRepository
+                .findValidByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 6));
         if (memories == null || memories.isEmpty()) {
             return "近期状态信息较少。";
         }

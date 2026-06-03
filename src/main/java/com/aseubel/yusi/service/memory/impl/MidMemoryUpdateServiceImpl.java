@@ -29,6 +29,7 @@ public class MidMemoryUpdateServiceImpl implements MidMemoryUpdateService {
                 .importance(importance != null ? importance : 0.5)
                 .createdAt(now)
                 .updatedAt(now)
+                .validUntil(now.plusDays(30))
                 .build());
     }
 }
