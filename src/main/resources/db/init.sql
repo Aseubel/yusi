@@ -554,10 +554,12 @@ CREATE TABLE `mid_term_memory` (
     `importance` DOUBLE NOT NULL DEFAULT 1.0 COMMENT '重要性权重（用于遗忘曲线，初始值1.0）',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `valid_until` DATETIME DEFAULT NULL COMMENT '记忆有效期截止时间，过期后自动降低权重，NULL 表示永不过期',
     PRIMARY KEY (`id`),
     KEY `idx_mid_term_memory_user_id` (`user_id`),
     KEY `idx_mid_term_memory_created_at` (`user_id`, `created_at`),
-    KEY `idx_mid_term_memory_importance` (`user_id`, `importance`)
+    KEY `idx_mid_term_memory_importance` (`user_id`, `importance`),
+    KEY `idx_mid_term_memory_valid_until` (`user_id`, `valid_until`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'AI中期对话记忆压缩表';
 
 DROP TABLE IF EXISTS `image_file`;
@@ -578,5 +580,56 @@ CREATE TABLE IF NOT EXISTS `image_file` (
     KEY `idx_image_file_user_id` (`user_id`),
     KEY `idx_image_file_object_key` (`object_key`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '图片文件存储映射表(用于秒传和去重)';
+
+DROP TABLE IF EXISTS `match_feedback`;
+
+CREATE TABLE `match_feedback` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `match_id` BIGINT NOT NULL COMMENT '关联的匹配记录ID',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+    `action` VARCHAR(16) NOT NULL COMMENT '反馈动作: ACCEPT/SKIP/INTERACT/REPORT',
+    `interaction_depth` INT DEFAULT NULL COMMENT '互动深度（消息条数，仅INTERACT时有效）',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '反馈时间',
+    PRIMARY KEY (`id`),
+    KEY `idx_match_feedback_user` (`user_id`),
+    KEY `idx_match_feedback_match` (`match_id`),
+    KEY `idx_match_feedback_action` (`user_id`, `action`),
+    KEY `idx_match_feedback_created` (`created_at`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '匹配反馈记录表';
+
+DROP TABLE IF EXISTS `resonance_signal`;
+
+CREATE TABLE `resonance_signal` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `from_user_id` VARCHAR(64) NOT NULL COMMENT '发送方用户ID',
+    `to_user_id` VARCHAR(64) NOT NULL COMMENT '接收方用户ID',
+    `card_id` BIGINT DEFAULT NULL COMMENT '触发共鸣的广场帖子ID',
+    `message` VARCHAR(200) DEFAULT NULL COMMENT '附言（匿名，不超过100字）',
+    `is_read` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '接收方是否已读',
+    `is_mutual` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否相互共鸣',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_resonance_signal_pair` (`from_user_id`, `to_user_id`),
+    KEY `idx_resonance_signal_to_user` (`to_user_id`, `created_at`),
+    KEY `idx_resonance_signal_from_user` (`from_user_id`),
+    KEY `idx_resonance_signal_mutual` (`is_mutual`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '广场共鸣信号表';
+
+DROP TABLE IF EXISTS `agent_persona_config`;
+
+CREATE TABLE `agent_persona_config` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+    `personality_style` VARCHAR(32) NOT NULL DEFAULT 'gentle' COMMENT '人格风格: gentle/lively/calm/rational',
+    `proactive_frequency` VARCHAR(16) NOT NULL DEFAULT 'low' COMMENT '主动问候频率: off/low/normal',
+    `quiet_hours_start` VARCHAR(8) DEFAULT NULL COMMENT '静默时段开始(HH:mm)',
+    `quiet_hours_end` VARCHAR(8) DEFAULT NULL COMMENT '静默时段结束(HH:mm)',
+    `anniversary_reminder_enabled` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '纪念日提醒开关',
+    `weekly_report_enabled` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '周报开关',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_agent_persona_config_user_id` (`user_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'Agent 人格配置表';
 
 SET FOREIGN_KEY_CHECKS = 1;
