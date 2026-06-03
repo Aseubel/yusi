@@ -16,7 +16,9 @@ import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.SoulMatchRepository;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
+import com.aseubel.yusi.service.match.ConnectionGuideService;
 import com.aseubel.yusi.service.match.MatchAssistant;
+import com.aseubel.yusi.service.match.MatchFeedbackService;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
 import com.aseubel.yusi.service.match.MatchService;
 import com.aseubel.yusi.service.user.UserService;
@@ -73,13 +75,15 @@ public class MatchServiceImpl implements MatchService {
     private final DiaryRepository diaryRepository;
     private final MatchAssistant matchAssistant;
     private final MatchProfileAssembler matchProfileAssembler;
+    private final ConnectionGuideService connectionGuideService;
+    private final MatchFeedbackService matchFeedbackService;
     private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
     private final ObjectMapper objectMapper;
 
     @Override
     @Scheduled(cron = "0 0 20 ? * FRI", zone = "Asia/Shanghai") // Every Friday at 8 PM China time (UTC+8)
-    public void runDailyMatching() {
+    public void runWeeklyMatching() {
         log.info("Starting weekly matching process...");
         ModelRouteContextHolder.set(ModelRouteContext.builder()
                 .language(ModelUtils.normalizeLanguage("zh"))
@@ -579,7 +583,10 @@ public class MatchServiceImpl implements MatchService {
 
     private MatchRerankResult rerank(MatchProfile targetProfile, MatchProfile candidateProfile) {
         try {
+            // F9.5: 获取用户匹配偏好上下文，辅助精排判断
+            String preferenceContext = buildRerankPreferenceContext(targetProfile.getUserId());
             String raw = matchAssistant.rerankMatch(
+                    preferenceContext,
                     buildStructuredProfileForMatching(targetProfile),
                     buildStructuredProfileForMatching(candidateProfile));
             return objectMapper.readValue(extractJsonObject(raw), MatchRerankResult.class);
@@ -588,6 +595,17 @@ public class MatchServiceImpl implements MatchService {
                     targetProfile.getUserId(), candidateProfile.getUserId(), e);
             return null;
         }
+    }
+
+    /**
+     * 构建精排时的用户偏好上下文（F9.5 匹配反馈循环）。
+     */
+    private String buildRerankPreferenceContext(String userId) {
+        if (userId == null) {
+            return "";
+        }
+        String context = matchFeedbackService.buildPreferenceContext(userId);
+        return context != null ? "用户匹配偏好：" + context + "\n" : "";
     }
 
     private String buildStructuredProfileForMatching(MatchProfile profile) {
@@ -657,6 +675,11 @@ public class MatchServiceImpl implements MatchService {
 
         match.setUpdateTime(LocalDateTime.now());
         SoulMatch saved = soulMatchRepository.save(match);
+
+        // F9.5: 记录匹配反馈
+        String feedbackAction = Integer.valueOf(1).equals(action) ? "ACCEPT" : "SKIP";
+        matchFeedbackService.recordFeedback(saved.getId(), userId, feedbackAction);
+
         return toRecommendationResponse(userId, saved);
     }
 
@@ -686,7 +709,7 @@ public class MatchServiceImpl implements MatchService {
                 .diaryCount(diaryCount)
                 .pendingMatches(pendingMatches)
                 .completedMatches(completedMatches)
-                .nextMatchTime("每日凌晨 2:00")
+                .nextMatchTime("每周五晚 20:00")
                 .canEnable(canEnable)
                 .enableHint(enableHint)
                 .build();
@@ -696,6 +719,25 @@ public class MatchServiceImpl implements MatchService {
         boolean isUserA = currentUserId.equals(match.getUserAId());
         String counterpartUserId = isUserA ? match.getUserBId() : match.getUserAId();
         User counterpart = userService.getUserByUserId(counterpartUserId);
+
+        // F9.1: 生成匹配后破冰引导
+        List<String> iceBreakers = List.of();
+        String suggestedScenario = null;
+        try {
+            MatchProfile myProfile = matchProfileAssembler.ensureProfile(currentUserId);
+            MatchProfile counterpartProfile = matchProfileAssembler.ensureProfile(counterpartUserId);
+            MatchRerankResult rerankResult = MatchRerankResult.builder()
+                    .reason(match.getReason())
+                    .timingReason(match.getTimingReason())
+                    .iceBreaker(match.getIceBreaker())
+                    .score(match.getScore())
+                    .build();
+            iceBreakers = connectionGuideService.generateIceBreakers(myProfile, counterpartProfile, rerankResult);
+            suggestedScenario = connectionGuideService.suggestScenario(myProfile, counterpartProfile);
+        } catch (Exception e) {
+            log.debug("生成匹配引导失败: matchId={}, userId={}", match.getId(), currentUserId, e);
+        }
+
         return MatchRecommendationResponse.builder()
                 .matchId(match.getId())
                 .counterpartUserId(counterpartUserId)
@@ -709,6 +751,8 @@ public class MatchServiceImpl implements MatchService {
                 .myStatus(isUserA ? match.getStatusA() : match.getStatusB())
                 .counterpartStatus(isUserA ? match.getStatusB() : match.getStatusA())
                 .matched(match.getIsMatched())
+                .iceBreakers(iceBreakers)
+                .suggestedScenario(suggestedScenario)
                 .createTime(match.getCreateTime())
                 .updateTime(match.getUpdateTime())
                 .build();

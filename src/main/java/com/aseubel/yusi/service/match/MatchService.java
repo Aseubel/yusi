@@ -12,10 +12,10 @@ import java.util.List;
 public interface MatchService {
 
     /**
-     * Trigger daily matching process.
+     * Trigger weekly matching process.
      * Can be called by a scheduler or manually for testing.
      */
-    void runDailyMatching();
+    void runWeeklyMatching();
 
     /**
      * Get matches for a user (either A or B).
