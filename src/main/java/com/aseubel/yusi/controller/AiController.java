@@ -21,9 +21,11 @@ import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.pojo.entity.SoulReport;
 import com.aseubel.yusi.repository.SoulReportRepository;
+import com.aseubel.yusi.pojo.entity.CognitiveConflict;
 import com.aseubel.yusi.service.agent.AgentPersonaConfigService;
 import com.aseubel.yusi.service.agent.AgentGrowthService;
 import com.aseubel.yusi.service.ai.AiLockService;
+import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.diary.Assistant;
@@ -89,6 +91,9 @@ public class AiController {
 
     @Autowired
     private AgentGrowthService agentGrowthService;
+
+    @Autowired
+    private CognitiveConflictDetector conflictDetector;
 
     @Auth
     @GetMapping("/chat/history")
@@ -323,6 +328,21 @@ public class AiController {
     @GetMapping("/agent-growth")
     public Response<AgentGrowthResponse> getAgentGrowth() {
         return Response.success(agentGrowthService.getGrowth(UserContext.getUserId()));
+    }
+
+    // ──────────────── 认知冲突检测（F11.3）────────────────
+
+    @Auth
+    @GetMapping("/cognitive-conflicts")
+    public Response<List<CognitiveConflict>> getConflicts() {
+        return Response.success(conflictDetector.getUnresolved(UserContext.getUserId()));
+    }
+
+    @Auth
+    @PostMapping("/cognitive-conflicts/{id}/resolve")
+    public Response<Void> resolveConflict(@PathVariable Long id) {
+        // TODO Phase 3: 支持 Agent 在对话中自然澄清后自动 resolve
+        return Response.success();
     }
 
 }

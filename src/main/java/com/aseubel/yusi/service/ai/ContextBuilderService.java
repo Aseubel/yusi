@@ -11,6 +11,7 @@ import com.aseubel.yusi.repository.AgentPersonaConfigRepository;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.repository.UserRepository;
+import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -67,6 +68,7 @@ public class ContextBuilderService {
     private final UserPersonaService userPersonaService;
     private final AgentPersonaConfigRepository agentPersonaConfigRepository;
     private final MidTermMemoryRepository midTermMemoryRepository;
+    private final CognitiveConflictDetector conflictDetector;
 
     /**
      * 构建 System Message 内容
@@ -89,6 +91,7 @@ public class ContextBuilderService {
         injectAgentPersona(systemMessage, userId);
         injectUserProfile(systemMessage, userId);
         injectMidMemoryContext(systemMessage, userId);
+        injectCognitiveConflicts(systemMessage, userId);
         injectMemoryGuidelines(systemMessage);
         injectRelationshipStage(systemMessage, userId);
 
@@ -227,6 +230,18 @@ public class ContextBuilderService {
                     .append("\">").append(summary).append("</recent_insight>").append("\n");
         }
         sb.append("    ").append(MID_MEMORY_END).append("\n");
+    }
+
+    /**
+     * 注入未解决的认知冲突，引导 Agent 在对话中自然地"注意到变化"（F11.3）。
+     */
+    private void injectCognitiveConflicts(StringBuilder sb, String userId) {
+        String conflictContext = conflictDetector.getUnresolvedContext(userId);
+        if (conflictContext != null) {
+            sb.append("    <cognitive_conflicts>\n");
+            sb.append("        ").append(conflictContext).append("\n");
+            sb.append("    </cognitive_conflicts>\n");
+        }
     }
 
     // 在 ContextBuilderService 中注入关系阶段
