@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Repository
@@ -52,4 +53,9 @@ public interface UserNotificationRepository extends JpaRepository<UserNotificati
      * 删除用户的所有消息
      */
     void deleteByUserId(String userId);
+
+    /**
+     * 查询用户在指定时间之后的指定类型通知，用于去重判断。
+     */
+    List<UserNotification> findByUserIdAndTypeAndCreatedAtAfter(String userId, String type, LocalDateTime since);
 }
