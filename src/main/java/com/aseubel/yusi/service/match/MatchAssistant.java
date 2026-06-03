@@ -79,6 +79,8 @@ public interface MatchAssistant {
                         你是统一 AI Agent 的匹配精排器。请根据目标用户与候选用户的长期结构、稳定偏好、近期状态，
                         判断双方在当前阶段是否值得被推荐给彼此。
 
+                        {{preferenceContext}}
+
                         目标用户画像：
                         {{userAProfile}}
 
@@ -100,6 +102,7 @@ public interface MatchAssistant {
                         3. 不能泄露真实姓名与隐私细节
                         4. reason、timingReason、iceBreaker 都必须是中文
                         """)
-        String rerankMatch(@V("userAProfile") String userAProfile,
+        String rerankMatch(@V("preferenceContext") String preferenceContext,
+                        @V("userAProfile") String userAProfile,
                         @V("userBProfile") String userBProfile);
 }
