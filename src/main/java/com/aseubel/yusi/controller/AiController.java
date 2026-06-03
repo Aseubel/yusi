@@ -15,12 +15,14 @@ import com.aseubel.yusi.common.utils.SensitiveWordUtils;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.config.ai.PersistentChatMemoryStore;
 import com.aseubel.yusi.pojo.dto.agent.AgentPersonaConfigRequest;
+import com.aseubel.yusi.pojo.dto.agent.AgentGrowthResponse;
 import com.aseubel.yusi.pojo.dto.chat.ChatRequest;
 import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.pojo.entity.SoulReport;
 import com.aseubel.yusi.repository.SoulReportRepository;
 import com.aseubel.yusi.service.agent.AgentPersonaConfigService;
+import com.aseubel.yusi.service.agent.AgentGrowthService;
 import com.aseubel.yusi.service.ai.AiLockService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
@@ -84,6 +86,9 @@ public class AiController {
 
     @Autowired
     private SoulReportRepository soulReportRepository;
+
+    @Autowired
+    private AgentGrowthService agentGrowthService;
 
     @Auth
     @GetMapping("/chat/history")
@@ -310,6 +315,14 @@ public class AiController {
         String userId = UserContext.getUserId();
         return Response.success(soulReportRepository
                 .findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(page, size)));
+    }
+
+    // ──────────────── Agent 成长可见化（F8.5）────────────────
+
+    @Auth
+    @GetMapping("/agent-growth")
+    public Response<AgentGrowthResponse> getAgentGrowth() {
+        return Response.success(agentGrowthService.getGrowth(UserContext.getUserId()));
     }
 
 }
