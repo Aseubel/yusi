@@ -51,7 +51,12 @@ public enum PromptKey {
     /**
      * Unified cognition routing prompt
      */
-    COGNITION_ROUTING("cognition-routing");
+    COGNITION_ROUTING("cognition-routing"),
+
+    /**
+     * Soul weekly report generation prompt (F8.3)
+     */
+    SOUL_WEEKLY_REPORT("soul-weekly-report");
 
     private final String key;
 }

@@ -9,6 +9,7 @@ import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.room.SituationRoomAgent;
 import com.aseubel.yusi.service.match.MatchAssistant;
+import com.aseubel.yusi.service.report.SoulReportAssistant;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -109,6 +110,13 @@ public class AgentConfig {
     @Bean(name = "matchAssistant")
     public MatchAssistant matchAssistant() {
         return AiServices.builder(MatchAssistant.class)
+                .chatModel((ChatModel) applicationContext.getBean("chatModel"))
+                .build();
+    }
+
+    @Bean(name = "soulReportAssistant")
+    public SoulReportAssistant soulReportAssistant() {
+        return AiServices.builder(SoulReportAssistant.class)
                 .chatModel((ChatModel) applicationContext.getBean("chatModel"))
                 .build();
     }

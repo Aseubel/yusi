@@ -18,6 +18,8 @@ import com.aseubel.yusi.pojo.dto.agent.AgentPersonaConfigRequest;
 import com.aseubel.yusi.pojo.dto.chat.ChatRequest;
 import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
+import com.aseubel.yusi.pojo.entity.SoulReport;
+import com.aseubel.yusi.repository.SoulReportRepository;
 import com.aseubel.yusi.service.agent.AgentPersonaConfigService;
 import com.aseubel.yusi.service.ai.AiLockService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
@@ -43,6 +45,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
 import java.net.URI;
+import org.springframework.data.domain.PageRequest;
+
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -77,6 +81,9 @@ public class AiController {
 
     @Autowired
     private AgentPersonaConfigService agentPersonaConfigService;
+
+    @Autowired
+    private SoulReportRepository soulReportRepository;
 
     @Auth
     @GetMapping("/chat/history")
@@ -282,6 +289,27 @@ public class AiController {
     public Response<AgentPersonaConfig> updatePersonaConfig(@RequestBody AgentPersonaConfigRequest request) {
         String userId = UserContext.getUserId();
         return Response.success(agentPersonaConfigService.updateConfig(userId, request));
+    }
+
+    // ──────────────── 灵魂周报（F8.3）────────────────
+
+    @Auth
+    @GetMapping("/soul-report/latest")
+    public Response<SoulReport> getLatestReport() {
+        String userId = UserContext.getUserId();
+        return Response.success(soulReportRepository
+                .findTopByUserIdAndReportTypeOrderByCreatedAtDesc(userId, "WEEKLY")
+                .orElse(null));
+    }
+
+    @Auth
+    @GetMapping("/soul-report/history")
+    public Response<List<SoulReport>> getReportHistory(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        String userId = UserContext.getUserId();
+        return Response.success(soulReportRepository
+                .findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(page, size)));
     }
 
 }
