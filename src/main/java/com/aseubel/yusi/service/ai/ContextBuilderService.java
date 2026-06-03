@@ -3,17 +3,25 @@ package com.aseubel.yusi.service.ai;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
+import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.pojo.entity.UserPersona;
+import com.aseubel.yusi.repository.AgentPersonaConfigRepository;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
+import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import dev.langchain4j.data.message.SystemMessage;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 上下文构建服务
@@ -39,6 +47,8 @@ public class ContextBuilderService {
     private static final String USER_ID_END = "</user_id>";
     private static final String NICKNAME_START = "<nickname>";
     private static final String NICKNAME_END = "</nickname>";
+    private static final String AGENT_PERSONA_START = "<agent_persona>";
+    private static final String AGENT_PERSONA_END = "</agent_persona>";
     private static final String MEMORY_GUIDELINES_START = "<memory_guidelines>";
     private static final String MEMORY_GUIDELINES_END = "</memory_guidelines>";
     private static final String MEMORY_GUIDELINES_CONTENT = """
@@ -48,11 +58,15 @@ public class ContextBuilderService {
             """;
     private static final String TIME_CONTEXT_START = "<time_context>";
     private static final String TIME_CONTEXT_END = "</time_context>";
+    private static final String MID_MEMORY_START = "<mid_memory_context>";
+    private static final String MID_MEMORY_END = "</mid_memory_context>";
 
     private final UserRepository userRepository;
     private final PromptManager promptManager;
     private final ChatMemoryMessageRepository chatMemoryMessageRepository;
     private final UserPersonaService userPersonaService;
+    private final AgentPersonaConfigRepository agentPersonaConfigRepository;
+    private final MidTermMemoryRepository midTermMemoryRepository;
 
     /**
      * 构建 System Message 内容
@@ -72,7 +86,9 @@ public class ContextBuilderService {
         systemMessage.append(CONTEXT_START).append("\n");
 
         injectTimeContext(systemMessage);
+        injectAgentPersona(systemMessage, userId);
         injectUserProfile(systemMessage, userId);
+        injectMidMemoryContext(systemMessage, userId);
         injectMemoryGuidelines(systemMessage);
         injectRelationshipStage(systemMessage, userId);
 
@@ -157,6 +173,58 @@ public class ContextBuilderService {
         sb.append("    ").append(MEMORY_GUIDELINES_START).append("\n");
         sb.append("        ").append(MEMORY_GUIDELINES_CONTENT);
         sb.append("    ").append(MEMORY_GUIDELINES_END).append("\n");
+    }
+
+    /**
+     * 注入 Agent 人格配置，让 Agent 保持稳定的性格和陪伴风格。
+     */
+    private void injectAgentPersona(StringBuilder sb, String userId) {
+        AgentPersonaConfig config = agentPersonaConfigRepository.findByUserId(userId).orElse(null);
+        if (config == null) {
+            config = AgentPersonaConfig.builder().userId(userId).build();
+        }
+
+        sb.append("    ").append(AGENT_PERSONA_START).append("\n");
+
+        String style = config.getPersonalityStyle();
+        String personaInstruction = switch (style) {
+            case "lively" -> "你是一个性格活泼、充满好奇心的陪伴者。语气轻快自然，适当使用表情和俏皮的表达。你在认真倾听的同时保持轻松愉快的氛围。";
+            case "calm" -> "你是一个沉静、善于倾听的陪伴者。语气平和温柔，不急于表达观点，给对方充分的空间。你的存在本身就是一种安静的陪伴。";
+            case "rational" -> "你是一个理性、善于分析的陪伴者。表达清晰有条理，能帮对方理清思路。你不冷漠，但更倾向于用逻辑和洞察来支持对方。";
+            default -> "你是一个温柔、善解人意的知己。语气温暖而有边界感，懂得何时给建议、何时只是陪伴。你是对方可以完全放松做自己的存在。";
+        };
+        sb.append("        ").append("<style>").append(personaInstruction).append("</style>").append("\n");
+
+        if (!"off".equalsIgnoreCase(config.getProactiveFrequency())) {
+            sb.append("        ").append("<proactive>").append("你在合适的时机关心对方的状态，但始终保持舒适的距离感。")
+                    .append("</proactive>").append("\n");
+        }
+
+        sb.append("    ").append(AGENT_PERSONA_END).append("\n");
+    }
+
+    /**
+     * 注入用户近期状态摘要（中期记忆），让 Agent 了解用户当前阶段。
+     */
+    private void injectMidMemoryContext(StringBuilder sb, String userId) {
+        List<MidTermMemory> recentMemories = midTermMemoryRepository
+                .findValidByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 3));
+        if (recentMemories.isEmpty()) {
+            return;
+        }
+
+        sb.append("    ").append(MID_MEMORY_START).append("\n");
+        sb.append("        <description>以下是你对用户近期状态的了解，你可以在对话中自然地提及，但不要机械复述。</description>\n");
+        for (MidTermMemory memory : recentMemories) {
+            String summary = memory.getSummary();
+            if (summary != null && summary.length() > 150) {
+                summary = summary.substring(0, 150) + "...";
+            }
+            sb.append("        ").append("<recent_insight importance=\"")
+                    .append(String.format("%.2f", memory.getImportance() != null ? memory.getImportance() : 0.5))
+                    .append("\">").append(summary).append("</recent_insight>").append("\n");
+        }
+        sb.append("    ").append(MID_MEMORY_END).append("\n");
     }
 
     // 在 ContextBuilderService 中注入关系阶段

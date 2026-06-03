@@ -14,8 +14,11 @@ import com.aseubel.yusi.common.utils.ModelUtils;
 import com.aseubel.yusi.common.utils.SensitiveWordUtils;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.config.ai.PersistentChatMemoryStore;
+import com.aseubel.yusi.pojo.dto.agent.AgentPersonaConfigRequest;
 import com.aseubel.yusi.pojo.dto.chat.ChatRequest;
+import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
+import com.aseubel.yusi.service.agent.AgentPersonaConfigService;
 import com.aseubel.yusi.service.ai.AiLockService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
@@ -71,6 +74,9 @@ public class AiController {
     private final ThreadPoolTaskExecutor threadPoolExecutor;
 
     private final SensitiveWordUtils sensitiveWordUtils;
+
+    @Autowired
+    private AgentPersonaConfigService agentPersonaConfigService;
 
     @Auth
     @GetMapping("/chat/history")
@@ -260,6 +266,22 @@ public class AiController {
                     return ImageContent.from(URI.create(url));
                 })
                 .collect(Collectors.toList());
+    }
+
+    // ──────────────── Agent 人格配置 ────────────────
+
+    @Auth
+    @GetMapping("/persona-config")
+    public Response<AgentPersonaConfig> getPersonaConfig() {
+        String userId = UserContext.getUserId();
+        return Response.success(agentPersonaConfigService.getConfig(userId));
+    }
+
+    @Auth
+    @PutMapping("/persona-config")
+    public Response<AgentPersonaConfig> updatePersonaConfig(@RequestBody AgentPersonaConfigRequest request) {
+        String userId = UserContext.getUserId();
+        return Response.success(agentPersonaConfigService.updateConfig(userId, request));
     }
 
 }
