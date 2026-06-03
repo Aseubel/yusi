@@ -23,7 +23,11 @@ public interface MidTermMemoryRepository
      * 查找有效的（未过期的）中期记忆，按创建时间倒序。
      * 使用显式 JPQL 避免 Spring Data 方法名解析的 And/Or 优先级陷阱。
      */
-    @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND (m.validUntil > :now OR m.validUntil IS NULL) ORDER BY m.createdAt DESC")
+    @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND (m.validUntil > :now OR m.validUntil IS NULL) AND m.mergedIntoId IS NULL ORDER BY m.createdAt DESC")
     List<MidTermMemory> findValidByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now, Pageable pageable);
+
+    /** 用于跨源融合：获取用户最近的有效记忆（不限数量），便于两两比较去重 */
+    @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND m.mergedIntoId IS NULL ORDER BY m.createdAt DESC")
+    List<MidTermMemory> findUnmergedByUserId(@Param("userId") String userId);
 
 }

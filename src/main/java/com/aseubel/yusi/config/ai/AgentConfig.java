@@ -10,6 +10,7 @@ import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.room.SituationRoomAgent;
 import com.aseubel.yusi.service.match.MatchAssistant;
 import com.aseubel.yusi.service.cognition.CognitiveConflictAssistant;
+import com.aseubel.yusi.service.cognition.MidMemoryFusionAssistant;
 import com.aseubel.yusi.service.report.SoulReportAssistant;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.model.chat.ChatModel;
@@ -125,6 +126,13 @@ public class AgentConfig {
     @Bean(name = "cognitiveConflictAssistant")
     public CognitiveConflictAssistant cognitiveConflictAssistant() {
         return AiServices.builder(CognitiveConflictAssistant.class)
+                .chatModel((ChatModel) applicationContext.getBean("chatModel"))
+                .build();
+    }
+
+    @Bean(name = "midMemoryFusionAssistant")
+    public MidMemoryFusionAssistant midMemoryFusionAssistant() {
+        return AiServices.builder(MidMemoryFusionAssistant.class)
                 .chatModel((ChatModel) applicationContext.getBean("chatModel"))
                 .build();
     }

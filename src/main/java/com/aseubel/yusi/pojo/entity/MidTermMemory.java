@@ -41,4 +41,11 @@ public class MidTermMemory {
     // TODO Phase 5 (F11.5): 添加定时任务定期清理 expired (validUntil < now) 的记忆，实施遗忘机制
     @Column(name = "valid_until")
     private LocalDateTime validUntil;
+
+    /**
+     * 若被跨源融合到另一条记忆，指向幸存记忆的 ID（F11.4）。
+     * null 表示未被合并。
+     */
+    @Column(name = "merged_into_id")
+    private Long mergedIntoId;
 }

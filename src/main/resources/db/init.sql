@@ -555,6 +555,7 @@ CREATE TABLE `mid_term_memory` (
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     `valid_until` DATETIME DEFAULT NULL COMMENT '记忆有效期截止时间，过期后自动降低权重，NULL 表示永不过期',
+    `merged_into_id` BIGINT DEFAULT NULL COMMENT '若被跨源融合，指向幸存记忆的ID',
     PRIMARY KEY (`id`),
     KEY `idx_mid_term_memory_user_id` (`user_id`),
     KEY `idx_mid_term_memory_created_at` (`user_id`, `created_at`),

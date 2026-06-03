@@ -26,6 +26,7 @@ import com.aseubel.yusi.service.agent.AgentPersonaConfigService;
 import com.aseubel.yusi.service.agent.AgentGrowthService;
 import com.aseubel.yusi.service.ai.AiLockService;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
+import com.aseubel.yusi.service.cognition.MidMemoryFusionService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.diary.Assistant;
@@ -94,6 +95,9 @@ public class AiController {
 
     @Autowired
     private CognitiveConflictDetector conflictDetector;
+
+    @Autowired
+    private MidMemoryFusionService fusionService;
 
     @Auth
     @GetMapping("/chat/history")
@@ -343,6 +347,14 @@ public class AiController {
     public Response<Void> resolveConflict(@PathVariable Long id) {
         // TODO Phase 3: 支持 Agent 在对话中自然澄清后自动 resolve
         return Response.success();
+    }
+
+    // ──────────────── 跨源记忆融合（F11.4）────────────────
+
+    @Auth
+    @PostMapping("/memory-fusion/run")
+    public Response<Integer> runMemoryFusion() {
+        return Response.success(fusionService.fuseUserMemories(UserContext.getUserId()));
     }
 
 }
