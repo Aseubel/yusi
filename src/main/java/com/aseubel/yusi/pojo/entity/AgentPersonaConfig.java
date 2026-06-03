@@ -58,11 +58,13 @@ public class AgentPersonaConfig {
     private String quietHoursEnd;
 
     /** 是否允许 Agent 提及纪念日 */
+    // TODO Phase 5 (F8.4): 实现周年纪念日自动检测与提醒功能
     @Column(name = "anniversary_reminder_enabled")
     @Builder.Default
     private Boolean anniversaryReminderEnabled = true;
 
     /** 是否允许 Agent 发送周报 */
+    // TODO Phase 5 (F8.5): 实现周报生成功能，汇总用户本周的状态变化与关键事件
     @Column(name = "weekly_report_enabled")
     @Builder.Default
     private Boolean weeklyReportEnabled = true;

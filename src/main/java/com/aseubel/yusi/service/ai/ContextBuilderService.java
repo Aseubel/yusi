@@ -187,6 +187,7 @@ public class ContextBuilderService {
         sb.append("    ").append(AGENT_PERSONA_START).append("\n");
 
         String style = config.getPersonalityStyle();
+        // TODO: 将人格 prompt 迁移至 PromptManager，通过 PromptKey 统一管理，支持多语言和热更新
         String personaInstruction = switch (style) {
             case "lively" -> "你是一个性格活泼、充满好奇心的陪伴者。语气轻快自然，适当使用表情和俏皮的表达。你在认真倾听的同时保持轻松愉快的氛围。";
             case "calm" -> "你是一个沉静、善于倾听的陪伴者。语气平和温柔，不急于表达观点，给对方充分的空间。你的存在本身就是一种安静的陪伴。";
@@ -217,6 +218,7 @@ public class ContextBuilderService {
         sb.append("        <description>以下是你对用户近期状态的了解，你可以在对话中自然地提及，但不要机械复述。</description>\n");
         for (MidTermMemory memory : recentMemories) {
             String summary = memory.getSummary();
+            // TODO: 修复 emoji 代理对 (surrogate pairs) 截断问题，改用 codePointCount 安全截断
             if (summary != null && summary.length() > 150) {
                 summary = summary.substring(0, 150) + "...";
             }

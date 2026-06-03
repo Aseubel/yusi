@@ -64,6 +64,7 @@ public class ConnectionGuideService {
         if (StrUtil.isNotBlank(personaA) && StrUtil.isNotBlank(personaB)
                 && !"稳定偏好信息较少。".equals(personaA)
                 && !"稳定偏好信息较少。".equals(personaB)) {
+            // TODO Phase 4: 使用 embedding 语义相似度替代硬编码关键词匹配，覆盖更广泛的共同兴趣
             // 寻找可能共同的关键词
             String[] interestKeywords = {"摄影", "旅行", "电影", "音乐", "阅读", "写作", "运动", "美食",
                     "哲学", "心理学", "艺术", "科技", "自然", "猫", "狗", "独处"};
@@ -90,8 +91,7 @@ public class ConnectionGuideService {
      * 生成情景室推荐信息。若双方画像信息不足以推荐，返回 null。
      */
     public String suggestScenario(MatchProfile profileA, MatchProfile profileB) {
-        // 在 Phase 2 中，返回简单推荐文案
-        // 后续可接入 ScenarioRepository 做智能匹配
+        // TODO Phase 3 (F9.3): 接入 ScenarioRepository，基于双方画像做智能情景匹配，替代当前固定文案
         String midA = profileA != null ? StrUtil.blankToDefault(profileA.getMidMemorySummary(), "") : "";
         String midB = profileB != null ? StrUtil.blankToDefault(profileB.getMidMemorySummary(), "") : "";
 

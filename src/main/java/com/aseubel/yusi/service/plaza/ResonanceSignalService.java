@@ -72,6 +72,7 @@ public class ResonanceSignalService {
             signalRepository.save(signal);
             signalRepository.save(reverse);
 
+            // TODO Phase 3 (F9.4): 双向共鸣时，将双方加入匹配推荐优先队列，或直接触发一次轻量匹配
             // 通知双方
             notifyMutualResonance(fromUserId, toUserId);
         } else {

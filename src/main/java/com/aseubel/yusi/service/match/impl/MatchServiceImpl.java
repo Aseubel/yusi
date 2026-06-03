@@ -677,6 +677,7 @@ public class MatchServiceImpl implements MatchService {
         SoulMatch saved = soulMatchRepository.save(match);
 
         // F9.5: 记录匹配反馈
+        // TODO Phase 3: 扩展 action 类型，支持 INTERACT（记录互动深度）和 REPORT（举报），完善反馈闭环
         String feedbackAction = Integer.valueOf(1).equals(action) ? "ACCEPT" : "SKIP";
         matchFeedbackService.recordFeedback(saved.getId(), userId, feedbackAction);
 

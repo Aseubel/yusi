@@ -38,6 +38,7 @@ public class MidTermMemory {
      * 记忆有效期截止时间。
      * 过期后自动降低匹配和对话上下文中的权重，null 表示永不过期。
      */
+    // TODO Phase 5 (F11.5): 添加定时任务定期清理 expired (validUntil < now) 的记忆，实施遗忘机制
     @Column(name = "valid_until")
     private LocalDateTime validUntil;
 }

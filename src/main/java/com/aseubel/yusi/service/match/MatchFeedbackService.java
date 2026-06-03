@@ -57,6 +57,7 @@ public class MatchFeedbackService {
      * 构建用户匹配偏好摘要，供精排 prompt 使用。
      * 返回 null 表示无足够反馈数据。
      */
+    // TODO Phase 3 (F11.3): 提取被接受匹配的 reason 关键词，构建更细粒度的偏好画像；在精排时排除与 REPORT 候选人类似的用户
     public String buildPreferenceContext(String userId) {
         List<MatchFeedback> recentFeedback = feedbackRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId);
         if (recentFeedback.isEmpty()) {

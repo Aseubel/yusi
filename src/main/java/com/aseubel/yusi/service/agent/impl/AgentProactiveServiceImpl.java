@@ -37,6 +37,7 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
     /** 默认未互动天数阈值 */
     private static final int DEFAULT_INACTIVE_DAYS = 3;
     /** 主动问候最小间隔（天），避免同一天多次问候 */
+    // TODO: 当前统一使用5天间隔，未根据 proactiveFrequency (low=每周1次 / normal=每周2次) 差异化控制频率
     private static final int MIN_GREET_INTERVAL_DAYS = 5;
     /** 单次扫描最大处理用户数 */
     private static final int MAX_BATCH_SIZE = 50;
@@ -114,7 +115,7 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
     }
 
     private boolean meetsInactiveThreshold(String userId) {
-        // 检查用户最近一次聊天时间
+        // TODO: 当前简化实现仅检查中期记忆更新时间，应综合检查最近聊天时间 + 日记更新时间
         // 简化实现：检查最近的中期记忆更新时间
         List<MidTermMemory> recentMemories = midTermMemoryRepository
                 .findByUserIdOrderByCreatedAtDesc(userId, PageRequest.of(0, 1));
@@ -147,7 +148,7 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
     }
 
     private void generateGreetingNotification(User user, AgentPersonaConfig config) {
-        // 基础问候消息，后续 Phase 可由 LLM 基于 mid-memory 动态生成
+        // TODO Phase 3 (F8.3): 改为 LLM 基于 mid-memory 动态生成个性化问候，替代当前模板消息
         String greetingMessage = buildGreetingMessage(user, config);
         notificationRepository.save(UserNotification.builder()
                 .userId(user.getUserId())
@@ -162,7 +163,7 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
 
     private String buildGreetingMessage(User user, AgentPersonaConfig config) {
         String userName = StrUtil.blankToDefault(user.getUserName(), "朋友");
-        // Phase 1 使用模板消息，Phase 3 改为 LLM 基于 mid-memory 动态生成
+        // TODO Phase 3 (F8.3): 替换模板消息为 LLM 基于 mid-memory 动态生成的个性化问候
         return switch (config.getPersonalityStyle()) {
             case "lively" -> "嘿 " + userName + "，好久不见！最近过得怎么样？有空来聊聊吧~";
             case "calm" -> userName + "，有一阵子没见了。任何时候你想说话，我都在。";
