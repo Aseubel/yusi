@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -35,6 +36,14 @@ public interface DiaryRepository extends JpaRepository<Diary, Long> {
      * 统计用户日记数量（用于匹配资格检查）
      */
     long countByUserId(String userId);
+
+    /**
+     * 统计用户在指定时间范围内的日记数量（F8.3 周报用）。
+     */
+    @Query("SELECT COUNT(d) FROM Diary d WHERE d.userId = :userId AND d.createTime BETWEEN :start AND :end")
+    long countByUserIdAndDateRange(@Param("userId") String userId,
+                                   @Param("start") LocalDateTime start,
+                                   @Param("end") LocalDateTime end);
 
     /**
      * 获取用户所有有地理位置的日记（用于足迹地图）

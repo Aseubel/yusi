@@ -12,7 +12,7 @@ import dev.langchain4j.service.V;
  */
 public interface CognitiveConflictAssistant {
 
-    // TODO Phase 3: 将此 prompt 迁移至 PromptManager 统一管理
+    // TODO Phase 4: 迁移至 PromptKey.COGNITIVE_CONFLICT，需 LangChain4j 支持动态 prompt 加载
     @UserMessage("""
             你是一个认知一致性检测器。请判断以下"已有认知"与"新观察"之间是否存在语义矛盾。
 

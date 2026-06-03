@@ -131,11 +131,13 @@ public class SoulReportGenerator {
             }
         }
 
-        // 4. 日记统计
-        // TODO: 按 periodStart-periodEnd 过滤日记数量，需在 DiaryRepository 添加按日期范围查询方法
-        long diaryCount = diaryRepository.countByUserId(userId);
+        // 4. 本周日记统计
+        LocalDateTime start = periodStart.atStartOfDay();
+        LocalDateTime end = periodEnd.plusDays(1).atStartOfDay();
+        long diaryCount = diaryRepository.countByUserIdAndDateRange(userId, start, end);
+        ctx.append("\n本周写日记 ").append(diaryCount).append(" 篇");
+
         List<Diary> recentDiaries = diaryRepository.findTop3ByUserIdOrderByCreateTimeDesc(userId);
-        ctx.append("\n累计日记 ").append(diaryCount).append(" 篇");
         if (!recentDiaries.isEmpty()) {
             ctx.append("，最近几篇的情感标签：");
             String emotions = recentDiaries.stream()

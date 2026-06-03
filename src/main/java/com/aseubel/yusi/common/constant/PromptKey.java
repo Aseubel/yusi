@@ -56,7 +56,27 @@ public enum PromptKey {
     /**
      * Soul weekly report generation prompt (F8.3)
      */
-    SOUL_WEEKLY_REPORT("soul-weekly-report");
+    SOUL_WEEKLY_REPORT("soul-weekly-report"),
+
+    /**
+     * Cognitive conflict detection prompt (F11.3)
+     */
+    COGNITIVE_CONFLICT("cognitive-conflict"),
+
+    /**
+     * Cross-source memory fusion prompt (F11.4)
+     */
+    MEMORY_FUSION("memory-fusion"),
+
+    /**
+     * Agent persona style prompt (F8.1) — gentle/lively/calm/rational
+     */
+    AGENT_PERSONA("agent-persona"),
+
+    /**
+     * Agent proactive greeting prompt (F8.2)
+     */
+    AGENT_PROACTIVE_GREETING("agent-proactive-greeting");
 
     private final String key;
 }

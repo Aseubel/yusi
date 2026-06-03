@@ -36,9 +36,6 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
 
     /** 默认未互动天数阈值 */
     private static final int DEFAULT_INACTIVE_DAYS = 3;
-    /** 主动问候最小间隔（天），避免同一天多次问候 */
-    // TODO: 当前统一使用5天间隔，未根据 proactiveFrequency (low=每周1次 / normal=每周2次) 差异化控制频率
-    private static final int MIN_GREET_INTERVAL_DAYS = 5;
     /** 单次扫描最大处理用户数 */
     private static final int MAX_BATCH_SIZE = 50;
 
@@ -64,7 +61,7 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
                 if (!shouldConsiderGreeting(config)) {
                     continue;
                 }
-                if (recentlyGreeted(user.getUserId())) {
+                if (recentlyGreeted(user.getUserId(), config)) {
                     continue;
                 }
                 if (!meetsInactiveThreshold(user.getUserId())) {
@@ -107,8 +104,9 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
         return config != null && !"off".equalsIgnoreCase(config.getProactiveFrequency());
     }
 
-    private boolean recentlyGreeted(String userId) {
-        LocalDateTime since = LocalDateTime.now().minusDays(MIN_GREET_INTERVAL_DAYS);
+    private boolean recentlyGreeted(String userId, AgentPersonaConfig config) {
+        int days = "normal".equalsIgnoreCase(config.getProactiveFrequency()) ? 3 : 7;
+        LocalDateTime since = LocalDateTime.now().minusDays(days);
         List<UserNotification> recentGreetings = notificationRepository
                 .findByUserIdAndTypeAndCreatedAtAfter(userId, "AGENT_GREETING", since);
         return recentGreetings != null && !recentGreetings.isEmpty();

@@ -20,6 +20,7 @@ import com.aseubel.yusi.pojo.dto.chat.ChatRequest;
 import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.pojo.entity.SoulReport;
+import com.aseubel.yusi.repository.CognitiveConflictRepository;
 import com.aseubel.yusi.repository.SoulReportRepository;
 import com.aseubel.yusi.pojo.entity.CognitiveConflict;
 import com.aseubel.yusi.service.agent.AgentPersonaConfigService;
@@ -98,6 +99,9 @@ public class AiController {
 
     @Autowired
     private MidMemoryFusionService fusionService;
+
+    @Autowired
+    private CognitiveConflictRepository conflictRepository;
 
     @Auth
     @GetMapping("/chat/history")
@@ -345,7 +349,12 @@ public class AiController {
     @Auth
     @PostMapping("/cognitive-conflicts/{id}/resolve")
     public Response<Void> resolveConflict(@PathVariable Long id) {
-        // TODO Phase 3: 支持 Agent 在对话中自然澄清后自动 resolve
+        conflictRepository.findById(id).ifPresent(conflict -> {
+            if (conflict.getUserId().equals(UserContext.getUserId())) {
+                conflict.setResolved(true);
+                conflictRepository.save(conflict);
+            }
+        });
         return Response.success();
     }
 

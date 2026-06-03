@@ -12,7 +12,7 @@ import dev.langchain4j.service.V;
  */
 public interface MidMemoryFusionAssistant {
 
-    // TODO Phase 3: 迁移 prompt 至 PromptManager
+    // TODO Phase 4: 迁移至 PromptKey.MEMORY_FUSION，需 LangChain4j 支持动态 prompt 加载
     @UserMessage("""
             你是记忆融合器。判断以下两条用户洞察是否指向同一主题或同一件事情。
 

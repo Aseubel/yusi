@@ -63,8 +63,7 @@ public class AgentPersonaConfig {
     @Builder.Default
     private Boolean anniversaryReminderEnabled = true;
 
-    /** 是否允许 Agent 发送周报 */
-    // TODO Phase 5 (F8.5): 实现周报生成功能，汇总用户本周的状态变化与关键事件
+    /** 是否允许 Agent 发送周报 (F8.3 已实现) */
     @Column(name = "weekly_report_enabled")
     @Builder.Default
     private Boolean weeklyReportEnabled = true;

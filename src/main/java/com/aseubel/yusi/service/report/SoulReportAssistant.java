@@ -12,7 +12,7 @@ import dev.langchain4j.service.V;
  */
 public interface SoulReportAssistant {
 
-    // TODO Phase 3: 将此 prompt 迁移至 PromptManager，通过 PromptKey.SOUL_WEEKLY_REPORT 统一管理
+    // TODO Phase 4: 迁移至 PromptKey.SOUL_WEEKLY_REPORT，需 LangChain4j 支持动态 prompt 加载
     @UserMessage("""
             你是用户的 AI 知己（小予）。请根据以下信息，为用户生成一份温暖、真诚的"灵魂周报"。
 
