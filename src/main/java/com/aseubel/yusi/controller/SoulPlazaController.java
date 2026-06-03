@@ -6,10 +6,13 @@ import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.soulplaza.ResonateRequest;
+import com.aseubel.yusi.pojo.dto.soulplaza.SendSignalRequest;
 import com.aseubel.yusi.pojo.dto.soulplaza.SubmitCardRequest;
 import com.aseubel.yusi.pojo.dto.soulplaza.UpdateCardRequest;
+import com.aseubel.yusi.pojo.entity.ResonanceSignal;
 import com.aseubel.yusi.pojo.entity.SoulCard;
 import com.aseubel.yusi.pojo.entity.SoulResonance;
+import com.aseubel.yusi.service.plaza.ResonanceSignalService;
 import com.aseubel.yusi.service.plaza.SoulPlazaService;
 import com.github.houbb.sensitive.word.core.SensitiveWordHelper;
 
@@ -26,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 public class SoulPlazaController {
 
     private final SoulPlazaService plazaService;
+    private final ResonanceSignalService resonanceSignalService;
 
     @Auth
     @PostMapping("/submit")
@@ -85,5 +89,38 @@ public class SoulPlazaController {
                 UserContext.getUserId(),
                 cardId,
                 request.getType()));
+    }
+
+    // ──────────────── 共鸣信号（F9.2）────────────────
+
+    @Auth
+    @PostMapping("/signal")
+    public Response<ResonanceSignal> sendSignal(@RequestBody SendSignalRequest request) {
+        String userId = UserContext.getUserId();
+        return Response.success(resonanceSignalService.sendSignal(
+                userId, request.getToUserId(), request.getCardId(), request.getMessage()));
+    }
+
+    @Auth
+    @GetMapping("/signals/received")
+    public Response<java.util.List<ResonanceSignal>> getReceivedSignals(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        String userId = UserContext.getUserId();
+        return Response.success(resonanceSignalService.getReceivedSignals(
+                userId, org.springframework.data.domain.PageRequest.of(page, size)));
+    }
+
+    @Auth
+    @GetMapping("/signals/unread-count")
+    public Response<Long> getUnreadSignalCount() {
+        return Response.success(resonanceSignalService.countUnread(UserContext.getUserId()));
+    }
+
+    @Auth
+    @PostMapping("/signals/{signalId}/read")
+    public Response<Void> markSignalRead(@PathVariable Long signalId) {
+        resonanceSignalService.markAsRead(signalId, UserContext.getUserId());
+        return Response.success();
     }
 }
