@@ -4,16 +4,14 @@ import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.entity.ResonanceSignal;
-import com.aseubel.yusi.pojo.entity.UserNotification;
 import com.aseubel.yusi.repository.ResonanceSignalRepository;
-import com.aseubel.yusi.repository.UserNotificationRepository;
+import com.aseubel.yusi.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -29,7 +27,7 @@ import java.util.List;
 public class ResonanceSignalService {
 
     private final ResonanceSignalRepository signalRepository;
-    private final UserNotificationRepository notificationRepository;
+    private final NotificationService notificationService;
 
     /**
      * 发送匿名共鸣信号。
@@ -105,27 +103,27 @@ public class ResonanceSignalService {
     }
 
     private void notifyNewSignal(ResonanceSignal signal) {
-        notificationRepository.save(UserNotification.builder()
-                .userId(signal.getToUserId())
-                .type("RESONANCE_SIGNAL")
-                .title("有人与你产生了共鸣")
-                .content("有人在广场感受到了与你的共鸣，向你发送了一个匿名信号。")
-                .isRead(false)
-                .createdAt(LocalDateTime.now())
-                .build());
+        notificationService.createNotification(
+                signal.getToUserId(),
+                "RESONANCE_SIGNAL",
+                "有人与你产生了共鸣",
+                "有人在广场感受到了与你的共鸣，向你发送了一个匿名信号。",
+                null,
+                null,
+                null);
     }
 
     private void notifyMutualResonance(String userIdA, String userIdB) {
         String content = "你们互相发送了共鸣信号！这是一种奇妙的默契，也许可以了解更多。";
         for (String uid : new String[] { userIdA, userIdB }) {
-            notificationRepository.save(UserNotification.builder()
-                    .userId(uid)
-                    .type("MUTUAL_RESONANCE")
-                    .title("双向共鸣！")
-                    .content(content)
-                    .isRead(false)
-                    .createdAt(LocalDateTime.now())
-                    .build());
+            notificationService.createNotification(
+                    uid,
+                    "MUTUAL_RESONANCE",
+                    "双向共鸣！",
+                    content,
+                    null,
+                    null,
+                    null);
         }
     }
 }

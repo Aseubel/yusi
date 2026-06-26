@@ -9,6 +9,7 @@ import com.aseubel.yusi.repository.AgentPersonaConfigRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.repository.UserNotificationRepository;
 import com.aseubel.yusi.service.agent.AgentProactiveService;
+import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +17,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -43,6 +43,7 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
     private final AgentPersonaConfigRepository personaConfigRepository;
     private final MidTermMemoryRepository midTermMemoryRepository;
     private final UserNotificationRepository notificationRepository;
+    private final NotificationService notificationService;
 
     @Override
     @Scheduled(cron = "0 0 */1 * * ?") // 每小时检查一次
@@ -148,14 +149,14 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
     private void generateGreetingNotification(User user, AgentPersonaConfig config) {
         // TODO Phase 3 (F8.3): 改为 LLM 基于 mid-memory 动态生成个性化问候，替代当前模板消息
         String greetingMessage = buildGreetingMessage(user, config);
-        notificationRepository.save(UserNotification.builder()
-                .userId(user.getUserId())
-                .type("AGENT_GREETING")
-                .title("小予的问候")
-                .content(greetingMessage)
-                .isRead(false)
-                .createdAt(LocalDateTime.now())
-                .build());
+        notificationService.createNotification(
+                user.getUserId(),
+                "AGENT_GREETING",
+                "小予的问候",
+                greetingMessage,
+                null,
+                null,
+                null);
         log.info("已为用户 {} 生成主动问候通知", user.getUserId());
     }
 

@@ -1,5 +1,6 @@
 package com.aseubel.yusi.pojo.entity;
 
+import cn.hutool.core.util.IdUtil;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -92,6 +93,9 @@ public class UserNotification {
 
     @PrePersist
     public void prePersist() {
+        if (notificationId == null) {
+            notificationId = IdUtil.fastSimpleUUID();
+        }
         if (createdAt == null) {
             createdAt = LocalDateTime.now();
         }

@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.report;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.pojo.entity.*;
 import com.aseubel.yusi.repository.*;
+import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.aseubel.yusi.service.user.UserService;
 import lombok.RequiredArgsConstructor;
@@ -12,7 +13,6 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -36,7 +36,7 @@ public class SoulReportGenerator {
     private final DiaryRepository diaryRepository;
     private final ChatMemoryMessageRepository chatMemoryMessageRepository;
     private final AgentPersonaConfigRepository personaConfigRepository;
-    private final UserNotificationRepository notificationRepository;
+    private final NotificationService notificationService;
 
     /** 单次扫描最大处理用户数 */
     private static final int MAX_BATCH_SIZE = 50;
@@ -180,14 +180,14 @@ public class SoulReportGenerator {
 
     private void notifyUser(String userId, SoulReport report) {
         try {
-            notificationRepository.save(UserNotification.builder()
-                    .userId(userId)
-                    .type("SOUL_WEEKLY_REPORT")
-                    .title("你的灵魂周报已生成")
-                    .content("小予为你准备了一份本周的灵魂周报，点击查看 →")
-                    .isRead(false)
-                    .createdAt(LocalDateTime.now())
-                    .build());
+            notificationService.createNotification(
+                    userId,
+                    "SOUL_WEEKLY_REPORT",
+                    "你的灵魂周报已生成",
+                    "小予为你准备了一份本周的灵魂周报，点击查看 →",
+                    null,
+                    null,
+                    null);
             report.setNotified(true);
             reportRepository.save(report);
         } catch (Exception e) {
