@@ -22,4 +22,6 @@ public interface AdminService {
     Page<SituationScenario> getAllScenarios(Pageable pageable, Integer status);
 
     void auditScenario(String scenarioId, ScenarioAuditRequest request);
+
+    void deregisterUser(String userId);
 }

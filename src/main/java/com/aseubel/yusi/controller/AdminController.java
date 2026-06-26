@@ -189,6 +189,13 @@ public class AdminController {
         return Response.success(count);
     }
 
+    @PostMapping("/users/{userId}/deregister")
+    public Response<Void> deregisterUser(@PathVariable String userId) {
+        checkSuperAdminPermission();
+        adminService.deregisterUser(userId);
+        return Response.success();
+    }
+
     /**
      * 获取记忆系统配置信息
      */
