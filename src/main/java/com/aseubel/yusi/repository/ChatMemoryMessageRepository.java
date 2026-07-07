@@ -42,6 +42,8 @@ public interface ChatMemoryMessageRepository extends JpaRepository<ChatMemoryMes
 
     long countByMemoryId(String memoryId);
 
+    long countByMemoryIdAndCreatedAtBetween(String memoryId, LocalDateTime start, LocalDateTime end);
+
     long countByMemoryIdAndRole(String memoryId, String role);
 
     /**

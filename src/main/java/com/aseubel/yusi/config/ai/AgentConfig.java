@@ -12,6 +12,7 @@ import com.aseubel.yusi.service.match.MatchAssistant;
 import com.aseubel.yusi.service.cognition.CognitiveConflictAssistant;
 import com.aseubel.yusi.service.cognition.MidMemoryFusionAssistant;
 import com.aseubel.yusi.service.report.SoulReportAssistant;
+import com.aseubel.yusi.service.agent.AgentGreetingAssistant;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -36,7 +37,7 @@ import org.springframework.context.annotation.Configuration;
  * 
  * 用户隔离机制：
  * - ChatMemory 通过 memoryId (userId) 隔离对话历史
- * - SystemMessage 通过 memoryId 动态注入用户画像
+ * - SystemMessage 通过 memoryId 动态注入 user画像
  * - Tool 通过 UserContext (ThreadLocal) 获取当前用户ID
  * 
  * @author Aseubel
@@ -119,6 +120,13 @@ public class AgentConfig {
     @Bean(name = "soulReportAssistant")
     public SoulReportAssistant soulReportAssistant() {
         return AiServices.builder(SoulReportAssistant.class)
+                .chatModel((ChatModel) applicationContext.getBean("chatModel"))
+                .build();
+    }
+
+    @Bean(name = "agentGreetingAssistant")
+    public AgentGreetingAssistant agentGreetingAssistant() {
+        return AiServices.builder(AgentGreetingAssistant.class)
                 .chatModel((ChatModel) applicationContext.getBean("chatModel"))
                 .build();
     }

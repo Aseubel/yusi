@@ -32,9 +32,15 @@ import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.oss.OssService;
+import com.aseubel.yusi.pojo.entity.UserNotification;
+import com.aseubel.yusi.repository.UserNotificationRepository;
+import com.aseubel.yusi.redis.service.IRedisService;
+import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDateTime;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessageSerializer;
 import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.TextContent;
@@ -102,6 +108,12 @@ public class AiController {
 
     @Autowired
     private CognitiveConflictRepository conflictRepository;
+
+    @Autowired
+    private UserNotificationRepository notificationRepository;
+
+    @Autowired
+    private IRedisService redisService;
 
     @Auth
     @GetMapping("/chat/history")
@@ -364,6 +376,48 @@ public class AiController {
     @PostMapping("/memory-fusion/run")
     public Response<Integer> runMemoryFusion() {
         return Response.success(fusionService.fuseUserMemories(UserContext.getUserId()));
+    }
+
+    // ──────────────── 聊天气泡主动问候注入 ────────────────
+
+    @Auth
+    @PostMapping("/chat/inject-greeting")
+    @Transactional
+    public Response<Void> injectGreeting(@RequestParam Long notificationId) {
+        String userId = UserContext.getUserId();
+        UserNotification notification = notificationRepository.findById(notificationId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_ERROR, "通知不存在"));
+
+        if (!notification.getUserId().equals(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+
+        // 检查 extraData 避免重复注入
+        String extraData = notification.getExtraData();
+        if (extraData != null && extraData.contains("\"injected\":true")) {
+            return Response.success();
+        }
+
+        // 插入到聊天历史中
+        AiMessage aiMessage = AiMessage.from(notification.getContent());
+        String serialized = ChatMessageSerializer.messagesToJson(List.of(aiMessage));
+
+        ChatMemoryMessage entity = ChatMemoryMessage.builder()
+                .memoryId(userId)
+                .role("AI")
+                .content(serialized)
+                .createdAt(LocalDateTime.now())
+                .build();
+        chatMemoryMessageRepository.save(entity);
+
+        // 更新 Redis 缓存
+        redisService.remove("yusi:langchain:" + userId);
+
+        // 更新通知的 extraData
+        notification.setExtraData("{\"injected\":true}");
+        notificationRepository.save(notification);
+
+        return Response.success();
     }
 
 }

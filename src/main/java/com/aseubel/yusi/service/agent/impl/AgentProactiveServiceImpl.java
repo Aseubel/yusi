@@ -8,6 +8,7 @@ import com.aseubel.yusi.pojo.entity.UserNotification;
 import com.aseubel.yusi.repository.AgentPersonaConfigRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.repository.UserNotificationRepository;
+import com.aseubel.yusi.service.agent.AgentGreetingAssistant;
 import com.aseubel.yusi.service.agent.AgentProactiveService;
 import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.user.UserService;
@@ -22,6 +23,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * Agent 主动问候服务实现。
@@ -45,6 +47,7 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
     private final MidTermMemoryRepository midTermMemoryRepository;
     private final UserNotificationRepository notificationRepository;
     private final NotificationService notificationService;
+    private final AgentGreetingAssistant agentGreetingAssistant;
 
     @Override
     @Scheduled(cron = "0 0 */1 * * ?") // 每小时检查一次
@@ -148,8 +151,28 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
     }
 
     private void generateGreetingNotification(User user, AgentPersonaConfig config) {
-        // TODO Phase 3 (F8.3): 改为 LLM 基于 mid-memory 动态生成个性化问候，替代当前模板消息
-        String greetingMessage = buildGreetingMessage(user, config);
+        String userName = StrUtil.blankToDefault(user.getUserName(), "朋友");
+        List<MidTermMemory> memories = midTermMemoryRepository.findValidByUserId(
+                user.getUserId(), LocalDateTime.now(), PageRequest.of(0, 3));
+        String midTermMemories = memories.stream()
+                .map(m -> "- " + m.getSummary())
+                .collect(Collectors.joining("\n"));
+
+        String greetingMessage;
+        try {
+            greetingMessage = agentGreetingAssistant.generateGreeting(
+                    userName,
+                    config.getPersonalityStyle(),
+                    midTermMemories
+            );
+            if (StrUtil.isBlank(greetingMessage)) {
+                greetingMessage = buildGreetingMessage(user, config);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to generate dynamic greeting using LLM, fallback to template: userId={}", user.getUserId(), e);
+            greetingMessage = buildGreetingMessage(user, config);
+        }
+
         notificationService.createNotification(
                 user.getUserId(),
                 "AGENT_GREETING",
@@ -163,7 +186,6 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
 
     private String buildGreetingMessage(User user, AgentPersonaConfig config) {
         String userName = StrUtil.blankToDefault(user.getUserName(), "朋友");
-        // TODO Phase 3 (F8.3): 替换模板消息为 LLM 基于 mid-memory 动态生成的个性化问候
         return switch (config.getPersonalityStyle()) {
             case "lively" -> "嘿 " + userName + "，好久不见！最近过得怎么样？有空来聊聊吧~";
             case "calm" -> userName + "，有一阵子没见了。任何时候你想说话，我都在。";

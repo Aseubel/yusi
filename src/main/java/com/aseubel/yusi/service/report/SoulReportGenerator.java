@@ -68,6 +68,16 @@ public class SoulReportGenerator {
                 }
 
                 try {
+                    // Check if there is any activity this week (diaries or chats)
+                    LocalDateTime start = periodStart.atStartOfDay();
+                    LocalDateTime end = periodEnd.plusDays(1).atStartOfDay();
+                    long diaryCount = diaryRepository.countByUserIdAndDateRange(userId, start, end);
+                    long chatCount = chatMemoryMessageRepository.countByMemoryIdAndCreatedAtBetween(userId, start, end);
+                    if (diaryCount == 0 && chatCount == 0) {
+                        log.info("用户 {} 本周无任何活动，跳过周报生成", userId);
+                        continue;
+                    }
+
                     SoulReport report = generateReport(user, periodStart, periodEnd);
                     reportRepository.save(report);
                     notifyUser(userId, report);
@@ -153,7 +163,7 @@ public class SoulReportGenerator {
         }
 
         // 5. 本周对话互动
-        long chatCount = chatMemoryMessageRepository.countByMemoryId(userId);
+        long chatCount = chatMemoryMessageRepository.countByMemoryIdAndCreatedAtBetween(userId, start, end);
         ctx.append("与我的对话 ").append(chatCount).append(" 条\n");
 
         return ctx.toString();

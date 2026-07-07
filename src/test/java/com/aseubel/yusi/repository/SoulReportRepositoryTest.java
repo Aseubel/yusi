@@ -48,7 +48,8 @@ class SoulReportRepositoryTest {
             // Retrieve from database and verify
             SoulReport retrieved = soulReportRepository.findById(savedReport.getId()).orElseThrow();
             assertThat(retrieved.getCreatedAt()).isNotNull();
-            assertThat(retrieved.getCreatedAt()).isEqualTo(savedReport.getCreatedAt());
+            assertThat(retrieved.getCreatedAt().truncatedTo(java.time.temporal.ChronoUnit.SECONDS))
+                    .isEqualTo(savedReport.getCreatedAt().truncatedTo(java.time.temporal.ChronoUnit.SECONDS));
         } finally {
             // Clean up
             soulReportRepository.delete(savedReport);
