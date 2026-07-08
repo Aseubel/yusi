@@ -40,6 +40,7 @@ import java.time.LocalDateTime;
 
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ChatMessageSerializer;
 import dev.langchain4j.data.message.Content;
 import dev.langchain4j.data.message.ImageContent;
@@ -122,12 +123,16 @@ public class AiController {
         List<ChatMemoryMessage> messages = chatMemoryMessageRepository.findByMemoryIdOrderByCreatedAtAsc(userId);
 
         List<Map<String, Object>> history = messages.stream()
-                .map(chatMemoryStore::toChatMessage)
-                .filter(msg -> msg instanceof UserMessage || msg instanceof AiMessage
-                        || msg instanceof ToolExecutionResultMessage)
-                .map(msg -> {
+                .map(entity -> {
+                    ChatMessage msg = chatMemoryStore.toChatMessage(entity);
+                    if (!(msg instanceof UserMessage || msg instanceof AiMessage
+                            || msg instanceof ToolExecutionResultMessage)) {
+                        return null;
+                    }
+
                     Map<String, Object> item = new java.util.HashMap<>();
                     item.put("role", msg instanceof UserMessage ? "user" : "assistant");
+                    item.put("createdAt", entity.getCreatedAt() != null ? entity.getCreatedAt().toString() : null);
 
                     if (msg instanceof UserMessage userMsg) {
                         String textContent = userMsg.contents().stream()
@@ -165,17 +170,7 @@ public class AiController {
                         } else {
                             // Backup check for images in string format if deserialization failed to map to
                             // ImageContent
-                            String dbImagesStr = null;
-                            for (ChatMemoryMessage entity : messages) {
-                                // Simple string matching to find corresponding entity (not perfect but works
-                                // for fallback)
-                                if (entity.getRole().equals("USER") && entity.getContent() != null
-                                        && entity.getContent().contains(textContent)) {
-                                    dbImagesStr = entity.getImages();
-                                    break;
-                                }
-                            }
-
+                            String dbImagesStr = entity.getImages();
                             if (StrUtil.isNotBlank(dbImagesStr)) {
                                 try {
                                     List<String> urls = cn.hutool.json.JSONUtil.toList(dbImagesStr, String.class);
@@ -190,22 +185,13 @@ public class AiController {
                     } else if (msg instanceof AiMessage aiMsg) {
                         if (aiMsg.text() != null && !aiMsg.text().isEmpty()) {
                             item.put("content", aiMsg.text());
-                        } else if (aiMsg.hasToolExecutionRequests()) {
-                            // String toolNames = aiMsg.toolExecutionRequests().stream()
-                            // .map(ToolExecutionRequest::name)
-                            // .collect(Collectors.joining(", "));
-                            // item.put("content", "正在调用工具：" + toolNames + "...");
-                        } else {
-                            // item.put("content", "");
                         }
-                    } else if (msg instanceof ToolExecutionResultMessage toolMsg) {
-                        // item.put("role", "assistant");
-                        // item.put("content", "工具执行结果：" + toolMsg.text());
                     }
 
                     return item;
                 })
                 .filter(item -> {
+                    if (item == null) return false;
                     Object content = item.get("content");
                     return (content != null && !content.toString().trim().isEmpty()) || item.containsKey("images");
                 })
