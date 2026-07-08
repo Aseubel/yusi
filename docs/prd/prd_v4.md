@@ -462,5 +462,5 @@ v4.0 完成后应满足：
 
 <p align="center">
   <i>v4.0 — Agent Awakening</i><br>
-  <i>以 AI 为中心 · 认识你自己 · 遇见同频</i>
+  <i>以 AI 为中心 · 认识自我 · 遇见同频</i>
 </p>
