@@ -35,5 +35,5 @@ build/
 ### trae ###
 .trae/
 
-src/main/resources/application-prod.yml
 *.log
+prod_secrets.txt
