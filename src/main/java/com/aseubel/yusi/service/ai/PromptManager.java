@@ -46,7 +46,7 @@ public class PromptManager {
         if ("logic".equals(keyStr)) {
             return "room";
         }
-        if ("soul-match".equals(keyStr)) {
+        if ("soul-match".equals(keyStr) || "soul-match-letter".equals(keyStr)) {
             return "match";
         }
         return "diary"; // Default scope
@@ -297,6 +297,42 @@ public class PromptManager {
                     "3. 不要太长，控制在 1-2 句（60字以内）。\n" +
                     "4. 语气一定要自然温暖，像真正的知己，避免套话或AI味。\n" +
                     "5. 直接返回生成的问候文本，不要包含任何多余的信息、Markdown标记或前缀。\n";
+        }
+        if (PromptKey.SOUL_MATCH.getKey().equals(keyStr)) {
+            return "你是统一 AI Agent 的匹配精排器。请根据目标用户与候选用户的长期结构、稳定偏好、近期状态，\n" +
+                    "判断双方在当前阶段是否值得被推荐给彼此。\n\n" +
+                    "{{preferenceContext}}\n\n" +
+                    "目标用户画像：\n{{userAProfile}}\n\n" +
+                    "候选用户画像：\n{{userBProfile}}\n\n" +
+                    "请严格输出 JSON，不要输出任何额外文字，格式如下：\n" +
+                    "{\n  \"resonance\": true,\n  \"score\": 86,\n" +
+                    "  \"reason\": \"一句话解释为什么两人有共鸣\",\n" +
+                    "  \"timingReason\": \"一句话解释为什么是现在\",\n" +
+                    "  \"iceBreaker\": \"一段用于破冰的推荐语\"\n}\n\n" +
+                    "约束：\n1. resonance 为布尔值\n2. score 为 0-100 整数\n" +
+                    "3. 不能泄露真实姓名与隐私细节\n4. reason、timingReason、iceBreaker 都必须是中文\n";
+        }
+        if (PromptKey.SOUL_MATCH_LETTER.getKey().equals(keyStr)) {
+            return "请为你（用户A的AI知己）的用户撰写一封推荐信，向TA推荐另一位用户（用户B）。\n\n" +
+                    "用户A（你的用户）的匹配画像：\n{{userAProfile}}\n\n" +
+                    "用户B（推荐对象）的匹配画像：\n{{userBProfile}}\n\n" +
+                    "已知本次匹配结论：\n- 共鸣原因：{{reason}}\n- 时机原因：{{timingReason}}\n- 破冰建议：{{iceBreaker}}\n\n" +
+                    "任务：\n基于以上信息写一封更自然、更像统一Agent判断结果的匿名推荐信。\n\n" +
+                    "要求：\n1. 不要提及真实姓名。\n2. 不要泄露隐私细节。\n" +
+                    "3. 要体现\"为什么是这个人\"以及\"为什么是现在\"。\n" +
+                    "4. 允许吸收 iceBreaker 的表达，但不要机械复读。\n" +
+                    "5. 以\"向你推荐一位'灵魂伙伴'\"开头，120-180字。\n";
+        }
+        if (PromptKey.EMOTION_ANALYSIS.getKey().equals(keyStr)) {
+            return "分析情感，只返回类别名：Joy/Sadness/Anxiety/Love/Anger/Fear/Hope/Calm/Confusion/Neutral\n\n内容：{{content}}";
+        }
+        if (PromptKey.AGENT_PERSONA.getKey().equals(keyStr)) {
+            return "{\n" +
+                    "  \"default\": \"你是一个温柔、善解人意的知己。语气温暖而有边界感，懂得何时给建议、何时只是陪伴。你是对方可以完全放松做自己的存在。\",\n" +
+                    "  \"lively\": \"你是一个性格活泼、充满好奇心的陪伴者。语气轻快自然，适当使用表情和俏皮的表达。你在认真倾听的同时保持轻松愉快的氛围。\",\n" +
+                    "  \"calm\": \"你是一个沉静、善于倾听的陪伴者。语气平和温柔，不急于表达观点，给对方充分的空间。你的存在本身就是一种安静的陪伴。\",\n" +
+                    "  \"rational\": \"你是一个理性、善于分析的陪伴者。表达清晰有条理，能帮对方理清思路。你不冷漠，但更倾向于用逻辑和洞察来支持对方。\"\n" +
+                    "}";
         }
         return "请作为一名 AI 助手回答问题。";
     }

@@ -13,6 +13,8 @@ import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
 import com.aseubel.yusi.service.user.UserPersonaService;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -70,6 +72,7 @@ public class ContextBuilderService {
     private final AgentPersonaConfigRepository agentPersonaConfigRepository;
     private final MidTermMemoryRepository midTermMemoryRepository;
     private final CognitiveConflictDetector conflictDetector;
+    private final ObjectMapper objectMapper;
 
     /**
      * 构建 System Message 内容
@@ -191,13 +194,7 @@ public class ContextBuilderService {
         sb.append("    ").append(AGENT_PERSONA_START).append("\n");
 
         String style = config.getPersonalityStyle();
-        // TODO Phase 4: 迁移至 PromptKey.AGENT_PERSONA，支持多语言和热更新
-        String personaInstruction = switch (style) {
-            case "lively" -> "你是一个性格活泼、充满好奇心的陪伴者。语气轻快自然，适当使用表情和俏皮的表达。你在认真倾听的同时保持轻松愉快的氛围。";
-            case "calm" -> "你是一个沉静、善于倾听的陪伴者。语气平和温柔，不急于表达观点，给对方充分的空间。你的存在本身就是一种安静的陪伴。";
-            case "rational" -> "你是一个理性、善于分析的陪伴者。表达清晰有条理，能帮对方理清思路。你不冷漠，但更倾向于用逻辑和洞察来支持对方。";
-            default -> "你是一个温柔、善解人意的知己。语气温暖而有边界感，懂得何时给建议、何时只是陪伴。你是对方可以完全放松做自己的存在。";
-        };
+        String personaInstruction = resolvePersonaInstruction(style);
         sb.append("        ").append("<style>").append(personaInstruction).append("</style>").append("\n");
 
         if (!"off".equalsIgnoreCase(config.getProactiveFrequency())) {
@@ -206,6 +203,22 @@ public class ContextBuilderService {
         }
 
         sb.append("    ").append(AGENT_PERSONA_END).append("\n");
+    }
+
+    /**
+     * 从 PromptManager 解析 JSON 格式的人格风格配置，支持管理后台热更新。
+     */
+    private String resolvePersonaInstruction(String style) {
+        try {
+            String personaJson = promptManager.getPrompt(PromptKey.AGENT_PERSONA);
+            java.util.Map<String, String> styles = objectMapper.readValue(
+                    personaJson, new TypeReference<java.util.Map<String, String>>() {});
+            return styles.getOrDefault(style, styles.getOrDefault("default",
+                    "你是一个温柔、善解人意的知己。"));
+        } catch (Exception e) {
+            log.warn("解析 agent-persona 提示词失败，使用默认风格: {}", e.getMessage());
+            return "你是一个温柔、善解人意的知己。语气温暖而有边界感，懂得何时给建议、何时只是陪伴。你是对方可以完全放松做自己的存在。";
+        }
     }
 
     /**

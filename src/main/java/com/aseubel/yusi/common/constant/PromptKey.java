@@ -39,9 +39,14 @@ public enum PromptKey {
     MEMORY_EXTRACT("memory-extract"),
 
     /**
-     * Soul Match Prompt
+     * Soul Match Rerank Prompt
      */
     SOUL_MATCH("soul-match"),
+
+    /**
+     * Soul Match Recommendation Letter Prompt
+     */
+    SOUL_MATCH_LETTER("soul-match-letter"),
 
     /**
      * Emotion Analysis Prompt

@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.plaza.impl;
 
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.service.ai.PromptManager;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
@@ -26,6 +27,7 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
 
     // 使用专门的情感分析模型，避免使用复杂的 situation-analysis 场景
     private final ChatModel chatModel;
+    private final PromptManager promptManager;
 
     // 有效的情感类别列表
     private static final Set<String> VALID_EMOTIONS = Set.of(
@@ -86,7 +88,7 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
      * 使用极简格式减少 token 消耗，提升响应速度
      */
     private String buildEmotionPrompt(String content) {
-        return String.format("分析情感，只返回类别名：Joy/Sadness/Anxiety/Love/Anger/Fear/Hope/Calm/Confusion/Neutral\n\n内容：%s",
-                content);
+        String template = promptManager.getPrompt(PromptKey.EMOTION_ANALYSIS);
+        return template.replace("{{content}}", content);
     }
 }

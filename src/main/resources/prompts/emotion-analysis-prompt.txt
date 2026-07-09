@@ -1,0 +1,3 @@
+分析情感，只返回类别名：Joy/Sadness/Anxiety/Love/Anger/Fear/Hope/Calm/Confusion/Neutral
+
+内容：{{content}}

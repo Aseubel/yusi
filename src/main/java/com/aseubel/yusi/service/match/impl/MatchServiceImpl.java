@@ -17,13 +17,16 @@ import com.aseubel.yusi.repository.SoulMatchRepository;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.match.ConnectionGuideService;
-import com.aseubel.yusi.service.match.MatchAssistant;
 import com.aseubel.yusi.service.match.MatchFeedbackService;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
 import com.aseubel.yusi.service.match.MatchService;
+import com.aseubel.yusi.service.ai.PromptManager;
 import com.aseubel.yusi.service.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.embedding.Embedding;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.vector.request.AnnSearchReq;
@@ -73,12 +76,13 @@ public class MatchServiceImpl implements MatchService {
     private final UserService userService;
     private final SoulMatchRepository soulMatchRepository;
     private final DiaryRepository diaryRepository;
-    private final MatchAssistant matchAssistant;
     private final MatchProfileAssembler matchProfileAssembler;
     private final ConnectionGuideService connectionGuideService;
     private final MatchFeedbackService matchFeedbackService;
     private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
+    private final ChatModel chatModel;
+    private final PromptManager promptManager;
     private final ObjectMapper objectMapper;
 
     @Override
@@ -222,15 +226,24 @@ public class MatchServiceImpl implements MatchService {
             MatchRerankResult rerankResult) {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return matchAssistant.generateRecommendationLetterFromMatchDecision(
-                        myProfile,
-                        partnerProfile,
-                        rerankResult != null ? rerankResult.getReason() : "",
-                        rerankResult != null ? rerankResult.getTimingReason() : "",
-                        rerankResult != null ? rerankResult.getIceBreaker() : "");
+                ModelRouteContextHolder.set(ModelRouteContext.builder()
+                        .language(ModelUtils.normalizeLanguage("zh"))
+                        .scene(PromptKey.SOUL_MATCH.getKey())
+                        .build());
+                String template = promptManager.getPrompt(PromptKey.SOUL_MATCH_LETTER);
+                String prompt = template
+                        .replace("{{userAProfile}}", myProfile)
+                        .replace("{{userBProfile}}", partnerProfile)
+                        .replace("{{reason}}", rerankResult != null && rerankResult.getReason() != null ? rerankResult.getReason() : "")
+                        .replace("{{timingReason}}", rerankResult != null && rerankResult.getTimingReason() != null ? rerankResult.getTimingReason() : "")
+                        .replace("{{iceBreaker}}", rerankResult != null && rerankResult.getIceBreaker() != null ? rerankResult.getIceBreaker() : "");
+                AiMessage aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+                return aiMessage.text();
             } catch (Exception e) {
                 log.error("Failed to generate recommendation letter for user {}", userId, e);
                 return buildFallbackLetter(rerankResult);
+            } finally {
+                ModelRouteContextHolder.clear();
             }
         });
     }
@@ -583,12 +596,14 @@ public class MatchServiceImpl implements MatchService {
 
     private MatchRerankResult rerank(MatchProfile targetProfile, MatchProfile candidateProfile) {
         try {
-            // F9.5: 获取用户匹配偏好上下文，辅助精排判断
             String preferenceContext = buildRerankPreferenceContext(targetProfile.getUserId());
-            String raw = matchAssistant.rerankMatch(
-                    preferenceContext,
-                    buildStructuredProfileForMatching(targetProfile),
-                    buildStructuredProfileForMatching(candidateProfile));
+            String template = promptManager.getPrompt(PromptKey.SOUL_MATCH);
+            String prompt = template
+                    .replace("{{preferenceContext}}", preferenceContext)
+                    .replace("{{userAProfile}}", buildStructuredProfileForMatching(targetProfile))
+                    .replace("{{userBProfile}}", buildStructuredProfileForMatching(candidateProfile));
+            AiMessage aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+            String raw = aiMessage.text();
             return objectMapper.readValue(extractJsonObject(raw), MatchRerankResult.class);
         } catch (Exception e) {
             log.warn("匹配精排失败: targetUserId={}, candidateUserId={}",
