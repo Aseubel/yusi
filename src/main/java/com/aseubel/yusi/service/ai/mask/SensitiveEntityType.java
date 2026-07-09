@@ -46,12 +46,14 @@ public enum SensitiveEntityType {
      * @return 对应的类型，未匹配返回 null
      */
     public static SensitiveEntityType fromNatureTag(String natureTag) {
-        if (natureTag == null)
-            return null;
-        return switch (natureTag) {
-            case "nr" -> PERSON;
-            case "nt" -> ORGANIZATION;
-            default -> null;
-        };
+        // if (natureTag == null)
+        //     return null;
+        // return switch (natureTag) {
+        //     case "nr" -> PERSON;
+        //     case "nt" -> ORGANIZATION;
+        //     default -> null;
+        // };
+        // TODO: 这里脱敏后会影响大模型上下文理解回复，暂时返回 null，后续可以优化。
+        return null;
     }
 }
