@@ -43,7 +43,8 @@ public class AgentCognitionOrchestratorImpl implements AgentCognitionOrchestrato
             midMemoryUpdateService.appendSnapshot(
                     command.getUserId(),
                     routingResult.getMidMemorySummary(),
-                    routingResult.getMidMemoryImportance());
+                    routingResult.getMidMemoryImportance(),
+                    routingResult.getMidMemoryCategory());
         }
         lifeGraphCognitionBridgeService.bridge(command, routingResult);
         matchProfileAssembler.refreshProfile(command.getUserId());

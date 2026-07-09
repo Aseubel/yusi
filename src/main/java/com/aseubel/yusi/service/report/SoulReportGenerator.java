@@ -1,13 +1,19 @@
 package com.aseubel.yusi.service.report;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.*;
 import com.aseubel.yusi.repository.*;
+import com.aseubel.yusi.service.ai.PromptManager;
 import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.aseubel.yusi.service.user.UserService;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -30,7 +36,9 @@ import java.util.stream.Collectors;
 public class SoulReportGenerator {
 
     private final SoulReportRepository reportRepository;
-    private final SoulReportAssistant reportAssistant;
+    @Qualifier("chatModel")
+    private final ChatModel chatModel;
+    private final PromptManager promptManager;
     private final UserService userService;
     private final UserPersonaService userPersonaService;
     private final MidTermMemoryRepository midTermMemoryRepository;
@@ -96,7 +104,12 @@ public class SoulReportGenerator {
     private SoulReport generateReport(User user, LocalDate periodStart, LocalDate periodEnd) {
         String userId = user.getUserId();
         String context = buildReportContext(userId, periodStart, periodEnd);
-        String markdown = reportAssistant.generateWeeklyReport(context);
+        
+        String template = promptManager.getPrompt(PromptKey.SOUL_WEEKLY_REPORT);
+        String prompt = template.replace("{{context}}", context);
+        
+        AiMessage aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+        String markdown = aiMessage.text();
 
         // 提取第一行作为标题
         String title = extractTitle(markdown);

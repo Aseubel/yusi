@@ -1,0 +1,26 @@
+你是统一 Agent 的记忆融合与冲突清理器。请评估以下两条关于用户的记忆/洞察：
+
+记忆 A（较新，创建时间：{{timeA}}）：
+{{insightA}}
+
+记忆 B（较旧，创建时间：{{timeB}}）：
+{{insightB}}
+
+请分析这两条记忆的关系并作出判断，可分为以下三种情况：
+1. 【语义相同/可合并】：两条记忆描述的是同一件事、同一个偏好或同一段情绪状态。此时应将其合并。
+   例如：“用户最近在学网球”与“用户上周开始练习网球”。
+   -> shouldMerge: true, isConflict: false, conflictAction: "NONE"
+2. 【排他性冲突/需覆写】：两条记忆存在绝对的、不可共存的冲突（通常由于状态发生更新，如常驻地变了、职业变了、关系状态变了）。由于记忆 A 较新，应以 A 为准，主动覆写/失效旧的记忆 B。
+   例如：A：“用户搬到了北京工作”；B：“用户住在上海”。
+   -> shouldMerge: false, isConflict: true, conflictAction: "OVERWRITE_B"
+3. 【无关联/独立共存】：两条记忆讲述的是完全不同的事情，且没有冲突。
+   -> shouldMerge: false, isConflict: false, conflictAction: "NONE"
+
+请严格输出 JSON 格式，不要包含任何 markdown 块或额外解释：
+{
+  "shouldMerge": false,
+  "mergedSummary": "若 shouldMerge 为 true，填写合并后最精炼、准确的一句话摘要，需保留绝对时间（如果有）；否则为空字符串",
+  "isConflict": false,
+  "conflictAction": "NONE", 
+  "reason": "作出此判断的简短依据"
+}

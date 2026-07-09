@@ -1,14 +1,20 @@
 package com.aseubel.yusi.service.cognition;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.CognitiveConflict;
 import com.aseubel.yusi.pojo.entity.UserPersona;
 import com.aseubel.yusi.repository.CognitiveConflictRepository;
+import com.aseubel.yusi.service.ai.PromptManager;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -26,7 +32,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CognitiveConflictDetector {
 
-    private final CognitiveConflictAssistant conflictAssistant;
+    @Qualifier("chatModel")
+    private final ChatModel chatModel;
+    private final PromptManager promptManager;
     private final CognitiveConflictRepository conflictRepository;
     private final UserPersonaService userPersonaService;
     private final ObjectMapper objectMapper;
@@ -62,7 +70,14 @@ public class CognitiveConflictDetector {
         }
 
         try {
-            String raw = conflictAssistant.detect(existingBelief, newInsight);
+            String template = promptManager.getPrompt(PromptKey.COGNITIVE_CONFLICT);
+            String prompt = template
+                    .replace("{{existingBelief}}", existingBelief)
+                    .replace("{{newObservation}}", newInsight);
+
+            AiMessage aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+            String raw = aiMessage.text();
+
             JsonNode result = objectMapper.readTree(extractJson(raw));
             if (result.has("hasConflict") && result.get("hasConflict").asBoolean()) {
                 String description = result.has("description")

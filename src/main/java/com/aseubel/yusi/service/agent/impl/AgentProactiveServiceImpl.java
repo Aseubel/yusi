@@ -8,10 +8,14 @@ import com.aseubel.yusi.pojo.entity.UserNotification;
 import com.aseubel.yusi.repository.AgentPersonaConfigRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.repository.UserNotificationRepository;
-import com.aseubel.yusi.service.agent.AgentGreetingAssistant;
+import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.service.ai.PromptManager;
 import com.aseubel.yusi.service.agent.AgentProactiveService;
 import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.user.UserService;
+import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.data.message.AiMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -47,7 +51,8 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
     private final MidTermMemoryRepository midTermMemoryRepository;
     private final UserNotificationRepository notificationRepository;
     private final NotificationService notificationService;
-    private final AgentGreetingAssistant agentGreetingAssistant;
+    private final PromptManager promptManager;
+    private final ChatModel chatModel;
 
     @Override
     @Scheduled(cron = "0 0 */1 * * ?") // 每小时检查一次
@@ -160,11 +165,15 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
 
         String greetingMessage;
         try {
-            greetingMessage = agentGreetingAssistant.generateGreeting(
-                    userName,
-                    config.getPersonalityStyle(),
-                    midTermMemories
-            );
+            String template = promptManager.getPrompt(PromptKey.AGENT_PROACTIVE_GREETING);
+            String prompt = template
+                    .replace("{{userName}}", userName)
+                    .replace("{{personalityStyle}}", config.getPersonalityStyle())
+                    .replace("{{midTermMemories}}", midTermMemories);
+
+            AiMessage aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+            greetingMessage = aiMessage.text();
+
             if (StrUtil.isBlank(greetingMessage)) {
                 greetingMessage = buildGreetingMessage(user, config);
             }

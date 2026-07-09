@@ -146,18 +146,29 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
 
     private String buildMidMemorySummary(String userId) {
         List<MidTermMemory> memories = midTermMemoryRepository
-                .findValidByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 6));
+                .findValidByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 10));
         if (memories == null || memories.isEmpty()) {
             return "近期状态信息较少。";
         }
         return memories.stream()
-                .sorted(Comparator
-                        .comparing(MidTermMemory::getImportance, Comparator.nullsLast(Comparator.reverseOrder()))
-                        .thenComparing(MidTermMemory::getCreatedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .sorted((a, b) -> Double.compare(calculateDecayedImportance(b), calculateDecayedImportance(a)))
                 .limit(3)
                 .map(memory -> "- " + truncate(memory.getSummary(), 120))
                 .reduce((a, b) -> a + "\n" + b)
                 .orElse("近期状态信息较少。");
+    }
+
+    private double calculateDecayedImportance(MidTermMemory memory) {
+        double importance = memory.getImportance() != null ? memory.getImportance() : 0.5;
+        if (memory.getCreatedAt() == null) {
+            return importance;
+        }
+        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(memory.getCreatedAt(), LocalDateTime.now());
+        if (daysBetween <= 0) {
+            return importance;
+        }
+        // 14-day half-life soft decay
+        return importance * Math.pow(0.5, (double) daysBetween / 14.0);
     }
 
     private String buildMatchIntentSummary(User user) {

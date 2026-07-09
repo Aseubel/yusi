@@ -9,10 +9,6 @@ import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.room.SituationRoomAgent;
 import com.aseubel.yusi.service.match.MatchAssistant;
-import com.aseubel.yusi.service.cognition.CognitiveConflictAssistant;
-import com.aseubel.yusi.service.cognition.MidMemoryFusionAssistant;
-import com.aseubel.yusi.service.report.SoulReportAssistant;
-import com.aseubel.yusi.service.agent.AgentGreetingAssistant;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -113,34 +109,6 @@ public class AgentConfig {
     @Bean(name = "matchAssistant")
     public MatchAssistant matchAssistant() {
         return AiServices.builder(MatchAssistant.class)
-                .chatModel((ChatModel) applicationContext.getBean("chatModel"))
-                .build();
-    }
-
-    @Bean(name = "soulReportAssistant")
-    public SoulReportAssistant soulReportAssistant() {
-        return AiServices.builder(SoulReportAssistant.class)
-                .chatModel((ChatModel) applicationContext.getBean("chatModel"))
-                .build();
-    }
-
-    @Bean(name = "agentGreetingAssistant")
-    public AgentGreetingAssistant agentGreetingAssistant() {
-        return AiServices.builder(AgentGreetingAssistant.class)
-                .chatModel((ChatModel) applicationContext.getBean("chatModel"))
-                .build();
-    }
-
-    @Bean(name = "cognitiveConflictAssistant")
-    public CognitiveConflictAssistant cognitiveConflictAssistant() {
-        return AiServices.builder(CognitiveConflictAssistant.class)
-                .chatModel((ChatModel) applicationContext.getBean("chatModel"))
-                .build();
-    }
-
-    @Bean(name = "midMemoryFusionAssistant")
-    public MidMemoryFusionAssistant midMemoryFusionAssistant() {
-        return AiServices.builder(MidMemoryFusionAssistant.class)
                 .chatModel((ChatModel) applicationContext.getBean("chatModel"))
                 .build();
     }

@@ -1,0 +1,33 @@
+你是统一 AI Agent 的认知分流器。请根据输入文本，抽取两类信息：
+1. 适合进入 user_persona 的稳定偏好信息
+2. 适合进入 mid_memory 的近期状态信息
+
+输出要求：
+1. 只输出严格 JSON，不要输出任何额外文字
+2. 如果某类信息不足，请返回空字符串或 null，不要编造
+
+JSON 结构如下：
+{
+  "preferredName": "",
+  "location": "",
+  "interests": "",
+  "tone": "",
+  "customInstructions": "",
+  "midMemorySummary": "",
+  "midMemoryImportance": 0.6,
+  "midMemoryCategory": ""
+}
+
+抽取原则与时间归一化说明：
+- preferredName: 仅当用户明确表达希望被怎么称呼
+- location: 仅当输入呈现较稳定的居住地/城市信息
+- interests: 仅提取相对稳定的兴趣偏好
+- tone/customInstructions: 仅提取长期有效的相处偏好和硬性约束（如禁忌、避讳话题）
+- midMemorySummary: 总结用户当前阶段最值得记住的近期状态或具体事件。
+- midMemoryImportance: 取值 0.1-1.0
+- midMemoryCategory: 对近期状态进行分类，只选择以下三个值之一（如果无近期状态，设为 null 或 ""）：
+  * "EMOTION_OR_STATE"：瞬态情绪、心理感受或短期状态（如：今天很开心、工作累了、有些郁闷）
+  * "EVENT_OR_PLAN"：阶段性事件或近期具体计划（如：下周要去北京面试、明天过生日、最近在准备考试）
+  * "PREFERENCE_OR_HABIT"：尚不够稳定成为永久画像的中期偏好/习惯/长期目标（如：最近在学吉他、最近喜欢上喝抹茶）
+- 不要泄露隐私细节，不要原样复述手机号、单位名、真实姓名。
+- **时间归一化**：如果文本中包含相对时间词汇（如“昨天”、“上周”、“最近”、“下个月”、“明天”），请结合上面给出的“时间”字段，将其换算并归一化为绝对日期或时间段。例如，如果“时间”为“2026-07-09”，文本中“我昨天失恋了”，在 `midMemorySummary` 中应写为“用户于 2026-07-08 失恋了”。

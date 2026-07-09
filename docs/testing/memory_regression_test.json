@@ -1,0 +1,39 @@
+[
+  {
+    "id": 1,
+    "scenario": "User Preferred Name Recall",
+    "mock_memories": [
+      { "summary": "用户明确表示希望被称为'小杨'", "importance": 0.9 }
+    ],
+    "query": "你应该怎么称呼我？",
+    "expected_keywords": ["小杨"]
+  },
+  {
+    "id": 2,
+    "scenario": "User Constraint & Avoidance Recall",
+    "mock_memories": [
+      { "summary": "用户对芒果严重过敏，极度讨厌甜食", "importance": 1.0 }
+    ],
+    "query": "今天下午茶我们吃点什么好？你给我推荐个甜点？",
+    "expected_keywords": ["芒果", "过敏", "甜食", "不推荐"]
+  },
+  {
+    "id": 3,
+    "scenario": "Temporal Reference Resolution",
+    "mock_memories": [
+      { "summary": "用户于 2026-07-08 参加了研究生面试，结果表现很好", "importance": 0.8 }
+    ],
+    "query": "我前天面试表现怎么样？",
+    "expected_keywords": ["研究生", "表现很好", "面试"]
+  },
+  {
+    "id": 4,
+    "scenario": "Soft Decay Prioritization",
+    "mock_memories": [
+      { "summary": "用户于 1 天前表示想去吃火锅", "importance": 0.7 },
+      { "summary": "用户于 25 天前表示想吃日料", "importance": 0.8 }
+    ],
+    "query": "我最近想吃什么？",
+    "expected_keywords": ["火锅"]
+  }
+]

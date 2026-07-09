@@ -23,6 +23,7 @@ import dev.langchain4j.data.message.SystemMessage;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 上下文构建服务
@@ -212,24 +213,44 @@ public class ContextBuilderService {
      */
     private void injectMidMemoryContext(StringBuilder sb, String userId) {
         List<MidTermMemory> recentMemories = midTermMemoryRepository
-                .findValidByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 3));
+                .findValidByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 10));
         if (recentMemories.isEmpty()) {
             return;
         }
 
+        // Apply soft decay sorting
+        List<MidTermMemory> sortedMemories = recentMemories.stream()
+                .sorted((a, b) -> Double.compare(calculateDecayedImportance(b), calculateDecayedImportance(a)))
+                .limit(3)
+                .collect(Collectors.toList());
+
         sb.append("    ").append(MID_MEMORY_START).append("\n");
         sb.append("        <description>以下是你对用户近期状态的了解，你可以在对话中自然地提及，但不要机械复述。</description>\n");
-        for (MidTermMemory memory : recentMemories) {
+        for (MidTermMemory memory : sortedMemories) {
             String summary = memory.getSummary();
             if (summary != null && summary.codePointCount(0, summary.length()) > 150) {
                 int endIndex = summary.offsetByCodePoints(0, 150);
                 summary = summary.substring(0, endIndex) + "...";
             }
+            double decayedImp = calculateDecayedImportance(memory);
             sb.append("        ").append("<recent_insight importance=\"")
-                    .append(String.format("%.2f", memory.getImportance() != null ? memory.getImportance() : 0.5))
+                    .append(String.format("%.2f", decayedImp))
                     .append("\">").append(summary).append("</recent_insight>").append("\n");
         }
         sb.append("    ").append(MID_MEMORY_END).append("\n");
+    }
+
+    private double calculateDecayedImportance(MidTermMemory memory) {
+        double importance = memory.getImportance() != null ? memory.getImportance() : 0.5;
+        if (memory.getCreatedAt() == null) {
+            return importance;
+        }
+        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(memory.getCreatedAt(), LocalDateTime.now());
+        if (daysBetween <= 0) {
+            return importance;
+        }
+        // 14-day half-life soft decay
+        return importance * Math.pow(0.5, (double) daysBetween / 14.0);
     }
 
     /**

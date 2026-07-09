@@ -202,7 +202,9 @@ public class MemoryCompressionService {
 
         String promptTemplate = promptManager.getPrompt(PromptKey.MEMORY_EXTRACT);
 
-        StringBuilder promptBuilder = new StringBuilder(promptTemplate);
+        StringBuilder promptBuilder = new StringBuilder();
+        promptBuilder.append("当前系统时间: ").append(DateUtil.now()).append("\n\n");
+        promptBuilder.append(promptTemplate);
         if (previousSummary != null && !previousSummary.isEmpty()) {
             promptBuilder.append("\n\n之前的记忆摘要:\n").append(previousSummary);
         }
@@ -269,12 +271,14 @@ public class MemoryCompressionService {
      */
     @Transactional
     public Long persistMidTermMemoryTx(String memoryId, String summaryText, List<ChatMemoryMessage> messages) {
+        LocalDateTime now = LocalDateTime.now();
         MidTermMemory activeMemory = MidTermMemory.builder()
                 .userId(memoryId)
                 .summary(summaryText)
                 .importance(1.0)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
+                .createdAt(now)
+                .updatedAt(now)
+                .validUntil(now.plusDays(30))
                 .build();
         activeMemory = midTermMemoryRepository.save(activeMemory);
         log.info("Saved compressed memory to MySQL for user: {}. ID: {}", memoryId, activeMemory.getId());

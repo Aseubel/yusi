@@ -1,17 +1,25 @@
 package com.aseubel.yusi.service.cognition;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
+import com.aseubel.yusi.service.ai.PromptManager;
 import com.aseubel.yusi.service.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
@@ -26,7 +34,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class MidMemoryFusionService {
 
-    private final MidMemoryFusionAssistant fusionAssistant;
+    @Qualifier("chatModel")
+    private final ChatModel chatModel;
+    private final PromptManager promptManager;
     private final MidTermMemoryRepository memoryRepository;
     private final UserService userService;
     private final ObjectMapper objectMapper;
@@ -69,7 +79,7 @@ public class MidMemoryFusionService {
      * 融合指定用户的记忆。返回合并的对数。
      */
     public int fuseUserMemories(String userId) {
-        List<MidTermMemory> entries = memoryRepository.findUnmergedByUserId(userId);
+        List<MidTermMemory> entries = memoryRepository.findUnmergedByUserId(userId, LocalDateTime.now());
         if (entries.size() < MIN_ENTRIES_TO_FUSE) {
             return 0;
         }
@@ -90,14 +100,29 @@ public class MidMemoryFusionService {
         if (a.getMergedIntoId() != null || b.getMergedIntoId() != null) { return false; }
 
         try {
-            String raw = fusionAssistant.evaluate(a.getSummary(), b.getSummary());
+            String template = promptManager.getPrompt(PromptKey.MEMORY_FUSION);
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+            String timeA = a.getCreatedAt() != null ? a.getCreatedAt().format(formatter) : "未知";
+            String timeB = b.getCreatedAt() != null ? b.getCreatedAt().format(formatter) : "未知";
+
+            String prompt = template
+                    .replace("{{insightA}}", a.getSummary())
+                    .replace("{{insightB}}", b.getSummary())
+                    .replace("{{timeA}}", timeA)
+                    .replace("{{timeB}}", timeB);
+
+            AiMessage aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+            String raw = aiMessage.text();
+
             JsonNode result = objectMapper.readTree(extractJson(raw));
+
+            // Case 1: Merge
             if (result.has("shouldMerge") && result.get("shouldMerge").asBoolean()) {
                 String mergedSummary = result.has("mergedSummary")
                         ? result.get("mergedSummary").asText()
                         : a.getSummary();
 
-                // 保留 importance 更高的，把另一个标记为 merged_into
+                // Keep the one with higher importance, link the other
                 if (a.getImportance() >= b.getImportance()) {
                     a.setSummary(mergedSummary);
                     memoryRepository.save(a);
@@ -109,13 +134,28 @@ public class MidMemoryFusionService {
                     a.setMergedIntoId(b.getId());
                     memoryRepository.save(a);
                 }
-                log.debug("融合记忆: userId={}, keeper={}, merged={}", userId,
+                log.info("融合记忆成功: userId={}, keeper={}, merged={}", userId,
                         a.getImportance() >= b.getImportance() ? a.getId() : b.getId(),
                         a.getImportance() >= b.getImportance() ? b.getId() : a.getId());
                 return true;
             }
+
+            // Case 2: Conflict Overwrite
+            if (result.has("isConflict") && result.get("isConflict").asBoolean()) {
+                String conflictAction = result.has("conflictAction") ? result.get("conflictAction").asText() : "NONE";
+                if ("OVERWRITE_B".equalsIgnoreCase(conflictAction)) {
+                    // Make the older memory b expire immediately
+                    b.setValidUntil(LocalDateTime.now());
+                    b.setMergedIntoId(a.getId());
+                    memoryRepository.save(b);
+                    log.info("记忆冲突覆写完成: userId={}, 新记忆(保留)={}, 旧记忆(失效)={}, 原因={}",
+                            userId, a.getId(), b.getId(), result.has("reason") ? result.get("reason").asText() : "");
+                    return true;
+                }
+            }
+
         } catch (Exception e) {
-            log.warn("记忆融合 LLM 调用失败: userId={}", userId, e);
+            log.warn("记忆融合/冲突处理 LLM 调用失败: userId={}", userId, e);
         }
         return false;
     }

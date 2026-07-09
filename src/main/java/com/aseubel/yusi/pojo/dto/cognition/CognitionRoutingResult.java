@@ -18,4 +18,5 @@ public class CognitionRoutingResult {
     private String customInstructions;
     private String midMemorySummary;
     private Double midMemoryImportance;
+    private String midMemoryCategory;
 }

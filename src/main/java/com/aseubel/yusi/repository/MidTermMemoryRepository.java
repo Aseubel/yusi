@@ -26,8 +26,8 @@ public interface MidTermMemoryRepository
     @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND (m.validUntil > :now OR m.validUntil IS NULL) AND m.mergedIntoId IS NULL ORDER BY m.createdAt DESC")
     List<MidTermMemory> findValidByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now, Pageable pageable);
 
-    /** 用于跨源融合：获取用户最近的有效记忆（不限数量），便于两两比较去重 */
-    @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND m.mergedIntoId IS NULL ORDER BY m.createdAt DESC")
-    List<MidTermMemory> findUnmergedByUserId(@Param("userId") String userId);
+    /** 用于跨源融合：获取用户最近的有效且未合并的中期记忆，便于两两比较去重 */
+    @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND (m.validUntil > :now OR m.validUntil IS NULL) AND m.mergedIntoId IS NULL ORDER BY m.createdAt DESC")
+    List<MidTermMemory> findUnmergedByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now);
 
 }
