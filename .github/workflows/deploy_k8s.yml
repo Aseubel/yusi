@@ -15,6 +15,10 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
+    - name: Downcase REPO name
+      run: |
+        echo "REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+
     # 1. 登录容器镜像服务
     - name: Login to GHCR
       uses: docker/login-action@v3
@@ -42,8 +46,8 @@ jobs:
         file: Dockerfile
         push: true
         tags: |
-          ghcr.io/${{ github.repository }}/yusi-backend:${{ github.sha }}
-          ghcr.io/${{ github.repository }}/yusi-backend:latest
+          ghcr.io/${{ env.REPO_LOWER }}/yusi-backend:${{ github.sha }}
+          ghcr.io/${{ env.REPO_LOWER }}/yusi-backend:latest
 
     - name: Build and Push Frontend Image
       uses: docker/build-push-action@v5
@@ -52,8 +56,8 @@ jobs:
         file: ./frontend/Dockerfile
         push: true
         tags: |
-          ghcr.io/${{ github.repository }}/yusi-frontend:${{ github.sha }}
-          ghcr.io/${{ github.repository }}/yusi-frontend:latest
+          ghcr.io/${{ env.REPO_LOWER }}/yusi-frontend:${{ github.sha }}
+          ghcr.io/${{ env.REPO_LOWER }}/yusi-frontend:latest
 
     - name: Build and Push MCP Image
       uses: docker/build-push-action@v5
@@ -62,8 +66,8 @@ jobs:
         file: ./mcp/Dockerfile
         push: true
         tags: |
-          ghcr.io/${{ github.repository }}/yusi-mcp:${{ github.sha }}
-          ghcr.io/${{ github.repository }}/yusi-mcp:latest
+          ghcr.io/${{ env.REPO_LOWER }}/yusi-mcp:${{ github.sha }}
+          ghcr.io/${{ env.REPO_LOWER }}/yusi-mcp:latest
 
     # 4. 检出 GitOps 专用的配置仓库 (yusi-infra)
     - name: Checkout Infra Repository
@@ -80,9 +84,9 @@ jobs:
     - name: Update K8s Manifest Image Tag
       run: |
         cd yusi-infra/overlays/prod
-        kustomize edit set image yusi-backend=ghcr.io/${{ github.repository }}/yusi-backend:${{ github.sha }}
-        kustomize edit set image yusi-frontend=ghcr.io/${{ github.repository }}/yusi-frontend:${{ github.sha }}
-        kustomize edit set image yusi-mcp=ghcr.io/${{ github.repository }}/yusi-mcp:${{ github.sha }}
+        kustomize edit set image yusi-backend=ghcr.io/${{ env.REPO_LOWER }}/yusi-backend:${{ github.sha }}
+        kustomize edit set image yusi-frontend=ghcr.io/${{ env.REPO_LOWER }}/yusi-frontend:${{ github.sha }}
+        kustomize edit set image yusi-mcp=ghcr.io/${{ env.REPO_LOWER }}/yusi-mcp:${{ github.sha }}
 
     # 6. 提交修改并推回 GitOps 配置仓库
     - name: Commit and Push Manifest Changes

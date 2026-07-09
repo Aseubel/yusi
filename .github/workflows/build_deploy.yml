@@ -1,5 +1,5 @@
 name: build and deploy to server
-
+# 该workflow暂时弃用
 on:
   #  push:
   workflow_dispatch:
