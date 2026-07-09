@@ -15,6 +15,9 @@ jobs:
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        token: ${{ secrets.YUSI_REPO_TOKEN }}
 
     - name: Downcase REPO name
       run: |
@@ -75,7 +78,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: Aseubel/yusi-infra
-        token: ${{ secrets.INFRA_REPO_TOKEN }} # 需要在 GitHub Secrets 中配置该 Token，赋予 yusi-infra 写权限
+        token: ${{ secrets.YUSI_REPO_TOKEN }} # 需要在 GitHub Secrets 中配置该 Token，赋予 yusi-infra 写权限
         path: yusi-infra
 
     # 5. 更新 GitOps 配置 (使用 Kustomize 替换 yusi-infra 里的镜像 Tag)
