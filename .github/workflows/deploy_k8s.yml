@@ -1,0 +1,96 @@
+name: K8s GitOps Build & Push
+
+on:
+  push:
+    branches:
+      - main # 合并到主分支时触发
+
+permissions:
+  contents: write # 自动提交代码需要写权限
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    # 1. 登录容器镜像服务
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    # 2. 设置 JDK 并编译 Java 后端
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: 'maven'
+        
+    - name: Build Java Backend
+      run: ./mvnw clean package -DskipTests
+
+    # 3. 构建并推送镜像 (使用 Git Commit SHA 作为 Version Tag)
+    - name: Build and Push Backend Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: Dockerfile
+        push: true
+        tags: |
+          ghcr.io/${{ github.repository }}/yusi-backend:${{ github.sha }}
+          ghcr.io/${{ github.repository }}/yusi-backend:latest
+
+    - name: Build and Push Frontend Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./frontend
+        file: ./frontend/Dockerfile
+        push: true
+        tags: |
+          ghcr.io/${{ github.repository }}/yusi-frontend:${{ github.sha }}
+          ghcr.io/${{ github.repository }}/yusi-frontend:latest
+
+    - name: Build and Push MCP Image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./mcp
+        file: ./mcp/Dockerfile
+        push: true
+        tags: |
+          ghcr.io/${{ github.repository }}/yusi-mcp:${{ github.sha }}
+          ghcr.io/${{ github.repository }}/yusi-mcp:latest
+
+    # 4. 检出 GitOps 专用的配置仓库 (yusi-infra)
+    - name: Checkout Infra Repository
+      uses: actions/checkout@v4
+      with:
+        repository: Aseubel/yusi-infra
+        token: ${{ secrets.INFRA_REPO_TOKEN }} # 需要在 GitHub Secrets 中配置该 Token，赋予 yusi-infra 写权限
+        path: yusi-infra
+
+    # 5. 更新 GitOps 配置 (使用 Kustomize 替换 yusi-infra 里的镜像 Tag)
+    - name: Set up Kustomize
+      uses: imranismail/setup-kustomize@v2
+
+    - name: Update K8s Manifest Image Tag
+      run: |
+        cd yusi-infra/overlays/prod
+        kustomize edit set image yusi-backend=ghcr.io/${{ github.repository }}/yusi-backend:${{ github.sha }}
+        kustomize edit set image yusi-frontend=ghcr.io/${{ github.repository }}/yusi-frontend:${{ github.sha }}
+        kustomize edit set image yusi-mcp=ghcr.io/${{ github.repository }}/yusi-mcp:${{ github.sha }}
+
+    # 6. 提交修改并推回 GitOps 配置仓库
+    - name: Commit and Push Manifest Changes
+      run: |
+        cd yusi-infra
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git add overlays/prod/kustomization.yaml
+        git commit -m "chore(gitops): update image tags to ${{ github.sha }} [skip ci]"
+        git push origin main
+
