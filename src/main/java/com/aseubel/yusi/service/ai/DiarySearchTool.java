@@ -23,8 +23,6 @@ import io.milvus.v2.service.vector.response.SearchResp;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * 日记检索工具 - 使用 LangChain4j @Tool 注解实现 Agentic RAG
@@ -47,13 +45,16 @@ public class DiarySearchTool {
     private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
     private final UserRepository userRepository;
+    private final DiaryRetrievalAssembler retrievalAssembler;
 
     public DiarySearchTool(MilvusClientV2 milvusClientV2,
             EmbeddingModel embeddingModel,
-            UserRepository userRepository) {
+            UserRepository userRepository,
+            DiaryRetrievalAssembler retrievalAssembler) {
         this.milvusClientV2 = milvusClientV2;
         this.embeddingModel = embeddingModel;
         this.userRepository = userRepository;
+        this.retrievalAssembler = retrievalAssembler;
     }
 
     /**
@@ -135,7 +136,7 @@ public class DiarySearchTool {
                     .vectorFieldName("vector")
                     .vectors(Collections.singletonList(new FloatVec(queryEmbedding.vector())))
                     .params("{\"metric_type\": \"COSINE\"}")
-                    .limit(10) // 增加TopK以供Rerank
+                    .limit(20)
                     .filter(expr)
                     .build();
 
@@ -144,7 +145,7 @@ public class DiarySearchTool {
                     .vectorFieldName("text_sparse")
                     .vectors(Collections.singletonList(new EmbeddedText(query)))
                     .params("{\"metric_type\": \"BM25\"}")
-                    .limit(10)
+                    .limit(20)
                     .filter(expr)
                     .build();
 
@@ -153,8 +154,8 @@ public class DiarySearchTool {
                     .collectionName("yusi_embedding_collection")
                     .searchRequests(Arrays.asList(denseReq, sparseReq))
                     .ranker(RRFRanker.builder().k(60).build()) // RRF重排序，60为常用的平滑参数k
-                    .limit(5) // 最终返回Top 5
-                    .outFields(Collections.singletonList("text"))
+                    .limit(20)
+                    .outFields(Arrays.asList("text", "metadata"))
                     .build();
 
             // 4. 执行混合搜索
@@ -169,17 +170,7 @@ public class DiarySearchTool {
                 return List.of("没有找到与该主题相关的日记记录。现在请直接用你的语气回答用户的问题。");
             }
 
-            // 提取并返回结果
-            List<String> results = searchResults.get(0).stream()
-                    .map(result -> {
-                        Map<String, Object> entity = result.getEntity();
-                        String content = entity.containsKey("text") ? entity.get("text").toString() : "";
-                        double score = result.getScore();
-                        log.debug("DiarySearchTool: 匹配结果 score={}, content='{}'", score,
-                                content.substring(0, Math.min(50, content.length())));
-                        return content;
-                    })
-                    .collect(Collectors.toList());
+            List<String> results = retrievalAssembler.assemble(searchResults.get(0), 5);
 
             log.info("DiarySearchTool: 找到 {} 条匹配结果", results.size());
             return results;

@@ -13,11 +13,7 @@ import com.google.gson.JsonObject;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.vector.request.InsertReq;
 import io.milvus.v2.service.vector.request.DeleteReq;
-import dev.langchain4j.data.document.Document;
-import dev.langchain4j.data.document.DocumentSplitter;
-import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -51,7 +47,7 @@ public class EmbeddingBatchService {
     private final UserRepository userRepository;
     private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
-    private final DocumentSplitter documentSplitter;
+    private final DiaryChunker diaryChunker;
     private final DiaryService diaryService;
 
     /**
@@ -116,8 +112,7 @@ public class EmbeddingBatchService {
         }
 
         // 准备批量 Embedding 数据
-        List<TextSegment> allSegments = new ArrayList<>();
-        List<String> allIds = new ArrayList<>();
+        List<DiaryChunker.DiaryChunk> allChunks = new ArrayList<>();
         List<EmbeddingTask> successTasks = new ArrayList<>();
         List<String> toRemoveIds = new ArrayList<>();
 
@@ -147,29 +142,17 @@ public class EmbeddingBatchService {
                 continue;
             }
 
-            // 准备 Metadata
-            HashMap<String, Object> params = new HashMap<>();
-            params.put("userId", diary.getUserId());
-            if (diary.getEntryDate() != null) {
-                params.put("entryDate", diary.getEntryDate().toString());
-            }
-
-            Document doc = Document.document(text, Metadata.from(params));
-            List<TextSegment> segments = documentSplitter.split(doc);
+            List<DiaryChunker.DiaryChunk> chunks = diaryChunker.split(diary, text);
 
             // 记录需要删除的旧 embedding
             toRemoveIds.add(diary.getDiaryId());
 
-            // 为每个 segment 分配唯一 ID
-            for (int i = 0; i < segments.size(); i++) {
-                allSegments.add(segments.get(i));
-                allIds.add(diary.getDiaryId() + "_" + i);
-            }
+            allChunks.addAll(chunks);
 
             successTasks.add(task);
         }
 
-        if (allSegments.isEmpty()) {
+        if (allChunks.isEmpty()) {
             return;
         }
 
@@ -187,14 +170,17 @@ public class EmbeddingBatchService {
             }
 
             // 批量调用 Embedding API
-            List<Embedding> embeddings = embeddingModel.embedAll(allSegments).content();
+            List<Embedding> embeddings = embeddingModel.embedAll(allChunks.stream()
+                    .map(chunk -> dev.langchain4j.data.segment.TextSegment.from(chunk.text()))
+                    .toList()).content();
 
             // 批量写入 Milvus（使用 V2 客户端，避免 text_sparse 字段校验问题）
             List<JsonObject> insertData = new ArrayList<>();
-            for (int i = 0; i < allSegments.size(); i++) {
+            for (int i = 0; i < allChunks.size(); i++) {
+                DiaryChunker.DiaryChunk chunk = allChunks.get(i);
                 JsonObject row = new JsonObject();
-                row.addProperty("id", allIds.get(i));
-                row.addProperty("text", allSegments.get(i).text());
+                row.addProperty("id", chunkId(chunk));
+                row.addProperty("text", chunk.text());
 
                 JsonArray vectorArray = new JsonArray();
                 for (float v : embeddings.get(i).vector()) {
@@ -203,11 +189,14 @@ public class EmbeddingBatchService {
                 row.add("vector", vectorArray);
 
                 JsonObject metadata = new JsonObject();
-                allSegments.get(i).metadata().toMap().forEach((k, v) -> {
-                    if (v != null) {
-                        metadata.addProperty(k, v.toString());
-                    }
-                });
+                Diary diary = diaryMap.get(chunk.diaryId());
+                metadata.addProperty("userId", diary.getUserId());
+                metadata.addProperty("diaryId", chunk.diaryId());
+                metadata.addProperty("chunkIndex", chunk.index());
+                metadata.addProperty("chunkCount", chunk.count());
+                if (diary.getEntryDate() != null) {
+                    metadata.addProperty("entryDate", diary.getEntryDate().toString());
+                }
                 row.add("metadata", metadata);
 
                 insertData.add(row);
@@ -235,6 +224,10 @@ public class EmbeddingBatchService {
                         task.getId(), e.getMessage(), nextRetry, now);
             }
         }
+    }
+
+    private String chunkId(DiaryChunker.DiaryChunk chunk) {
+        return chunk.diaryId() + "_" + chunk.index();
     }
 
     /**
