@@ -1,16 +1,16 @@
 package com.aseubel.yusi.service.diary.impl;
 
-import com.aseubel.yusi.service.ai.model.SpeechModelRegistry;
+import com.aseubel.yusi.service.ai.asr.SpeechModelRegistry;
 import com.aseubel.yusi.service.diary.VoiceTranscriptionService;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
-public class ModelRoutedVoiceTranscriptionService implements VoiceTranscriptionService {
+public class VoiceDiaryTranscriptionService implements VoiceTranscriptionService {
 
     private final SpeechModelRegistry speechModelRegistry;
 
-    public ModelRoutedVoiceTranscriptionService(SpeechModelRegistry speechModelRegistry) {
+    public VoiceDiaryTranscriptionService(SpeechModelRegistry speechModelRegistry) {
         this.speechModelRegistry = speechModelRegistry;
     }
 

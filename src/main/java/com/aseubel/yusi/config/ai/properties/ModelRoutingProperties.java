@@ -50,6 +50,7 @@ public class ModelRoutingProperties {
     @Data
     public static class ModelDefinition {
         private String id;
+        private String provider;
         private String baseurl;
         private String apikey;
         private String model;

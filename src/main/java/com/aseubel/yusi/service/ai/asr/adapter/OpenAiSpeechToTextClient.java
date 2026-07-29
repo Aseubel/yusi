@@ -1,8 +1,8 @@
-package com.aseubel.yusi.service.diary.impl;
+package com.aseubel.yusi.service.ai.asr.adapter;
 
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
-import com.aseubel.yusi.service.diary.SpeechToTextClient;
-import com.aseubel.yusi.service.diary.TranscriptionResult;
+import com.aseubel.yusi.service.ai.asr.SpeechToTextClient;
+import com.aseubel.yusi.service.ai.asr.TranscriptionResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -19,15 +19,15 @@ import java.io.IOException;
 import java.time.Duration;
 
 @Slf4j
-public class OpenAiCompatibleSpeechToTextClient implements SpeechToTextClient {
+public class OpenAiSpeechToTextClient implements SpeechToTextClient {
 
     private final ModelRoutingProperties.ModelDefinition definition;
     private final ObjectMapper objectMapper;
     private final RestTemplate restTemplate;
 
-    public OpenAiCompatibleSpeechToTextClient(ModelRoutingProperties.ModelDefinition definition,
-                                              ObjectMapper objectMapper,
-                                              RestTemplateBuilder restTemplateBuilder) {
+    public OpenAiSpeechToTextClient(ModelRoutingProperties.ModelDefinition definition,
+                                    ObjectMapper objectMapper,
+                                    RestTemplateBuilder restTemplateBuilder) {
         this.definition = definition;
         this.objectMapper = objectMapper;
         int timeoutSeconds = Math.max(1, definition.getTimeoutSeconds() == null
@@ -67,12 +67,12 @@ public class OpenAiCompatibleSpeechToTextClient implements SpeechToTextClient {
             JsonNode json = objectMapper.readTree(response.getBody());
             String text = json.path("text").asText(null);
             if (text == null || text.isBlank()) {
-                throw new IllegalStateException("语音识别未返回文本");
+                throw new IllegalStateException("OpenAI ASR 未返回文本");
             }
             return new TranscriptionResult(modelId(), text.trim());
         } catch (IOException | RestClientException e) {
-            log.warn("语音识别调用失败: modelId={}", modelId(), e);
-            throw new IllegalStateException("语音识别调用失败", e);
+            log.warn("OpenAI ASR 调用失败: modelId={}", modelId(), e);
+            throw new IllegalStateException("OpenAI ASR 调用失败", e);
         }
     }
 }

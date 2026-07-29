@@ -53,6 +53,8 @@ BDI 和 Human-in-the-Loop 适合“计划 -> 工具调用 -> 等待用户确认 
 
 当前 ASR registry 按 endpoint priority 顺序执行失败转移；接入现有 ModelStateCenter 的延迟、熔断和半开探测仍是后续工作。
 
+ASR provider adapter 位于 service/ai/asr：OpenAiSpeechToTextClient 处理 OpenAI multipart HTTP，DashScopeSpeechToTextClient 使用 DashScope Java SDK 的本地文件识别 API。service/diary 只保留 VoiceTranscriptionService 这个日记用例门面。
+
 ## 约束与风险
 
 - `EmbeddingRequest` API 在 1.18 中标记为实验性，正式迁移前需要验证 DashScope/OpenAI 兼容接口的参数和返回元数据。
@@ -60,7 +62,7 @@ BDI 和 Human-in-the-Loop 适合“计划 -> 工具调用 -> 等待用户确认 
 - Agentic 流程必须把用户确认、幂等键、超时和恢复状态持久化，不能直接复用普通同步 Service 调用。
 - MCP 权限过滤必须在工具暴露前完成，避免把敏感数据访问交给提示词约束。
 - 当前 developer_config 仍保存明文 API Key，且一个用户只有一个 Key；生产化开放前应迁移为只存 hash 的多应用 Key 模型。
-- 当前语音 ASR 采用 OpenAI-compatible HTTP 适配器，部署时需显式配置 provider、模型和密钥；默认关闭。
+- 当前语音 ASR 提供 OpenAI multipart HTTP 和 DashScope Java SDK 两个 provider adapter，部署时需显式配置 provider、模型和密钥；默认关闭。
 
 ## 参考
 

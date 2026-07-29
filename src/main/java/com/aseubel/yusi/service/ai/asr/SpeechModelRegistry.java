@@ -1,9 +1,11 @@
-package com.aseubel.yusi.service.ai.model;
+package com.aseubel.yusi.service.ai.asr;
 
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
-import com.aseubel.yusi.service.diary.SpeechToTextClient;
-import com.aseubel.yusi.service.diary.TranscriptionResult;
-import com.aseubel.yusi.service.diary.impl.OpenAiCompatibleSpeechToTextClient;
+import com.aseubel.yusi.service.ai.model.ModelCapability;
+import com.aseubel.yusi.service.ai.model.ModelConfigCenter;
+import com.aseubel.yusi.service.ai.model.ModelConfigUpdatedEvent;
+import com.aseubel.yusi.service.ai.asr.adapter.DashScopeSpeechToTextClient;
+import com.aseubel.yusi.service.ai.asr.adapter.OpenAiSpeechToTextClient;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,9 +58,11 @@ public class SpeechModelRegistry {
                     || definition.getId() == null || definition.getId().isBlank()) {
                 continue;
             }
-            clients.put(definition.getId(),
-                    new OpenAiCompatibleSpeechToTextClient(definition, objectMapper, restTemplateBuilder));
-            definitions.put(definition.getId(), definition);
+            SpeechToTextClient client = createClient(definition);
+            if (client != null) {
+                clients.put(definition.getId(), client);
+                definitions.put(definition.getId(), definition);
+            }
         }
     }
 
@@ -80,9 +84,27 @@ public class SpeechModelRegistry {
         throw new IllegalStateException("所有语音识别模型均调用失败", lastFailure);
     }
 
+    private SpeechToTextClient createClient(ModelRoutingProperties.ModelDefinition definition) {
+        String provider = definition.getProvider() == null
+                ? "openai" : definition.getProvider().trim().toLowerCase();
+        return switch (provider) {
+            case "openai", "openai-compatible" ->
+                    new OpenAiSpeechToTextClient(definition, objectMapper, restTemplateBuilder);
+            case "dashscope" ->
+                    new DashScopeSpeechToTextClient(definition);
+            default -> {
+                log.warn("跳过不支持的 ASR provider: modelId={}, provider={}",
+                        definition.getId(), definition.getProvider());
+                yield null;
+            }
+        };
+    }
+
     private List<SpeechToTextClient> candidates(ModelRoutingProperties config) {
         Map<String, String> capabilityGroups = config.getCapabilityGroups();
-        String groupId = resolveGroupId(capabilityGroups);
+        String groupId = capabilityGroups == null
+                ? DEFAULT_GROUP : capabilityGroups.getOrDefault(CAPABILITY.name(),
+                capabilityGroups.getOrDefault("speech-to-text", DEFAULT_GROUP));
         ModelRoutingProperties.GroupDefinition group = config.getGroups().get(groupId);
         List<String> memberIds = group == null || group.getMembers() == null
                 ? new ArrayList<>(clients.keySet()) : group.getMembers();
@@ -93,13 +115,5 @@ public class SpeechModelRegistry {
                         definitions.get(client.modelId()).getPriority() == null
                                 ? 100 : definitions.get(client.modelId()).getPriority()))
                 .toList();
-    }
-
-    private String resolveGroupId(Map<String, String> capabilityGroups) {
-        if (capabilityGroups == null) {
-            return DEFAULT_GROUP;
-        }
-        return capabilityGroups.getOrDefault(CAPABILITY.name(),
-                capabilityGroups.getOrDefault("speech-to-text", DEFAULT_GROUP));
     }
 }

@@ -1,4 +1,4 @@
-package com.aseubel.yusi.service.diary;
+package com.aseubel.yusi.service.ai.asr;
 
 import org.springframework.web.multipart.MultipartFile;
 

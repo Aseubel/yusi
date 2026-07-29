@@ -50,9 +50,18 @@ model:
         scenes: [chat, situation-analysis, memory-extract, emotion-analysis, soul-match]
       - id: whisper-asr
         enabled: ${ASR_ENABLED:false}
+        provider: openai
         baseurl: ${ASR_BASE_URL:https://api.openai.com/v1/audio/transcriptions}
         apikey: ${ASR_API_KEY:}
         model: ${ASR_MODEL:whisper-1}
+        timeout-seconds: 120
+        capabilities: [SPEECH_TO_TEXT]
+      - id: dashscope-asr
+        enabled: ${DASHSCOPE_ASR_ENABLED:false}
+        provider: dashscope
+        baseurl: ${DASHSCOPE_ASR_BASEURL:https://dashscope.aliyuncs.com/api/v1}
+        apikey: ${DASHSCOPE_API_KEY:}
+        model: ${DASHSCOPE_ASR_MODEL:paraformer-realtime-v2}
         timeout-seconds: 120
         capabilities: [SPEECH_TO_TEXT]
     groups:
@@ -73,7 +82,7 @@ model:
         members: [qwen, deepseek]
       asr-default:
         strategy: FAIL_OVER
-        members: [whisper-asr]
+        members: [whisper-asr, dashscope-asr]
     matrix:
       zh:
         chat: 
