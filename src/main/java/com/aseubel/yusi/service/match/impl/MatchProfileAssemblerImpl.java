@@ -94,7 +94,8 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
     }
 
     @Override
-    @Transactional(readOnly = true)
+    // 画像不存在时会在当前方法内创建并持久化，不能使用只读事务。
+    @Transactional
     public MatchProfile ensureProfile(String userId) {
         return matchProfileRepository.findByUserId(userId)
                 .filter(p -> StrUtil.isNotBlank(p.getProfileText()))
