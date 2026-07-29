@@ -42,7 +42,7 @@ BDI 和 Human-in-the-Loop 适合“计划 -> 工具调用 -> 等待用户确认 
 
 ### 5. 统一模型控制面，保留能力专用客户端
 
-模型管理中心统一的是 endpoint 配置、能力声明、分组路由、密钥合并、健康状态和热更新，不要求所有模型使用同一个客户端类型。
+模型管理中心统一的是 endpoint 配置、能力声明、分组路由、密钥合并和热更新，不要求所有模型使用同一个客户端类型。
 
 - Chat/Streaming Chat 继续由 LangChain4j ChatModel / StreamingChatModel adapter 创建。
 - Speech-to-Text 由 SpeechModelRegistry 根据 SPEECH_TO_TEXT capability 创建 multipart HTTP adapter。
@@ -50,6 +50,8 @@ BDI 和 Human-in-the-Loop 适合“计划 -> 工具调用 -> 等待用户确认 
 - capability 组与 endpoint 成员独立于 Chat 场景矩阵，避免把 ASR 当作聊天模型创建或参与聊天路由。
 
 当前 bootstrap 配置已将 ASR endpoint 放入 model.routing.models，并通过 capability-groups.SPEECH_TO_TEXT 选择 asr-default。model.speech.asr 不再是运行时配置来源。
+
+当前 ASR registry 按 endpoint priority 顺序执行失败转移；接入现有 ModelStateCenter 的延迟、熔断和半开探测仍是后续工作。
 
 ## 约束与风险
 
