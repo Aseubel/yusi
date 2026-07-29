@@ -17,12 +17,6 @@ model:
     apikey: ${EMBEDDING_MODEL_APIKEY:your-siliconflow-embedding-apikey}
     model: ${EMBEDDING_MODEL_NAME:BAAI/bge-m3}
     dimension: ${EMBEDDING_MODEL_DIMENSION:1024}
-  speech:
-    asr:
-      enabled: ${ASR_ENABLED:false}
-      base-url: ${ASR_BASE_URL:https://api.openai.com/v1/audio/transcriptions}
-      api-key: ${ASR_API_KEY:}
-      model: ${ASR_MODEL:whisper-1}
   routing:
     default-language: zh
     default-scene: chat
@@ -33,11 +27,14 @@ model:
     failure-threshold: 3
     recovery-success-threshold: 2
     recovery-probe-interval-ms: 15000
+    capability-groups:
+      SPEECH_TO_TEXT: asr-default
     models:
       - id: qwen
         baseurl: ${QWEN_BASEURL:https://dashscope.aliyuncs.com/compatible-mode/v1}
         apikey: ${QWEN_APIKEY:your-qwen-apikey}
         model: ${QWEN_MODEL:qwen3.5-flash-2026-02-23}
+        capabilities: [CHAT, STREAMING_CHAT]
         weight: 100
         priority: 2
         languages: [zh, en]
@@ -46,10 +43,18 @@ model:
         baseurl: ${DEEPSEEK_BASEURL:https://api.deepseek.com}
         apikey: ${DEEPSEEK_APIKEY:your-deepseek-apikey}
         model: ${DEEPSEEK_MODEL:deepseek-v4-flash}
+        capabilities: [CHAT, STREAMING_CHAT]
         weight: 0
         priority: 1
         languages: [zh, en]
         scenes: [chat, situation-analysis, memory-extract, emotion-analysis, soul-match]
+      - id: whisper-asr
+        enabled: ${ASR_ENABLED:false}
+        baseurl: ${ASR_BASE_URL:https://api.openai.com/v1/audio/transcriptions}
+        apikey: ${ASR_API_KEY:}
+        model: ${ASR_MODEL:whisper-1}
+        timeout-seconds: 120
+        capabilities: [SPEECH_TO_TEXT]
     groups:
       chat-zh:
         strategy: FAIL_OVER
@@ -66,6 +71,9 @@ model:
       match-zh:
         strategy: FAIL_OVER
         members: [qwen, deepseek]
+      asr-default:
+        strategy: FAIL_OVER
+        members: [whisper-asr]
     matrix:
       zh:
         chat: 

@@ -40,6 +40,17 @@ BDI 和 Human-in-the-Loop 适合“计划 -> 工具调用 -> 等待用户确认 
 | 后续 | 在明确的确认型流程中试点 Human-in-the-Loop/Agentic 编排 | 待评估 |
 | 后续 | 从单用户单 Key 演进为多应用 Key，并补齐工具级安装授权、配额与调用审计 | 待评估 |
 
+### 5. 统一模型控制面，保留能力专用客户端
+
+模型管理中心统一的是 endpoint 配置、能力声明、分组路由、密钥合并、健康状态和热更新，不要求所有模型使用同一个客户端类型。
+
+- Chat/Streaming Chat 继续由 LangChain4j ChatModel / StreamingChatModel adapter 创建。
+- Speech-to-Text 由 SpeechModelRegistry 根据 SPEECH_TO_TEXT capability 创建 multipart HTTP adapter。
+- Embedding 后续迁移到同一 endpoint 配置契约，但保留 EmbeddingModel 专用 adapter。
+- capability 组与 endpoint 成员独立于 Chat 场景矩阵，避免把 ASR 当作聊天模型创建或参与聊天路由。
+
+当前 bootstrap 配置已将 ASR endpoint 放入 model.routing.models，并通过 capability-groups.SPEECH_TO_TEXT 选择 asr-default。model.speech.asr 不再是运行时配置来源。
+
 ## 约束与风险
 
 - `EmbeddingRequest` API 在 1.18 中标记为实验性，正式迁移前需要验证 DashScope/OpenAI 兼容接口的参数和返回元数据。

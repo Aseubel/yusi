@@ -142,6 +142,8 @@ LangChain4j 1.18 已提供几个适合 Yusi 后续演进的官方 API：
 
 4. **MCP 权限隔离**：现有 `McpToolProvider` 已接入 `AiServices`。后续平台化时应按用户会话创建经过权限过滤的 `ToolProvider`，把“只读记忆 / 写入日记 / 匹配查询”作为工具集合边界，而不是在每个工具内部重复判断权限。
 
+5. **统一模型控制面、能力专用客户端**：模型管理中心负责 endpoint、capability、路由、密钥和热更新；Chat、Embedding、Speech-to-Text 分别由专用 adapter 创建。ASR 使用 multipart HTTP 协议，不能直接复用 `ChatModel`，但可以复用同一套 endpoint 配置和故障转移边界。
+
 上述建议均属于后续架构演进，不改变本次升级的现有业务行为。
 
 ---

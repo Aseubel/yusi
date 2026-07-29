@@ -2,6 +2,7 @@ package com.aseubel.yusi.config.ai.properties;
 
 import com.aseubel.yusi.redis.common.RedisKey;
 import com.aseubel.yusi.service.ai.model.ModelSelectionStrategyType;
+import com.aseubel.yusi.service.ai.model.ModelCapability;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -44,12 +45,15 @@ public class ModelRoutingProperties {
 
     private Map<String, Map<String, SceneDefinition>> matrix = new HashMap<>();
 
+    private Map<String, String> capabilityGroups = new HashMap<>();
+
     @Data
     public static class ModelDefinition {
         private String id;
         private String baseurl;
         private String apikey;
         private String model;
+        private List<ModelCapability> capabilities = new ArrayList<>();
         private Integer weight = 100;
         private Integer priority = 100;
         private List<String> languages = new ArrayList<>();
@@ -59,6 +63,13 @@ public class ModelRoutingProperties {
          * 请求超时时间（秒），默认60秒
          */
         private Integer timeoutSeconds = 60;
+
+        public boolean supports(ModelCapability capability) {
+            if (capabilities == null || capabilities.isEmpty()) {
+                return capability == ModelCapability.CHAT || capability == ModelCapability.STREAMING_CHAT;
+            }
+            return capabilities.contains(capability);
+        }
     }
 
     @Data

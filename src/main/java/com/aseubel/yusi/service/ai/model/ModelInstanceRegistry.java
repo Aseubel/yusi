@@ -48,6 +48,10 @@ public class ModelInstanceRegistry {
             if (!definition.isEnabled() || definition.getId() == null || definition.getId().isBlank()) {
                 continue;
             }
+            if (!definition.supports(ModelCapability.CHAT)
+                    && !definition.supports(ModelCapability.STREAMING_CHAT)) {
+                continue;
+            }
             Duration timeout = Duration.ofSeconds(
                     definition.getTimeoutSeconds() != null ? definition.getTimeoutSeconds() : 60);
             OpenAiChatModel chatModel = OpenAiChatModel.builder()

@@ -142,6 +142,29 @@ public class ModelConfigCenter {
                 }
             });
         });
+        if (config.getCapabilityGroups() != null) {
+            config.getCapabilityGroups().forEach((capabilityName, groupName) -> {
+                ModelCapability capability;
+                try {
+                    capability = ModelCapability.valueOf(capabilityName.toUpperCase(Locale.ROOT)
+                            .replace('-', '_'));
+                } catch (Exception e) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR,
+                            "不支持的模型 capability: " + capabilityName);
+                }
+                ModelRoutingProperties.GroupDefinition group = config.getGroups().get(groupName);
+                if (group == null || group.getMembers() == null || group.getMembers().isEmpty()) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR,
+                            "capability[" + capabilityName + "] 引用了不存在或为空的分组: " + groupName);
+                }
+                group.getMembers().forEach(member -> config.getModels().stream()
+                        .filter(model -> Objects.equals(model.getId(), member))
+                        .findFirst()
+                        .filter(model -> model.supports(capability))
+                        .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_ERROR,
+                                "capability[" + capabilityName + "] 的成员不支持该能力: " + member)));
+            });
+        }
         if (config.getMatrix() != null) {
             config.getMatrix().forEach((lang, sceneMap) -> {
                 if (sceneMap == null) {
