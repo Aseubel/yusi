@@ -16,6 +16,12 @@ model:
     apikey: ${EMBEDDING_MODEL_APIKEY}
     model: ${EMBEDDING_MODEL_NAME}
     dimension: ${EMBEDDING_MODEL_DIMENSION:1024}
+  speech:
+    asr:
+      enabled: ${ASR_ENABLED:false}
+      base-url: ${ASR_BASE_URL:https://api.openai.com/v1/audio/transcriptions}
+      api-key: ${ASR_API_KEY:}
+      model: ${ASR_MODEL:whisper-1}
   routing:
     default-language: zh
     default-scene: chat

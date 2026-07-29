@@ -30,6 +30,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Collections;
 
 @Slf4j
 @Service
@@ -294,11 +295,22 @@ public class DiaryServiceImpl implements DiaryService {
         }
         eventPublisher.publishEvent(new DiaryChangedEvent(this, diary, type));
 
-        if (StrUtil.isBlank(plainContent)) {
+        List<String> imageObjectKeys = Collections.emptyList();
+        if (StrUtil.isNotBlank(diary.getImages())) {
+            try {
+                imageObjectKeys = JSONUtil.toList(diary.getImages(), String.class);
+            } catch (RuntimeException e) {
+                log.warn("日记图片字段不是有效 JSON，跳过图片认知: diaryId={}", diary.getDiaryId());
+            }
+        }
+        if (StrUtil.isBlank(plainContent) && imageObjectKeys.isEmpty()) {
             return;
         }
-        MaskResult maskResult = sensitiveDataMaskService.mask(plainContent);
+        MaskResult maskResult = sensitiveDataMaskService.mask(StrUtil.blankToDefault(plainContent, ""));
         String maskedText = maskResult != null ? maskResult.getMaskedText() : null;
+        if (StrUtil.isBlank(maskedText) && !imageObjectKeys.isEmpty()) {
+            maskedText = "日记包含图片，请结合图片理解。";
+        }
         if (StrUtil.isBlank(maskedText)) {
             return;
         }
@@ -311,6 +323,7 @@ public class DiaryServiceImpl implements DiaryService {
                 .placeName(diary.getPlaceName())
                 .timestamp(diary.getUpdateTime())
                 .confidenceHint(1.0)
+                .imageObjectKeys(imageObjectKeys)
                 .build()));
     }
 }

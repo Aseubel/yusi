@@ -37,6 +37,8 @@ public class OssService {
 
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of(
             "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp");
+    private static final List<String> ALLOWED_AUDIO_TYPES = List.of(
+            "audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav", "audio/ogg", "audio/webm");
 
     private static final String CHUNK_UPLOAD_KEY_PREFIX = "yusi:chunk:";
     private static final String MD5_CACHE_KEY_PREFIX = "yusi:md5:";
@@ -100,6 +102,36 @@ public class OssService {
         return objectKeys;
     }
 
+    public String uploadAudio(MultipartFile file, String userId) {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "音频文件不能为空");
+        }
+        if (file.getSize() > ossProperties.getMaxFileSize()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "音频文件超过大小限制");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_AUDIO_TYPES.contains(contentType.toLowerCase())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的音频格式");
+        }
+
+        String extension = getFileExtension(file.getOriginalFilename());
+        String objectKey = ossProperties.getAudioFolder() + userId + "/"
+                + UuidUtils.genUuidSimple() + extension;
+        try {
+            PutObjectRequest request = PutObjectRequest.newBuilder()
+                    .bucket(ossProperties.getBucketName())
+                    .key(objectKey)
+                    .body(BinaryData.fromBytes(file.getBytes()))
+                    .contentType(contentType)
+                    .build();
+            ossClient.putObject(request);
+            return objectKey;
+        } catch (IOException e) {
+            log.error("Failed to upload audio: {}", objectKey, e);
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "音频上传失败");
+        }
+    }
+
     public String generatePresignedUrl(String objectKey) {
         return generatePresignedUrl(objectKey, ossProperties.getUrlExpireSeconds());
     }
@@ -124,13 +156,17 @@ public class OssService {
     }
 
     public void deleteImage(String objectKey) {
+        deleteObject(objectKey);
+    }
+
+    public void deleteObject(String objectKey) {
         DeleteObjectRequest request = DeleteObjectRequest.newBuilder()
                 .bucket(ossProperties.getBucketName())
                 .key(objectKey)
                 .build();
 
         ossClient.deleteObject(request);
-        log.info("Image deleted: {}", objectKey);
+        log.info("Object deleted: {}", objectKey);
     }
 
     public void deleteImages(List<String> objectKeys) {

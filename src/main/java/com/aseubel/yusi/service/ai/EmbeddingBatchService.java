@@ -14,7 +14,6 @@ import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.vector.request.InsertReq;
 import io.milvus.v2.service.vector.request.DeleteReq;
 import dev.langchain4j.data.embedding.Embedding;
-import dev.langchain4j.model.embedding.EmbeddingModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -46,7 +45,7 @@ public class EmbeddingBatchService {
     private final DiaryRepository diaryRepository;
     private final UserRepository userRepository;
     private final MilvusClientV2 milvusClientV2;
-    private final EmbeddingModel embeddingModel;
+    private final EmbeddingGateway embeddingGateway;
     private final DiaryChunker diaryChunker;
     private final DiaryService diaryService;
 
@@ -170,9 +169,10 @@ public class EmbeddingBatchService {
             }
 
             // 批量调用 Embedding API
-            List<Embedding> embeddings = embeddingModel.embedAll(allChunks.stream()
+            EmbeddingGateway.EmbeddingBatchResult embeddingResult = embeddingGateway.embedAll(allChunks.stream()
                     .map(chunk -> dev.langchain4j.data.segment.TextSegment.from(chunk.text()))
-                    .toList()).content();
+                    .toList());
+            List<Embedding> embeddings = embeddingResult.embeddings();
 
             // 批量写入 Milvus（使用 V2 客户端，避免 text_sparse 字段校验问题）
             List<JsonObject> insertData = new ArrayList<>();
@@ -213,7 +213,9 @@ public class EmbeddingBatchService {
                 taskRepository.markAsCompleted(task.getId(), now);
             }
 
-            log.info("批量写入 {} 个 Embedding 完成，涉及 {} 个任务", embeddings.size(), successTasks.size());
+            log.info("批量写入 {} 个 Embedding 完成，涉及 {} 个任务，模型={}，维度={}，输入Token={}，耗时={}ms",
+                    embeddings.size(), successTasks.size(), embeddingResult.modelName(),
+                    embeddingResult.dimension(), embeddingResult.inputTokenCount(), embeddingResult.latencyMillis());
 
         } catch (Exception e) {
             log.error("批量处理 UPSERT 任务失败", e);

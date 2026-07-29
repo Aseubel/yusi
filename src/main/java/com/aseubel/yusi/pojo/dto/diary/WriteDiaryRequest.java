@@ -57,6 +57,8 @@ public class WriteDiaryRequest implements Serializable {
      */
     private String images;
 
+    private String audioObjectKey;
+
     public Diary toDiary() {
         return Diary.builder()
                 .userId(userId)
@@ -72,6 +74,7 @@ public class WriteDiaryRequest implements Serializable {
                 .placeName(placeName)
                 .placeId(placeId)
                 .images(images)
+                .audioObjectKey(audioObjectKey)
                 .build();
     }
 }

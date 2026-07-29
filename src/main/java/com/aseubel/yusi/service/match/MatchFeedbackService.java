@@ -9,7 +9,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 匹配反馈服务。
@@ -31,6 +30,21 @@ public class MatchFeedbackService {
     @Transactional
     public void recordFeedback(Long matchId, String userId, String action) {
         recordFeedback(matchId, userId, action, null);
+    }
+
+    /** 记录匹配后的互动深度。 */
+    @Transactional
+    public void recordInteraction(Long matchId, String userId, int interactionDepth) {
+        if (interactionDepth < 0) {
+            return;
+        }
+        recordFeedback(matchId, userId, "INTERACT", interactionDepth);
+    }
+
+    /** 记录举报信号，供后续精排排除高风险匹配。 */
+    @Transactional
+    public void recordReport(Long matchId, String userId) {
+        recordFeedback(matchId, userId, "REPORT");
     }
 
     /**
@@ -57,7 +71,6 @@ public class MatchFeedbackService {
      * 构建用户匹配偏好摘要，供精排 prompt 使用。
      * 返回 null 表示无足够反馈数据。
      */
-    // TODO Phase 3 (F11.3): 提取被接受匹配的 reason 关键词，构建更细粒度的偏好画像；在精排时排除与 REPORT 候选人类似的用户
     public String buildPreferenceContext(String userId) {
         List<MatchFeedback> recentFeedback = feedbackRepository.findTop20ByUserIdOrderByCreatedAtDesc(userId);
         if (recentFeedback.isEmpty()) {
@@ -67,14 +80,23 @@ public class MatchFeedbackService {
         long acceptCount = recentFeedback.stream().filter(f -> "ACCEPT".equals(f.getAction())).count();
         long skipCount = recentFeedback.stream().filter(f -> "SKIP".equals(f.getAction())).count();
         long reportCount = recentFeedback.stream().filter(f -> "REPORT".equals(f.getAction())).count();
+        int interactionDepth = recentFeedback.stream()
+                .filter(f -> "INTERACT".equals(f.getAction()))
+                .map(MatchFeedback::getInteractionDepth)
+                .filter(java.util.Objects::nonNull)
+                .mapToInt(Integer::intValue)
+                .sum();
 
-        // 提取被接受的 match 的 reason 中的常见关键词
+        // 聚合行为信号，作为精排上下文的轻量偏好摘要
         StringBuilder ctx = new StringBuilder();
         ctx.append("用户历史匹配偏好（最近").append(recentFeedback.size()).append("次）：");
         ctx.append("接受").append(acceptCount).append("次，");
         ctx.append("跳过").append(skipCount).append("次");
         if (reportCount > 0) {
             ctx.append("，举报").append(reportCount).append("次（请严格避免类似匹配）");
+        }
+        if (interactionDepth > 0) {
+            ctx.append("，累计互动").append(interactionDepth).append("条消息");
         }
         ctx.append("。");
 

@@ -3,11 +3,19 @@ package com.aseubel.yusi.service.match;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.pojo.dto.match.MatchRerankResult;
 import com.aseubel.yusi.pojo.entity.MatchProfile;
+import com.aseubel.yusi.pojo.entity.SituationScenario;
+import com.aseubel.yusi.repository.SituationScenarioRepository;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 匹配后引导服务。
@@ -18,7 +26,11 @@ import java.util.List;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class ConnectionGuideService {
+
+    private static final Pattern LATIN_TOKEN = Pattern.compile("[\\p{IsAlphabetic}\\p{IsDigit}]{2,}");
+    private final SituationScenarioRepository scenarioRepository;
 
     /**
      * 基于匹配精排结果和双方画像，生成破冰话题列表。
@@ -64,7 +76,7 @@ public class ConnectionGuideService {
         if (StrUtil.isNotBlank(personaA) && StrUtil.isNotBlank(personaB)
                 && !"稳定偏好信息较少。".equals(personaA)
                 && !"稳定偏好信息较少。".equals(personaB)) {
-            // TODO Phase 4: 使用 embedding 语义相似度替代硬编码关键词匹配，覆盖更广泛的共同兴趣
+            // 后续演进：使用 embedding 语义相似度替代硬编码关键词匹配，覆盖更广泛的共同兴趣
             // 寻找可能共同的关键词
             String[] interestKeywords = {"摄影", "旅行", "电影", "音乐", "阅读", "写作", "运动", "美食",
                     "哲学", "心理学", "艺术", "科技", "自然", "猫", "狗", "独处"};
@@ -91,15 +103,59 @@ public class ConnectionGuideService {
      * 生成情景室推荐信息。若双方画像信息不足以推荐，返回 null。
      */
     public String suggestScenario(MatchProfile profileA, MatchProfile profileB) {
-        // TODO Phase 3 (F9.3): 接入 ScenarioRepository，基于双方画像做智能情景匹配，替代当前固定文案
         String midA = profileA != null ? StrUtil.blankToDefault(profileA.getMidMemorySummary(), "") : "";
         String midB = profileB != null ? StrUtil.blankToDefault(profileB.getMidMemorySummary(), "") : "";
 
         if (StrUtil.isNotBlank(midA) && StrUtil.isNotBlank(midB)
                 && !"近期状态信息较少。".equals(midA)
                 && !"近期状态信息较少。".equals(midB)) {
+            SituationScenario matchedScenario = scenarioRepository
+                    .findByStatusGreaterThanEqual(SituationScenario.STATUS_AI_APPROVED)
+                    .stream()
+                    .map(scenario -> new ScoredScenario(scenario,
+                            score(scenario.getContentString(), midA),
+                            score(scenario.getContentString(), midB)))
+                    .filter(candidate -> candidate.scoreA() > 0 && candidate.scoreB() > 0)
+                    .max(Comparator.comparingInt(ScoredScenario::totalScore))
+                    .map(ScoredScenario::scenario)
+                    .orElse(null);
+
+            if (matchedScenario != null) {
+                return matchedScenario.getTitle() + "：" + matchedScenario.getDescription();
+            }
             return "推荐开启一个情景室，让场景引导你们自然地互相了解";
         }
         return null;
+    }
+
+    private int score(String scenarioText, String profileText) {
+        Set<String> scenarioTokens = tokens(scenarioText);
+        Set<String> profileTokens = tokens(profileText);
+        scenarioTokens.retainAll(profileTokens);
+        return scenarioTokens.size();
+    }
+
+    private Set<String> tokens(String text) {
+        Set<String> tokens = new HashSet<>();
+        if (StrUtil.isBlank(text)) {
+            return tokens;
+        }
+
+        Matcher matcher = LATIN_TOKEN.matcher(text.toLowerCase());
+        while (matcher.find()) {
+            tokens.add(matcher.group());
+        }
+
+        String hanText = text.replaceAll("[^\\p{IsHan}]", "");
+        for (int i = 0; i + 1 < hanText.length(); i++) {
+            tokens.add(hanText.substring(i, i + 2));
+        }
+        return tokens;
+    }
+
+    private record ScoredScenario(SituationScenario scenario, int scoreA, int scoreB) {
+        private int totalScore() {
+            return scoreA + scoreB;
+        }
     }
 }

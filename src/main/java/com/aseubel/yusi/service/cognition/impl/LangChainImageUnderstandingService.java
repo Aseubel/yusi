@@ -1,0 +1,51 @@
+package com.aseubel.yusi.service.cognition.impl;
+
+import com.aseubel.yusi.service.cognition.ImageUnderstandingService;
+import com.aseubel.yusi.service.oss.OssService;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.Content;
+import dev.langchain4j.data.message.ImageContent;
+import dev.langchain4j.data.message.TextContent;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.chat.ChatModel;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class LangChainImageUnderstandingService implements ImageUnderstandingService {
+
+    private final ChatModel chatModel;
+    private final OssService ossService;
+
+    @Override
+    public String describe(List<String> imageObjectKeys) {
+        if (imageObjectKeys == null || imageObjectKeys.isEmpty()) {
+            return null;
+        }
+        try {
+            List<Content> contents = new ArrayList<>();
+            contents.add(TextContent.from("请描述这些图片中与日记相关的客观场景、人物活动和情绪氛围。"
+                    + "不要猜测身份，不要输出隐私信息，只返回一段简洁中文描述。"));
+            for (String objectKey : imageObjectKeys) {
+                if (objectKey != null && !objectKey.isBlank()) {
+                    contents.add(ImageContent.from(URI.create(ossService.generatePresignedUrl(objectKey))));
+                }
+            }
+            if (contents.size() == 1) {
+                return null;
+            }
+            AiMessage message = chatModel.chat(UserMessage.from(contents)).aiMessage();
+            return message == null ? null : message.text();
+        } catch (Exception e) {
+            log.warn("图片认知理解失败，继续文本认知链路: {}", e.getMessage());
+            return null;
+        }
+    }
+}

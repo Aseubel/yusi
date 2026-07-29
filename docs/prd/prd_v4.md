@@ -161,7 +161,7 @@ Agent 人格 = 基础人格（系统定义）+ 用户适配层（随互动演化
 |:---|:---|:---|:---|
 | **F9.1** | 匹配后引导 | ✅ 已实现：ConnectionGuideService 生成破冰话题 + 情景推荐 | P0 |
 | **F9.2** | 共鸣信号 | ✅ 已实现：ResonanceSignal 实体 + API + 双向共鸣检测 | P1 |
-| **F9.3** | 情景室匹配入口 | 匹配成功的双方可一键创建私人情景室，通过结构化情景破冰 | P1 |
+| **F9.3** | 情景室匹配入口 | ✅ 已实现：从已审核情景中按双方画像共同 token 推荐情景 | P1 |
 | **F9.4** | 群体共鸣发现 | Agent 从广场中发现"正在经历相似阶段"的 3-5 人小群体，提供匿名小群连接 | P2 |
 | **F9.5** | 匹配反馈循环 | ✅ 已实现：MatchFeedback 记录 + 精排偏好上下文注入 | P0 |
 
@@ -206,20 +206,20 @@ Agent 人格 = 基础人格（系统定义）+ 用户适配层（随互动演化
 
 | ID | 功能特性 | 描述 | 优先级 |
 |:---|:---|:---|:---|
-| **F10.1** | 语音日记 | 用户可通过语音输入日记，Agent 转写后理解并存入认知层 | P1 |
-| **F10.2** | 图片日记 | 日记支持附加图片，Agent 理解图片内容并纳入认知 | P1 |
+| **F10.1** | 语音日记 | ✅ 已实现：前端录音 + OSS 保留 + OpenAI-compatible ASR 转写，转写结果进入普通日记认知链路 | P1 |
+| **F10.2** | 图片日记 | ✅ 已实现：图片 OSS 关联 + LangChain4j 多模态描述，描述进入认知链路，原图不进入精排上下文 | P1 |
 | **F10.3** | 语音对话 | AI 对话支持语音输入/输出（ASR + TTS），降低输入门槛 | P2 |
 
 #### F10.1 语音日记 — 设计要点
 
-- 前端录音 → 上传至 OSS → 调用 ASR（如 FunASR，已有文档）→ 转写文本
+- 前端录音 → 上传至 OSS → 调用可配置的 OpenAI-compatible ASR → 转写文本
 - 转写文本进入正常日记写入链路（加密 + 认知摄取）
 - 语音原文件保留，支持回听
 
 #### F10.2 图片日记 — 设计要点
 
-- 图片上传至 OSS，日记关联图片 URL
-- 在认知摄取阶段，调用多模态模型（如 Qwen-VL）理解图片内容
+- 图片上传至 OSS，日记关联图片 object key，并在查询响应中转换为 URL
+- 在认知摄取阶段，通过 LangChain4j ChatModel 调用多模态模型理解图片内容
 - 图片理解结果（场景描述、情绪氛围）作为附加上下文进入 lifeGraph / mid-memory
 - 注意隐私：图片内容理解后原始图片不参与 LLM 精排
 
@@ -268,10 +268,10 @@ Agent 人格 = 基础人格（系统定义）+ 用户适配层（随互动演化
 
 | ID | 功能特性 | 描述 | 优先级 |
 |:---|:---|:---|:---|
-| **F12.1** | 开发者注册与 API Key 管理 | 提供开发者门户，支持注册、创建应用、管理 API Key | P1 |
+| **F12.1** | 开发者注册与 API Key 管理 | ✅ 已实现当前边界：用户设置页生成/吊销单用户 API Key，并管理 capability scopes；多应用注册后续实现 | P1 |
 | **F12.2** | MCP 工具市场 | 允许开发者提交自定义 MCP 工具（如第三方分析、可视化），用户可选择安装 | P2 |
 | **F12.3** | 使用配额与计费 | API 调用配额管理，防止滥用 | P2 |
-| **F12.4** | MCP 工具权限控制 | 用户可控制哪些外部 MCP 工具可访问自己的数据、访问哪些维度的数据 | P1 |
+| **F12.4** | MCP 工具权限控制 | ✅ 已实现：Go MCP Server 透传 API Key，Java gRPC 内部能力边界校验 MEMORY_READ scope | P1 |
 
 #### F12.1 API Key 管理 — 设计要点
 
@@ -318,7 +318,7 @@ Agent 人格 = 基础人格（系统定义）+ 用户适配层（随互动演化
 | `DiaryController` 事件发布 | 确保所有事件在 Service 层发布 | 遵循架构分层原则（v3 重构指南中提出但需复查） |
 | `EmotionPlaza` 认知接入 | 新建 `EmotionPlazaCognitionIngestService` | 事件已定义但缺少专门的 ingest 服务 |
 | `MidMemoryUpdateService` | 从内存维护升级为 DB 持久化 | 对应 F11.1 |
-| Prompt 模板管理 | 统一管理所有 Prompt，支持版本化和 A/B 测试 | 当前 Prompt 散落在 Assistant 接口和代码中 |
+| Prompt 模板管理 | 统一管理所有 Prompt，支持版本化和 A/B 测试 | ✅ 已实现：PromptManager 统一加载资源模板 |
 
 ### 3.4 不做的大重构
 
@@ -378,28 +378,30 @@ Agent 的主动性不能变成骚扰。
 1. ✅ **F9.1 匹配后引导** — ConnectionGuideService 生成破冰话题 + MatchRecommendationResponse 新增 iceBreakers/suggestedScenario
 2. ✅ **F9.5 匹配反馈循环** — MatchFeedback 实体 + MatchFeedbackService + 精排 prompt 注入偏好上下文
 3. ✅ **F9.2 共鸣信号** — ResonanceSignal 实体 + API（发送/接收/未读/已读）+ 双向共鸣检测
-4. **F9.3 情景室匹配入口**（P1，移至 Phase 3）
+4. ✅ **F9.3 情景室匹配入口** — ConnectionGuideService 从已审核情景中按双方画像共同 token 推荐
 
 **Phase 2 交付物**：匹配不再是"推荐-接受-聊天"的线性流程，而是有引导、有反馈的闭环
 
-### Phase 3: 认知进化 — 预计 2-3 周
+### Phase 3: 认知进化 — ✅ 已完成
 
 1. ✅ **F8.3 周期性回顾**（P0）
 2. ✅ **F11.3 认知冲突检测**（P1）
 3. ✅ **F11.4 跨源记忆融合**（P1）
 4. ✅ **F8.5 Agent 成长可见化**（P1）
-5. 重构 `EmotionPlazaCognitionIngestService`
+5. ✅ **F9.3 情景室匹配入口** — 已审核情景库 + 双方画像相关性评分
+6. ✅ **匹配反馈扩展** — MatchFeedbackService 提供 INTERACT/REPORT 记录入口并纳入互动深度摘要
+7. ✅ **Prompt 模板统一管理** — PromptManager 统一加载资源模板
 
 **Phase 3 交付物**：Agent 的"理解深度"可被用户感知
 
-### Phase 4: 平台与多模态 — 预计 3-4 周
+### Phase 4: 平台与多模态 — ✅ 已完成
 
-1. **F10.1 语音日记**（P1）
-2. **F10.2 图片日记**（P1）
-3. **F12.1 开发者注册与 API Key 管理**（P1）
-4. **F12.4 MCP 工具权限控制**（P1）
+1. ✅ **F10.1 语音日记**（P1）
+2. ✅ **F10.2 图片日记**（P1）
+3. ✅ **F12.1 开发者 API Key 管理**（P1，当前为单用户单 Key + scopes）
+4. ✅ **F12.4 MCP 工具权限控制**（P1，Java gRPC 边界鉴权）
 
-**Phase 4 交付物**：输入模态扩展 + MCP 平台化起步
+**Phase 4 交付物**：输入模态扩展 + MCP 平台化起步，已完成。多应用开发者门户、工具市场和配额计费仍属于后续阶段。
 
 ### Phase 5: 深度特性 — 按需
 
@@ -420,7 +422,7 @@ Agent 的主动性不能变成骚扰。
 | `getMatchStatus().nextMatchTime` 写死"每日凌晨 2:00" | `MatchServiceImpl.java:689` | ✅ 已修复 |
 | `EmotionPlazaCognitionIngestService` 缺失 | `SoulPlazaServiceImpl.java` | ✅ 无需新建（事件发布已内联在 publishEmotionPlazaEvent） |
 | `runDailyMatching()` 方法名过时 | `MatchServiceImpl.java:82` | ✅ 已重命名为 runWeeklyMatching |
-| Prompt 散落各处 | `MatchAssistant.java` 等 | 🔧 后续重构（Phase 3 统一迁移至 PromptManager） |
+| Prompt 散落各处 | `PromptManager` | ✅ 已统一加载资源模板 |
 
 ---
 
@@ -456,6 +458,7 @@ v4.0 完成后应满足：
 - [开发哲学与产品理念](../design/philosophy.md)
 - [后端详细设计](../design/backend-design.md)
 - [前端详细设计](../design/frontend-design.md)
+- [LangChain4j 1.18 架构演进记录](../record/langchain4j-1.18-architecture-evolution.md)
 - [统一 Agent 认知架构与匹配重构](./perf_match_0413.md)
 
 ---

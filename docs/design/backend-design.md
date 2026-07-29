@@ -12,7 +12,7 @@
 | 关系存储 | MySQL + ShardingSphere 5.5.0 | 分库分表，支持高并发写入 |
 | 缓存层 | Redis + Redisson 3.26.0 | 分布式限流、热点数据缓存 |
 | 向量存储 | Milvus | 语义检索、记忆向量存储 |
-| AI 框架 | LangChain4j 1.12.2 | 统一 AI 模型集成 |
+| AI 框架 | LangChain4j 1.18.0 / Community 1.18.0-beta28 | 统一 AI 模型、Agent、RAG 与 MCP 集成 |
 | 事件驱动 | Disruptor 4.0.0 | 高性能异步事件处理 |
 | 通信协议 | gRPC + MCP | 跨语言服务调用、模型上下文协议 |
 
@@ -95,9 +95,9 @@ flowchart LR
     end
 
     subgraph YusiBackend["Yusi 后端 (Java)"]
-        gRPC["gRPC Client"]
-        DiaryService["DiaryService"]
-        MemoryService["MemoryService"]
+        gRPC["Java gRPC Server"]
+        DiaryService["内部 Diary 能力"]
+        MemoryService["内部 Memory 能力"]
     end
 
     subgraph Storage["存储"]
@@ -110,14 +110,39 @@ flowchart LR
     Tools --> Search
     Tools --> DiarySearch
     Tools --> MemorySearch
-    DiarySearch -->|gRPC| gRPC
-    MemorySearch -->|gRPC| gRPC
+    DiarySearch -->|gRPC request| gRPC
+    MemorySearch -->|gRPC request| gRPC
     gRPC --> DiaryService
     gRPC --> MemoryService
     DiaryService --> MySQL
-    MemoryService --> Milvus
-    MemoryService --> MySQL
+MemoryService --> Milvus
+MemoryService --> MySQL
 ```
+
+### 1.4 LangChain4j 1.18 适配建议
+
+本次升级先保持现有 `ChatModel`、`StreamingChatModel`、`AiServices` 和 `ToolProvider` 边界，避免把依赖升级与业务重构绑定。具体决策与后续落地顺序见 [LangChain4j 1.18 架构演进记录](../record/langchain4j-1.18-architecture-evolution.md)。
+
+LangChain4j 1.18 已提供几个适合 Yusi 后续演进的官方 API：
+
+1. **统一 Embedding 请求边界**：官方 `EmbeddingModel` 新增实验性的 `embed(EmbeddingRequest)`，返回包含响应元数据的 `EmbeddingResponse`。建议将 `EmbeddingBatchService` 和动态模型路由逐步收敛到 request/response API，把模型名、维度、耗时和 token 使用量作为可观测元数据保存；现有 `embed(String)` 作为兼容过渡。
+
+   ```java
+   EmbeddingResponse response = embeddingModel.embed(
+           EmbeddingRequest.builder().texts(chunks).build());
+   ```
+
+2. **多模态认知摄取**：AI Service 已支持 `Content`、`ImageContent` 和 `AudioContent` 参数。建议将日记摄取抽象为 `CognitionInput`，由文本、图片理解结果和 ASR 转写共同生成统一事件，再进入现有 `AgentCognitionOrchestrator`；原始图片和音频继续留在 OSS，不进入精排上下文。
+
+   ```java
+   String result = assistant.chat(text, ImageContent.from(imageUrl));
+   ```
+
+3. **Agentic 编排的边界**：1.18 引入 BDI agentic pattern 和可暂停/恢复的 Human-in-the-Loop。建议只把需要计划、工具调用和用户确认的流程迁移到 Agentic 层，例如“记忆删除确认”或“匹配后情景室创建”；普通聊天、认知路由和定时周报继续使用现有 Spring Service，避免让持久化事务依赖长生命周期 Agent execution。
+
+4. **MCP 权限隔离**：现有 `McpToolProvider` 已接入 `AiServices`。后续平台化时应按用户会话创建经过权限过滤的 `ToolProvider`，把“只读记忆 / 写入日记 / 匹配查询”作为工具集合边界，而不是在每个工具内部重复判断权限。
+
+上述建议均属于后续架构演进，不改变本次升级的现有业务行为。
 
 ---
 

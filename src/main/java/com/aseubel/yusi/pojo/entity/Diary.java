@@ -15,6 +15,7 @@ import org.hibernate.annotations.DynamicUpdate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -127,6 +128,14 @@ public class Diary {
      */
     @Column(name = "images", columnDefinition = "TEXT")
     private String images;
+
+    /** 原始 OSS object keys，仅用于编辑态回写，不落库。 */
+    @Transient
+    private List<String> imageObjectKeys;
+
+    /** 原始语音日记在 OSS 中的 object key。 */
+    @Column(name = "audio_object_key", length = 512)
+    private String audioObjectKey;
 
     public String generateId() {
         this.diaryId = UuidUtils.genUuidSimple();

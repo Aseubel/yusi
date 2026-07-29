@@ -8,10 +8,7 @@ import com.aseubel.yusi.repository.EmbeddingTaskRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.diary.DiaryService;
 import com.google.gson.JsonObject;
-import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.output.Response;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.vector.request.InsertReq;
 import org.junit.jupiter.api.Test;
@@ -42,7 +39,7 @@ class EmbeddingBatchServiceTest {
     @Mock
     private MilvusClientV2 milvusClientV2;
     @Mock
-    private EmbeddingModel embeddingModel;
+    private EmbeddingGateway embeddingGateway;
     @Mock
     private DiaryChunker diaryChunker;
     @Mock
@@ -51,7 +48,7 @@ class EmbeddingBatchServiceTest {
     @Test
     void processPendingTasks_writesDiaryChunkMetadataAndContextualText() {
         EmbeddingBatchService service = new EmbeddingBatchService(taskRepository, diaryRepository, userRepository,
-                milvusClientV2, embeddingModel, diaryChunker, diaryService);
+                milvusClientV2, embeddingGateway, diaryChunker, diaryService);
         EmbeddingTask task = EmbeddingTask.createUpsertTask("diary-1", "user-1");
         task.setId(1L);
         Diary diary = Diary.builder().diaryId("diary-1").userId("user-1")
@@ -66,8 +63,10 @@ class EmbeddingBatchServiceTest {
         when(diaryRepository.findByDiaryId("diary-1")).thenReturn(diary);
         when(userRepository.findByUserId("user-1")).thenReturn(User.builder().keyMode("DEFAULT").build());
         when(diaryChunker.split(diary, diary.getPlainContent())).thenReturn(chunks);
-        when(embeddingModel.embedAll(any())).thenReturn(Response.from(List.of(
-                Embedding.from(new float[] { 0.1f }), Embedding.from(new float[] { 0.2f }))));
+        when(embeddingGateway.embedAll(any())).thenReturn(new EmbeddingGateway.EmbeddingBatchResult(
+                List.of(dev.langchain4j.data.embedding.Embedding.from(new float[] { 0.1f }),
+                        dev.langchain4j.data.embedding.Embedding.from(new float[] { 0.2f })),
+                "bge-m3", 12, 2, 1, 1));
 
         service.processPendingTasks();
 

@@ -5,8 +5,6 @@ import lombok.Data;
 import java.util.List;
 
 @Data
-public class DeveloperConfigVO {
-    private String apiKey;
+public class DeveloperScopeUpdateRequest {
     private List<String> scopes;
-    private boolean active;
 }

@@ -21,6 +21,8 @@ public class OssProperties {
 
     private String imageFolder = "images/";
 
+    private String audioFolder = "audio/";
+
     private String accessKeyId;
 
     private String accessKeySecret;

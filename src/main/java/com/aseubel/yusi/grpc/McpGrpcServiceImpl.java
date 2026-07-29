@@ -11,9 +11,8 @@ import com.aseubel.yusi.grpc.mcp.SearchMemoryRequest;
 import com.aseubel.yusi.grpc.mcp.SearchMemoryResponse;
 import com.aseubel.yusi.grpc.mcp.MemoryResult;
 import com.aseubel.yusi.pojo.entity.Diary;
-import com.aseubel.yusi.repository.DeveloperConfigRepository;
 import com.aseubel.yusi.repository.DiaryExtensionRepository;
-import com.aseubel.yusi.pojo.entity.DeveloperConfig;
+import com.aseubel.yusi.service.developer.DeveloperConfigService;
 import com.aseubel.yusi.service.diary.DiaryService;
 import com.aseubel.yusi.service.ai.MemorySearchTool;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
@@ -40,25 +39,16 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
     private final DiaryService diaryService;
     private final DiaryExtensionRepository diaryExtensionRepository;
     private final MemorySearchTool memorySearchTool;
-    private final DeveloperConfigRepository developerConfigRepository;
+    private final DeveloperConfigService developerConfigService;
     private final ChatMemoryMessageRepository chatMemoryMessageRepository;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
-    private String getUserIdByApiKey(String apiKey) {
-        if (StrUtil.isBlank(apiKey)) {
-            return null;
-        }
-        return developerConfigRepository.findByApiKey(apiKey)
-                .map(DeveloperConfig::getUserId)
-                .orElse(null);
-    }
 
     @Override
     public void searchDiary(SearchDiaryRequest request, StreamObserver<SearchDiaryResponse> responseObserver) {
         try {
             String apiKey = request.getApiKey();
-            String userId = getUserIdByApiKey(apiKey);
+            String userId = developerConfigService.authorize(apiKey, "MEMORY_READ");
             if (userId == null) {
                 throw new IllegalArgumentException("Invalid API Key");
             }
@@ -125,7 +115,7 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
     public void searchMemory(SearchMemoryRequest request, StreamObserver<SearchMemoryResponse> responseObserver) {
         try {
             String apiKey = request.getApiKey();
-            String userId = getUserIdByApiKey(apiKey);
+            String userId = developerConfigService.authorize(apiKey, "MEMORY_READ");
             if (userId == null) {
                 throw new IllegalArgumentException("Invalid API Key");
             }

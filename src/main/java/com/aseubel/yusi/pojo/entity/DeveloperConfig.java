@@ -22,6 +22,12 @@ public class DeveloperConfig {
     @Column(name = "api_key", unique = true)
     private String apiKey;
 
+    @Column(name = "scopes", length = 512)
+    private String scopes;
+
+    @Column(name = "revoked_at")
+    private LocalDateTime revokedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
