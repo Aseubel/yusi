@@ -9,6 +9,13 @@ import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.request.ChatRequestParameters;
 import dev.langchain4j.model.chat.response.ChatResponse;
+import dev.langchain4j.model.chat.response.CompleteToolCall;
+import dev.langchain4j.model.chat.response.PartialResponse;
+import dev.langchain4j.model.chat.response.PartialResponseContext;
+import dev.langchain4j.model.chat.response.PartialThinking;
+import dev.langchain4j.model.chat.response.PartialThinkingContext;
+import dev.langchain4j.model.chat.response.PartialToolCall;
+import dev.langchain4j.model.chat.response.PartialToolCallContext;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
 import dev.langchain4j.model.openai.OpenAiChatRequestParameters.Builder;
@@ -260,6 +267,46 @@ public class ModelProxyFactory {
                 @Override
                 public void onPartialResponse(String partialResponse) {
                     original.onPartialResponse(maskService.unmask(mapping, partialResponse));
+                }
+
+                @Override
+                public void onPartialResponse(PartialResponse partialResponse,
+                        PartialResponseContext context) {
+                    PartialResponse unmasked = new PartialResponse(
+                            maskService.unmask(mapping, partialResponse.text()));
+                    original.onPartialResponse(unmasked, context);
+                }
+
+                @Override
+                public void onPartialThinking(PartialThinking partialThinking) {
+                    original.onPartialThinking(partialThinking);
+                }
+
+                @Override
+                public void onPartialThinking(PartialThinking partialThinking,
+                        PartialThinkingContext context) {
+                    original.onPartialThinking(partialThinking, context);
+                }
+
+                @Override
+                public void onPartialToolCall(PartialToolCall partialToolCall) {
+                    original.onPartialToolCall(partialToolCall);
+                }
+
+                @Override
+                public void onPartialToolCall(PartialToolCall partialToolCall,
+                        PartialToolCallContext context) {
+                    original.onPartialToolCall(partialToolCall, context);
+                }
+
+                @Override
+                public void onCompleteToolCall(CompleteToolCall completeToolCall) {
+                    original.onCompleteToolCall(completeToolCall);
+                }
+
+                @Override
+                public void onUnmappedRawEvent(Object event) {
+                    original.onUnmappedRawEvent(event);
                 }
 
                 @Override

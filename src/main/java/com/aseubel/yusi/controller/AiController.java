@@ -16,6 +16,7 @@ import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.config.ai.PersistentChatMemoryStore;
 import com.aseubel.yusi.pojo.dto.agent.AgentPersonaConfigRequest;
 import com.aseubel.yusi.pojo.dto.agent.AgentGrowthResponse;
+import com.aseubel.yusi.pojo.dto.chat.ChatCancelRequest;
 import com.aseubel.yusi.pojo.dto.chat.ChatRequest;
 import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
@@ -26,6 +27,7 @@ import com.aseubel.yusi.pojo.entity.CognitiveConflict;
 import com.aseubel.yusi.service.agent.AgentPersonaConfigService;
 import com.aseubel.yusi.service.agent.AgentGrowthService;
 import com.aseubel.yusi.service.ai.AiLockService;
+import com.aseubel.yusi.service.ai.ChatStreamCancellationRegistry;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
 import com.aseubel.yusi.service.cognition.MidMemoryFusionService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
@@ -115,6 +117,9 @@ public class AiController {
 
     @Autowired
     private IRedisService redisService;
+
+    @Autowired
+    private ChatStreamCancellationRegistry chatStreamCancellationRegistry;
 
     @Auth
     @GetMapping("/chat/history")
@@ -206,8 +211,13 @@ public class AiController {
     public SseEmitter chatStream(@RequestBody ChatRequest request,
             @RequestHeader(value = "Accept-Language", required = false) String language) {
         String userId = UserContext.getUserId();
+        String requestId = request.getRequestId();
         String message = request.getMessage();
         List<String> images = request.getImages();
+
+        if (StrUtil.isBlank(requestId)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "requestId不能为空");
+        }
 
         if (images != null && images.size() > 3) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "图片数量不能超过3张");
@@ -218,19 +228,49 @@ public class AiController {
         }
 
         SseEmitter emitter = new SseEmitter(180000L);
+        ChatStreamCancellationRegistry.ChatStreamSession session;
+        try {
+            session = chatStreamCancellationRegistry.register(userId, requestId, emitter, () -> {
+                UserContext.clear();
+                ModelRouteContextHolder.clear();
+                aiLockService.releaseLock(userId);
+            });
+        } catch (RuntimeException exception) {
+            aiLockService.releaseLock(userId);
+            throw exception;
+        }
 
-        threadPoolExecutor.execute(() -> {
+        emitter.onCompletion(session::cancel);
+        emitter.onTimeout(session::cancel);
+        emitter.onError(error -> session.cancel());
+
+        try {
+            threadPoolExecutor.execute(() -> {
             try {
-                String violationMessage = sensitiveWordUtils.checkAndHandleViolation(userId, message);
-                if (violationMessage != null) {
-                    emitter.send(SseEmitter.event().data(violationMessage));
-                    emitter.complete();
+                if (!session.isActive()) {
                     return;
                 }
+
+                String violationMessage = sensitiveWordUtils.checkAndHandleViolation(userId, message);
+                if (violationMessage != null) {
+                    if (session.isActive()) {
+                        emitter.send(SseEmitter.event().data(violationMessage));
+                        session.complete();
+                    }
+                    return;
+                }
+                if (!session.isActive()) {
+                    return;
+                }
+
                 // 构建三明治模板内容，用于强调systemprompt
                 String sandwichContent = String.format(PersistentChatMemoryStore.SANDWITCH_TEMPLATE, message);
                 // 构建图片内容列表
                 List<ImageContent> imageContents = buildImageContents(images);
+                if (!session.isActive()) {
+                    return;
+                }
+
                 // 设置模型路由上下文
                 ModelRouteContextHolder.set(ModelRouteContext.builder()
                         .language(ModelUtils.normalizeLanguage(language))
@@ -238,41 +278,65 @@ public class AiController {
                         .build());
 
                 TokenStream tokenStream = diaryAssistant.chatWithMessage(userId, sandwichContent, imageContents);
+                if (!session.isActive()) {
+                    return;
+                }
+
                 tokenStream
-                        .onPartialResponse(token -> {
+                        .onPartialResponseWithContext((partialResponse, context) -> {
+                            if (context != null) {
+                                session.bind(context.streamingHandle());
+                            }
+                            if (!session.isActive()) {
+                                return;
+                            }
                             try {
-                                emitter.send(SseEmitter.event().data(token));
-                            } catch (IOException e) {
-                                emitter.completeWithError(e);
+                                emitter.send(SseEmitter.event().data(partialResponse.text()));
+                            } catch (IOException | IllegalStateException e) {
+                                session.fail(e);
+                            }
+                        })
+                        .onPartialThinkingWithContext((partialThinking, context) -> {
+                            if (context != null) {
+                                session.bind(context.streamingHandle());
+                            }
+                        })
+                        .onPartialToolCallWithContext((partialToolCall, context) -> {
+                            if (context != null) {
+                                session.bind(context.streamingHandle());
                             }
                         })
                         .onCompleteResponse(response -> {
-                            UserContext.clear();
-                            ModelRouteContextHolder.clear();
-                            aiLockService.releaseLock(userId);
-                            emitter.complete();
+                            session.complete();
                         })
                         .onError(error -> {
-                            UserContext.clear();
-                            ModelRouteContextHolder.clear();
-                            aiLockService.releaseLock(userId);
-                            emitter.completeWithError(error);
+                            session.fail(error);
                         })
                         .start();
             } catch (Exception e) {
                 log.error("Error during AI chat stream", e);
+                session.fail(e);
+            } finally {
                 UserContext.clear();
                 ModelRouteContextHolder.clear();
-                aiLockService.releaseLock(userId);
-                emitter.completeWithError(e);
             }
-        });
-
-        emitter.onCompletion(() -> aiLockService.releaseLock(userId));
-        emitter.onTimeout(() -> aiLockService.releaseLock(userId));
-        emitter.onError(e -> aiLockService.releaseLock(userId));
+            });
+        } catch (RuntimeException exception) {
+            session.fail(exception);
+            throw exception;
+        }
 
         return emitter;
+    }
+
+    @Auth
+    @PostMapping("/chat/cancel")
+    public Response<Void> cancelChat(@RequestBody ChatCancelRequest request) {
+        if (request == null || StrUtil.isBlank(request.getRequestId())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "requestId不能为空");
+        }
+        chatStreamCancellationRegistry.cancel(UserContext.getUserId(), request.getRequestId());
+        return Response.success();
     }
 
     private List<ImageContent> buildImageContents(List<String> images) {
