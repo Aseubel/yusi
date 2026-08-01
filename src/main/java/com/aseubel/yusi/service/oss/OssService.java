@@ -38,7 +38,8 @@ public class OssService {
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of(
             "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp");
     private static final List<String> ALLOWED_AUDIO_TYPES = List.of(
-            "audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav", "audio/ogg", "audio/webm");
+            "audio/mpeg", "audio/mp3", "audio/mpga", "audio/mp4", "audio/x-m4a",
+            "audio/wav", "audio/x-wav", "audio/ogg", "audio/webm", "video/webm");
 
     private static final String CHUNK_UPLOAD_KEY_PREFIX = "yusi:chunk:";
     private static final String MD5_CACHE_KEY_PREFIX = "yusi:md5:";
@@ -110,11 +111,17 @@ public class OssService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "音频文件超过大小限制");
         }
         String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_AUDIO_TYPES.contains(contentType.toLowerCase())) {
+        String normalizedContentType = contentType == null ? "" : contentType.toLowerCase(Locale.ROOT)
+                .split(";", 2)[0].trim();
+        String extension = getFileExtension(file.getOriginalFilename()).toLowerCase(Locale.ROOT);
+        boolean supportedByType = ALLOWED_AUDIO_TYPES.contains(normalizedContentType);
+        boolean supportedByExtension = (contentType == null || contentType.isBlank()
+                || "application/octet-stream".equals(normalizedContentType))
+                && List.of("mp3", "mpga", "m4a", "mp4", "wav", "ogg", "webm", "aac", "amr").contains(extension);
+        if (!supportedByType && !supportedByExtension) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的音频格式");
         }
 
-        String extension = getFileExtension(file.getOriginalFilename());
         String objectKey = ossProperties.getAudioFolder() + userId + "/"
                 + UuidUtils.genUuidSimple() + extension;
         try {
