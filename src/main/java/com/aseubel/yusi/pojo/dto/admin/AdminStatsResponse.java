@@ -11,4 +11,7 @@ public class AdminStatsResponse {
     private long pendingScenarios;
     private long totalRooms;
     private long pendingSuggestions;
+    private long activeUsersToday;
+    private long activeUsers7d;
+    private long activeUsers30d;
 }

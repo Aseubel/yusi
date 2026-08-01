@@ -13,6 +13,7 @@ import com.aseubel.yusi.repository.SituationRoomRepository;
 import com.aseubel.yusi.repository.SituationScenarioRepository;
 import com.aseubel.yusi.repository.SuggestionRepository;
 import com.aseubel.yusi.repository.UserRepository;
+import com.aseubel.yusi.repository.InterfaceDailyUsageRepository;
 import com.aseubel.yusi.service.user.AdminService;
 import com.aseubel.yusi.service.user.TokenService;
 import com.aseubel.yusi.redis.service.IRedisService;
@@ -27,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.time.LocalDate;
 
 @Slf4j
 @Service
@@ -38,6 +40,7 @@ public class AdminServiceImpl implements AdminService {
     private final SituationRoomRepository situationRoomRepository;
     private final SituationScenarioRepository situationScenarioRepository;
     private final SuggestionRepository suggestionRepository;
+    private final InterfaceDailyUsageRepository interfaceDailyUsageRepository;
     private final JdbcTemplate jdbcTemplate;
     private final TokenService tokenService;
     private final IRedisService redissonService;
@@ -45,12 +48,16 @@ public class AdminServiceImpl implements AdminService {
 
     @Override
     public AdminStatsResponse getStats() {
+        LocalDate today = LocalDate.now();
         return AdminStatsResponse.builder()
                 .totalUsers(userRepository.count())
                 .totalDiaries(diaryRepository.count())
                 .totalRooms(situationRoomRepository.count())
                 .pendingScenarios(situationScenarioRepository.findByStatus(0).size())
                 .pendingSuggestions(suggestionRepository.countByStatus("PENDING"))
+                .activeUsersToday(interfaceDailyUsageRepository.countDistinctUsersByUsageDateBetween(today, today))
+                .activeUsers7d(interfaceDailyUsageRepository.countDistinctUsersByUsageDateBetween(today.minusDays(6), today))
+                .activeUsers30d(interfaceDailyUsageRepository.countDistinctUsersByUsageDateBetween(today.minusDays(29), today))
                 .build();
     }
 

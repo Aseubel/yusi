@@ -26,6 +26,11 @@ public interface InterfaceDailyUsageRepository extends JpaRepository<InterfaceDa
             """, nativeQuery = true)
     void upsertUsage(String userId, String ip, String interfaceName, LocalDate usageDate, Long requestCount);
 
+    @Query(value = "SELECT COUNT(DISTINCT user_id) FROM interface_daily_usage "
+            + "WHERE user_id IS NOT NULL AND user_id <> 'anonymous' "
+            + "AND usage_date BETWEEN ?1 AND ?2", nativeQuery = true)
+    long countDistinctUsersByUsageDateBetween(LocalDate startDate, LocalDate endDate);
+
     /**
      * 批量插入或更新接口使用记录
      * 注意：由于 Spring Data JPA 原生SQL不支持模板语法，这里使用循环调用单条方法
