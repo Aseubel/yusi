@@ -5,7 +5,7 @@ import cn.hutool.json.JSONUtil;
 import com.aseubel.yusi.common.event.MessageSavedEvent;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
-import com.aseubel.yusi.service.ai.ContextBuilderService;
+import com.aseubel.yusi.service.ai.chat.ContextBuilderService;
 import com.aseubel.yusi.redis.service.IRedisService;
 import dev.langchain4j.data.message.*;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;

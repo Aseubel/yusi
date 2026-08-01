@@ -1,6 +1,6 @@
 package com.aseubel.yusi.service.room;
 
-import com.aseubel.yusi.pojo.contant.RoomStatus;
+import com.aseubel.yusi.pojo.constant.RoomStatus;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
 import com.aseubel.yusi.repository.SituationRoomRepository;
 import lombok.RequiredArgsConstructor;

@@ -4,7 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.*;
 import com.aseubel.yusi.repository.*;
-import com.aseubel.yusi.service.ai.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.aseubel.yusi.service.user.UserService;

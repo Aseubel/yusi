@@ -9,7 +9,7 @@ import com.aseubel.yusi.pojo.dto.prompt.PromptResponse;
 import com.aseubel.yusi.pojo.dto.prompt.PromptSaveRequest;
 import com.aseubel.yusi.pojo.dto.prompt.PromptUpdateRequest;
 import com.aseubel.yusi.pojo.entity.PromptTemplate;
-import com.aseubel.yusi.service.ai.PromptService;
+import com.aseubel.yusi.service.ai.prompt.PromptService;
 import com.aseubel.yusi.service.user.UserService;
 import org.springframework.data.domain.Page;
 import org.springframework.beans.factory.annotation.Autowired;

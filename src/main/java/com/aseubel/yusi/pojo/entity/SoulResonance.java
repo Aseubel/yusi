@@ -1,6 +1,6 @@
 package com.aseubel.yusi.pojo.entity;
 
-import com.aseubel.yusi.pojo.contant.ResonanceType;
+import com.aseubel.yusi.pojo.constant.ResonanceType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

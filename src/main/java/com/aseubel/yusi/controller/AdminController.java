@@ -16,7 +16,7 @@ import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
 import com.aseubel.yusi.pojo.entity.Suggestion;
 import com.aseubel.yusi.pojo.entity.User;
-import com.aseubel.yusi.service.ai.EmbeddingBatchService;
+import com.aseubel.yusi.service.ai.embedding.EmbeddingBatchService;
 import com.aseubel.yusi.service.suggestion.SuggestionService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;

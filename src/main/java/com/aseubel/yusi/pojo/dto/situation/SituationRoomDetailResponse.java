@@ -1,6 +1,6 @@
 package com.aseubel.yusi.pojo.dto.situation;
 
-import com.aseubel.yusi.pojo.contant.RoomStatus;
+import com.aseubel.yusi.pojo.constant.RoomStatus;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

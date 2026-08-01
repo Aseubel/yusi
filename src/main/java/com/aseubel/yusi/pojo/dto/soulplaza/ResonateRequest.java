@@ -1,6 +1,6 @@
 package com.aseubel.yusi.pojo.dto.soulplaza;
 
-import com.aseubel.yusi.pojo.contant.ResonanceType;
+import com.aseubel.yusi.pojo.constant.ResonanceType;
 import lombok.Data;
 
 /**

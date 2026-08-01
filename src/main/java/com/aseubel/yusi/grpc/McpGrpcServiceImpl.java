@@ -14,7 +14,7 @@ import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.DiaryExtensionRepository;
 import com.aseubel.yusi.service.developer.DeveloperConfigService;
 import com.aseubel.yusi.service.diary.DiaryService;
-import com.aseubel.yusi.service.ai.MemorySearchTool;
+import com.aseubel.yusi.service.ai.tool.MemorySearchTool;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;

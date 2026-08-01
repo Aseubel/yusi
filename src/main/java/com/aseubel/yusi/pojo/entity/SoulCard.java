@@ -1,6 +1,6 @@
 package com.aseubel.yusi.pojo.entity;
 
-import com.aseubel.yusi.pojo.contant.CardType;
+import com.aseubel.yusi.pojo.constant.CardType;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

@@ -20,7 +20,7 @@ import com.aseubel.yusi.service.match.ConnectionGuideService;
 import com.aseubel.yusi.service.match.MatchFeedbackService;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
 import com.aseubel.yusi.service.match.MatchService;
-import com.aseubel.yusi.service.ai.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.AiMessage;

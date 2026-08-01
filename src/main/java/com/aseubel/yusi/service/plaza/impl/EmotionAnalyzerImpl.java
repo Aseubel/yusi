@@ -1,7 +1,7 @@
 package com.aseubel.yusi.service.plaza.impl;
 
 import com.aseubel.yusi.common.constant.PromptKey;
-import com.aseubel.yusi.service.ai.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;

@@ -5,7 +5,7 @@ import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
-import com.aseubel.yusi.service.ai.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -7,7 +7,7 @@ import com.aseubel.yusi.common.exception.AuthenticationException;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.utils.UuidUtils;
-import com.aseubel.yusi.pojo.contant.RoomStatus;
+import com.aseubel.yusi.pojo.constant.RoomStatus;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.dto.situation.SituationRoomDetailResponse;
 import com.aseubel.yusi.pojo.entity.SituationRoom;

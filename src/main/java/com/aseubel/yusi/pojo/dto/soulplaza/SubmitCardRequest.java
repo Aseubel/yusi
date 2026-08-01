@@ -1,6 +1,6 @@
 package com.aseubel.yusi.pojo.dto.soulplaza;
 
-import com.aseubel.yusi.pojo.contant.CardType;
+import com.aseubel.yusi.pojo.constant.CardType;
 import lombok.Data;
 
 /**

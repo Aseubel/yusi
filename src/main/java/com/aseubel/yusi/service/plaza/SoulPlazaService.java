@@ -1,7 +1,7 @@
 package com.aseubel.yusi.service.plaza;
 
-import com.aseubel.yusi.pojo.contant.CardType;
-import com.aseubel.yusi.pojo.contant.ResonanceType;
+import com.aseubel.yusi.pojo.constant.CardType;
+import com.aseubel.yusi.pojo.constant.ResonanceType;
 import com.aseubel.yusi.pojo.entity.SoulCard;
 import com.aseubel.yusi.pojo.entity.SoulResonance;
 import org.springframework.data.domain.Page;

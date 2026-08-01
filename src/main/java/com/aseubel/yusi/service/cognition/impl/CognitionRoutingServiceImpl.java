@@ -4,7 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
 import com.aseubel.yusi.pojo.dto.cognition.CognitionRoutingResult;
-import com.aseubel.yusi.service.ai.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.cognition.CognitionRoutingService;

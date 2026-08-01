@@ -9,7 +9,7 @@ import com.aseubel.yusi.repository.AgentPersonaConfigRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.repository.UserNotificationRepository;
 import com.aseubel.yusi.common.constant.PromptKey;
-import com.aseubel.yusi.service.ai.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.agent.AgentProactiveService;
 import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.user.UserService;

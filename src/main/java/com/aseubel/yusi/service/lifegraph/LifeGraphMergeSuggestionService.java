@@ -9,7 +9,7 @@ import com.aseubel.yusi.repository.LifeGraphEntityRepository;
 import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphMergeJudgmentRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
-import com.aseubel.yusi.service.ai.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphAssistant;
 import com.aseubel.yusi.service.lifegraph.dto.LifeGraphMergeSuggestion;
 import com.aseubel.yusi.service.notification.NotificationService;

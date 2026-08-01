@@ -5,7 +5,7 @@ import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.CognitiveConflict;
 import com.aseubel.yusi.pojo.entity.UserPersona;
 import com.aseubel.yusi.repository.CognitiveConflictRepository;
-import com.aseubel.yusi.service.ai.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

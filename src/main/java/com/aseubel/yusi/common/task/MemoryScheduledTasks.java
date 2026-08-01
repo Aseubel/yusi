@@ -2,7 +2,7 @@ package com.aseubel.yusi.common.task;
 
 import com.aseubel.yusi.config.MemoryConfigProperties;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
-import com.aseubel.yusi.service.ai.MemoryCompressionService;
+import com.aseubel.yusi.service.memory.MemoryCompressionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;

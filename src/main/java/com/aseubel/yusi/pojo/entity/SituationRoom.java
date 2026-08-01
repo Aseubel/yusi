@@ -2,7 +2,7 @@ package com.aseubel.yusi.pojo.entity;
 
 import com.aseubel.yusi.config.jpa.SituationConverters;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
-import com.aseubel.yusi.pojo.contant.RoomStatus;
+import com.aseubel.yusi.pojo.constant.RoomStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

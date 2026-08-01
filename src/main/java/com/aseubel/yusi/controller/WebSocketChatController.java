@@ -3,7 +3,7 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.BusinessException;
-import com.aseubel.yusi.pojo.contant.RoomStatus;
+import com.aseubel.yusi.pojo.constant.RoomStatus;
 import com.aseubel.yusi.pojo.dto.chat.RoomChatRequest;
 import com.aseubel.yusi.pojo.entity.RoomMessage;
 import com.aseubel.yusi.pojo.entity.SituationRoom;

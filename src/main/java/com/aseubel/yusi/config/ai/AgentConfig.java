@@ -1,10 +1,10 @@
 package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.common.constant.PromptKey;
-import com.aseubel.yusi.service.ai.MemorySearchTool;
-import com.aseubel.yusi.service.ai.UserPersonaTool;
-import com.aseubel.yusi.service.ai.MemoryCompressionAssistant;
-import com.aseubel.yusi.service.ai.PromptManager;
+import com.aseubel.yusi.service.ai.tool.MemorySearchTool;
+import com.aseubel.yusi.service.ai.tool.UserPersonaTool;
+import com.aseubel.yusi.service.memory.MemoryCompressionAssistant;
+import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.room.SituationRoomAgent;
