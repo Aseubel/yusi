@@ -6,6 +6,7 @@ import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
 import com.aseubel.yusi.service.memory.MidMemoryUpdateService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +19,7 @@ public class MidMemoryUpdateServiceImpl implements MidMemoryUpdateService {
 
     private final MidTermMemoryRepository midTermMemoryRepository;
     private final CognitiveConflictDetector conflictDetector;
+    private final ThreadPoolTaskExecutor threadPoolExecutor;
 
     @Override
     @Transactional
@@ -51,6 +53,6 @@ public class MidMemoryUpdateServiceImpl implements MidMemoryUpdateService {
                 .build());
 
         // F11.3: 异步检测新洞察是否与已有认知冲突
-        CompletableFuture.runAsync(() -> conflictDetector.checkAndRecord(userId, summary));
+        CompletableFuture.runAsync(() -> conflictDetector.checkAndRecord(userId, summary), threadPoolExecutor);
     }
 }

@@ -10,7 +10,47 @@ permissions:
   packages: write # 允许向 GHCR 推送和创建容器镜像
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        submodules: recursive
+        token: ${{ secrets.YUSI_REPO_TOKEN }}
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+        cache: 'maven'
+
+    - name: Run backend tests
+      run: ./mvnw test
+
+    - name: Set up pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 11.9.0
+        run_install: false
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: pnpm
+        cache-dependency-path: frontend/pnpm-lock.yaml
+
+    - name: Run frontend tests and type check
+      working-directory: frontend
+      run: |
+        pnpm install --frozen-lockfile
+        pnpm test
+        pnpm exec tsc -b
+
   build-and-deploy:
+    needs: verify
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Code
@@ -101,4 +141,3 @@ jobs:
         git add overlays/prod/kustomization.yaml
         git commit -m "chore(gitops): update image tags to ${{ github.sha }} [skip ci]"
         git push origin main
-

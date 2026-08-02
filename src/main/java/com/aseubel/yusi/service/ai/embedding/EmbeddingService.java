@@ -38,7 +38,7 @@ public class EmbeddingService {
     /**
      * 异步监听日记变更事件，创建相应的 Embedding 任务
      */
-    @Async
+    @Async("threadPoolExecutor")
     @EventListener
     @Transactional
     public void onDiaryChanged(DiaryChangedEvent event) {

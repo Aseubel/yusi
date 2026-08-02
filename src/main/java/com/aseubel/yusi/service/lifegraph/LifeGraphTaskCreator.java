@@ -24,7 +24,7 @@ public class LifeGraphTaskCreator {
     private final LifeGraphTaskBatchService batchService;
     private final ThreadPoolTaskExecutor threadPoolExecutor;
 
-    @Async
+    @Async("threadPoolExecutor")
     @EventListener
     @Transactional
     public void onDiaryChanged(DiaryChangedEvent event) {

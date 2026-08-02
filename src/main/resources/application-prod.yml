@@ -135,7 +135,7 @@ thread:
       config:
         core-pool-size: 20
         max-pool-size: 200
-        keep-alive-time: 60
+        keep-alive-seconds: 60
         block-queue-size: 500
         policy: CallerRunsPolicy
 

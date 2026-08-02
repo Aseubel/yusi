@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 public class EmbeddingBatchService {
 
     private final EmbeddingTaskRepository taskRepository;
+    private final EmbeddingTaskClaimService taskClaimService;
     private final DiaryRepository diaryRepository;
     private final UserRepository userRepository;
     private final MilvusClientV2 milvusClientV2;
@@ -60,23 +61,18 @@ public class EmbeddingBatchService {
      * 每秒执行一次，将多个日记变更打包成批处理
      */
     @Scheduled(fixedDelay = 1000)
-    @Transactional
     public void processPendingTasks() {
         LocalDateTime now = LocalDateTime.now();
 
-        // 1. 获取待处理任务（带悲观锁）
-        List<EmbeddingTask> tasks = taskRepository.findPendingTasksForUpdate(now, BATCH_SIZE);
+        // 1. 在短事务内获取并抢占任务
+        List<EmbeddingTask> tasks = taskClaimService.claimPendingTasks(now, BATCH_SIZE);
         if (tasks.isEmpty()) {
             return;
         }
 
         log.info("开始处理 {} 个 Embedding 任务", tasks.size());
 
-        // 2. 批量标记为处理中
-        List<Long> taskIds = tasks.stream().map(EmbeddingTask::getId).collect(Collectors.toList());
-        taskRepository.markAsProcessing(taskIds, now);
-
-        // 3. 分组处理：UPSERT 和 DELETE 分开处理
+        // 2. 分组处理：UPSERT 和 DELETE 分开处理。外部调用不在数据库事务内。
         Map<EmbeddingTask.TaskType, List<EmbeddingTask>> grouped = tasks.stream()
                 .collect(Collectors.groupingBy(EmbeddingTask::getTaskType));
 

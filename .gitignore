@@ -37,3 +37,4 @@ build/
 
 *.log
 prod_secrets.txt
+.codegraph/daemon.pid

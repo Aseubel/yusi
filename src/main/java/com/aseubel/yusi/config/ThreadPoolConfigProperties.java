@@ -11,8 +11,8 @@ public class ThreadPoolConfigProperties {
     private Integer corePoolSize = 20;
     /** 最大线程数 */
     private Integer maxPoolSize = 200;
-    /** 最大等待时间 */
-    private Integer keepAliveTime = 10;
+    /** 非核心线程空闲保活时间（秒） */
+    private Integer keepAliveSeconds = 60;
     /** 最大队列数 */
     private Integer blockQueueSize = 5000;
     /*

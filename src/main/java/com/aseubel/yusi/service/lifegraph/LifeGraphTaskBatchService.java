@@ -17,7 +17,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -25,6 +24,7 @@ import java.util.stream.Collectors;
 public class LifeGraphTaskBatchService {
 
     private final LifeGraphTaskRepository taskRepository;
+    private final LifeGraphTaskClaimService taskClaimService;
     private final DiaryRepository diaryRepository;
     private final UserRepository userRepository;
     private final CryptoService cryptoService;
@@ -33,16 +33,12 @@ public class LifeGraphTaskBatchService {
     private static final int BATCH_SIZE = 10;
 
     @Scheduled(fixedDelay = 2000)
-    @Transactional
     public void processPendingTasks() {
         LocalDateTime now = LocalDateTime.now();
-        List<LifeGraphTask> tasks = taskRepository.findPendingTasksForUpdate(now, BATCH_SIZE);
+        List<LifeGraphTask> tasks = taskClaimService.claimPendingTasks(now, BATCH_SIZE);
         if (tasks.isEmpty()) {
             return;
         }
-
-        List<Long> taskIds = tasks.stream().map(LifeGraphTask::getId).collect(Collectors.toList());
-        taskRepository.markAsProcessing(taskIds, now);
 
         for (LifeGraphTask task : tasks) {
             try {

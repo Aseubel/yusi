@@ -23,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import org.redisson.api.RLock;
 import org.springframework.stereotype.Service;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -49,6 +50,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     private final SituationReportService reportService;
 
     private final IRedisService redisService;
+    private final ThreadPoolTaskExecutor threadPoolExecutor;
 
     private static final String REPORT_LOCK_PREFIX = "room:report:lock:";
 
@@ -158,7 +160,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
                 } catch (Exception e) {
                     log.error("Async analysis failed for room: {}", code, e);
                 }
-            });
+            }, threadPoolExecutor);
             return room;
         }
         return roomRepository.save(room);

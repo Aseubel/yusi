@@ -405,7 +405,7 @@ public class OssService {
         redisTemplate.delete(CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":uploadId");
     }
 
-    @Async
+    @Async("threadPoolExecutor")
     public void saveImageFileAsync(String objectKey, String fileMd5, String userId, String fileName,
             Long fileSize, String contentType) {
         try {

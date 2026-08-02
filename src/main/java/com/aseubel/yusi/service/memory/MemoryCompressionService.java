@@ -95,7 +95,7 @@ public class MemoryCompressionService {
      * 监听 {@link MessageSavedEvent}，在 AI 回复所在事务提交后异步触发压缩检查
      * 使用 AFTER_COMMIT 确保消费方能读取到已提交的消息数据
      */
-    @Async
+    @Async("threadPoolExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onMessageSaved(MessageSavedEvent event) {
         log.debug("Received MessageSavedEvent for memoryId: {}", event.getMemoryId());

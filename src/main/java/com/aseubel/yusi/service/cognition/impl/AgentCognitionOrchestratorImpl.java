@@ -58,7 +58,7 @@ public class AgentCognitionOrchestratorImpl implements AgentCognitionOrchestrato
         matchProfileAssembler.refreshProfile(command.getUserId());
     }
 
-    @Async
+    @Async("threadPoolExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onDiaryCognitionIngest(DiaryCognitionIngestEvent event) {
         log.debug("收到日记认知摄取事件: userId={}, sourceId={}",
@@ -66,7 +66,7 @@ public class AgentCognitionOrchestratorImpl implements AgentCognitionOrchestrato
         ingest(event.getCommand());
     }
 
-    @Async
+    @Async("threadPoolExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onChatCognitionIngest(ChatCognitionIngestEvent event) {
         log.debug("收到聊天认知摄取事件: userId={}, sourceId={}",
@@ -74,7 +74,7 @@ public class AgentCognitionOrchestratorImpl implements AgentCognitionOrchestrato
         ingest(event.getCommand());
     }
 
-    @Async
+    @Async("threadPoolExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onEmotionPlazaCognitionIngest(EmotionPlazaCognitionIngestEvent event) {
         log.debug("收到广场认知摄取事件: userId={}, sourceId={}",

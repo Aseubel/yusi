@@ -34,7 +34,7 @@ public class EmotionAnalysisService {
     /**
      * 异步监听日记变更事件，进行情感分析
      */
-    @Async
+    @Async("threadPoolExecutor")
     @EventListener
     public void onDiaryChanged(DiaryChangedEvent event) {
         Diary diary = event.getDiary();
