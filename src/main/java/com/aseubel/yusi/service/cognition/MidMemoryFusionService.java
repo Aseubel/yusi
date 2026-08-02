@@ -15,7 +15,6 @@ import dev.langchain4j.model.chat.ChatModel;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -51,7 +50,6 @@ public class MidMemoryFusionService {
     /**
      * 每天凌晨 3:00 执行跨源融合。
      */
-    @Scheduled(cron = "0 0 3 * * ?", zone = "Asia/Shanghai")
     public void runFusion() {
         log.info("开始跨源记忆融合...");
         try {

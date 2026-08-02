@@ -11,7 +11,6 @@ import com.aseubel.yusi.repository.LifeGraphTaskRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,7 +32,6 @@ public class LifeGraphTaskBatchService {
     private static final int BATCH_SIZE = 10;
     private static final long PROCESSING_TIMEOUT_MINUTES = 30;
 
-    @Scheduled(fixedDelay = 2000)
     public void processPendingTasks() {
         LocalDateTime now = LocalDateTime.now();
         List<LifeGraphTask> tasks = taskClaimService.claimPendingTasks(now, BATCH_SIZE);
@@ -73,7 +71,6 @@ public class LifeGraphTaskBatchService {
     /**
      * 定期回收进程崩溃或 worker 超时遗留的 PROCESSING 任务。
      */
-    @Scheduled(fixedDelay = 60000)
     @Transactional
     public void recoverStaleTasks() {
         LocalDateTime now = LocalDateTime.now();
@@ -85,7 +82,6 @@ public class LifeGraphTaskBatchService {
         }
     }
 
-    @Scheduled(fixedDelay = 3600000)
     @Transactional
     public void cleanupCompletedTasks() {
         LocalDateTime before = LocalDateTime.now().minusHours(24);

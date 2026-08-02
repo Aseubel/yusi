@@ -6,7 +6,6 @@ import com.aseubel.yusi.repository.InterfaceDailyUsageRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RMap;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
@@ -78,7 +77,6 @@ public class InterfaceUsageMonitor {
     /**
      * 每 30 分钟同步一次数据到数据库
      */
-    @Scheduled(cron = "0 0/30 * * * ?")
     public void syncToDatabase() {
         log.debug("Starting interface usage sync...");
         LocalDate today = LocalDate.now();

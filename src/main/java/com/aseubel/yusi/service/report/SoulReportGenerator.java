@@ -15,7 +15,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -53,7 +52,6 @@ public class SoulReportGenerator {
     /**
      * 每周日晚上 22:00 执行周报生成。
      */
-    @Scheduled(cron = "0 0 22 ? * SUN", zone = "Asia/Shanghai")
     public void generateWeeklyReports() {
         log.info("开始生成灵魂周报...");
         try {

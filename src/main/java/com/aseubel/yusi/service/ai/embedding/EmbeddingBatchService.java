@@ -17,7 +17,6 @@ import io.milvus.v2.service.vector.request.DeleteReq;
 import dev.langchain4j.data.embedding.Embedding;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,7 +61,6 @@ public class EmbeddingBatchService {
      * 定时扫描并处理待处理任务
      * 每秒执行一次，将多个日记变更打包成批处理
      */
-    @Scheduled(fixedDelay = 1000)
     public void processPendingTasks() {
         LocalDateTime now = LocalDateTime.now();
 
@@ -94,7 +92,6 @@ public class EmbeddingBatchService {
     /**
      * 定期回收进程崩溃或 worker 超时遗留的 PROCESSING 任务。
      */
-    @Scheduled(fixedDelay = 60000)
     @Transactional
     public void recoverStaleTasks() {
         LocalDateTime now = LocalDateTime.now();
@@ -299,7 +296,6 @@ public class EmbeddingBatchService {
      * 定期清理已完成的任务（每小时执行一次）
      * 保留最近24小时的已完成任务
      */
-    @Scheduled(fixedDelay = 3600000)
     @Transactional
     public void cleanupCompletedTasks() {
         LocalDateTime before = LocalDateTime.now().minusHours(24);

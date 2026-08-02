@@ -7,7 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RMap;
 import org.redisson.api.RTopic;
 import org.redisson.api.RedissonClient;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.Collection;
@@ -40,8 +39,6 @@ public class ModelStateCenter {
         private volatile Phase previousPhase = Phase.UP;
         private final AtomicBoolean probing = new AtomicBoolean(false);
     }
-
-    private static final long SYNC_INTERVAL_MS = 30_000L;
 
     private final ModelRoutingProperties properties;
     private final ModelConfigCenter modelConfigCenter;
@@ -170,7 +167,6 @@ public class ModelStateCenter {
                 .toList();
     }
 
-    @Scheduled(fixedDelay = SYNC_INTERVAL_MS)
     public void syncToRedis() {
         RMap<String, ModelRuntimeState> stateMap = redissonClient.getMap(properties.getInstanceStateMapKey());
         for (Map.Entry<String, LocalWindow> entry : localWindows.entrySet()) {

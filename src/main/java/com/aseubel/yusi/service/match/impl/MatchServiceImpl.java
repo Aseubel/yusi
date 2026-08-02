@@ -37,7 +37,6 @@ import io.milvus.v2.service.vector.request.ranker.RRFRanker;
 import io.milvus.v2.service.vector.response.SearchResp;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 
@@ -88,7 +87,6 @@ public class MatchServiceImpl implements MatchService {
     private final ThreadPoolTaskExecutor threadPoolExecutor;
 
     @Override
-    @Scheduled(cron = "0 0 20 ? * FRI", zone = "Asia/Shanghai") // Every Friday at 8 PM China time (UTC+8)
     public void runWeeklyMatching() {
         log.info("Starting weekly matching process...");
         ModelRouteContextHolder.set(ModelRouteContext.builder()

@@ -18,7 +18,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,7 +46,6 @@ public class LifeGraphMergeSuggestionService {
     /**
      * 定时任务：每天凌晨3点执行，为所有用户生成合并建议
      */
-    @Scheduled(cron = "0 0 3 * * ?")
     public void scheduledMergeSuggestion() {
         log.info("开始执行定时合并建议任务");
         List<LifeGraphEntity> allEntities = entityRepository.findAll();

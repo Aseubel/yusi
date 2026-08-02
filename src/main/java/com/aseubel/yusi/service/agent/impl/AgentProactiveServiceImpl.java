@@ -19,7 +19,6 @@ import dev.langchain4j.data.message.AiMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -55,7 +54,7 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
     private final ChatModel chatModel;
 
     @Override
-    @Scheduled(cron = "0 0 */1 * * ?") // 每小时检查一次
+    // Called by the centralized scheduler and can also be triggered by an application workflow.
     public void scanAndGreet() {
         log.debug("开始扫描主动问候候选人...");
         try {

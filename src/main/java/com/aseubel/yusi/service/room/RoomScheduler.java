@@ -6,7 +6,6 @@ import com.aseubel.yusi.repository.SituationRoomRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -32,7 +31,6 @@ public class RoomScheduler {
     /**
      * 每分钟检查一次超时房间
      */
-    @Scheduled(fixedRate = 60000)
     public void dissolveExpiredRooms() {
         LocalDateTime threshold = LocalDateTime.now().minusMinutes(ROOM_TIMEOUT_MINUTES);
         List<SituationRoom> expiredRooms = roomRepository.findExpiredWaitingRooms(threshold);
