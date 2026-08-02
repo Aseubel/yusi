@@ -31,6 +31,7 @@ public class LifeGraphTaskBatchService {
     private final LifeGraphBuildService lifeGraphBuildService;
 
     private static final int BATCH_SIZE = 10;
+    private static final long PROCESSING_TIMEOUT_MINUTES = 30;
 
     @Scheduled(fixedDelay = 2000)
     public void processPendingTasks() {
@@ -66,6 +67,21 @@ public class LifeGraphTaskBatchService {
                 LocalDateTime nextRetry = calculateNextRetry(task.getRetryCount() + 1);
                 taskRepository.incrementRetryAndSetNextAttempt(task.getId(), e.getMessage(), nextRetry, now);
             }
+        }
+    }
+
+    /**
+     * 定期回收进程崩溃或 worker 超时遗留的 PROCESSING 任务。
+     */
+    @Scheduled(fixedDelay = 60000)
+    @Transactional
+    public void recoverStaleTasks() {
+        LocalDateTime now = LocalDateTime.now();
+        int recovered = taskRepository.recoverStaleProcessing(
+                now.minusMinutes(PROCESSING_TIMEOUT_MINUTES), now,
+                "任务处理超时，已自动回收并重试");
+        if (recovered > 0) {
+            log.warn("回收 {} 个超时 LifeGraph 任务", recovered);
         }
     }
 

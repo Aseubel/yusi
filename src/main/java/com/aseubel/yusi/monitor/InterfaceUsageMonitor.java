@@ -58,7 +58,7 @@ public class InterfaceUsageMonitor {
 
             // 先写入本地缓冲区
             AtomicLong count = usageBuffer.computeIfAbsent(redisKey + ":" + field, k -> new AtomicLong(0));
-            long currentCount = count.incrementAndGet();
+            count.incrementAndGet();
             bufferCount.incrementAndGet();
 
             // 使用 Redisson 的 addAndGet 进行原子递增
@@ -84,11 +84,10 @@ public class InterfaceUsageMonitor {
         LocalDate today = LocalDate.now();
         LocalDate yesterday = today.minusDays(1);
 
+        // 先落本地增量，再用 Redis 的累计值校准，避免增量覆盖累计统计。
+        syncBufferToDatabase();
         syncDate(yesterday);
         syncDate(today);
-
-        // 同步缓冲区数据
-        syncBufferToDatabase();
 
         log.debug("Interface usage sync completed.");
     }
@@ -154,7 +153,7 @@ public class InterfaceUsageMonitor {
                 String ip = parts[1];
                 String interfaceName = parts[2];
 
-                UsageRecord record = new UsageRecord(userId, ip, interfaceName, count);
+                UsageRecord record = new UsageRecord(key, userId, ip, interfaceName, count);
                 groupedByDate.computeIfAbsent(dateStr, k -> new ArrayList<>()).add(record);
             }
 
@@ -185,6 +184,7 @@ public class InterfaceUsageMonitor {
                     
                     // 使用真正的批量 SQL 操作
                     repository.batchUpsertUsage(entities);
+                    records.forEach(this::acknowledgeBufferRecord);
                     
                     log.debug("批量同步日期 {} 的 {} 条记录", dateStr, records.size());
                     
@@ -193,25 +193,35 @@ public class InterfaceUsageMonitor {
                 }
             }
 
-            // 清空缓冲区
-            usageBuffer.clear();
-            bufferCount.set(0);
-            
         } catch (Exception e) {
             log.error("批量同步缓冲区数据失败", e);
         }
     }
 
     /**
+     * 只确认本次快照已成功写入的计数，并保留同步期间新产生的计数。
+     */
+    private void acknowledgeBufferRecord(UsageRecord record) {
+        usageBuffer.computeIfPresent(record.bufferKey, (key, current) -> {
+            long acknowledged = Math.min(record.count, current.get());
+            long remaining = current.addAndGet(-acknowledged);
+            bufferCount.addAndGet(-acknowledged);
+            return remaining > 0 ? current : null;
+        });
+    }
+
+    /**
      * 内部记录类，用于批量处理
      */
     private static class UsageRecord {
+        String bufferKey;
         String userId;
         String ip;
         String interfaceName;
         long count;
 
-        UsageRecord(String userId, String ip, String interfaceName, long count) {
+        UsageRecord(String bufferKey, String userId, String ip, String interfaceName, long count) {
+            this.bufferKey = bufferKey;
             this.userId = userId;
             this.ip = ip;
             this.interfaceName = interfaceName;

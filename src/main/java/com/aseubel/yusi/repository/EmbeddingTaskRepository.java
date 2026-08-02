@@ -40,6 +40,22 @@ public interface EmbeddingTaskRepository extends JpaRepository<EmbeddingTask, Lo
     int markAsProcessing(@Param("ids") List<Long> ids, @Param("now") LocalDateTime now);
 
     /**
+     * 回收处理超时的任务，避免 worker 崩溃后任务永久停留在 PROCESSING。
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE EmbeddingTask t SET " +
+            "t.retryCount = t.retryCount + 1, " +
+            "t.status = CASE WHEN t.retryCount + 1 >= t.maxRetries THEN 'FAILED' ELSE 'PENDING' END, " +
+            "t.nextRetryAt = :now, " +
+            "t.errorMessage = :errorMessage, " +
+            "t.updatedAt = :now " +
+            "WHERE t.status = 'PROCESSING' AND t.updatedAt < :staleBefore")
+    int recoverStaleProcessing(@Param("staleBefore") LocalDateTime staleBefore,
+            @Param("now") LocalDateTime now,
+            @Param("errorMessage") String errorMessage);
+
+    /**
      * 标记任务为完成
      */
     @Modifying

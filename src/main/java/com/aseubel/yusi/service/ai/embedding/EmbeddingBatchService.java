@@ -44,6 +44,7 @@ public class EmbeddingBatchService {
 
     private final EmbeddingTaskRepository taskRepository;
     private final EmbeddingTaskClaimService taskClaimService;
+    private final EmbeddingTaskMaintenanceService taskMaintenanceService;
     private final DiaryRepository diaryRepository;
     private final UserRepository userRepository;
     private final MilvusClientV2 milvusClientV2;
@@ -55,6 +56,7 @@ public class EmbeddingBatchService {
      * 每批处理的最大任务数
      */
     private static final int BATCH_SIZE = 50;
+    private static final long PROCESSING_TIMEOUT_MINUTES = 30;
 
     /**
      * 定时扫描并处理待处理任务
@@ -86,6 +88,21 @@ public class EmbeddingBatchService {
         List<EmbeddingTask> deleteTasks = grouped.getOrDefault(EmbeddingTask.TaskType.DELETE, List.of());
         for (EmbeddingTask task : deleteTasks) {
             processDeleteTask(task, now);
+        }
+    }
+
+    /**
+     * 定期回收进程崩溃或 worker 超时遗留的 PROCESSING 任务。
+     */
+    @Scheduled(fixedDelay = 60000)
+    @Transactional
+    public void recoverStaleTasks() {
+        LocalDateTime now = LocalDateTime.now();
+        int recovered = taskRepository.recoverStaleProcessing(
+                now.minusMinutes(PROCESSING_TIMEOUT_MINUTES), now,
+                "任务处理超时，已自动回收并重试");
+        if (recovered > 0) {
+            log.warn("回收 {} 个超时 Embedding 任务", recovered);
         }
     }
 
@@ -298,7 +315,6 @@ public class EmbeddingBatchService {
      *
      * @return 同步的任务数量（重置数 + 新增数）
      */
-    @Transactional
     public int fullSync() {
         log.info("开始执行 Embedding 全量同步");
 
@@ -315,14 +331,10 @@ public class EmbeddingBatchService {
         }
 
         LocalDateTime now = LocalDateTime.now();
-        // 2. 重置所有任务为 PENDING
-        int updatedCount = taskRepository.resetAllToPending(now);
-        log.info("已重置 {} 个任务为 PENDING 状态", updatedCount);
+        // 2. 在独立短事务内重置任务为 PENDING
+        int totalCount = taskMaintenanceService.resetAndRebuildPendingTasks(now);
+        log.info("已重置并补充 {} 个 Embedding 任务", totalCount);
 
-        // 3. 补充缺失的日记任务
-        int insertedCount = taskRepository.insertMissingTasks(now);
-        log.info("已补充插入 {} 个缺失的 Embedding 任务", insertedCount);
-
-        return updatedCount + insertedCount;
+        return totalCount;
     }
 }

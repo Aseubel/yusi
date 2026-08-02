@@ -9,12 +9,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.time.Duration;
 
 @Service
 public class GeoServiceImpl implements GeoService {
@@ -26,10 +28,14 @@ public class GeoServiceImpl implements GeoService {
     private final ObjectMapper objectMapper;
 
     @Autowired
-    public GeoServiceImpl(AmapConfig amapConfig) {
+    public GeoServiceImpl(AmapConfig amapConfig, RestTemplateBuilder restTemplateBuilder,
+            ObjectMapper objectMapper) {
         this.amapConfig = amapConfig;
-        this.restTemplate = new RestTemplate();
-        this.objectMapper = new ObjectMapper();
+        this.restTemplate = restTemplateBuilder
+                .setConnectTimeout(Duration.ofSeconds(3))
+                .setReadTimeout(Duration.ofSeconds(10))
+                .build();
+        this.objectMapper = objectMapper;
     }
 
     @Override

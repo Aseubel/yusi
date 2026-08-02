@@ -26,6 +26,22 @@ public interface LifeGraphTaskRepository extends JpaRepository<LifeGraphTask, Lo
     @Query("UPDATE LifeGraphTask t SET t.status = 'PROCESSING', t.updatedAt = :now WHERE t.id IN :ids")
     int markAsProcessing(@Param("ids") List<Long> ids, @Param("now") LocalDateTime now);
 
+    /**
+     * 回收处理超时的任务，避免 worker 崩溃后任务永久停留在 PROCESSING。
+     */
+    @Modifying
+    @Transactional
+    @Query("UPDATE LifeGraphTask t SET " +
+            "t.retryCount = t.retryCount + 1, " +
+            "t.status = CASE WHEN t.retryCount + 1 >= t.maxRetries THEN 'FAILED' ELSE 'PENDING' END, " +
+            "t.nextRetryAt = :now, " +
+            "t.errorMessage = :errorMessage, " +
+            "t.updatedAt = :now " +
+            "WHERE t.status = 'PROCESSING' AND t.updatedAt < :staleBefore")
+    int recoverStaleProcessing(@Param("staleBefore") LocalDateTime staleBefore,
+            @Param("now") LocalDateTime now,
+            @Param("errorMessage") String errorMessage);
+
     @Modifying
     @Transactional
     @Query("UPDATE LifeGraphTask t SET t.status = 'PROCESSING', t.updatedAt = :now WHERE t.id = :id")

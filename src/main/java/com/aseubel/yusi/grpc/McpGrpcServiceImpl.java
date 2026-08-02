@@ -20,6 +20,9 @@ import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 
 import jakarta.persistence.criteria.Predicate;
@@ -43,6 +46,10 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
     private final ChatMemoryMessageRepository chatMemoryMessageRepository;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+    private static final int DIARY_PAGE_SIZE = 100;
+    private static final int MAX_DIARY_SCAN = 1000;
+    private static final int MAX_DIARY_RESULTS = 100;
+    private static final int MAX_MEMORY_RESULTS = 50;
 
     @Override
     public void searchDiary(SearchDiaryRequest request, StreamObserver<SearchDiaryResponse> responseObserver) {
@@ -75,23 +82,34 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
                 return cb.and(predicates.toArray(new Predicate[0]));
             };
 
-            List<Diary> diaries = diaryExtensionRepository.findAll(spec);
             List<DiaryResult> results = new ArrayList<>();
+            int scanned = 0;
+            for (int page = 0; scanned < MAX_DIARY_SCAN && results.size() < MAX_DIARY_RESULTS; page++) {
+                Page<Diary> diaryPage = diaryExtensionRepository.findAll(spec,
+                        PageRequest.of(page, DIARY_PAGE_SIZE,
+                                Sort.by(Sort.Direction.DESC, "createTime")));
+                for (Diary diary : diaryPage.getContent()) {
+                    scanned++;
+                    // Decrypt only the bounded page in memory to match the keyword.
+                    String decryptedContent = diaryService.decryptDiaryContent(diary);
 
-            for (Diary diary : diaries) {
-                // Decrypt into memory to match keyword
-                String decryptedContent = diaryService.decryptDiaryContent(diary);
+                    if (StrUtil.isNotBlank(decryptedContent)
+                            && (StrUtil.isBlank(keyword) || decryptedContent.contains(keyword))) {
+                        results.add(DiaryResult.newBuilder()
+                                .setDiaryId(diary.getDiaryId() != null ? diary.getDiaryId() : "")
+                                .setDate(diary.getCreateTime() != null ? diary.getCreateTime().format(FORMATTER) : "")
+                                .setContent(decryptedContent)
+                                .setEmotion(diary.getEmotion() != null ? diary.getEmotion() : "")
+                                .build());
+                    }
 
-                // If content exists and matches keyword (or no keyword provided)
-                if (StrUtil.isNotBlank(decryptedContent) &&
-                        (StrUtil.isBlank(keyword) || decryptedContent.contains(keyword))) {
+                    if (results.size() >= MAX_DIARY_RESULTS || scanned >= MAX_DIARY_SCAN) {
+                        break;
+                    }
+                }
 
-                    results.add(DiaryResult.newBuilder()
-                            .setDiaryId(diary.getDiaryId() != null ? diary.getDiaryId() : "")
-                            .setDate(diary.getCreateTime() != null ? diary.getCreateTime().format(FORMATTER) : "")
-                            .setContent(decryptedContent)
-                            .setEmotion(diary.getEmotion() != null ? diary.getEmotion() : "")
-                            .build());
+                if (!diaryPage.hasNext()) {
+                    break;
                 }
             }
 
@@ -121,7 +139,8 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
             }
 
             String query = request.getQuery();
-            int maxResults = request.getMaxResults() > 0 ? request.getMaxResults() : 10;
+            int requestedResults = request.getMaxResults() > 0 ? request.getMaxResults() : 10;
+            int maxResults = Math.min(Math.max(requestedResults, 1), MAX_MEMORY_RESULTS);
 
             log.info("MCP Ext: Searching memory for user {}, query: '{}', maxResults: {}", userId, query, maxResults);
 
