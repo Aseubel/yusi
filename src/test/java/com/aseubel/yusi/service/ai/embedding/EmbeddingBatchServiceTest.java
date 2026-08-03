@@ -34,6 +34,10 @@ class EmbeddingBatchServiceTest {
     @Mock
     private EmbeddingTaskRepository taskRepository;
     @Mock
+    private EmbeddingTaskClaimService taskClaimService;
+    @Mock
+    private EmbeddingTaskMaintenanceService taskMaintenanceService;
+    @Mock
     private DiaryRepository diaryRepository;
     @Mock
     private UserRepository userRepository;
@@ -48,8 +52,9 @@ class EmbeddingBatchServiceTest {
 
     @Test
     void processPendingTasks_writesDiaryChunkMetadataAndContextualText() {
-        EmbeddingBatchService service = new EmbeddingBatchService(taskRepository, diaryRepository, userRepository,
-                milvusClientV2, embeddingGateway, diaryChunker, diaryService);
+        EmbeddingBatchService service = new EmbeddingBatchService(taskRepository, taskClaimService,
+                taskMaintenanceService, diaryRepository, userRepository, milvusClientV2, embeddingGateway,
+                diaryChunker, diaryService);
         EmbeddingTask task = EmbeddingTask.createUpsertTask("diary-1", "user-1");
         task.setId(1L);
         Diary diary = Diary.builder().diaryId("diary-1").userId("user-1")
@@ -60,7 +65,7 @@ class EmbeddingBatchServiceTest {
                 new DiaryChunker.DiaryChunk("diary-1", 0, 2, "日期：2026-07-13\n标题：测试日记", "第一段。"),
                 new DiaryChunker.DiaryChunk("diary-1", 1, 2, "日期：2026-07-13\n标题：测试日记", "第二段。"));
 
-        when(taskRepository.findPendingTasksForUpdate(any(), anyInt())).thenReturn(List.of(task));
+        when(taskClaimService.claimPendingTasks(any(), anyInt())).thenReturn(List.of(task));
         when(diaryRepository.findByDiaryId("diary-1")).thenReturn(diary);
         when(userRepository.findByUserId("user-1")).thenReturn(User.builder().keyMode("DEFAULT").build());
         when(diaryChunker.split(diary, diary.getPlainContent())).thenReturn(chunks);
