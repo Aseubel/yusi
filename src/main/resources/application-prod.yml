@@ -212,7 +212,7 @@ logging:
 # MCP (Model Context Protocol) 配置
 # 启用后，DiaryAssistant 将可以使用 MCP Server 提供的工具（如 web_search）
 mcp:
-  enabled: true # 设置为 true 启用 MCP 集成
+  enabled: ${MCP_ENABLED:true} # Set false to disable the internal MCP client.
   server:
     url: http://yusi-mcp:11611/internal/mcp # Go MCP 内部端点 (仅部署工具)
     service-key: ${MCP_AUTH_API_KEY}

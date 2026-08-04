@@ -46,39 +46,10 @@ cd yusi
 
 **Step 2：配置环境变量**
 ```bash
-# 创建环境变量文件
-cat > .env << EOF
-# 数据库
-SPRING_DATASOURCE_USERNAME=root
-SPRING_DATASOURCE_PASSWORD=123456
-SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/yusi
-
-# JWT 密钥 (生产环境请使用强随机密钥)
-YUSI_JWT_SECRET=your-super-secret-jwt-key-change-in-production
-
-# 日记加密密钥 (至少16字符, Base64编码的32字节)
-YUSI_ENCRYPTION_KEY=your-32-byte-base64-aes-key-here
-
-# RSA 密钥对 (用于密钥备份恢复)
-YUSI_BACKUP_RSA_PUBLIC_KEY_SPKI_BASE64=your-rsa-public-key
-YUSI_BACKUP_RSA_PRIVATE_KEY_PKCS8_BASE64=your-rsa-private-key
-
-# AI 模型配置
-CHAT_MODEL_APIKEY=your-chat-model-apikey
-CHAT_MODEL_BASEURL=https://api.siliconflow.cn/v1
-CHAT_MODEL_NAME=Qwen/Qwen2.5-72B-Instruct
-
-EMBEDDING_MODEL_APIKEY=your-embedding-apikey
-EMBEDDING_MODEL_BASEURL=https://api.siliconflow.cn/v1
-EMBEDDING_MODEL_NAME=BAAI/bge-m3
-
-# Redis
-REDIS_SDK_CONFIG_PASSWORD=
-
-# MCP (可选, 默认关闭)
-MCP_AUTH_API_KEY=replace-with-a-long-random-service-key
-MCP_ENABLED=false
-EOF
+# Copy the complete production variable template and fill in its values.
+cp yusi_prod.env.example yusi_prod.env
+chmod 600 yusi_prod.env
+# Edit yusi_prod.env with the production credentials.
 ```
 
 **Step 3：启动服务**
@@ -95,6 +66,9 @@ docker exec -i yusi-mysql mysql -uroot -p123456 < src/main/resources/db/init.sql
 
 # 启动 Yusi 应用
 docker-compose -f docker-compose.yml up -d yusi
+
+# 启动 MCP 网关。它读取同一个文件，但只注入 MCP 所需变量。
+docker compose --env-file yusi_prod.env -f mcp/docker-compose.yml up -d
 ```
 
 **Step 4：验证服务**
@@ -334,7 +308,7 @@ docker-compose restart yusi
 
 ```bash
 # 检查 API Key 配置
-grep -E "MODEL_APIKEY|MODEL_BASEURL" .env
+grep -E "MODEL_APIKEY|MODEL_BASEURL" yusi_prod.env
 
 # 检查模型是否可用
 curl -X POST ${CHAT_MODEL_BASEURL}/chat/completions \
@@ -355,7 +329,7 @@ curl -X POST ${CHAT_MODEL_BASEURL}/chat/completions \
 
 ```bash
 # 确认 MCP 已启用
-grep MCP_ENABLED .env
+grep MCP_ENABLED yusi_prod.env
 # 应为 MCP_ENABLED=true
 
 # 检查端口连通性

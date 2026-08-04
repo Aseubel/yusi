@@ -13,10 +13,11 @@ services:
       - "611:611"
     expose:
       - "9090"
+    env_file:
+      - ./yusi_prod.env
     environment:
       - TZ=PRC
       - SPRING_PROFILES_ACTIVE=prod
-      - MCP_AUTH_API_KEY=${MCP_AUTH_API_KEY:?MCP_AUTH_API_KEY is required}
     volumes:
       - ./log:/data/log
     logging:
