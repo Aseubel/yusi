@@ -109,7 +109,7 @@ public class NotificationService {
     @Transactional
     @UpdateCache(key = "'notifications:user:' + #userId + ':*'", evictOnly = true)
     public boolean markAsRead(String userId, Long notificationId) {
-        boolean result = notificationRepository.markAsRead(notificationId) > 0;
+        boolean result = notificationRepository.markAsRead(notificationId, userId) > 0;
         return result;
     }
 
@@ -128,7 +128,7 @@ public class NotificationService {
     @Transactional
     @UpdateCache(key = "'notifications:user:' + #userId + ':*'", evictOnly = true)
     public void deleteNotification(String userId, Long notificationId) {
-        notificationRepository.deleteById(notificationId);
+        notificationRepository.deleteByIdAndUserId(notificationId, userId);
     }
 
     private String getTypeLabel(String type) {

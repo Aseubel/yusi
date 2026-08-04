@@ -26,7 +26,7 @@ public interface SituationRoomService {
 
     SituationRoomDetailResponse getRoomDetailResponse(String code, String requesterId);
 
-    SituationReport getReport(String code);
+    SituationReport getReport(String code, String requesterId);
 
     List<SituationScenario> getScenarios();
 

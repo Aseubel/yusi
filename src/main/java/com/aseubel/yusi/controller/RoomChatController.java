@@ -3,6 +3,8 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.redis.annotation.QueryCache;
@@ -36,7 +38,6 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/room-chat")
-@CrossOrigin("*")
 public class RoomChatController {
 
     private final RoomMessageRepository messageRepository;
@@ -49,6 +50,7 @@ public class RoomChatController {
      */
     @UpdateCache(cacheNames = "room:chat", key = "#request.roomCode")
     @PostMapping("/send")
+    @RateLimiter(key = "room-chat-send", time = 60, count = 60, limitType = LimitType.USER)
     public Response<RoomMessage> sendMessage(@RequestBody RoomChatRequest request) {
         String userId = UserContext.getUserId();
         String roomCode = request.getRoomCode();

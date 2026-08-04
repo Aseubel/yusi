@@ -16,7 +16,6 @@ import java.util.List;
 @Auth
 @Slf4j
 @RestController()
-@CrossOrigin("*")
 @RequestMapping("/api/room")
 public class SituationRoomController {
 
@@ -25,22 +24,22 @@ public class SituationRoomController {
 
     @PostMapping("/create")
     public Response<SituationRoom> create(@RequestBody CreateRoomRequest request) {
-        SituationRoom room = situationRoomService.createRoom(request.getOwnerId(),
+        SituationRoom room = situationRoomService.createRoom(UserContext.getUserId(),
                 Math.max(2, Math.min(8, request.getMaxMembers())));
-        return Response.success(room);
+        return Response.success(safeRoom(room));
     }
 
     @PostMapping("/join")
     public Response<SituationRoom> join(@RequestBody JoinRoomRequest request) {
-        SituationRoom room = situationRoomService.joinRoom(request.getCode(), request.getUserId());
-        return Response.success(room);
+        SituationRoom room = situationRoomService.joinRoom(request.getCode(), UserContext.getUserId());
+        return Response.success(safeRoom(room));
     }
 
     @PostMapping("/start")
     public Response<SituationRoom> startRoom(@RequestBody StartRoomRequest request) {
         SituationRoom room = situationRoomService.startRoom(request.getCode(), request.getScenarioId(),
-                request.getOwnerId());
-        return Response.success(room);
+                UserContext.getUserId());
+        return Response.success(safeRoom(room));
     }
 
     @PostMapping("/scenarios/submit")
@@ -87,21 +86,21 @@ public class SituationRoomController {
     @PostMapping("/cancel")
     public Response<?> cancelRoom(@RequestBody JoinRoomRequest request) {
         // Reusing JoinRoomRequest for code + userId
-        situationRoomService.cancelRoom(request.getCode(), request.getUserId());
+        situationRoomService.cancelRoom(request.getCode(), UserContext.getUserId());
         return Response.success();
     }
 
     @PostMapping("/vote-cancel")
     public Response<SituationRoom> voteCancel(@RequestBody JoinRoomRequest request) {
-        SituationRoom room = situationRoomService.voteCancel(request.getCode(), request.getUserId());
-        return Response.success(room);
+        SituationRoom room = situationRoomService.voteCancel(request.getCode(), UserContext.getUserId());
+        return Response.success(safeRoom(room));
     }
 
     @PostMapping("/submit")
     public Response<SituationRoom> submitNarrative(@RequestBody SubmitNarrativeRequest request) {
-        SituationRoom room = situationRoomService.submit(request.getCode(), request.getUserId(),
+        SituationRoom room = situationRoomService.submit(request.getCode(), UserContext.getUserId(),
                 request.getNarrative(), request.getIsPublic());
-        return Response.success(room);
+        return Response.success(safeRoom(room));
     }
 
     @GetMapping("/history")
@@ -111,7 +110,7 @@ public class SituationRoomController {
 
     @GetMapping("/report/{code}")
     public Response<SituationReport> report(@PathVariable("code") String code) {
-        SituationReport report = situationRoomService.getReport(code);
+        SituationReport report = situationRoomService.getReport(code, UserContext.getUserId());
         return Response.success(report);
     }
 
@@ -119,5 +118,9 @@ public class SituationRoomController {
     public Response<SituationRoomDetailResponse> getRoom(@PathVariable("code") String code) {
         SituationRoomDetailResponse room = situationRoomService.getRoomDetailResponse(code, UserContext.getUserId());
         return Response.success(room);
+    }
+
+    private SituationRoom safeRoom(SituationRoom room) {
+        return situationRoomService.getRoomDetail(room.getCode(), UserContext.getUserId());
     }
 }

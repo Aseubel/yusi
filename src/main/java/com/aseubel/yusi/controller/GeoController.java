@@ -1,6 +1,8 @@
 package com.aseubel.yusi.controller;
 
 import com.aseubel.yusi.common.Response;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.dto.geo.POIResult;
 import com.aseubel.yusi.pojo.dto.geo.ReverseGeocodeResult;
 import com.aseubel.yusi.service.geo.GeoService;
@@ -14,7 +16,6 @@ import java.util.List;
  * 前端通过此接口调用高德地图服务，避免 API Key 暴露在前端
  */
 @RestController
-@CrossOrigin("*")
 @RequestMapping("/api/geo")
 public class GeoController {
 
@@ -25,6 +26,7 @@ public class GeoController {
      * POI 搜索 / 输入提示
      */
     @GetMapping("/search")
+    @RateLimiter(key = "geo-search", time = 60, count = 60, limitType = LimitType.IP)
     public Response<List<POIResult>> searchPOI(
             @RequestParam String keyword,
             @RequestParam(required = false, defaultValue = "") String city) {
@@ -39,6 +41,7 @@ public class GeoController {
      * 逆地理编码
      */
     @GetMapping("/reverse")
+    @RateLimiter(key = "geo-reverse", time = 60, count = 120, limitType = LimitType.IP)
     public Response<ReverseGeocodeResult> reverseGeocode(
             @RequestParam Double lat,
             @RequestParam Double lng) {

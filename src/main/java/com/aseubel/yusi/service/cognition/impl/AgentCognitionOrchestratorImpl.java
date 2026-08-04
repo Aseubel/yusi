@@ -38,7 +38,7 @@ public class AgentCognitionOrchestratorImpl implements AgentCognitionOrchestrato
             return;
         }
         if (command.getImageObjectKeys() != null && !command.getImageObjectKeys().isEmpty()) {
-            String imageDescription = imageUnderstandingService.describe(command.getImageObjectKeys());
+            String imageDescription = imageUnderstandingService.describe(command.getUserId(), command.getImageObjectKeys());
             if (StrUtil.isNotBlank(imageDescription)) {
                 command.setMaskedText(command.getMaskedText() + "\n图片理解：" + imageDescription);
             }

@@ -14,6 +14,8 @@ import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.service.diary.DiaryService;
 import com.aseubel.yusi.service.diary.VoiceTranscriptionService;
 import com.aseubel.yusi.service.oss.OssService;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 
@@ -33,7 +35,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Auth
 @Slf4j
 @RestController()
-@CrossOrigin("*")
 @RequestMapping("/api/diary")
 public class DiaryController {
 
@@ -54,15 +55,17 @@ public class DiaryController {
             @RequestParam(required = false) String sortBy,
             @RequestParam(defaultValue = "true") boolean asc,
             PagedResourcesAssembler<Diary> assembler) {
-        if (userId == null || userId.isEmpty()) {
-            throw new IllegalArgumentException("用户ID不能为空");
+        String currentUserId = UserContext.getUserId();
+        if (!currentUserId.equals(userId)) {
+            throw new com.aseubel.yusi.common.exception.AuthorizationException(
+                    com.aseubel.yusi.common.exception.ErrorCode.FORBIDDEN, "无权访问其他用户的日记");
         }
-        Page<Diary> diaryPage = diaryService.getDiaryList(userId, pageNum, pageSize, sortBy, asc);
+        Page<Diary> diaryPage = diaryService.getDiaryList(currentUserId, pageNum, pageSize, sortBy, asc);
         if (diaryPage.hasContent()) {
             diaryPage.getContent().forEach(diary -> {
                 if (StrUtil.isNotBlank(diary.getImages())) {
                     diary.setImageObjectKeys(JSONUtil.toList(diary.getImages(), String.class));
-                    diary.setImages(diaryService.convertImagesToUrls(diary.getImages()));
+                    diary.setImages(diaryService.convertImagesToUrls(diary.getImages(), currentUserId));
                 }
             });
         }
@@ -71,18 +74,23 @@ public class DiaryController {
 
     @PostMapping
     public Response<?> writeDiary(@RequestBody WriteDiaryRequest request) {
-        diaryService.addDiary(request.toDiary());
+        Diary diary = request.toDiary();
+        diary.setUserId(UserContext.getUserId());
+        diaryService.addDiary(diary);
         return Response.success();
     }
 
     @PutMapping
     public Response<?> editDiary(@RequestBody EditDiaryRequest request) {
-        diaryService.editDiary(request.toDiary());
+        Diary diary = request.toDiary();
+        diary.setUserId(UserContext.getUserId());
+        diaryService.editDiary(diary);
         return Response.success();
     }
 
     /** 上传语音并返回转写结果，客户端随后走普通日记保存链路。 */
     @PostMapping("/voice/transcribe")
+    @RateLimiter(key = "voice-transcribe", time = 60, count = 10, limitType = LimitType.USER)
     public Response<VoiceDiaryResponse> transcribeVoice(@RequestParam("file") MultipartFile file) {
         String userId = UserContext.getUserId();
         String objectKey = ossService.uploadAudio(file, userId);
@@ -94,7 +102,7 @@ public class DiaryController {
                     .build());
         } catch (RuntimeException e) {
             try {
-                ossService.deleteObject(objectKey);
+                ossService.deleteOwnedAudioObject(objectKey, userId);
             } catch (RuntimeException cleanupException) {
                 log.warn("语音转写失败且音频清理失败: objectKey={}", objectKey, cleanupException);
             }
@@ -104,10 +112,11 @@ public class DiaryController {
 
     @GetMapping("/{diaryId}")
     public Response<Diary> getDiary(@PathVariable("diaryId") String diaryId) {
-        Diary diary = diaryService.getDiary(diaryId);
+        String currentUserId = UserContext.getUserId();
+        Diary diary = diaryService.getDiary(diaryId, currentUserId);
         if (diary != null && StrUtil.isNotBlank(diary.getImages())) {
             diary.setImageObjectKeys(JSONUtil.toList(diary.getImages(), String.class));
-            diary.setImages(diaryService.convertImagesToUrls(diary.getImages()));
+            diary.setImages(diaryService.convertImagesToUrls(diary.getImages(), currentUserId));
         }
         return Response.success(diary);
     }
@@ -124,10 +133,11 @@ public class DiaryController {
     @GetMapping("/footprints")
     public Response<List<DiaryFootprint>> getFootprints(
             @RequestParam String userId) {
-        if (userId == null || userId.isEmpty()) {
-            throw new IllegalArgumentException("用户ID不能为空");
+        if (!UserContext.getUserId().equals(userId)) {
+            throw new com.aseubel.yusi.common.exception.AuthorizationException(
+                    com.aseubel.yusi.common.exception.ErrorCode.FORBIDDEN, "无权访问其他用户的足迹");
         }
-        List<Diary> diaries = diaryService.getFootprints(userId);
+        List<Diary> diaries = diaryService.getFootprints(UserContext.getUserId());
         List<DiaryFootprint> footprints = diaries.stream()
                 .map(d -> new DiaryFootprint(
                         d.getDiaryId(),

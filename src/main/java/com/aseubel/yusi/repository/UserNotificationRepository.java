@@ -39,8 +39,9 @@ public interface UserNotificationRepository extends JpaRepository<UserNotificati
      * 标记消息为已读
      */
     @Modifying
-    @Query("UPDATE UserNotification n SET n.isRead = true, n.readAt = CURRENT_TIMESTAMP WHERE n.id = :id")
-    int markAsRead(@Param("id") Long id);
+    @Query("UPDATE UserNotification n SET n.isRead = true, n.readAt = CURRENT_TIMESTAMP "
+            + "WHERE n.id = :id AND n.userId = :userId")
+    int markAsRead(@Param("id") Long id, @Param("userId") String userId);
 
     /**
      * 标记用户所有消息为已读
@@ -53,6 +54,13 @@ public interface UserNotificationRepository extends JpaRepository<UserNotificati
      * 删除用户的所有消息
      */
     void deleteByUserId(String userId);
+
+    /**
+     * 按用户删除单条消息，避免仅凭自增 ID 跨用户删除。
+     */
+    @Modifying
+    @Query("DELETE FROM UserNotification n WHERE n.id = :id AND n.userId = :userId")
+    int deleteByIdAndUserId(@Param("id") Long id, @Param("userId") String userId);
 
     /**
      * 查询用户在指定时间之后的指定类型通知，用于去重判断。

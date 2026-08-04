@@ -11,10 +11,12 @@ services:
     restart: on-failure
     ports:
       - "611:611"
-      - "9090:9090"
+    expose:
+      - "9090"
     environment:
       - TZ=PRC
       - SPRING_PROFILES_ACTIVE=prod
+      - MCP_AUTH_API_KEY=${MCP_AUTH_API_KEY:?MCP_AUTH_API_KEY is required}
     volumes:
       - ./log:/data/log
     logging:

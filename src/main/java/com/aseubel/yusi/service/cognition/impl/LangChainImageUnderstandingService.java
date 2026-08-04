@@ -25,7 +25,7 @@ public class LangChainImageUnderstandingService implements ImageUnderstandingSer
     private final OssService ossService;
 
     @Override
-    public String describe(List<String> imageObjectKeys) {
+    public String describe(String userId, List<String> imageObjectKeys) {
         if (imageObjectKeys == null || imageObjectKeys.isEmpty()) {
             return null;
         }
@@ -35,7 +35,7 @@ public class LangChainImageUnderstandingService implements ImageUnderstandingSer
                     + "不要猜测身份，不要输出隐私信息，只返回一段简洁中文描述。"));
             for (String objectKey : imageObjectKeys) {
                 if (objectKey != null && !objectKey.isBlank()) {
-                    contents.add(ImageContent.from(URI.create(ossService.generatePresignedUrl(objectKey))));
+                    contents.add(ImageContent.from(URI.create(ossService.generateOwnedUrl(objectKey, userId))));
                 }
             }
             if (contents.size() == 1) {

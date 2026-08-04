@@ -172,7 +172,7 @@ public class KeyManagementServiceImpl implements KeyManagementService {
             diaryService.evictListCache(userId);
             diaryService.evictFootprintsCache(userId);
             for (Diary d : toUpdate) {
-                diaryService.evictDiaryCache(d.getDiaryId());
+                diaryService.evictDiaryCache(d.getDiaryId(), userId);
             }
         }
 

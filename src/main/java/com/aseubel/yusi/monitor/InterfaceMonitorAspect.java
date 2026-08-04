@@ -1,7 +1,7 @@
 package com.aseubel.yusi.monitor;
 
 import com.aseubel.yusi.common.auth.UserContext;
-import jakarta.servlet.http.HttpServletRequest;
+import com.aseubel.yusi.common.web.ClientIpResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.JoinPoint;
@@ -19,6 +19,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 public class InterfaceMonitorAspect {
 
     private final InterfaceUsageMonitor monitor;
+    private final ClientIpResolver clientIpResolver;
 
     @Pointcut("execution(* com.aseubel.yusi.controller..*.*(..))")
     public void controllerPointcut() {
@@ -37,8 +38,7 @@ public class InterfaceMonitorAspect {
             String ip = "unknown";
             ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attributes != null) {
-                HttpServletRequest request = attributes.getRequest();
-                ip = getIpAddress(request);
+                ip = clientIpResolver.resolve(attributes.getRequest());
             }
 
             // Get Interface Name
@@ -55,20 +55,4 @@ public class InterfaceMonitorAspect {
         }
     }
 
-    private String getIpAddress(HttpServletRequest request) {
-        String ip = request.getHeader("x-forwarded-for");
-        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("Proxy-Client-IP");
-        }
-        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getHeader("WL-Proxy-Client-IP");
-        }
-        if (ip == null || ip.length() == 0 || "unknown".equalsIgnoreCase(ip)) {
-            ip = request.getRemoteAddr();
-        }
-        if (ip != null && ip.contains(",")) {
-            ip = ip.split(",")[0].trim();
-        }
-        return ip;
-    }
 }

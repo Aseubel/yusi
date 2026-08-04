@@ -13,20 +13,23 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.Map;
+
 /**
  * MCP (Model Context Protocol) 配置类
  * 
- * 通过 MCP 协议连接到 Go 实现的 MCP Server，获取外部工具（如 web_search）。
+ * 通过内部 MCP 入口连接到 Go 实现的 MCP Server，获取部署内部工具（如 web_search）。
  * 这使得 DiaryAssistant 可以访问实时网络搜索等能力。
  * 
  * 使用 Streamable HTTP 传输协议（推荐）：
- * - 单一 POST 端点 (/mcp)
+ * - 单一 POST 端点 (/internal/mcp)
  * - 响应为 SSE 流
  * - 无状态，每次请求独立
  * 
  * 配置项：
  * - mcp.enabled: 是否启用 MCP 集成（默认 false）
- * - mcp.server.url: MCP Server 的端点 URL
+ * - mcp.server.url: 内部 MCP Server 端点 URL（/internal/mcp）
+ * - mcp.server.service-key: 内部 MCP 网关服务密钥，不是用户开发者 API Key
  * 
  * @author Aseubel
  * @date 2025/12/31
@@ -36,8 +39,11 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnProperty(name = "mcp.enabled", havingValue = "true", matchIfMissing = false)
 public class McpConfig {
 
-    @Value("${mcp.server.url:http://localhost:8080/mcp}")
+    @Value("${mcp.server.url:http://localhost:11611/internal/mcp}")
     private String mcpServerUrl;
+
+    @Value("${mcp.server.service-key:}")
+    private String mcpServerServiceKey;
 
     private McpClient mcpClient;
     private McpTransport mcpTransport;
@@ -46,17 +52,22 @@ public class McpConfig {
      * 创建 MCP Transport
      * 
      * 使用 Streamable HTTP 传输层连接到 Go MCP Server。
-     * Go Server 提供 POST /mcp 端点用于处理请求。
+     * Go Server 提供 POST /internal/mcp 端点用于处理内部请求。
      */
     @Bean(name = "mcpTransport")
     public McpTransport mcpTransport() {
         log.info("正在创建 MCP Transport (Streamable HTTP)，连接到: {}", mcpServerUrl);
 
-        this.mcpTransport = StreamableHttpMcpTransport.builder()
+        if (mcpServerServiceKey == null || mcpServerServiceKey.isBlank()) {
+            throw new IllegalStateException("mcp.server.service-key must be set when MCP is enabled");
+        }
+
+        StreamableHttpMcpTransport.Builder builder = StreamableHttpMcpTransport.builder()
                 .url(mcpServerUrl)
                 .logRequests(false)
-                .logResponses(false)
-                .build();
+                .logResponses(false);
+        builder.customHeaders(Map.of("X-MCP-Service-Key", mcpServerServiceKey));
+        this.mcpTransport = builder.build();
 
         return this.mcpTransport;
     }

@@ -7,6 +7,7 @@ import com.aseubel.yusi.pojo.dto.match.MatchActionRequest;
 import com.aseubel.yusi.pojo.dto.match.MatchRecommendationResponse;
 import com.aseubel.yusi.pojo.dto.match.MatchSettingsRequest;
 import com.aseubel.yusi.pojo.dto.match.MatchStatusResponse;
+import com.aseubel.yusi.pojo.dto.user.UserResponse;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.service.match.MatchService;
 import com.aseubel.yusi.service.user.UserService;
@@ -26,7 +27,6 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/match")
-@CrossOrigin("*")
 public class MatchController {
 
     @Autowired
@@ -36,9 +36,10 @@ public class MatchController {
     private UserService userService;
 
     @PostMapping("/settings")
-    public Response<User> updateSettings(@RequestBody MatchSettingsRequest request) {
+    public Response<UserResponse> updateSettings(@RequestBody MatchSettingsRequest request) {
         String userId = UserContext.getUserId();
-        return Response.success(userService.updateMatchSettings(userId, request.getEnabled(), request.getIntent()));
+        return Response.success(UserResponse.from(
+                userService.updateMatchSettings(userId, request.getEnabled(), request.getIntent())));
     }
 
     @GetMapping("/recommendations")

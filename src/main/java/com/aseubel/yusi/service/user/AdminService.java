@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.user;
 
 import com.aseubel.yusi.pojo.dto.admin.AdminStatsResponse;
+import com.aseubel.yusi.pojo.dto.admin.AdminUserResponse;
 import com.aseubel.yusi.pojo.dto.admin.ScenarioAuditRequest;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
 import com.aseubel.yusi.pojo.entity.User;
@@ -11,7 +12,7 @@ public interface AdminService {
 
     AdminStatsResponse getStats();
 
-    Page<User> getUsers(Pageable pageable, String search);
+    Page<AdminUserResponse> getUsers(Pageable pageable, String search);
 
     void updateUserPermission(String userId, Integer permissionLevel);
 

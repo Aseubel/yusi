@@ -22,6 +22,8 @@ public interface DiaryRepository extends JpaRepository<Diary, Long> {
 
     Diary findByDiaryId(String diaryId);
 
+    Diary findByDiaryIdAndUserId(String diaryId, String userId);
+
     @Query("SELECT d FROM Diary d WHERE d.userId = :userId")
     Page<Diary> findByUserId(@Param("userId") String userId, Pageable pageable);
 

@@ -80,6 +80,12 @@ public class AuthAspect {
 
         try {
             Claims claims = jwtUtils.getClaims(token);
+            if (!"access".equals(claims.get("type", String.class))) {
+                if (isRequired) {
+                    throw new AuthorizationException(ErrorCode.TOKEN_INVALID, "需要访问令牌");
+                }
+                return joinPoint.proceed();
+            }
             String userId = claims.getSubject();
             if (!StringUtils.hasText(userId)) {
                 userId = (String) claims.get("userId");
@@ -89,6 +95,12 @@ public class AuthAspect {
                     }
                     return joinPoint.proceed();
                 }
+            }
+            if (!tokenService.isValidDeviceToken(userId, token)) {
+                if (isRequired) {
+                    throw new AuthorizationException(ErrorCode.TOKEN_INVALID, "令牌已失效");
+                }
+                return joinPoint.proceed();
             }
             UserContext.setUserId(userId);
         } catch (ExpiredJwtException e) {

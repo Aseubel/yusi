@@ -2,6 +2,8 @@ package com.aseubel.yusi.service.lifegraph;
 
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
 import com.aseubel.yusi.pojo.entity.LifeGraphMergeJudgment;
 import com.aseubel.yusi.repository.LifeGraphEntityAliasRepository;
@@ -209,14 +211,13 @@ public class LifeGraphMergeSuggestionService {
      * 接受合并建议
      */
     @Transactional
-    public void acceptMerge(Long judgmentId) {
-        judgmentRepository.findById(judgmentId).ifPresent(j -> {
-            j.setStatus("ACCEPTED");
-            judgmentRepository.save(j);
+    public void acceptMerge(String userId, Long judgmentId) {
+        LifeGraphMergeJudgment judgment = getPendingJudgment(userId, judgmentId);
+        judgment.setStatus("ACCEPTED");
+        judgmentRepository.save(judgment);
 
-            // 执行实际的合并逻辑
-            mergeEntities(j);
-        });
+        // 执行实际的合并逻辑
+        mergeEntities(judgment);
     }
 
     private void mergeEntities(LifeGraphMergeJudgment judgment) {
@@ -329,11 +330,23 @@ public class LifeGraphMergeSuggestionService {
      * 拒绝合并建议
      */
     @Transactional
-    public void rejectMerge(Long judgmentId) {
-        judgmentRepository.findById(judgmentId).ifPresent(j -> {
-            j.setStatus("REJECTED");
-            judgmentRepository.save(j);
-        });
+    public void rejectMerge(String userId, Long judgmentId) {
+        LifeGraphMergeJudgment judgment = getPendingJudgment(userId, judgmentId);
+        judgment.setStatus("REJECTED");
+        judgmentRepository.save(judgment);
+    }
+
+    private LifeGraphMergeJudgment getPendingJudgment(String userId, Long judgmentId) {
+        if (StrUtil.isBlank(userId) || judgmentId == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "合并建议参数不合法");
+        }
+        LifeGraphMergeJudgment judgment = judgmentRepository.findByIdAndUserId(judgmentId, userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "合并建议不存在"));
+        if (!"PENDING".equals(judgment.getStatus())
+                || !"YES".equalsIgnoreCase(judgment.getMergeDecision())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "合并建议已处理或不可操作");
+        }
+        return judgment;
     }
 
     private List<CandidatePair> findCandidates(String userId, Set<String> judgedPairs) {

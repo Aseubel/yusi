@@ -21,7 +21,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/model")
-@CrossOrigin("*")
 @Auth
 @Validated
 @RequiredArgsConstructor

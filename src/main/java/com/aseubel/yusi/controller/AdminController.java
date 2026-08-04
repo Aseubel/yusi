@@ -1,6 +1,5 @@
 package com.aseubel.yusi.controller;
 
-import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -11,6 +10,8 @@ import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.service.user.UserService;
 import com.aseubel.yusi.service.user.AdminService;
 import com.aseubel.yusi.pojo.dto.admin.AdminStatsResponse;
+import com.aseubel.yusi.pojo.dto.admin.AdminPermissionResponse;
+import com.aseubel.yusi.pojo.dto.admin.AdminUserResponse;
 import com.aseubel.yusi.pojo.dto.admin.ScenarioAuditRequest;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
@@ -25,8 +26,6 @@ import org.springframework.web.bind.annotation.*;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Map;
-
 import com.aseubel.yusi.config.MemoryConfigProperties;
 import groovy.util.logging.Slf4j;
 import lombok.RequiredArgsConstructor;
@@ -39,7 +38,6 @@ import java.util.Map;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/admin")
-@CrossOrigin("*")
 public class AdminController {
 
     private final UserService userService;
@@ -79,11 +77,17 @@ public class AdminController {
     }
 
     @GetMapping("/users")
-    public Response<Page<User>> getUsers(@RequestParam(defaultValue = "0") int page,
+    public Response<Page<AdminUserResponse>> getUsers(@RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String search) {
         checkAdminPermission();
         return Response.success(adminService.getUsers(PageRequest.of(page, size), search));
+    }
+
+    @GetMapping("/me")
+    public Response<AdminPermissionResponse> getCurrentAdminPermission() {
+        checkAdminPermission();
+        return Response.success(new AdminPermissionResponse(getCurrentUserPermissionLevel()));
     }
 
     @PostMapping("/users/{userId}/permission")

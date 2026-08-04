@@ -94,6 +94,10 @@ model:
         memory-extract: memory-zh
 
 yusi:
+  web:
+    trusted-proxy-addresses: ${YUSI_TRUSTED_PROXY_ADDRESSES:}
+  jwt:
+    secret: ${YUSI_JWT_SECRET}
   security:
     crypto:
       server-aes-key-base64: ${YUSI_ENCRYPTION_KEY}
@@ -135,9 +139,9 @@ spring:
     #    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
     # ShardingSphere 配置文件路径
     #    url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml
-    username: root
-    password: 123456
-    url: jdbc:mysql://127.0.0.1:3306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       pool-name: Retail_HikariCP
@@ -170,7 +174,7 @@ redis:
     config:
       host: 127.0.0.1
       port: 6379
-      password: ""
+      password: ${REDIS_SDK_CONFIG_PASSWORD:}
       pool-size: 10
       min-idle-size: 5
       idle-timeout: 30000
@@ -199,7 +203,8 @@ logging:
 mcp:
   enabled: false # 设置为 true 启用 MCP 集成
   server:
-    url: http://localhost:11611/mcp # Go MCP Server 端点 (Streamable HTTP)
+    url: http://localhost:11611/internal/mcp # Go MCP 内部端点 (仅部署工具)
+    service-key: ${MCP_AUTH_API_KEY:}
 
 # 高德地图 API 配置
 amap:

@@ -156,7 +156,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
             roomRepository.save(room);
             CompletableFuture.runAsync(() -> {
                 try {
-                    getReport(code);
+                    generateReport(code);
                 } catch (Exception e) {
                     log.error("Async analysis failed for room: {}", code, e);
                 }
@@ -189,7 +189,14 @@ public class SituationRoomServiceImpl implements SituationRoomService {
 
     @Override
     @Transactional
-    public SituationReport getReport(String code) {
+    public SituationReport getReport(String code, String requesterId) {
+        SituationRoom room = roomRepository.findById(code)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "房间不存在"));
+        requireMember(room, requesterId);
+        return generateReport(code);
+    }
+
+    private SituationReport generateReport(String code) {
         String lockKey = REPORT_LOCK_PREFIX + code;
         RLock lock = redisService.getLock(lockKey);
         boolean locked = false;
@@ -247,6 +254,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     @Override
     public SituationRoom getRoomDetail(String code, String requesterId) {
         SituationRoom room = getRoom(code);
+        requireMember(room, requesterId);
         SituationRoom safeRoom = room.toBuilder().build();
 
         if (room.getSubmissions() != null) {
@@ -267,6 +275,7 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     @Override
     public SituationRoomDetailResponse getRoomDetailResponse(String code, String requesterId) {
         SituationRoom room = getRoom(code);
+        requireMember(room, requesterId);
 
         SituationRoomDetailResponse.ScenarioDetail scenarioDetail = null;
         if (room.getScenario() != null) {
@@ -304,6 +313,12 @@ public class SituationRoomServiceImpl implements SituationRoomService {
                 .memberNames(room.getMemberNames())
                 .scenario(scenarioDetail)
                 .build();
+    }
+
+    private void requireMember(SituationRoom room, String userId) {
+        if (userId == null || room.getMembers() == null || !room.getMembers().contains(userId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "非房间成员");
+        }
     }
 
     private String generateSummary(String description) {

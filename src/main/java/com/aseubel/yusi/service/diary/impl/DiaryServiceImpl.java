@@ -5,6 +5,8 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.aseubel.yusi.common.event.DiaryChangedEvent;
 import com.aseubel.yusi.common.event.DiaryCognitionIngestEvent;
+import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
 import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
@@ -65,6 +67,7 @@ public class DiaryServiceImpl implements DiaryService {
     @Override
     @UpdateCache(key = "'diary:list:' + #diary.userId + ':*'", evictOnly = true)
     public Diary addDiary(Diary diary) {
+        validateDiaryAssets(diary);
         diary.generateId();
         diary.setCreateTime(LocalDateTime.now());
         diary.setUpdateTime(LocalDateTime.now());
@@ -124,12 +127,13 @@ public class DiaryServiceImpl implements DiaryService {
      * 失效单个日记缓存和用户列表缓存
      */
     @Override
-    @UpdateCache(key = "'diary:detail:' + #diary.diaryId", evictOnly = true)
+    @UpdateCache(key = "'diary:detail:' + #diary.diaryId + ':' + #diary.userId", evictOnly = true)
     public Diary editDiary(Diary diary) {
-        Diary existingDiary = diaryRepository.findByDiaryId(diary.getDiaryId());
+        validateDiaryAssets(diary);
+        Diary existingDiary = diaryRepository.findByDiaryIdAndUserId(diary.getDiaryId(), diary.getUserId());
         if (ObjectUtil.isNotEmpty(existingDiary)) {
             // Delete removed images from OSS
-            deleteRemovedImages(existingDiary.getImages(), diary.getImages());
+            deleteRemovedImages(existingDiary.getImages(), diary.getImages(), diary.getUserId());
 
             diary.setId(existingDiary.getId());
             diary.setUpdateTime(LocalDateTime.now());
@@ -145,10 +149,10 @@ public class DiaryServiceImpl implements DiaryService {
             self.evictFootprintsCache(diary.getUserId());
             return saved;
         }
-        return null;
+        throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "日记不存在");
     }
 
-    private void deleteRemovedImages(String oldImagesJson, String newImagesJson) {
+    private void deleteRemovedImages(String oldImagesJson, String newImagesJson, String userId) {
         if (StrUtil.isBlank(oldImagesJson)) {
             return;
         }
@@ -163,7 +167,7 @@ public class DiaryServiceImpl implements DiaryService {
 
             if (!deletedImages.isEmpty()) {
                 // Async deletion would be better, but we do it synchronously for simplicity
-                ossService.deleteImages(deletedImages);
+                ossService.deleteOwnedImages(deletedImages, userId);
                 log.info("Deleted orphaned images from OSS: {}", deletedImages);
             }
         } catch (Exception e) {
@@ -171,8 +175,8 @@ public class DiaryServiceImpl implements DiaryService {
         }
     }
 
-    @UpdateCache(key = "'diary:detail:' + #diaryId", evictOnly = true)
-    public void evictDiaryCache(String diaryId) {
+    @UpdateCache(key = "'diary:detail:' + #diaryId + ':' + #userId", evictOnly = true)
+    public void evictDiaryCache(String diaryId, String userId) {
     }
 
     /**
@@ -192,9 +196,9 @@ public class DiaryServiceImpl implements DiaryService {
      * 使用压缩缓存，日记内容较大，压缩可显著减少 Redis 内存占用
      */
     @Override
-    @QueryCache(key = "'diary:detail:' + #diaryId", ttl = 3600, compress = true)
-    public Diary getDiary(String diaryId) {
-        Diary diary = diaryRepository.findByDiaryId(diaryId);
+    @QueryCache(key = "'diary:detail:' + #diaryId + ':' + #userId", ttl = 3600, compress = true)
+    public Diary getDiary(String diaryId, String userId) {
+        Diary diary = diaryRepository.findByDiaryIdAndUserId(diaryId, userId);
         if (diary == null) {
             return null;
         }
@@ -275,17 +279,36 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     @Override
-    public String convertImagesToUrls(String imagesJson) {
+    public String convertImagesToUrls(String imagesJson, String userId) {
         if (StrUtil.isBlank(imagesJson)) {
             return imagesJson;
         }
+        List<String> objectKeys;
         try {
-            List<String> objectKeys = JSONUtil.toList(imagesJson, String.class);
-            List<String> urls = ossService.generatePresignedUrls(objectKeys);
-            return JSONUtil.toJsonStr(urls);
-        } catch (Exception e) {
-            log.error("Failed to convert images to urls: {}", imagesJson, e);
-            return imagesJson;
+            objectKeys = JSONUtil.toList(imagesJson, String.class);
+        } catch (RuntimeException e) {
+            log.warn("日记图片字段不是有效 JSON: {}", imagesJson, e);
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "日记图片数据不合法");
+        }
+        return JSONUtil.toJsonStr(ossService.generateOwnedUrls(objectKeys, userId));
+    }
+
+    private void validateDiaryAssets(Diary diary) {
+        if (diary == null || StrUtil.isBlank(diary.getUserId())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "用户身份不能为空");
+        }
+        if (StrUtil.isNotBlank(diary.getImages())) {
+            try {
+                List<String> objectKeys = JSONUtil.toList(diary.getImages(), String.class);
+                ossService.validateOwnedObjectKeys(objectKeys, diary.getUserId());
+            } catch (BusinessException e) {
+                throw e;
+            } catch (RuntimeException e) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "日记图片数据不合法");
+            }
+        }
+        if (StrUtil.isNotBlank(diary.getAudioObjectKey())) {
+            ossService.validateOwnedAudioObjectKey(diary.getAudioObjectKey(), diary.getUserId());
         }
     }
 

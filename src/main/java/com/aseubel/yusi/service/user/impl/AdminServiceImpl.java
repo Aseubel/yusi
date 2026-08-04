@@ -8,6 +8,7 @@ import com.aseubel.yusi.pojo.dto.admin.ScenarioAuditRequest;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
 import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.pojo.dto.admin.AdminUserResponse;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.SituationRoomRepository;
 import com.aseubel.yusi.repository.SituationScenarioRepository;
@@ -62,17 +63,17 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
-    public Page<User> getUsers(Pageable pageable, String search) {
+    public Page<AdminUserResponse> getUsers(Pageable pageable, String search) {
         if (search != null && !search.isEmpty()) {
             // 先尝试按 username 搜索
             Page<User> users = userRepository.findByUserNameContaining(search, pageable);
             if (users.hasContent()) {
-                return users;
+                return users.map(AdminUserResponse::from);
             }
             // 如果没找到，尝试按 userId 搜索
-            return userRepository.findByUserIdContaining(search, pageable);
+            return userRepository.findByUserIdContaining(search, pageable).map(AdminUserResponse::from);
         }
-        return userRepository.findAll(pageable);
+        return userRepository.findAll(pageable).map(AdminUserResponse::from);
     }
 
     @Override

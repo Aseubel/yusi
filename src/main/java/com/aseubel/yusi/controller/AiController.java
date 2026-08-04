@@ -71,7 +71,6 @@ import java.util.stream.Collectors;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/ai")
-@CrossOrigin("*")
 public class AiController {
 
     @Autowired
@@ -266,7 +265,7 @@ public class AiController {
                 // 构建三明治模板内容，用于强调systemprompt
                 String sandwichContent = String.format(PersistentChatMemoryStore.SANDWITCH_TEMPLATE, message);
                 // 构建图片内容列表
-                List<ImageContent> imageContents = buildImageContents(images);
+                List<ImageContent> imageContents = buildImageContents(userId, images);
                 if (!session.isActive()) {
                     return;
                 }
@@ -339,17 +338,15 @@ public class AiController {
         return Response.success();
     }
 
-    private List<ImageContent> buildImageContents(List<String> images) {
+    private List<ImageContent> buildImageContents(String userId, List<String> images) {
         if (images == null || images.isEmpty()) {
             return List.of();
         }
         // 验证图片key
-        ossService.validateObjectKeys(images);
-
         return images.stream()
                 .filter(StrUtil::isNotBlank)
                 .map(objectKey -> {
-                    String url = ossService.generatePresignedUrl(objectKey);
+                    String url = ossService.generateOwnedUrl(objectKey, userId);
                     return ImageContent.from(URI.create(url));
                 })
                 .collect(Collectors.toList());

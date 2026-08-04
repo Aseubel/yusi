@@ -12,11 +12,14 @@ public class OssConfig {
 
     @Bean
     public OSSClient ossClient(OssProperties ossProperties) {
-        return OSSClient.newBuilder()
+        var builder = OSSClient.newBuilder()
             .credentialsProvider(new StaticCredentialsProvider(
                 ossProperties.getAccessKeyId(),
                 ossProperties.getAccessKeySecret()))
-            .region(ossProperties.getRegion())
-            .build();
+            .region(ossProperties.getRegion());
+        if (ossProperties.getEndpoint() != null && !ossProperties.getEndpoint().isBlank()) {
+            builder.endpoint(ossProperties.getEndpoint());
+        }
+        return builder.build();
     }
 }

@@ -76,6 +76,7 @@ EMBEDDING_MODEL_NAME=BAAI/bge-m3
 REDIS_SDK_CONFIG_PASSWORD=
 
 # MCP (可选, 默认关闭)
+MCP_AUTH_API_KEY=replace-with-a-long-random-service-key
 MCP_ENABLED=false
 EOF
 ```
@@ -241,6 +242,7 @@ model:
 server:
   port: 11611
   env: "dev"
+  auth_api_key: "set-a-long-random-internal-service-key" # 仅 /internal/mcp，生产环境通过 SERVER_AUTH_API_KEY 注入
 
 search:
   provider: bocha    # 搜索提供商: bocha/google/serper/tavily
@@ -249,6 +251,8 @@ search:
 grpc:
   backend_target: "localhost:9090"  # 后端gRPC地址
 ```
+
+公共 MCP `POST /mcp` 只暴露 `diarySearch` 和 `memorySearch`，必须携带用户开发者 Key（推荐 `Authorization: Bearer <developer-key>`）。Java 后端访问内部 MCP `POST /internal/mcp`，只暴露 `web_search`，必须携带 `X-MCP-Service-Key`。两种密钥不得复用；生产环境只通过 HTTPS 反向代理发布公共 `/mcp`，不要公开 Java gRPC `9090`。
 
 ---
 

@@ -1,6 +1,5 @@
 package com.aseubel.yusi.pojo.dto.user;
 
-import com.aseubel.yusi.pojo.entity.User;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,5 +14,5 @@ import java.io.Serializable;
 public class AuthResponse implements Serializable {
     private String accessToken;
     private String refreshToken;
-    private User user;
+    private UserResponse user;
 }

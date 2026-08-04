@@ -21,7 +21,6 @@ import java.util.List;
 @Auth
 @Slf4j
 @RestController
-@CrossOrigin("*")
 @RequestMapping("/api/key")
 public class KeyManagementController {
 

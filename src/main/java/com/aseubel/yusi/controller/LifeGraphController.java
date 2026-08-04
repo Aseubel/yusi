@@ -100,13 +100,13 @@ public class LifeGraphController {
 
     @PostMapping("/merge-suggestions/{judgmentId}/accept")
     public Response<Void> acceptMerge(@PathVariable Long judgmentId) {
-        mergeSuggestionService.acceptMerge(judgmentId);
+        mergeSuggestionService.acceptMerge(UserContext.getUserId(), judgmentId);
         return Response.success(null);
     }
 
     @PostMapping("/merge-suggestions/{judgmentId}/reject")
     public Response<Void> rejectMerge(@PathVariable Long judgmentId) {
-        mergeSuggestionService.rejectMerge(judgmentId);
+        mergeSuggestionService.rejectMerge(UserContext.getUserId(), judgmentId);
         return Response.success(null);
     }
 

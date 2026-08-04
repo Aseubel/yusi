@@ -2,7 +2,7 @@ package com.aseubel.yusi.common.ratelimit;
 
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.RateLimitException;
-import jakarta.servlet.http.HttpServletRequest;
+import com.aseubel.yusi.common.web.ClientIpResolver;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.Aspect;
@@ -32,6 +32,9 @@ public class RateLimiterAspect {
 
     @Autowired
     private RedissonClient redissonClient;
+
+    @Autowired
+    private ClientIpResolver clientIpResolver;
 
     // 本地 Guava RateLimiter 缓存，用于 Redis 故障时降级
     private final ConcurrentHashMap<String, com.google.common.util.concurrent.RateLimiter> localRateLimiters = new ConcurrentHashMap<>();
@@ -173,18 +176,7 @@ public class RateLimiterAspect {
             ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder
                     .getRequestAttributes();
             if (attributes != null) {
-                HttpServletRequest request = attributes.getRequest();
-                String ip = request.getHeader("X-Forwarded-For");
-                if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-                    ip = request.getHeader("Proxy-Client-IP");
-                }
-                if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-                    ip = request.getHeader("WL-Proxy-Client-IP");
-                }
-                if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-                    ip = request.getRemoteAddr();
-                }
-                return ip;
+                return clientIpResolver.resolve(attributes.getRequest());
             }
         } catch (Exception e) {
             log.error("获取IP地址失败", e);

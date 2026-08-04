@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import com.aseubel.yusi.repository.SoulMatchRepository;
+import java.security.Principal;
 import org.springframework.stereotype.Controller;
 
 import java.util.Map;
@@ -18,6 +20,8 @@ public class WebSocketController {
     @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
+    private final SoulMatchRepository soulMatchRepository;
+
     // 存储匹配的在线状态
     private final Map<Long, Map<String, Boolean>> matchOnlineStatus = new ConcurrentHashMap<>();
 
@@ -25,8 +29,14 @@ public class WebSocketController {
      * 处理在线状态请求
      */
     @MessageMapping("/soul-chat/status")
-    public void handleStatusRequest(StatusRequest request) {
+    public void handleStatusRequest(StatusRequest request, Principal principal) {
         Long matchId = request.getMatchId();
+        if (principal == null || soulMatchRepository.findById(matchId)
+                .filter(match -> principal.getName().equals(match.getUserAId())
+                        || principal.getName().equals(match.getUserBId()))
+                .isEmpty()) {
+            return;
+        }
         // 广播当前在线状态
         broadcastStatus(matchId);
     }

@@ -5,6 +5,8 @@ import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.dto.soulplaza.ResonateRequest;
 import com.aseubel.yusi.pojo.dto.soulplaza.SendSignalRequest;
 import com.aseubel.yusi.pojo.dto.soulplaza.SubmitCardRequest;
@@ -25,7 +27,6 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/plaza")
-@CrossOrigin("*")
 public class SoulPlazaController {
 
     private final SoulPlazaService plazaService;
@@ -50,10 +51,14 @@ public class SoulPlazaController {
 
     @Auth(required = false)
     @GetMapping("/feed")
+    @RateLimiter(key = "plaza-feed", time = 60, count = 60, limitType = LimitType.IP)
     public Response<Page<SoulCard>> getFeed(
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size,
             @RequestParam(required = false) String emotion) {
+        if (page < 1 || page > 1000 || size < 1 || size > 50) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "分页参数不合法");
+        }
         return Response.success(plazaService.getFeed(UserContext.getUserId(), page, size, emotion));
     }
 

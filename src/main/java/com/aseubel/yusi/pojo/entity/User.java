@@ -1,6 +1,7 @@
 package com.aseubel.yusi.pojo.entity;
 
 import com.aseubel.yusi.common.utils.UuidUtils;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -36,6 +37,7 @@ public class User {
     private String userName;
 
     @Column(name = "password")
+    @JsonIgnore
     private String password;
 
     @Column(name = "email")
@@ -48,6 +50,7 @@ public class User {
     private String matchIntent;
 
     @Column(name = "permission_level")
+    @JsonIgnore
     private Integer permissionLevel = 0;
 
     /**
@@ -66,12 +69,14 @@ public class User {
      * 云端备份的加密密钥（使用管理员公钥加密）
      */
     @Column(name = "encrypted_backup_key", length = 1024)
+    @JsonIgnore
     private String encryptedBackupKey;
 
     /**
      * 密钥派生盐值（用于PBKDF2/Argon2）
      */
     @Column(name = "key_salt")
+    @JsonIgnore
     private String keySalt;
 
     public String generateUserId() {

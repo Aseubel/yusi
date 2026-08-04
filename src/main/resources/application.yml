@@ -5,6 +5,8 @@ spring:
     active: prod
 
 yusi:
+  web:
+    trusted-proxy-addresses: ${YUSI_TRUSTED_PROXY_ADDRESSES:}
   memory:
     # 上下文记忆窗口大小（短期记忆的消息条数）
     context-window-size: 20

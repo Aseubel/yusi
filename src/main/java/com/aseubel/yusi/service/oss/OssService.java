@@ -8,6 +8,7 @@ import com.aseubel.yusi.common.utils.UuidUtils;
 import com.aseubel.yusi.pojo.entity.ImageFile;
 import com.aseubel.yusi.repository.ImageFileRepository;
 import com.aliyun.sdk.service.oss2.OSSClient;
+import com.aliyun.sdk.service.oss2.PresignOptions;
 import com.aliyun.sdk.service.oss2.models.*;
 import com.aliyun.sdk.service.oss2.transport.BinaryData;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -37,6 +39,8 @@ public class OssService {
 
     private static final List<String> ALLOWED_IMAGE_TYPES = List.of(
             "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp");
+    private static final Set<String> ALLOWED_IMAGE_EXTENSIONS = Set.of(
+            ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp");
     private static final List<String> ALLOWED_AUDIO_TYPES = List.of(
             "audio/mpeg", "audio/mp3", "audio/mpga", "audio/mp4", "audio/x-m4a",
             "audio/wav", "audio/x-wav", "audio/ogg", "audio/webm", "video/webm");
@@ -45,6 +49,9 @@ public class OssService {
     private static final String MD5_CACHE_KEY_PREFIX = "yusi:md5:";
     private static final long CHUNK_EXPIRE_HOURS = 24;
     private static final long MD5_CACHE_EXPIRE_DAYS = 30;
+    private static final int MAX_CHUNKS = 1000;
+    private static final int MAX_URL_EXPIRE_SECONDS = 24 * 60 * 60;
+    private static final long MAX_CHUNK_SIZE = 5L * 1024 * 1024;
 
     public String uploadImage(MultipartFile file, String userId) {
         validateImageFile(file);
@@ -61,7 +68,7 @@ public class OssService {
 
             String fileMd5 = calculateMd5(compressed);
 
-            var existingFile = imageFileRepository.findByFileMd5(fileMd5);
+            var existingFile = imageFileRepository.findByFileMd5AndUserId(fileMd5, userId);
             if (existingFile.isPresent()) {
                 String existObjectKey = existingFile.get().getObjectKey();
                 if (objectKeyExists(existObjectKey)) {
@@ -83,7 +90,7 @@ public class OssService {
             log.info("Image uploaded successfully: {}, original size: {}, compressed size: {}",
                     objectKey, bytes.length, compressed.length);
 
-            cacheMd5ForSkipUpload(objectKey, fileMd5);
+            cacheMd5ForSkipUpload(objectKey, fileMd5, userId);
 
             saveImageFileAsync(objectKey, fileMd5, userId, originalFilename, (long) compressed.length,
                     file.getContentType());
@@ -139,13 +146,23 @@ public class OssService {
         }
     }
 
-    public String generatePresignedUrl(String objectKey) {
+    private String generatePresignedUrl(String objectKey) {
         return generatePresignedUrl(objectKey, ossProperties.getUrlExpireSeconds());
     }
 
-    public String generatePresignedUrl(String objectKey, int expireSeconds) {
+    private String generatePresignedUrl(String objectKey, int expireSeconds) {
+        validateObjectKey(objectKey);
+        if (expireSeconds < 1 || expireSeconds > MAX_URL_EXPIRE_SECONDS) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "图片链接有效期不合法");
+        }
         try {
-            String url = "https://" + ossProperties.getDomain() + "/" + objectKey;
+            GetObjectRequest request = GetObjectRequest.newBuilder()
+                    .bucket(ossProperties.getBucketName())
+                    .key(objectKey)
+                    .build();
+            String url = ossClient.presign(request, PresignOptions.newBuilder()
+                    .expiration(Duration.ofSeconds(expireSeconds))
+                    .build()).url();
             log.debug("Generated URL for: {}", objectKey);
             return url;
         } catch (Exception e) {
@@ -154,7 +171,10 @@ public class OssService {
         }
     }
 
-    public List<String> generatePresignedUrls(List<String> objectKeys) {
+    private List<String> generatePresignedUrls(List<String> objectKeys) {
+        if (objectKeys == null || objectKeys.size() > 100) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "图片数量超出限制");
+        }
         List<String> urls = new ArrayList<>();
         for (String objectKey : objectKeys) {
             urls.add(generatePresignedUrl(objectKey));
@@ -162,11 +182,40 @@ public class OssService {
         return urls;
     }
 
-    public void deleteImage(String objectKey) {
+    public String generateOwnedUrl(String objectKey, String userId) {
+        validateOwnedObjectKey(objectKey, userId);
+        return generatePresignedUrl(objectKey);
+    }
+
+    public List<String> generateOwnedUrls(List<String> objectKeys, String userId) {
+        if (objectKeys == null || objectKeys.size() > 100) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "图片数量超出限制");
+        }
+        return objectKeys.stream().map(key -> generateOwnedUrl(key, userId)).toList();
+    }
+
+    private void deleteImage(String objectKey) {
         deleteObject(objectKey);
     }
 
-    public void deleteObject(String objectKey) {
+    public void deleteOwnedImage(String objectKey, String userId) {
+        validateOwnedObjectKey(objectKey, userId);
+        deleteObject(objectKey);
+    }
+
+    public void deleteOwnedAudioObject(String objectKey, String userId) {
+        validateOwnedAudioObjectKey(objectKey, userId);
+        deleteObject(objectKey);
+    }
+
+    public void deleteOwnedImages(List<String> objectKeys, String userId) {
+        if (objectKeys == null || objectKeys.size() > 100) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "图片数量超出限制");
+        }
+        objectKeys.forEach(key -> deleteOwnedImage(key, userId));
+    }
+
+    private void deleteObject(String objectKey) {
         DeleteObjectRequest request = DeleteObjectRequest.newBuilder()
                 .bucket(ossProperties.getBucketName())
                 .key(objectKey)
@@ -176,7 +225,7 @@ public class OssService {
         log.info("Object deleted: {}", objectKey);
     }
 
-    public void deleteImages(List<String> objectKeys) {
+    private void deleteImages(List<String> objectKeys) {
         for (String objectKey : objectKeys) {
             deleteImage(objectKey);
         }
@@ -193,8 +242,9 @@ public class OssService {
         return url.substring(bucketIndex + ossProperties.getBucketName().length() + 1);
     }
 
-    public String checkSkipUpload(String fileMd5) {
-        var imageFile = imageFileRepository.findByFileMd5(fileMd5);
+    public String checkSkipUpload(String fileMd5, String userId) {
+        validateFileMd5(fileMd5);
+        var imageFile = imageFileRepository.findByFileMd5AndUserId(fileMd5, userId);
         if (imageFile.isPresent()) {
             String objectKey = imageFile.get().getObjectKey();
             if (objectKeyExists(objectKey)) {
@@ -203,7 +253,7 @@ public class OssService {
             }
         }
 
-        String cacheKey = MD5_CACHE_KEY_PREFIX + fileMd5;
+        String cacheKey = MD5_CACHE_KEY_PREFIX + userId + ":" + fileMd5;
         String cachedObjectKey = redisTemplate.opsForValue().get(cacheKey);
         if (cachedObjectKey != null && objectKeyExists(cachedObjectKey)) {
             log.info("Skip upload - found in cache, MD5: {}, objectKey: {}", fileMd5, cachedObjectKey);
@@ -228,18 +278,40 @@ public class OssService {
 
     public String uploadChunk(MultipartFile chunk, String fileMd5, Integer chunkIndex,
             Integer totalChunks, String userId) {
-        try {
-            String uploadId = getOrCreateUploadId(fileMd5, totalChunks, userId);
+        validateChunkRequest(chunk, fileMd5, chunkIndex, totalChunks, userId);
+        String uploadId = getOrCreateUploadId(fileMd5, totalChunks, userId);
 
-            String chunkKey = CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":" + chunkIndex;
-            if (Boolean.TRUE.equals(redisTemplate.hasKey(chunkKey))) {
-                log.info("Chunk {} already uploaded for MD5: {}", chunkIndex, fileMd5);
-                return uploadId;
+        String chunkKey = chunkKey(fileMd5, userId, chunkIndex);
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(chunkKey))) {
+            log.info("Chunk {} already uploaded for MD5: {}", chunkIndex, fileMd5);
+            return uploadId;
+        }
+
+        String reservationKey = chunkKey + ":reserved";
+        Boolean reserved = redisTemplate.opsForValue().setIfAbsent(
+                reservationKey, "1", CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
+        if (!Boolean.TRUE.equals(reserved)) {
+            return uploadId;
+        }
+
+        String bytesKey = chunkPrefix(fileMd5, userId) + ":bytes";
+        long chunkSize = chunk.getSize();
+        boolean bytesCounted = false;
+        try {
+            Long totalBytes = redisTemplate.opsForValue().increment(bytesKey, chunkSize);
+            bytesCounted = totalBytes != null;
+            if (totalBytes == null) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR, "分片计数失败");
+            }
+            redisTemplate.expire(bytesKey, CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
+            if (totalBytes > ossProperties.getMaxFileSize()) {
+                redisTemplate.opsForValue().increment(bytesKey, -chunkSize);
+                bytesCounted = false;
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "分片总大小超过限制");
             }
 
             byte[] chunkBytes = chunk.getBytes();
-
-            String chunkObjectKey = ossProperties.getImageFolder() + "chunks/" + fileMd5 + "/" + chunkIndex;
+            String chunkObjectKey = chunkObjectKey(fileMd5, userId, chunkIndex);
 
             PutObjectRequest request = PutObjectRequest.newBuilder()
                     .bucket(ossProperties.getBucketName())
@@ -251,37 +323,61 @@ public class OssService {
             ossClient.putObject(request);
 
             redisTemplate.opsForValue().set(chunkKey, chunkObjectKey, CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
+            redisTemplate.opsForValue().set(chunkKey + ":size", String.valueOf(chunkSize),
+                    CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
 
-            updateChunkProgress(fileMd5, totalChunks);
+            updateChunkProgress(fileMd5, userId);
 
             log.info("Chunk {} uploaded for MD5: {}", chunkIndex, fileMd5);
             return uploadId;
         } catch (IOException e) {
+            if (bytesCounted) {
+                redisTemplate.opsForValue().increment(bytesKey, -chunkSize);
+            }
             log.error("Failed to upload chunk {} for MD5: {}", chunkIndex, fileMd5, e);
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "分片上传失败");
+        } catch (RuntimeException e) {
+            if (bytesCounted) {
+                redisTemplate.opsForValue().increment(bytesKey, -chunkSize);
+            }
+            throw e;
+        } finally {
+            redisTemplate.delete(reservationKey);
         }
     }
 
     public String getOrCreateUploadId(String fileMd5, Integer totalChunks, String userId) {
-        String uploadIdKey = CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":uploadId";
+        validateFileMd5(fileMd5);
+        validateUserId(userId);
+        if (totalChunks == null || totalChunks < 1 || totalChunks > MAX_CHUNKS) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "分片数量不合法");
+        }
+        String uploadIdKey = chunkPrefix(fileMd5, userId) + ":uploadId";
         String existingUploadId = redisTemplate.opsForValue().get(uploadIdKey);
 
         if (existingUploadId != null) {
-            return existingUploadId;
+            String[] metadata = existingUploadId.split(":", 3);
+            if (metadata.length != 3 || !userId.equals(metadata[2])
+                    || !String.valueOf(totalChunks).equals(metadata[1])) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "分片会话参数不一致");
+            }
+            return metadata[0];
         }
 
         String newUploadId = UUID.randomUUID().toString();
         redisTemplate.opsForValue().set(uploadIdKey, newUploadId + ":" + totalChunks + ":" + userId,
                 CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
 
-        redisTemplate.opsForValue().set(CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":totalChunks",
+        redisTemplate.opsForValue().set(chunkPrefix(fileMd5, userId) + ":totalChunks",
                 String.valueOf(totalChunks), CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
 
         return newUploadId;
     }
 
-    public int getUploadedChunkCount(String fileMd5) {
-        String totalChunksStr = redisTemplate.opsForValue().get(CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":totalChunks");
+    public int getUploadedChunkCount(String fileMd5, String userId) {
+        validateFileMd5(fileMd5);
+        validateUserId(userId);
+        String totalChunksStr = redisTemplate.opsForValue().get(chunkPrefix(fileMd5, userId) + ":totalChunks");
         if (totalChunksStr == null) {
             return 0;
         }
@@ -290,7 +386,7 @@ public class OssService {
         int uploadedCount = 0;
 
         for (int i = 0; i < totalChunks; i++) {
-            String chunkKey = CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":" + i;
+            String chunkKey = chunkKey(fileMd5, userId, i);
             if (Boolean.TRUE.equals(redisTemplate.hasKey(chunkKey))) {
                 uploadedCount++;
             }
@@ -299,14 +395,24 @@ public class OssService {
         return uploadedCount;
     }
 
-    private void updateChunkProgress(String fileMd5, int totalChunks) {
-        int uploaded = getUploadedChunkCount(fileMd5);
-        redisTemplate.opsForValue().set(CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":uploadedCount",
+    private void updateChunkProgress(String fileMd5, String userId) {
+        int uploaded = getUploadedChunkCount(fileMd5, userId);
+        redisTemplate.opsForValue().set(chunkPrefix(fileMd5, userId) + ":uploadedCount",
                 String.valueOf(uploaded), CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
     }
 
     public String mergeChunks(String fileMd5, Integer totalChunks, String userId, String fileName, Long totalSize) {
-        int uploadedCount = getUploadedChunkCount(fileMd5);
+        validateFileMd5(fileMd5);
+        validateUserId(userId);
+        if (totalSize == null || totalSize < 1 || totalSize > ossProperties.getMaxFileSize()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "文件大小不合法");
+        }
+        if (totalChunks == null || totalChunks < 1 || totalChunks > MAX_CHUNKS) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "分片数量不合法");
+        }
+        String extension = validateImageFileName(fileName);
+        validateUploadSession(fileMd5, totalChunks, userId);
+        int uploadedCount = getUploadedChunkCount(fileMd5, userId);
         if (uploadedCount != totalChunks) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "分片上传不完整，已上传 " + uploadedCount + "/" + totalChunks);
@@ -316,17 +422,26 @@ public class OssService {
         try {
             tempDir = Files.createTempDirectory("yusi-merge-");
 
-            ByteArrayOutputStream mergedOutput = new ByteArrayOutputStream();
+            Path mergedFile = tempDir.resolve("merged.bin");
+            long mergedSize = 0;
 
-            for (int i = 0; i < totalChunks; i++) {
-                String chunkObjectKey = ossProperties.getImageFolder() + "chunks/" + fileMd5 + "/" + i;
-                byte[] chunkData = downloadChunk(chunkObjectKey);
-                mergedOutput.write(chunkData);
+            try (OutputStream output = Files.newOutputStream(mergedFile)) {
+                for (int i = 0; i < totalChunks; i++) {
+                    String chunkObjectKey = chunkObjectKey(fileMd5, userId, i);
+                    mergedSize += downloadChunk(chunkObjectKey, output, ossProperties.getMaxFileSize() - mergedSize);
+                }
             }
 
-            byte[] mergedBytes = mergedOutput.toByteArray();
+            if (mergedSize != totalSize) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR,
+                        "合并文件大小与声明不一致");
+            }
+            if (mergedSize > ossProperties.getMaxFileSize()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "合并文件超过大小限制");
+            }
 
-            String extension = getFileExtension(fileName);
+            byte[] mergedBytes = Files.readAllBytes(mergedFile);
+
             String finalObjectKey = ossProperties.getImageFolder() + userId + "/" +
                     UuidUtils.genUuidSimple() + extension;
 
@@ -341,16 +456,16 @@ public class OssService {
 
             ossClient.putObject(request);
 
-            cacheMd5ForSkipUpload(finalObjectKey, fileMd5);
+            cacheMd5ForSkipUpload(finalObjectKey, fileMd5, userId);
 
             saveImageFileAsync(finalObjectKey, fileMd5, userId, fileName, (long) compressedBytes.length,
                     getMimeType(extension));
 
-            cleanupChunks(fileMd5, totalChunks);
-            cleanupUploadId(fileMd5);
+            cleanupChunks(fileMd5, totalChunks, userId);
+            cleanupUploadId(fileMd5, userId);
 
             log.info("Image merged successfully: {}, total chunks: {}, original size: {}, compressed size: {}",
-                    finalObjectKey, totalChunks, mergedBytes.length, compressedBytes.length);
+                    finalObjectKey, totalChunks, mergedSize, compressedBytes.length);
             return finalObjectKey;
         } catch (BusinessException e) {
             throw e;
@@ -360,10 +475,12 @@ public class OssService {
         } finally {
             if (tempDir != null) {
                 try {
-                    Files.walk(tempDir)
+                    try (var paths = Files.walk(tempDir)) {
+                        paths
                             .sorted(Comparator.reverseOrder())
                             .map(Path::toFile)
                             .forEach(File::delete);
+                    }
                 } catch (IOException e) {
                     log.warn("Failed to cleanup temp directory: {}", tempDir);
                 }
@@ -371,20 +488,31 @@ public class OssService {
         }
     }
 
-    private byte[] downloadChunk(String objectKey) throws Exception {
+    private long downloadChunk(String objectKey, OutputStream output, long remainingBytes) throws Exception {
         GetObjectRequest request = GetObjectRequest.newBuilder()
                 .bucket(ossProperties.getBucketName())
                 .key(objectKey)
                 .build();
 
-        try (GetObjectResult result = ossClient.getObject(request)) {
-            return result.body().readAllBytes();
+        try (GetObjectResult result = ossClient.getObject(request);
+                InputStream input = result.body()) {
+            long total = 0;
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                total += read;
+                if (total > remainingBytes) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR, "合并文件超过大小限制");
+                }
+                output.write(buffer, 0, read);
+            }
+            return total;
         }
     }
 
-    private void cleanupChunks(String fileMd5, int totalChunks) {
+    private void cleanupChunks(String fileMd5, int totalChunks, String userId) {
         for (int i = 0; i < totalChunks; i++) {
-            String chunkKey = CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":" + i;
+            String chunkKey = chunkKey(fileMd5, userId, i);
             String chunkObjectKey = redisTemplate.opsForValue().get(chunkKey);
 
             if (chunkObjectKey != null) {
@@ -395,21 +523,24 @@ public class OssService {
                 }
             }
             redisTemplate.delete(chunkKey);
+            redisTemplate.delete(chunkKey + ":reserved");
+            redisTemplate.delete(chunkKey + ":size");
         }
 
-        redisTemplate.delete(CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":totalChunks");
-        redisTemplate.delete(CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":uploadedCount");
+        redisTemplate.delete(chunkPrefix(fileMd5, userId) + ":totalChunks");
+        redisTemplate.delete(chunkPrefix(fileMd5, userId) + ":uploadedCount");
+        redisTemplate.delete(chunkPrefix(fileMd5, userId) + ":bytes");
     }
 
-    private void cleanupUploadId(String fileMd5) {
-        redisTemplate.delete(CHUNK_UPLOAD_KEY_PREFIX + fileMd5 + ":uploadId");
+    private void cleanupUploadId(String fileMd5, String userId) {
+        redisTemplate.delete(chunkPrefix(fileMd5, userId) + ":uploadId");
     }
 
     @Async("threadPoolExecutor")
     public void saveImageFileAsync(String objectKey, String fileMd5, String userId, String fileName,
             Long fileSize, String contentType) {
         try {
-            if (imageFileRepository.existsByFileMd5(fileMd5)) {
+            if (imageFileRepository.existsByFileMd5AndUserId(fileMd5, userId)) {
                 log.debug("ImageFile already exists for MD5: {}", fileMd5);
                 return;
             }
@@ -431,8 +562,8 @@ public class OssService {
         }
     }
 
-    private void cacheMd5ForSkipUpload(String objectKey, String md5) {
-        String cacheKey = MD5_CACHE_KEY_PREFIX + md5;
+    private void cacheMd5ForSkipUpload(String objectKey, String md5, String userId) {
+        String cacheKey = MD5_CACHE_KEY_PREFIX + userId + ":" + md5;
         redisTemplate.opsForValue().set(cacheKey, objectKey, MD5_CACHE_EXPIRE_DAYS, TimeUnit.DAYS);
         log.debug("Cached MD5 {} for objectKey {}", md5, objectKey);
     }
@@ -475,6 +606,18 @@ public class OssService {
         return filename.substring(filename.lastIndexOf(".")).toLowerCase();
     }
 
+    private String validateImageFileName(String filename) {
+        if (filename == null || filename.isBlank() || filename.length() > 255
+                || filename.contains("/") || filename.contains("\\") || filename.endsWith(".")) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "图片文件名不合法");
+        }
+        String extension = getFileExtension(filename);
+        if (!ALLOWED_IMAGE_EXTENSIONS.contains(extension)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的图片扩展名");
+        }
+        return extension;
+    }
+
     private String getMimeType(String extension) {
         return switch (extension.toLowerCase()) {
             case ".jpg", ".jpeg" -> "image/jpeg";
@@ -486,7 +629,7 @@ public class OssService {
         };
     }
 
-    public void validateObjectKey(String objectKey) {
+    private void validateObjectKey(String objectKey) {
         if (objectKey == null || objectKey.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "图片key不能为空");
         }
@@ -498,12 +641,92 @@ public class OssService {
         }
     }
 
-    public void validateObjectKeys(List<String> objectKeys) {
+    private void validateObjectKeys(List<String> objectKeys) {
         if (objectKeys == null || objectKeys.isEmpty()) {
             return;
         }
         for (String objectKey : objectKeys) {
             validateObjectKey(objectKey);
         }
+    }
+
+    public void validateOwnedObjectKeys(List<String> objectKeys, String userId) {
+        if (objectKeys == null || objectKeys.size() > 100) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "图片数量超出限制");
+        }
+        for (String objectKey : objectKeys) {
+            validateOwnedObjectKey(objectKey, userId);
+        }
+    }
+
+    public void validateOwnedAudioObjectKey(String objectKey, String userId) {
+        if (objectKey == null || userId == null || userId.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "无效的音频路径");
+        }
+        if (objectKey.contains("..") || objectKey.contains("\\")
+                || !objectKey.startsWith(ossProperties.getAudioFolder() + userId + "/")) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该音频");
+        }
+    }
+
+    private void validateOwnedObjectKey(String objectKey, String userId) {
+        if (objectKey == null || userId == null || userId.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "无效的图片路径");
+        }
+        validateObjectKey(objectKey);
+        String ownerPrefix = ossProperties.getImageFolder() + userId + "/";
+        if (!objectKey.startsWith(ownerPrefix)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该图片");
+        }
+    }
+
+    private void validateChunkRequest(MultipartFile chunk, String fileMd5, Integer chunkIndex,
+            Integer totalChunks, String userId) {
+        long maxChunkSize = Math.min(ossProperties.getMaxFileSize(), MAX_CHUNK_SIZE);
+        if (chunk == null || chunk.isEmpty() || chunk.getSize() > maxChunkSize) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "分片文件不合法");
+        }
+        validateFileMd5(fileMd5);
+        validateUserId(userId);
+        if (totalChunks == null || totalChunks < 1 || totalChunks > MAX_CHUNKS
+                || chunkIndex == null || chunkIndex < 0 || chunkIndex >= totalChunks) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "分片参数不合法");
+        }
+    }
+
+    private void validateFileMd5(String fileMd5) {
+        if (fileMd5 == null || !fileMd5.matches("[a-fA-F0-9]{32}")) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "文件 MD5 不合法");
+        }
+    }
+
+    private void validateUserId(String userId) {
+        if (userId == null || userId.isBlank() || userId.contains(":") || userId.contains("/")
+                || userId.contains("\\")) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "用户身份不合法");
+        }
+    }
+
+    private void validateUploadSession(String fileMd5, int totalChunks, String userId) {
+        String metadata = redisTemplate.opsForValue().get(chunkPrefix(fileMd5, userId) + ":uploadId");
+        if (metadata == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "分片上传会话不存在或已过期");
+        }
+        String[] parts = metadata.split(":", 3);
+        if (parts.length != 3 || !String.valueOf(totalChunks).equals(parts[1]) || !userId.equals(parts[2])) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "分片会话参数不一致");
+        }
+    }
+
+    private String chunkPrefix(String fileMd5, String userId) {
+        return CHUNK_UPLOAD_KEY_PREFIX + userId + ":" + fileMd5;
+    }
+
+    private String chunkKey(String fileMd5, String userId, int chunkIndex) {
+        return chunkPrefix(fileMd5, userId) + ":" + chunkIndex;
+    }
+
+    private String chunkObjectKey(String fileMd5, String userId, int chunkIndex) {
+        return ossProperties.getImageFolder() + "chunks/" + userId + "/" + fileMd5 + "/" + chunkIndex;
     }
 }

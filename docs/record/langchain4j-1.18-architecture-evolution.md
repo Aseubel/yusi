@@ -26,7 +26,7 @@ BDI 和 Human-in-the-Loop 适合“计划 -> 工具调用 -> 等待用户确认 
 
 ### 4. MCP 外部适配层与 Java gRPC 能力边界
 
-当前 MCP 不是 Java 后端专用服务：Go MCP Server 对外实现 MCP/HTTP 协议，工具执行时通过 gRPC 调用 Java 后端的内部记忆能力。Go 层只负责协议适配和 API Key 透传，Java gRPC 服务负责用户归属、scope 和数据访问校验。Phase 4 已落地 MEMORY_READ，后续新增写日记或匹配能力时沿用同一 capability 边界。
+当前 MCP 不是 Java 后端专用服务：Go MCP Server 对外实现 MCP/HTTP 协议，工具执行时通过 gRPC 调用 Java 后端的内部记忆能力。Go 层使用独立的传输层服务密钥保护网关，并只透传请求中的用户开发者 Key；Java gRPC 服务负责用户归属、scope 和数据访问校验。Phase 4 已落地 MEMORY_READ，后续新增写日记或匹配能力时沿用同一 capability 边界。
 
 这比在 Go 工具描述或提示词中约束权限更可靠；Java 内部函数仍可被 Web、任务和 MCP 复用，MCP 也不会反向成为后端业务服务的所有者。
 

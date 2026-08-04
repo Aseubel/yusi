@@ -3,6 +3,8 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.chat.SendMessageRequest;
@@ -25,7 +27,6 @@ import java.util.List;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/soul-chat")
-@CrossOrigin("*")
 public class SoulChatController {
 
     @Autowired
@@ -41,6 +42,7 @@ public class SoulChatController {
     private WebSocketController webSocketController;
 
     @PostMapping("/send")
+    @RateLimiter(key = "soul-chat-send", time = 60, count = 60, limitType = LimitType.USER)
     public Response<SoulMessage> sendMessage(@RequestBody SendMessageRequest request) {
         String senderId = UserContext.getUserId();
 

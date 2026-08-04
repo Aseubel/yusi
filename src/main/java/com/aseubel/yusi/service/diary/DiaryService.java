@@ -11,13 +11,13 @@ public interface DiaryService {
 
     Diary editDiary(Diary diary);
 
-    Diary getDiary(String diaryId);
+    Diary getDiary(String diaryId, String userId);
 
     Page<Diary> getDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc);
 
     String decryptDiaryContent(Diary diary);
 
-    void evictDiaryCache(String diaryId);
+    void evictDiaryCache(String diaryId, String userId);
 
     void evictListCache(String userId);
 
@@ -25,5 +25,5 @@ public interface DiaryService {
 
     List<Diary> getFootprints(String userId);
 
-    String convertImagesToUrls(String imagesJson);
+    String convertImagesToUrls(String imagesJson, String userId);
 }

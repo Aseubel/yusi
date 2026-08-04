@@ -63,7 +63,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RateLimitException.class)
     public Response<String> handleRateLimitException(RateLimitException e) {
-        setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        setStatus(ErrorCode.RATE_LIMIT_EXCEEDED.getHttpStatus());
         return Response.<String>builder().code(ErrorCode.RATE_LIMIT_EXCEEDED.getCode()).info(e.getMessage()).build();
     }
 
@@ -76,8 +76,8 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AuthorizationException.class)
     public Response<String> handleAuthorizationException(AuthorizationException e) {
-        setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         ErrorCode ec = e.getErrorCode();
+        setStatus(ec != null ? ec.getHttpStatus() : HttpServletResponse.SC_UNAUTHORIZED);
         int code = ec != null ? ec.getCode() : ErrorCode.UNAUTHORIZED.getCode();
         return Response.<String>builder().code(code).info(e.getMessage()).build();
     }

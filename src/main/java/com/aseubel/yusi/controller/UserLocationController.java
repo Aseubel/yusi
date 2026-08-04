@@ -2,6 +2,9 @@ package com.aseubel.yusi.controller;
 
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
+import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.exception.AuthorizationException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.location.AddLocationRequest;
 import com.aseubel.yusi.pojo.dto.location.UpdateLocationRequest;
 import com.aseubel.yusi.pojo.entity.UserLocation;
@@ -22,7 +25,6 @@ import java.util.List;
 @Auth
 @Slf4j
 @RestController
-@CrossOrigin("*")
 @RequestMapping("/api/location")
 @RequiredArgsConstructor
 public class UserLocationController {
@@ -36,11 +38,12 @@ public class UserLocationController {
     public Response<List<UserLocation>> getUserLocations(
             @RequestParam String userId,
             @RequestParam(required = false) String locationType) {
+        requireCurrentUser(userId);
         List<UserLocation> locations;
         if (locationType != null && !locationType.isEmpty()) {
-            locations = userLocationService.getUserLocationsByType(userId, locationType);
+            locations = userLocationService.getUserLocationsByType(UserContext.getUserId(), locationType);
         } else {
-            locations = userLocationService.getUserLocations(userId);
+            locations = userLocationService.getUserLocations(UserContext.getUserId());
         }
         return Response.success(locations);
     }
@@ -50,6 +53,7 @@ public class UserLocationController {
      */
     @PostMapping
     public Response<UserLocation> addLocation(@RequestBody AddLocationRequest request) {
+        request.setUserId(UserContext.getUserId());
         UserLocation location = userLocationService.addLocation(request);
         return Response.success(location);
     }
@@ -59,6 +63,7 @@ public class UserLocationController {
      */
     @PutMapping
     public Response<UserLocation> updateLocation(@RequestBody UpdateLocationRequest request) {
+        request.setUserId(UserContext.getUserId());
         UserLocation location = userLocationService.updateLocation(request);
         return Response.success(location);
     }
@@ -70,7 +75,14 @@ public class UserLocationController {
     public Response<?> deleteLocation(
             @RequestParam String userId,
             @PathVariable String locationId) {
-        userLocationService.deleteLocation(userId, locationId);
+        requireCurrentUser(userId);
+        userLocationService.deleteLocation(UserContext.getUserId(), locationId);
         return Response.success();
+    }
+
+    private void requireCurrentUser(String userId) {
+        if (!UserContext.getUserId().equals(userId)) {
+            throw new AuthorizationException(ErrorCode.FORBIDDEN, "无权访问其他用户的地点");
+        }
     }
 }

@@ -6,6 +6,11 @@ public interface TokenService {
 
     void saveRefreshToken(String userId, String refreshToken);
 
+    /**
+     * Atomically replace a refresh token only when the expected token is still current.
+     */
+    boolean rotateRefreshToken(String userId, String expectedToken, String replacementToken);
+
     String getRefreshToken(String userId);
 
     void deleteRefreshToken(String userId);

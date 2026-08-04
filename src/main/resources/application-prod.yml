@@ -4,6 +4,7 @@ grpc:
 
 server:
   port: 611
+
   tomcat:
     threads:
       max: 200 # 设定处理客户请求的线程的最大数目，决定了服务器可以同时响应客户请求的数,默认200
@@ -14,7 +15,7 @@ server:
 model:
   embedding:
     baseurl: ${EMBEDDING_MODEL_BASEURL:https://api.siliconflow.cn/v1}
-    apikey: ${EMBEDDING_MODEL_APIKEY:your-siliconflow-embedding-apikey}
+    apikey: ${EMBEDDING_MODEL_APIKEY}
     model: ${EMBEDDING_MODEL_NAME:BAAI/bge-m3}
     dimension: ${EMBEDDING_MODEL_DIMENSION:1024}
   routing:
@@ -32,7 +33,7 @@ model:
     models:
       - id: qwen
         baseurl: ${QWEN_BASEURL:https://dashscope.aliyuncs.com/compatible-mode/v1}
-        apikey: ${QWEN_APIKEY:your-qwen-apikey}
+        apikey: ${QWEN_APIKEY}
         model: ${QWEN_MODEL:qwen3.5-flash-2026-02-23}
         capabilities: [CHAT, STREAMING_CHAT]
         weight: 100
@@ -41,7 +42,7 @@ model:
         scenes: [chat, situation-analysis, memory-extract, emotion-analysis, soul-match]
       - id: deepseek
         baseurl: ${DEEPSEEK_BASEURL:https://api.deepseek.com}
-        apikey: ${DEEPSEEK_APIKEY:your-deepseek-apikey}
+        apikey: ${DEEPSEEK_APIKEY}
         model: ${DEEPSEEK_MODEL:deepseek-v4-flash}
         capabilities: [CHAT, STREAMING_CHAT]
         weight: 0
@@ -102,13 +103,16 @@ model:
           group: match-zh
 
 yusi:
+  web:
+    allowed-origin: ${YUSI_WEB_ALLOWED_ORIGIN:https://app.aseubel.cn}
+    trusted-proxy-addresses: ${YUSI_TRUSTED_PROXY_ADDRESSES:}
   jwt:
-    secret: ${YUSI_JWT_SECRET:your-jwt-secret-placeholder}
+    secret: ${YUSI_JWT_SECRET}
   security:
     crypto:
-      server-aes-key-base64: ${YUSI_ENCRYPTION_KEY:your-server-aes-key-placeholder}
-      backup-rsa-public-key-spki-base64: ${YUSI_RSA_PUBLIC_KEY:your-rsa-public-key-placeholder}
-      backup-rsa-private-key-pkcs8-base64: ${YUSI_RSA_PRIVATE_KEY:your-rsa-private-key-placeholder}
+      server-aes-key-base64: ${YUSI_ENCRYPTION_KEY}
+      backup-rsa-public-key-spki-base64: ${YUSI_BACKUP_RSA_PUBLIC_KEY_SPKI_BASE64}
+      backup-rsa-private-key-pkcs8-base64: ${YUSI_BACKUP_RSA_PRIVATE_KEY_PKCS8_BASE64}
   memory:
     # 上下文记忆窗口大小（短期记忆的消息条数）
     context-window-size: 20
@@ -124,8 +128,8 @@ yusi:
     url-expire-seconds: 3600
     max-file-size: 10485760
     image-folder: yusi/images/
-    access-key-id: ${OSS_ACCESS_KEY_ID:your-oss-access-key-id}
-    access-key-secret: ${OSS_ACCESS_KEY_SECRET:your-oss-access-key-secret}
+    access-key-id: ${OSS_ACCESS_KEY_ID}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET}
 
 
 # 线程池配置
@@ -147,7 +151,7 @@ spring:
     # ShardingSphere 配置文件路径
     #    url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml
     username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:your-mysql-password}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/yusi?serverTimezone=UTC&characterEncoding=utf8&autoReconnect=true&serverTimezone=Asia/Shanghai}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
@@ -181,7 +185,7 @@ redis:
     config:
       host: ${REDIS_SDK_CONFIG_HOST:redis}
       port: ${REDIS_SDK_CONFIG_PORT:6379}
-      password: ${REDIS_SDK_CONFIG_PASSWORD:your-redis-password}
+      password: ${REDIS_SDK_CONFIG_PASSWORD}
       pool-size: 10
       min-idle-size: 5
       idle-timeout: 30000
@@ -192,12 +196,12 @@ redis:
       keep-alive: true
 
 milvus:
-  uri: ${MILVUS_URI:your-milvus-cloud-uri}
-  token: ${MILVUS_TOKEN:your-milvus-cloud-token}
+  uri: ${MILVUS_URI}
+  token: ${MILVUS_TOKEN}
   host: ${MILVUS_HOST:}
   port: ${MILVUS_PORT:19530}
-  username: ${MILVUS_USERNAME:your-milvus-username}
-  password: ${MILVUS_PASSWORD:your-milvus-password}
+  username: ${MILVUS_USERNAME}
+  password: ${MILVUS_PASSWORD}
 
 # 日志
 logging:
@@ -210,18 +214,19 @@ logging:
 mcp:
   enabled: true # 设置为 true 启用 MCP 集成
   server:
-    url: http://yusi-mcp:11611/mcp # Go MCP Server 端点 (Streamable HTTP)
+    url: http://yusi-mcp:11611/internal/mcp # Go MCP 内部端点 (仅部署工具)
+    service-key: ${MCP_AUTH_API_KEY}
 
 # 高德地图 API 配置
 amap:
-  key: ${AMAP_KEY:your-amap-key-placeholder}
+  key: ${AMAP_KEY}
   base-url: https://restapi.amap.com/v3
 
 # 阿里云邮件推送服务
 aliyun:
   dm:
-    accessKeyId: ${ALIYUN_DM_ACCESS_KEY_ID:your-aliyun-dm-access-key-id}
-    accessKeySecret: ${ALIYUN_DM_ACCESS_KEY_SECRET:your-aliyun-dm-access-key-secret}
+    accessKeyId: ${ALIYUN_DM_ACCESS_KEY_ID}
+    accessKeySecret: ${ALIYUN_DM_ACCESS_KEY_SECRET}
     accountName: ${ALIYUN_DM_ACCOUNT_NAME:yusi@mail.aseubel.cn}
     fromAlias: Yusi
     endpoint: dm.aliyuncs.com

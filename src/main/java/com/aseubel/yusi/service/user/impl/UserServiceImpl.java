@@ -8,6 +8,7 @@ import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.utils.JwtUtils;
 import com.aseubel.yusi.pojo.dto.user.AuthResponse;
+import com.aseubel.yusi.pojo.dto.user.UserResponse;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.redis.annotation.QueryCache;
 import com.aseubel.yusi.repository.UserRepository;
@@ -96,7 +97,7 @@ public class UserServiceImpl implements UserService {
         return AuthResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
-                .user(user)
+                .user(UserResponse.from(user))
                 .build();
     }
 
@@ -107,7 +108,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public AuthResponse refreshToken(String refreshToken, String oldAccessToken) {
-        log.info("收到刷新token请求, refreshToken: {}, oldAccessToken: {}", refreshToken, oldAccessToken);
+        log.info("收到刷新令牌请求");
         
         if (!jwtUtils.validateToken(refreshToken)) {
             log.warn("刷新token无效: validateToken返回false");
@@ -115,25 +116,22 @@ public class UserServiceImpl implements UserService {
         }
 
         String type = jwtUtils.getTypeFromToken(refreshToken);
-        log.info("token type: {}", type);
         if (!"refresh".equals(type)) {
-            log.warn("token类型不是refresh: {}", type);
+            log.warn("刷新请求携带的令牌类型错误");
             throw new BusinessException(ErrorCode.TOKEN_INVALID, "非刷新令牌");
         }
 
         String userId = jwtUtils.getUserIdFromToken(refreshToken);
-        log.info("从token解析出userId: {}", userId);
-        String storedRefreshToken = tokenService.getRefreshToken(userId);
-        log.info("Redis中存储的refreshToken: {}, 前端传来的refreshToken: {}", storedRefreshToken, refreshToken);
-
-        if (storedRefreshToken == null || !storedRefreshToken.equals(refreshToken)) {
-            log.warn("刷新令牌已失效: storedRefreshToken={}, refreshToken={}", storedRefreshToken, refreshToken);
-            throw new BusinessException(ErrorCode.TOKEN_INVALID, "刷新令牌已失效");
-        }
-
+        log.debug("刷新令牌已解析用户身份");
         User user = userRepository.findByUserId(userId);
         if (user == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
+        }
+
+        String newRefreshToken = jwtUtils.generateRefreshToken(userId);
+        if (!tokenService.rotateRefreshToken(userId, refreshToken, newRefreshToken)) {
+            log.warn("刷新令牌已失效或正在被使用");
+            throw new BusinessException(ErrorCode.TOKEN_INVALID, "刷新令牌已失效");
         }
 
         // Remove the old access token from device list if provided
@@ -146,13 +144,10 @@ public class UserServiceImpl implements UserService {
         // Add the new token
         tokenService.addDeviceToken(userId, newAccessToken, "refresh");
 
-        // 更新 Redis 中的 refreshToken 过期时间
-        tokenService.saveRefreshToken(userId, refreshToken);
-
         return AuthResponse.builder()
                 .accessToken(newAccessToken)
-                .refreshToken(refreshToken) // Return same refresh token
-                .user(user)
+                .refreshToken(newRefreshToken)
+                .user(UserResponse.from(user))
                 .build();
     }
 

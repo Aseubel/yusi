@@ -24,7 +24,6 @@ import jakarta.validation.constraints.Size;
 @RestController
 @RequestMapping("/api/prompt")
 @Auth // Protect all endpoints
-@CrossOrigin("*")
 @Validated
 public class PromptController {
 

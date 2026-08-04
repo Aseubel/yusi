@@ -36,6 +36,11 @@ public interface LifeGraphMergeJudgmentRepository extends JpaRepository<LifeGrap
     List<LifeGraphMergeJudgment> findByUserIdAndStatusOrderByCreatedAtDesc(String userId, String status);
 
     /**
+     * 按用户读取合并建议，避免仅凭自增 ID 跨用户访问。
+     */
+    Optional<LifeGraphMergeJudgment> findByIdAndUserId(Long id, String userId);
+
+    /**
      * 查找用户所有判断记录
      */
     List<LifeGraphMergeJudgment> findByUserIdOrderByCreatedAtDesc(String userId);

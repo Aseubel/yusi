@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 
 @Auth
 @RestController
-@CrossOrigin("*")
 @RequestMapping("/api/developer/config")
 @RequiredArgsConstructor
 public class DeveloperConfigController {

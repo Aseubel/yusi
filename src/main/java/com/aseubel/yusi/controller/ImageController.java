@@ -2,6 +2,9 @@ package com.aseubel.yusi.controller;
 
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
+import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.dto.oss.*;
 import com.aseubel.yusi.service.oss.OssService;
 import jakarta.validation.Valid;
@@ -16,7 +19,6 @@ import java.util.List;
 @Slf4j
 @Auth
 @RestController
-@CrossOrigin("*")
 @RequestMapping("/api/image")
 @RequiredArgsConstructor
 public class ImageController {
@@ -24,12 +26,14 @@ public class ImageController {
     private final OssService ossService;
 
     @PostMapping("/upload")
+    @RateLimiter(key = "image-upload", time = 60, count = 20, limitType = LimitType.USER)
     public Response<ImageUploadResponse> uploadImage(
             @RequestParam("file") MultipartFile file,
-            @RequestParam("userId") String userId) {
+            @RequestParam(value = "userId", required = false) String ignoredUserId) {
 
+        String userId = UserContext.getUserId();
         String objectKey = ossService.uploadImage(file, userId);
-        String url = ossService.generatePresignedUrl(objectKey);
+        String url = ossService.generateOwnedUrl(objectKey, userId);
 
         ImageUploadResponse response = ImageUploadResponse.builder()
                 .objectKey(objectKey)
@@ -43,15 +47,17 @@ public class ImageController {
     }
 
     @PostMapping("/upload/batch")
+    @RateLimiter(key = "image-upload-batch", time = 60, count = 5, limitType = LimitType.USER)
     public Response<List<ImageUploadResponse>> uploadImages(
             @RequestParam("files") List<MultipartFile> files,
-            @RequestParam("userId") String userId) {
+            @RequestParam(value = "userId", required = false) String ignoredUserId) {
 
+        String userId = UserContext.getUserId();
         List<ImageUploadResponse> responses = new ArrayList<>();
 
         for (MultipartFile file : files) {
             String objectKey = ossService.uploadImage(file, userId);
-            String url = ossService.generatePresignedUrl(objectKey);
+            String url = ossService.generateOwnedUrl(objectKey, userId);
 
             responses.add(ImageUploadResponse.builder()
                     .objectKey(objectKey)
@@ -66,15 +72,17 @@ public class ImageController {
     }
 
     @GetMapping("/check")
+    @RateLimiter(key = "image-upload-check", time = 60, count = 60, limitType = LimitType.USER)
     public Response<ImageUploadCheckResponse> checkUpload(
             @RequestParam("fileMd5") String fileMd5) {
 
-        String objectKey = ossService.checkSkipUpload(fileMd5);
+        String userId = UserContext.getUserId();
+        String objectKey = ossService.checkSkipUpload(fileMd5, userId);
 
         ImageUploadCheckResponse response = ImageUploadCheckResponse.builder()
                 .skip(objectKey != null)
                 .objectKey(objectKey)
-                .url(objectKey != null ? ossService.generatePresignedUrl(objectKey) : null)
+                .url(objectKey != null ? ossService.generateOwnedUrl(objectKey, userId) : null)
                 .fileMd5(fileMd5)
                 .build();
 
@@ -82,15 +90,17 @@ public class ImageController {
     }
 
     @PostMapping("/chunk/upload")
+    @RateLimiter(key = "image-chunk-upload", time = 60, count = 120, limitType = LimitType.USER)
     public Response<ChunkUploadResponse> uploadChunk(
             @RequestParam("file") MultipartFile chunk,
             @RequestParam("fileMd5") String fileMd5,
             @RequestParam("chunkIndex") Integer chunkIndex,
             @RequestParam("totalChunks") Integer totalChunks,
-            @RequestParam("userId") String userId) {
+            @RequestParam(value = "userId", required = false) String ignoredUserId) {
 
+        String userId = UserContext.getUserId();
         String uploadId = ossService.uploadChunk(chunk, fileMd5, chunkIndex, totalChunks, userId);
-        int uploadedChunks = ossService.getUploadedChunkCount(fileMd5);
+        int uploadedChunks = ossService.getUploadedChunkCount(fileMd5, userId);
 
         ChunkUploadResponse response = ChunkUploadResponse.builder()
                 .uploadId(uploadId)
@@ -104,17 +114,18 @@ public class ImageController {
     }
 
     @PostMapping("/chunk/merge")
+    @RateLimiter(key = "image-chunk-merge", time = 60, count = 20, limitType = LimitType.USER)
     public Response<ImageUploadResponse> mergeChunks(
             @Valid @RequestBody MergeChunksRequest request) {
 
         String objectKey = ossService.mergeChunks(
                 request.getFileMd5(),
                 request.getTotalChunks(),
-                request.getUserId(),
+                UserContext.getUserId(),
                 request.getFileName(),
                 request.getTotalSize());
 
-        String url = ossService.generatePresignedUrl(objectKey);
+        String url = ossService.generateOwnedUrl(objectKey, UserContext.getUserId());
 
         ImageUploadResponse response = ImageUploadResponse.builder()
                 .objectKey(objectKey)
@@ -128,10 +139,11 @@ public class ImageController {
     }
 
     @GetMapping("/chunk/progress")
+    @RateLimiter(key = "image-chunk-progress", time = 60, count = 120, limitType = LimitType.USER)
     public Response<ChunkUploadResponse> getChunkProgress(
             @RequestParam("fileMd5") String fileMd5) {
 
-        int uploadedChunks = ossService.getUploadedChunkCount(fileMd5);
+        int uploadedChunks = ossService.getUploadedChunkCount(fileMd5, UserContext.getUserId());
 
         ChunkUploadResponse response = ChunkUploadResponse.builder()
                 .uploadedChunks(uploadedChunks)
@@ -140,28 +152,27 @@ public class ImageController {
         return Response.success(response);
     }
 
-    @Auth(required = false)
     @GetMapping("/url")
     public Response<String> getPresignedUrl(@RequestParam("objectKey") String objectKey) {
-        String url = ossService.generatePresignedUrl(objectKey);
+        String url = ossService.generateOwnedUrl(objectKey, UserContext.getUserId());
         return Response.success(url);
     }
 
     @PostMapping("/urls")
     public Response<List<String>> getPresignedUrls(@RequestBody List<String> objectKeys) {
-        List<String> urls = ossService.generatePresignedUrls(objectKeys);
+        List<String> urls = ossService.generateOwnedUrls(objectKeys, UserContext.getUserId());
         return Response.success(urls);
     }
 
     @DeleteMapping
     public Response<Void> deleteImage(@RequestParam("objectKey") String objectKey) {
-        ossService.deleteImage(objectKey);
+        ossService.deleteOwnedImage(objectKey, UserContext.getUserId());
         return Response.success();
     }
 
     @DeleteMapping("/batch")
     public Response<Void> deleteImages(@RequestBody List<String> objectKeys) {
-        ossService.deleteImages(objectKeys);
+        ossService.deleteOwnedImages(objectKeys, UserContext.getUserId());
         return Response.success();
     }
 }
