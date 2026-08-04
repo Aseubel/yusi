@@ -75,6 +75,9 @@ public class LifeGraphCognitionBridgeServiceImpl implements LifeGraphCognitionBr
                         .displayName("我")
                         .summary("用户自身")
                         .mentionCount(1)
+                        .confidence(0.5)
+                        .matchAllowed(false)
+                        .hidden(false)
                         .relationCount(0)
                         .firstMentionDate(LocalDate.now())
                         .lastMentionAt(LocalDateTime.now())
@@ -94,6 +97,9 @@ public class LifeGraphCognitionBridgeServiceImpl implements LifeGraphCognitionBr
                         .displayName(displayName)
                         .mentionCount(0)
                         .relationCount(0)
+                        .confidence(0.5)
+                        .matchAllowed(false)
+                        .hidden(false)
                         .firstMentionDate(LocalDate.now())
                         .build());
         entity.setDisplayName(displayName);

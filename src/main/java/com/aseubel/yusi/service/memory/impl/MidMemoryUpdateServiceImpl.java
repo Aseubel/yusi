@@ -30,6 +30,13 @@ public class MidMemoryUpdateServiceImpl implements MidMemoryUpdateService {
     @Override
     @Transactional
     public void appendSnapshot(String userId, String summary, Double importance, String category) {
+        appendSnapshot(userId, summary, importance, category, "UNKNOWN", null);
+    }
+
+    @Override
+    @Transactional
+    public void appendSnapshot(String userId, String summary, Double importance, String category,
+                               String sourceType, String sourceId) {
         if (StrUtil.isBlank(userId) || StrUtil.isBlank(summary)) {
             return;
         }
@@ -45,8 +52,13 @@ public class MidMemoryUpdateServiceImpl implements MidMemoryUpdateService {
 
         midTermMemoryRepository.save(MidTermMemory.builder()
                 .userId(userId)
+                .sourceType(StrUtil.blankToDefault(sourceType, "UNKNOWN"))
+                .sourceId(StrUtil.isBlank(sourceId) ? null : sourceId.trim())
                 .summary(summary)
                 .importance(importance != null ? importance : 0.5)
+                .confidence(normalize(importance))
+                .matchAllowed(false)
+                .hidden(false)
                 .createdAt(now)
                 .updatedAt(now)
                 .validUntil(validUntil)
@@ -54,5 +66,12 @@ public class MidMemoryUpdateServiceImpl implements MidMemoryUpdateService {
 
         // F11.3: 异步检测新洞察是否与已有认知冲突
         CompletableFuture.runAsync(() -> conflictDetector.checkAndRecord(userId, summary), threadPoolExecutor);
+    }
+
+    private double normalize(Double value) {
+        if (value == null || value.isNaN() || value.isInfinite()) {
+            return 0.5;
+        }
+        return Math.max(0.0, Math.min(1.0, value));
     }
 }

@@ -30,7 +30,7 @@ public class MemorySearchTool {
             - endDate: 日期范围结束，格式 YYYY-MM-DD（可选）
 
             返回：
-            - GRAPH: 图谱实体/关系/证据
+            - GRAPH: 图谱实体/关系/安全来源元数据
             - DIARY: 向量检索出的日记片段
             - CONVERSATION_MEMORY: 向量检索出的中期对话记忆
             """)

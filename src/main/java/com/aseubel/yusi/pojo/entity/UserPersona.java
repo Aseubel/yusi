@@ -71,6 +71,46 @@ public class UserPersona {
     @Column(name = "custom_instructions", columnDefinition = "TEXT")
     private String customInstructions;
 
+    /**
+     * 来源类型，默认 UNKNOWN。
+     */
+    @Column(name = "source_type", nullable = false, length = 32)
+    @Builder.Default
+    private String sourceType = "UNKNOWN";
+
+    /**
+     * 来源记录 ID。
+     */
+    @Column(name = "source_id", length = 128)
+    private String sourceId;
+
+    /**
+     * 可信度，范围 0 到 1。
+     */
+    @Column(name = "confidence", nullable = false)
+    @Builder.Default
+    private Double confidence = 0.5;
+
+    /**
+     * 是否允许参与匹配。
+     */
+    @Column(name = "match_allowed", nullable = false)
+    @Builder.Default
+    private Boolean matchAllowed = false;
+
+    /**
+     * 是否隐藏。
+     */
+    @Column(name = "hidden", nullable = false)
+    @Builder.Default
+    private Boolean hidden = false;
+
+    /**
+     * 有效期截止时间。
+     */
+    @Column(name = "valid_until")
+    private LocalDateTime validUntil;
+
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

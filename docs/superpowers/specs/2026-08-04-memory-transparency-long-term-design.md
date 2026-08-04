@@ -1,7 +1,8 @@
 # Long-Term Memory Transparency and Lifecycle Design
 
-**Status:** Approved for implementation
+**Status:** Implemented for Phase 1 slice
 **Date:** 2026-08-04
+**Related:** [Product requirement](../../prd/2026-08-04-memory-transparency-lifecycle.md) · [Agent product roadmap](../../engineering/plans/2026-08-04-yusi-agent-product-roadmap.md) · [Implementation plan](../plans/2026-08-04-long-term-memory-transparency.md)
 
 ## Goal
 

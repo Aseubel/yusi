@@ -103,7 +103,8 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
     }
 
     private String buildLifeGraphSummary(String userId) {
-        List<LifeGraphEntity> entities = lifeGraphEntityRepository.findTop50ByUserIdOrderByMentionCountDesc(userId);
+        List<LifeGraphEntity> entities = lifeGraphEntityRepository.findMatchableTopByUserId(
+                userId, LocalDateTime.now(), PageRequest.of(0, 50));
         if (entities == null || entities.isEmpty()) {
             return "长期结构信息较少。";
         }
@@ -122,7 +123,7 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
     }
 
     private String buildPersonaSummary(String userId) {
-        UserPersona persona = userPersonaService.getUserPersona(userId);
+        UserPersona persona = userPersonaService.getMatchableUserPersona(userId);
         if (persona == null) {
             return "稳定偏好信息较少。";
         }
@@ -147,7 +148,7 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
 
     private String buildMidMemorySummary(String userId) {
         List<MidTermMemory> memories = midTermMemoryRepository
-                .findValidByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 10));
+                .findMatchableByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 10));
         if (memories == null || memories.isEmpty()) {
             return "近期状态信息较少。";
         }

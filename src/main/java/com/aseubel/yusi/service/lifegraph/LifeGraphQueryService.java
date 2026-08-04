@@ -22,6 +22,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 @Service
@@ -41,17 +42,20 @@ public class LifeGraphQueryService {
 
         String q = query.trim();
         String qNorm = normalize(q);
+        LocalDateTime now = LocalDateTime.now();
 
         List<LifeGraphEntity> candidates = new ArrayList<>();
         aliasRepository.findByUserIdAndAliasNorm(userId, qNorm)
-                .flatMap(a -> entityRepository.findById(a.getEntityId()))
+                .flatMap(a -> entityRepository.findByIdAndUserId(a.getEntityId(), userId))
+                .filter(entity -> isVisible(entity, now))
                 .ifPresent(candidates::add);
 
-        candidates.addAll(entityRepository.findByUserIdAndDisplayNameContainingOrderByMentionCountDesc(
-                userId, q, PageRequest.of(0, Math.max(1, maxEntities))).getContent());
+        candidates.addAll(entityRepository.findVisibleByUserIdAndDisplayNameContainingOrderByMentionCountDesc(
+                userId, q, now, PageRequest.of(0, Math.max(1, maxEntities))).getContent());
 
         Map<Long, LifeGraphEntity> entityMap = candidates.stream()
                 .filter(e -> e.getType() != LifeGraphEntity.EntityType.User)
+                .filter(e -> isVisible(e, now))
                 .collect(Collectors.toMap(LifeGraphEntity::getId, e -> e, (a, b) -> a, HashMap::new));
 
         if (entityMap.isEmpty()) {
@@ -59,16 +63,21 @@ public class LifeGraphQueryService {
         }
 
         Set<Long> seedIds = new HashSet<>(entityMap.keySet());
+        int relationLimit = Math.max(0, maxRelations);
+        int mentionLimit = Math.max(0, maxMentions);
         List<LifeGraphRelation> relations = new ArrayList<>();
         for (Long id : seedIds) {
+            if (relationLimit == 0) {
+                break;
+            }
             relations.addAll(relationRepository.findTop200ByUserIdAndSourceIdOrderByUpdatedAtDesc(userId, id));
             relations.addAll(relationRepository.findTop200ByUserIdAndTargetIdOrderByUpdatedAtDesc(userId, id));
-            if (relations.size() >= maxRelations) {
+            if (relations.size() >= relationLimit) {
                 break;
             }
         }
-        if (relations.size() > maxRelations) {
-            relations = relations.subList(0, maxRelations);
+        if (relations.size() > relationLimit) {
+            relations = relations.subList(0, relationLimit);
         }
 
         Set<Long> allIds = new HashSet<>(seedIds);
@@ -77,18 +86,31 @@ public class LifeGraphQueryService {
             allIds.add(r.getTargetId());
         }
 
-        entityRepository.findAllById(allIds).forEach(e -> entityMap.putIfAbsent(e.getId(), e));
+        entityRepository.findAllById(allIds).stream()
+                .filter(e -> userId.equals(e.getUserId()))
+                .filter(e -> e.getType() != LifeGraphEntity.EntityType.User)
+                .filter(e -> isVisible(e, now))
+                .forEach(e -> entityMap.putIfAbsent(e.getId(), e));
+
+        relations = relations.stream()
+                .filter(relation -> entityMap.containsKey(relation.getSourceId())
+                        && entityMap.containsKey(relation.getTargetId()))
+                .limit(Math.max(0, maxRelations))
+                .toList();
 
         List<Long> entityIds = new ArrayList<>(seedIds);
         List<LifeGraphMention> mentions = new ArrayList<>();
         for (Long id : entityIds) {
+            if (mentionLimit == 0) {
+                break;
+            }
             mentions.addAll(mentionRepository.findTop200ByUserIdAndEntityIdOrderByCreatedAtDesc(userId, id));
-            if (mentions.size() >= maxMentions) {
+            if (mentions.size() >= mentionLimit) {
                 break;
             }
         }
-        if (mentions.size() > maxMentions) {
-            mentions = mentions.subList(0, maxMentions);
+        if (mentions.size() > mentionLimit) {
+            mentions = mentions.subList(0, mentionLimit);
         }
 
         StringBuilder sb = new StringBuilder();
@@ -123,11 +145,15 @@ public class LifeGraphQueryService {
                     .append("\n");
         }
 
-        sb.append("GRAPH_MENTIONS:\n");
+        sb.append("GRAPH_SOURCES:\n");
         for (LifeGraphMention m : mentions) {
             LifeGraphEntity e = entityMap.get(m.getEntityId());
             String en = e != null ? e.getDisplayName() : String.valueOf(m.getEntityId());
-            sb.append("- ").append(en).append(": ").append(StrUtil.blankToDefault(m.getSnippet(), "")).append("\n");
+            sb.append("- ").append(en).append(": diaryId=").append(m.getDiaryId());
+            if (m.getEntryDate() != null) {
+                sb.append(", date=").append(m.getEntryDate());
+            }
+            sb.append("\n");
         }
 
         return sb.toString();
@@ -164,6 +190,12 @@ public class LifeGraphQueryService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private boolean isVisible(LifeGraphEntity entity, LocalDateTime now) {
+        return entity != null
+                && !Boolean.TRUE.equals(entity.getHidden())
+                && (entity.getValidUntil() == null || entity.getValidUntil().isAfter(now));
     }
 
     private String normalize(String v) {

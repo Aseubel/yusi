@@ -19,15 +19,25 @@ public interface MidTermMemoryRepository
 
     List<MidTermMemory> findByUserId(String userId);
 
+    java.util.Optional<MidTermMemory> findByIdAndUserId(Long id, String userId);
+
     /**
      * 查找有效的（未过期的）中期记忆，按创建时间倒序。
      * 使用显式 JPQL 避免 Spring Data 方法名解析的 And/Or 优先级陷阱。
      */
-    @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND (m.validUntil > :now OR m.validUntil IS NULL) AND m.mergedIntoId IS NULL ORDER BY m.createdAt DESC")
+    @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND (m.validUntil > :now OR m.validUntil IS NULL) AND m.mergedIntoId IS NULL AND m.hidden = false ORDER BY m.createdAt DESC")
     List<MidTermMemory> findValidByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now, Pageable pageable);
 
+    /** 可参与匹配的有效记忆：隐藏、过期、已融合或未授权的记忆都排除。 */
+    @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND (m.validUntil > :now OR m.validUntil IS NULL) AND m.mergedIntoId IS NULL AND m.hidden = false AND m.matchAllowed = true ORDER BY m.createdAt DESC")
+    List<MidTermMemory> findMatchableByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now, Pageable pageable);
+
+    /** 用于生成新的摘要上下文，只读取未隐藏且未过期的记忆。 */
+    @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND (m.validUntil > :now OR m.validUntil IS NULL) AND m.mergedIntoId IS NULL AND m.hidden = false ORDER BY m.createdAt DESC")
+    List<MidTermMemory> findAvailableByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now, Pageable pageable);
+
     /** 用于跨源融合：获取用户最近的有效且未合并的中期记忆，便于两两比较去重 */
-    @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND (m.validUntil > :now OR m.validUntil IS NULL) AND m.mergedIntoId IS NULL ORDER BY m.createdAt DESC")
+    @Query("SELECT m FROM MidTermMemory m WHERE m.userId = :userId AND (m.validUntil > :now OR m.validUntil IS NULL) AND m.mergedIntoId IS NULL AND m.hidden = false ORDER BY m.createdAt DESC")
     List<MidTermMemory> findUnmergedByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now);
 
 }

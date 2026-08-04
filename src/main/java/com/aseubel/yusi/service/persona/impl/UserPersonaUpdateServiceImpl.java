@@ -18,6 +18,13 @@ public class UserPersonaUpdateServiceImpl implements UserPersonaUpdateService {
     @Override
     @Transactional
     public void mergeFromRouting(String userId, CognitionRoutingResult routingResult) {
+        mergeFromRouting(userId, routingResult, null, null);
+    }
+
+    @Override
+    @Transactional
+    public void mergeFromRouting(String userId, CognitionRoutingResult routingResult,
+            String sourceType, String sourceId) {
         if (StrUtil.isBlank(userId) || routingResult == null) {
             return;
         }
@@ -31,13 +38,16 @@ public class UserPersonaUpdateServiceImpl implements UserPersonaUpdateService {
             return;
         }
 
-        userPersonaService.updateUserPersona(userId, UserPersona.builder()
+        UserPersona.UserPersonaBuilder update = UserPersona.builder()
                 .preferredName(blankToNull(routingResult.getPreferredName()))
                 .location(blankToNull(routingResult.getLocation()))
                 .interests(blankToNull(routingResult.getInterests()))
                 .tone(blankToNull(routingResult.getTone()))
-                .customInstructions(blankToNull(routingResult.getCustomInstructions()))
-                .build());
+                .customInstructions(blankToNull(routingResult.getCustomInstructions()));
+        if (StrUtil.isNotBlank(sourceType)) {
+            update.sourceType(sourceType).sourceId(sourceId).confidence(0.5);
+        }
+        userPersonaService.updateUserPersona(userId, update.build());
     }
 
     private String blankToNull(String value) {

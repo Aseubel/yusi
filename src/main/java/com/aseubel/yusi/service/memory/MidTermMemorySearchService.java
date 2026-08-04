@@ -1,5 +1,7 @@
 package com.aseubel.yusi.service.memory;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.milvus.v2.client.MilvusClientV2;
@@ -17,6 +19,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
@@ -71,8 +74,8 @@ public class MidTermMemorySearchService {
                     .collectionName("yusi_mid_term_memory")
                     .searchRequests(Arrays.asList(denseReq, sparseReq))
                     .ranker(RRFRanker.builder().k(60).build()) // RRF重排序，60为常用的平滑参数k
-                    .limit(topK) // 最终返回TopK
-                    .outFields(Collections.singletonList("text"))
+                    .limit(Math.max(topK * 3, topK)) // 过滤隐藏/过期记忆后仍尽量填满结果
+                    .outFields(Arrays.asList("text", "metadata"))
                     .build();
 
             // 4. 执行混合搜索
@@ -84,17 +87,51 @@ public class MidTermMemorySearchService {
                 return Collections.emptyList();
             }
 
+            LocalDateTime now = LocalDateTime.now();
             return searchResults.get(0).stream()
+                    .filter(result -> isAvailable(result, userId, now))
                     .map(result -> {
                         Map<String, Object> entity = result.getEntity();
                         return entity.containsKey("text") ? entity.get("text").toString() : "";
                     })
+                    .filter(text -> !text.isBlank())
+                    .limit(topK)
                     .collect(Collectors.toList());
 
         } catch (Exception e) {
             log.error("Error searching mid-term memory for user: {}", userId, e);
             return Collections.emptyList();
         }
+    }
+
+    private boolean isAvailable(SearchResp.SearchResult result, String userId, LocalDateTime now) {
+        String memoryId = extractMemoryId(result);
+        if (memoryId == null) {
+            return false;
+        }
+        try {
+            Long id = Long.valueOf(memoryId);
+            return midTermMemoryRepository.findByIdAndUserId(id, userId)
+                    .filter(memory -> !Boolean.TRUE.equals(memory.getHidden()))
+                    .filter(memory -> memory.getMergedIntoId() == null)
+                    .filter(memory -> memory.getValidUntil() == null || memory.getValidUntil().isAfter(now))
+                    .isPresent();
+        } catch (NumberFormatException exception) {
+            return false;
+        }
+    }
+
+    private String extractMemoryId(SearchResp.SearchResult result) {
+        Object metadataValue = result.getEntity().get("metadata");
+        if (metadataValue instanceof Map<?, ?> metadata) {
+            Object memoryId = metadata.get("memoryId");
+            return memoryId == null ? null : memoryId.toString();
+        }
+        if (metadataValue instanceof JsonObject metadata && metadata.has("memoryId")) {
+            JsonElement memoryId = metadata.get("memoryId");
+            return memoryId.isJsonPrimitive() ? memoryId.getAsString() : null;
+        }
+        return null;
     }
 
     /**
@@ -108,8 +145,8 @@ public class MidTermMemorySearchService {
     public String getRecentMemories(String userId, int limit) {
         log.info("Fetching recent mid-term memories for user: {}, limit: {}", userId, limit);
         try {
-            List<MidTermMemory> recentMemories = midTermMemoryRepository.findByUserIdOrderByCreatedAtDesc(
-                    userId, org.springframework.data.domain.PageRequest.of(0, limit));
+            List<MidTermMemory> recentMemories = midTermMemoryRepository.findAvailableByUserId(
+                    userId, java.time.LocalDateTime.now(), org.springframework.data.domain.PageRequest.of(0, limit));
 
             if (recentMemories.isEmpty()) {
                 return "";

@@ -12,6 +12,14 @@ public interface UserPersonaService {
     UserPersona getUserPersona(String userId);
 
     /**
+     * 获取当前用户允许参与匹配的稳定画像。
+     *
+     * @param userId 用户ID
+     * @return 可参与匹配的 UserPersona，不存在时返回安全空对象
+     */
+    UserPersona getMatchableUserPersona(String userId);
+
+    /**
      * 更新用户画像/偏好
      * @param userId 用户ID
      * @param persona 更新内容

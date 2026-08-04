@@ -37,24 +37,20 @@ public class AgentGrowthService {
     private final com.aseubel.yusi.service.user.UserPersonaService userPersonaService;
 
     public AgentGrowthResponse getGrowth(String userId) {
-        // 1. 人生图谱
-        long entityCount = lifeGraphRepository.countByUserId(userId);
+        // 1. 关系图谱（只统计当前仍可见的派生实体）
+        LocalDateTime now = LocalDateTime.now();
+        long entityCount = lifeGraphRepository.countVisibleByUserId(userId, now);
         Map<String, Long> breakdown = new LinkedHashMap<>();
-        breakdown.put("人物", lifeGraphRepository
-                .findByUserIdAndType(userId, com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Person)
-                .size() + (long) 0);
-        breakdown.put("事件", lifeGraphRepository
-                .findByUserIdAndType(userId, com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Event)
-                .size() + (long) 0);
-        breakdown.put("地点", lifeGraphRepository
-                .findByUserIdAndType(userId, com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Place)
-                .size() + (long) 0);
-        breakdown.put("情绪", lifeGraphRepository
-                .findByUserIdAndType(userId, com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Emotion)
-                .size() + (long) 0);
-        breakdown.put("主题", lifeGraphRepository
-                .findByUserIdAndType(userId, com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Topic)
-                .size() + (long) 0);
+        breakdown.put("人物", lifeGraphRepository.countVisibleByUserIdAndType(userId,
+                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Person, now));
+        breakdown.put("事件", lifeGraphRepository.countVisibleByUserIdAndType(userId,
+                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Event, now));
+        breakdown.put("地点", lifeGraphRepository.countVisibleByUserIdAndType(userId,
+                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Place, now));
+        breakdown.put("情绪", lifeGraphRepository.countVisibleByUserIdAndType(userId,
+                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Emotion, now));
+        breakdown.put("主题", lifeGraphRepository.countVisibleByUserIdAndType(userId,
+                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Topic, now));
 
         // 2. 画像完整度
         int personaScore = calcPersonaCompleteness(userId);

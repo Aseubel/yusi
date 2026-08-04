@@ -18,11 +18,6 @@ import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.ai.runtime.AiLockService;
 import dev.langchain4j.model.chat.ChatModel;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonArray;
-import io.milvus.v2.client.MilvusClientV2;
-import io.milvus.v2.service.vector.request.InsertReq;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -66,12 +61,10 @@ public class MemoryCompressionService {
     private final ChatMemoryMessageRepository messageRepository;
     private final MidTermMemoryRepository midTermMemoryRepository;
 
-    private final MilvusClientV2 milvusClientV2;
-
     @Qualifier("memoryCompressionAssistant")
     private final MemoryCompressionAssistant memoryCompressionAssistant;
 
-    private final EmbeddingModel embeddingModel;
+    private final MidTermMemoryVectorService midTermMemoryVectorService;
     private final MemoryConfigProperties memoryConfigProperties;
     private final PromptManager promptManager;
     private final AiLockService aiLockService;
@@ -189,8 +182,8 @@ public class MemoryCompressionService {
         }
 
         // 获取此用户最近一次的中期记忆摘要
-        List<MidTermMemory> previousMemories = midTermMemoryRepository.findByUserIdOrderByCreatedAtDesc(memoryId,
-                PageRequest.of(0, 1));
+        List<MidTermMemory> previousMemories = midTermMemoryRepository.findAvailableByUserId(memoryId,
+                LocalDateTime.now(), PageRequest.of(0, 1));
         String previousSummary = "";
         if (CollUtil.isNotEmpty(previousMemories)) {
             previousSummary = previousMemories.get(0).getSummary();
@@ -235,28 +228,9 @@ public class MemoryCompressionService {
             // Step 2: MySQL 持久化 + 消息标记（同一事务）
             Long savedMemoryId = getSelf().persistMidTermMemoryTx(memoryId, trimmedSummary, unsummarizedMessages);
 
-            // Step 3: 计算 embedding 并存入 Milvus（使用 V2 客户端，原生插入）
-            JsonObject metadata = new JsonObject();
-            metadata.addProperty("userId", memoryId);
-            metadata.addProperty("memoryId", String.valueOf(savedMemoryId));
-            metadata.addProperty("createdAt", DateUtil.formatDate(DateUtil.date()));
-
-            JsonObject row = new JsonObject();
-            row.addProperty("id", cn.hutool.core.util.IdUtil.fastUUID());
-            row.addProperty("text", trimmedSummary);
-
-            JsonArray vectorArray = new JsonArray();
-            for (float v : embeddingModel.embed(trimmedSummary).content().vector()) {
-                vectorArray.add(v);
-            }
-            row.add("vector", vectorArray);
-            row.add("metadata", metadata);
-
-            InsertReq insertReq = InsertReq.builder()
-                    .collectionName("yusi_mid_term_memory")
-                    .data(java.util.Collections.singletonList(row))
-                    .build();
-            milvusClientV2.insert(insertReq);
+            // Step 3: 计算 embedding 并存入 Milvus（统一维护透明度元数据）
+            MidTermMemory savedMemory = midTermMemoryRepository.findById(savedMemoryId).orElse(null);
+            midTermMemoryVectorService.upsert(savedMemory);
 
             log.info("Compressed memory saved to Milvus for user: {}", memoryId);
 
@@ -276,12 +250,18 @@ public class MemoryCompressionService {
         LocalDateTime now = LocalDateTime.now();
         MidTermMemory activeMemory = MidTermMemory.builder()
                 .userId(memoryId)
+                .sourceType("CHAT_SUMMARY")
                 .summary(summaryText)
                 .importance(1.0)
+                .confidence(1.0)
+                .matchAllowed(false)
+                .hidden(false)
                 .createdAt(now)
                 .updatedAt(now)
                 .validUntil(now.plusDays(30))
                 .build();
+        activeMemory = midTermMemoryRepository.save(activeMemory);
+        activeMemory.setSourceId(String.valueOf(activeMemory.getId()));
         activeMemory = midTermMemoryRepository.save(activeMemory);
         log.info("Saved compressed memory to MySQL for user: {}. ID: {}", memoryId, activeMemory.getId());
 

@@ -20,9 +20,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -187,11 +190,14 @@ public class LifeGraphMergeSuggestionService {
      * 获取待处理的合并建议（从数据库读取，不调用LLM）
      */
     public List<LifeGraphMergeSuggestion> getPendingSuggestions(String userId, int limit) {
+        LocalDateTime now = LocalDateTime.now();
         List<LifeGraphMergeJudgment> pending = judgmentRepository
                 .findByUserIdAndStatusOrderByCreatedAtDesc(userId, "PENDING");
 
         return pending.stream()
                 .filter(j -> "YES".equalsIgnoreCase(j.getMergeDecision()))
+                .filter(j -> isVisible(userId, j.getEntityIdA(), now)
+                        && isVisible(userId, j.getEntityIdB(), now))
                 .limit(limit)
                 .map(j -> LifeGraphMergeSuggestion.builder()
                         .judgmentId(j.getId())
@@ -350,7 +356,11 @@ public class LifeGraphMergeSuggestionService {
     }
 
     private List<CandidatePair> findCandidates(String userId, Set<String> judgedPairs) {
-        List<LifeGraphEntity> entities = entityRepository.findTop50ByUserIdOrderByMentionCountDesc(userId);
+        List<LifeGraphEntity> entities = entityRepository.findVisibleByUserId(
+                userId,
+                LocalDateTime.now(),
+                PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "mentionCount")))
+                .getContent();
         List<CandidatePair> candidates = new ArrayList<>();
 
         for (int i = 0; i < entities.size(); i++) {
@@ -377,6 +387,13 @@ public class LifeGraphMergeSuggestionService {
             }
         }
         return candidates;
+    }
+
+    private boolean isVisible(String userId, Long entityId, LocalDateTime now) {
+        return entityRepository.findByIdAndUserId(entityId, userId)
+                .map(entity -> !Boolean.TRUE.equals(entity.getHidden())
+                        && (entity.getValidUntil() == null || entity.getValidUntil().isAfter(now)))
+                .orElse(false);
     }
 
     @Data

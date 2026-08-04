@@ -10,7 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 /**
- * 人生图谱搜索工具 - 用于 Chat Agent 调用
+ * 关系图谱搜索工具 - 用于 Chat Agent 调用
  * 
  * 允许 LLM 从用户的个性化知识图谱中检索实体关系信息，用于回答关于人际关系、事件关联等问题。
  * 
@@ -28,7 +28,7 @@ public class LifeGraphTool {
             搜索用户的人生知识图谱（Life Graph）。
             当用户询问关于具体人物（如"小明"）、地点、事件之间的关系，或者需要了解某些实体的背景信息时使用此工具。
             
-            该工具会返回与查询词最相关的实体、它们之间的关系（如 RELATED_TO, HAPPENED_AT）以及原文提及片段。
+            该工具会返回与查询词最相关的实体、它们之间的关系（如 RELATED_TO, HAPPENED_AT）以及安全来源元数据。
             返回格式为结构化的文本，请基于这些信息回答用户问题。
             """)
     public String searchLifeGraph(

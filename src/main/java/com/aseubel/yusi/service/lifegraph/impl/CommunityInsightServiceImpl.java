@@ -8,9 +8,12 @@ import com.aseubel.yusi.service.lifegraph.CommunityInsightService;
 import com.aseubel.yusi.service.lifegraph.dto.CommunityInsight;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -27,7 +30,11 @@ public class CommunityInsightServiceImpl implements CommunityInsightService {
 
     @Override
     public List<CommunityInsight> detectCommunities(String userId) {
-        List<LifeGraphEntity> entities = entityRepository.findTop50ByUserIdOrderByMentionCountDesc(userId);
+        List<LifeGraphEntity> entities = entityRepository.findVisibleByUserId(
+                userId,
+                LocalDateTime.now(),
+                PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "mentionCount")))
+                .getContent();
         if (entities.size() < MIN_COMMUNITY_SIZE) {
             return Collections.emptyList();
         }

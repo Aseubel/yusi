@@ -82,6 +82,21 @@ public class LifeGraphEntity {
     @Column(name = "props", columnDefinition = "JSON")
     private String props;
 
+    @Column(name = "confidence", nullable = false)
+    @Builder.Default
+    private Double confidence = 0.5;
+
+    @Column(name = "match_allowed", nullable = false)
+    @Builder.Default
+    private Boolean matchAllowed = false;
+
+    @Column(name = "hidden", nullable = false)
+    @Builder.Default
+    private Boolean hidden = false;
+
+    @Column(name = "valid_until")
+    private LocalDateTime validUntil;
+
     @Column(name = "created_at", nullable = false)
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @JsonSerialize(using = LocalDateTimeSerializer.class)
@@ -118,6 +133,12 @@ public class LifeGraphEntity {
             mentionCount = 0;
         if (relationCount == null)
             relationCount = 0;
+        if (confidence == null)
+            confidence = 0.5;
+        if (matchAllowed == null)
+            matchAllowed = false;
+        if (hidden == null)
+            hidden = false;
     }
 
     @PreUpdate
@@ -127,5 +148,11 @@ public class LifeGraphEntity {
             mentionCount = 0;
         if (relationCount == null)
             relationCount = 0;
+        if (confidence == null)
+            confidence = 0.5;
+        if (matchAllowed == null)
+            matchAllowed = false;
+        if (hidden == null)
+            hidden = false;
     }
 }

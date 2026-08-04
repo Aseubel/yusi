@@ -12,4 +12,5 @@ public interface LifeGraphEntityAliasRepository extends JpaRepository<LifeGraphE
     Optional<LifeGraphEntityAlias> findByUserIdAndAliasNorm(String userId, String aliasNorm);
     List<LifeGraphEntityAlias> findByUserIdAndEntityId(String userId, Long entityId);
     List<LifeGraphEntityAlias> findTop200ByUserIdOrderByConfidenceDesc(String userId);
+    int deleteByUserIdAndEntityId(String userId, Long entityId);
 }

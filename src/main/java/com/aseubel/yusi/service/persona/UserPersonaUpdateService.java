@@ -5,4 +5,7 @@ import com.aseubel.yusi.pojo.dto.cognition.CognitionRoutingResult;
 public interface UserPersonaUpdateService {
 
     void mergeFromRouting(String userId, CognitionRoutingResult routingResult);
+
+    void mergeFromRouting(String userId, CognitionRoutingResult routingResult,
+                          String sourceType, String sourceId);
 }

@@ -10,9 +10,12 @@ import com.aseubel.yusi.service.lifegraph.EmotionTimelineService;
 import com.aseubel.yusi.service.lifegraph.dto.EmotionTimeline;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -90,13 +93,18 @@ public class EmotionTimelineServiceImpl implements EmotionTimelineService {
 
     @Override
     public List<EmotionTimeline.EmotionTrigger> getEmotionTriggers(String userId, int limit) {
-        List<LifeGraphEntity> emotionEntities = entityRepository.findByUserIdAndType(userId, LifeGraphEntity.EntityType.Emotion);
+        List<LifeGraphEntity> emotionEntities = entityRepository.findAllVisibleByUserIdAndType(
+                userId, LifeGraphEntity.EntityType.Emotion, LocalDateTime.now());
 
         if (emotionEntities.isEmpty()) {
             return Collections.emptyList();
         }
 
-        List<LifeGraphEntity> allEntities = entityRepository.findTop50ByUserIdOrderByMentionCountDesc(userId);
+        List<LifeGraphEntity> allEntities = entityRepository.findVisibleByUserId(
+                userId,
+                LocalDateTime.now(),
+                PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "mentionCount")))
+                .getContent();
         Map<Long, LifeGraphEntity> entityMap = allEntities.stream()
                 .collect(Collectors.toMap(LifeGraphEntity::getId, e -> e));
 

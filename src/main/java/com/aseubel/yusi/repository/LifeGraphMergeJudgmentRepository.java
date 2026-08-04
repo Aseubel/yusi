@@ -2,6 +2,7 @@ package com.aseubel.yusi.repository;
 
 import com.aseubel.yusi.pojo.entity.LifeGraphMergeJudgment;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -44,4 +45,9 @@ public interface LifeGraphMergeJudgmentRepository extends JpaRepository<LifeGrap
      * 查找用户所有判断记录
      */
     List<LifeGraphMergeJudgment> findByUserIdOrderByCreatedAtDesc(String userId);
+
+    @Modifying
+    @Query("DELETE FROM LifeGraphMergeJudgment j WHERE j.userId = :userId "
+            + "AND (j.entityIdA = :entityId OR j.entityIdB = :entityId)")
+    int deleteByUserIdAndEntityId(@Param("userId") String userId, @Param("entityId") Long entityId);
 }

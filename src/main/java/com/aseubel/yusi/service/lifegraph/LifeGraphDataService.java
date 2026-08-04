@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -37,8 +38,9 @@ public class LifeGraphDataService {
      * 分页获取全图数据
      */
     public GraphSnapshotDTO getFullGraph(String userId, int page, int size) {
-        Page<LifeGraphEntity> entityPage = entityRepository.findByUserId(
-                userId, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "mentionCount")));
+        LocalDateTime now = LocalDateTime.now();
+        Page<LifeGraphEntity> entityPage = entityRepository.findVisibleByUserId(
+                userId, now, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "mentionCount")));
 
         List<LifeGraphEntity> entities = entityPage.getContent();
         Set<Long> entityIds = entities.stream().map(LifeGraphEntity::getId).collect(Collectors.toSet());
@@ -54,7 +56,7 @@ public class LifeGraphDataService {
             }
         }
 
-        long totalCount = entityRepository.countByUserId(userId);
+        long totalCount = entityRepository.countVisibleByUserId(userId, now);
 
         return GraphSnapshotDTO.builder()
                 .nodes(entities.stream().map(this::toNodeDTO).toList())
@@ -73,7 +75,8 @@ public class LifeGraphDataService {
 
         for (int d = 0; d <= depth && visitedEntities.size() < maxNodes && !frontier.isEmpty(); d++) {
             List<LifeGraphEntity> found = entityRepository.findAllById(frontier).stream()
-                    .filter(e -> e.getUserId().equals(userId))
+                    .filter(e -> userId.equals(e.getUserId()))
+                    .filter(this::isVisible)
                     .toList();
 
             Set<Long> nextFrontier = new HashSet<>();
@@ -108,13 +111,18 @@ public class LifeGraphDataService {
             }
         }
 
-        long totalCount = entityRepository.countByUserId(userId);
+        long totalCount = entityRepository.countVisibleByUserId(userId, LocalDateTime.now());
 
         return GraphSnapshotDTO.builder()
                 .nodes(visitedEntities.values().stream().map(this::toNodeDTO).toList())
                 .links(relations.stream().map(this::toLinkDTO).toList())
                 .totalNodeCount(totalCount)
                 .build();
+    }
+
+    private boolean isVisible(LifeGraphEntity entity) {
+        return !Boolean.TRUE.equals(entity.getHidden())
+                && (entity.getValidUntil() == null || entity.getValidUntil().isAfter(LocalDateTime.now()));
     }
 
     // ======================== Entity CRUD ========================

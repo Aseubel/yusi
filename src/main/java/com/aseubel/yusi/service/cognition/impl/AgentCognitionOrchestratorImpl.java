@@ -44,7 +44,8 @@ public class AgentCognitionOrchestratorImpl implements AgentCognitionOrchestrato
             }
         }
         CognitionRoutingResult routingResult = cognitionRoutingService.route(command);
-        userPersonaUpdateService.mergeFromRouting(command.getUserId(), routingResult);
+        userPersonaUpdateService.mergeFromRouting(
+                command.getUserId(), routingResult, command.getSourceType(), command.getSourceId());
         if (routingResult != null
                 && StrUtil.isNotBlank(routingResult.getMidMemorySummary())
                 && !"CHAT_SUMMARY".equalsIgnoreCase(command.getSourceType())) {
@@ -52,7 +53,9 @@ public class AgentCognitionOrchestratorImpl implements AgentCognitionOrchestrato
                     command.getUserId(),
                     routingResult.getMidMemorySummary(),
                     routingResult.getMidMemoryImportance(),
-                    routingResult.getMidMemoryCategory());
+                    routingResult.getMidMemoryCategory(),
+                    command.getSourceType(),
+                    command.getSourceId());
         }
         lifeGraphCognitionBridgeService.bridge(command, routingResult);
         matchProfileAssembler.refreshProfile(command.getUserId());

@@ -24,6 +24,8 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -40,6 +42,8 @@ import java.util.Set;
 @Service
 @RequiredArgsConstructor
 public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
+
+    private static final String USER_ENTITY_NORM = "__user__";
 
     private final LifeGraphEntityRepository entityRepository;
     private final LifeGraphEntityAliasRepository aliasRepository;
@@ -126,7 +130,8 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         // 2. 将这篇日记产生过影响的实体，执行 mentionCount - 1（逆向退回抽卡）
         for (Long entityId : entityIds) {
             entityRepository.findById(entityId).ifPresent(entity -> {
-                if (entity.getType() != LifeGraphEntity.EntityType.User && !"__USER__".equals(entity.getNameNorm())) {
+                if (entity.getType() != LifeGraphEntity.EntityType.User
+                        && !USER_ENTITY_NORM.equalsIgnoreCase(entity.getNameNorm())) {
                     int newCount = (entity.getMentionCount() == null ? 0 : entity.getMentionCount()) - 1;
                     if (newCount <= 0) {
                         // 如果不再有任何提及，物理删除实体、以及它配套的别名大全，保持图谱干净
@@ -150,11 +155,11 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
     }
 
     private void ensureUserEntity(String userId) {
-        entityRepository.findByUserIdAndTypeAndNameNorm(userId, LifeGraphEntity.EntityType.User, "__USER__")
+        entityRepository.findByUserIdAndTypeAndNameNorm(userId, LifeGraphEntity.EntityType.User, USER_ENTITY_NORM)
                 .orElseGet(() -> entityRepository.save(LifeGraphEntity.builder()
                         .userId(userId)
                         .type(LifeGraphEntity.EntityType.User)
-                        .nameNorm("__USER__")
+                        .nameNorm(USER_ENTITY_NORM)
                         .displayName("我")
                         .mentionCount(0)
                         .build()));
@@ -172,9 +177,10 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             return null;
         }
 
-        if ("__USER__".equals(nameNorm) || "我".equals(nameNorm)) {
+        if (USER_ENTITY_NORM.equalsIgnoreCase(nameNorm) || "我".equals(nameNorm)) {
             ensureUserEntity(userId);
-            return entityRepository.findByUserIdAndTypeAndNameNorm(userId, LifeGraphEntity.EntityType.User, "__USER__")
+            return entityRepository.findByUserIdAndTypeAndNameNorm(userId, LifeGraphEntity.EntityType.User,
+                    USER_ENTITY_NORM)
                     .map(LifeGraphEntity::getId).orElse(null);
         }
 
@@ -188,6 +194,9 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                     .nameNorm(nameNorm)
                     .displayName(StrUtil.isBlank(displayName) ? nameNorm : displayName)
                     .mentionCount(0)
+                    .confidence(0.5)
+                    .matchAllowed(false)
+                    .hidden(false)
                     .firstMentionDate(diary.getEntryDate())
                     .build();
         }
@@ -261,7 +270,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             return;
         }
         String aliasNorm = normalizeName(aliasDisplay);
-        if (StrUtil.isBlank(aliasNorm) || "__USER__".equals(aliasNorm)) {
+        if (StrUtil.isBlank(aliasNorm) || USER_ENTITY_NORM.equalsIgnoreCase(aliasNorm)) {
             return;
         }
 
@@ -362,8 +371,9 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             return null;
         }
         String norm = normalizeName(key);
-        if ("__USER__".equals(norm) || "我".equals(norm)) {
-            return entityRepository.findByUserIdAndTypeAndNameNorm(userId, LifeGraphEntity.EntityType.User, "__USER__")
+        if (USER_ENTITY_NORM.equalsIgnoreCase(norm) || "我".equals(norm)) {
+            return entityRepository.findByUserIdAndTypeAndNameNorm(userId, LifeGraphEntity.EntityType.User,
+                    USER_ENTITY_NORM)
                     .map(LifeGraphEntity::getId).orElse(null);
         }
 
@@ -407,10 +417,20 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
     }
 
     private String buildKnownEntities(String userId) {
-        List<LifeGraphEntity> topEntities = entityRepository.findTop50ByUserIdOrderByMentionCountDesc(userId);
+        List<LifeGraphEntity> topEntities = entityRepository.findVisibleByUserId(
+                userId,
+                LocalDateTime.now(),
+                PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "mentionCount")))
+                .getContent();
+        Set<Long> visibleEntityIds = topEntities.stream()
+                .map(LifeGraphEntity::getId)
+                .collect(java.util.stream.Collectors.toSet());
         List<LifeGraphEntityAlias> topAliases = aliasRepository.findTop200ByUserIdOrderByConfidenceDesc(userId);
         Map<Long, List<LifeGraphEntityAlias>> aliases = new HashMap<>();
         for (LifeGraphEntityAlias a : topAliases) {
+            if (!visibleEntityIds.contains(a.getEntityId())) {
+                continue;
+            }
             aliases.computeIfAbsent(a.getEntityId(), k -> new ArrayList<>()).add(a);
         }
 

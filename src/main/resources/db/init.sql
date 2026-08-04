@@ -33,10 +33,17 @@ CREATE TABLE `user_persona` (
     `interests` VARCHAR(500) DEFAULT NULL COMMENT '兴趣/话题偏好',
     `tone` VARCHAR(200) DEFAULT NULL COMMENT '语气要求',
     `custom_instructions` TEXT DEFAULT NULL COMMENT '自定义指令/相处模式',
+    `source_type` VARCHAR(32) NOT NULL DEFAULT 'UNKNOWN' COMMENT '来源类型',
+    `source_id` VARCHAR(128) DEFAULT NULL COMMENT '来源记录ID',
+    `confidence` DOUBLE NOT NULL DEFAULT 0.5 COMMENT '可信度，范围 0 到 1',
+    `match_allowed` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否允许参与匹配',
+    `hidden` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否隐藏',
+    `valid_until` DATETIME DEFAULT NULL COMMENT '有效期截止时间',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uk_user_persona_user_id` (`user_id`)
+    UNIQUE KEY `uk_user_persona_user_id` (`user_id`),
+    KEY `idx_user_persona_lifecycle` (`user_id`, `hidden`, `match_allowed`, `valid_until`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '用户画像/偏好表';
 
 DROP TABLE IF EXISTS `diary`;
@@ -310,6 +317,10 @@ CREATE TABLE `life_graph_entity` (
     `first_mention_date` DATE DEFAULT NULL COMMENT '首次出现日期',
     `last_mention_at` DATETIME DEFAULT NULL COMMENT '最后一次出现时间',
     `props` JSON DEFAULT NULL COMMENT '扩展属性(JSON): emotion/frequency/coordinates/address/last_interaction 等',
+    `confidence` DOUBLE NOT NULL DEFAULT 0.5 COMMENT '可信度，范围 0 到 1',
+    `match_allowed` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否允许参与匹配',
+    `hidden` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否隐藏',
+    `valid_until` DATETIME DEFAULT NULL COMMENT '有效期截止时间',
     `version` BIGINT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -321,6 +332,8 @@ CREATE TABLE `life_graph_entity` (
     ),
     KEY `idx_life_graph_entity_user_type` (`user_id`, `type`),
     KEY `idx_life_graph_entity_user_mentions` (`user_id`, `mention_count`),
+    KEY `idx_life_graph_entity_lifecycle` (`user_id`, `hidden`, `match_allowed`, `valid_until`),
+    KEY `idx_life_graph_entity_visible_type` (`user_id`, `hidden`, `type`, `valid_until`, `mention_count`),
     KEY `idx_life_graph_entity_updated` (`updated_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '人生图谱实体表';
 
@@ -580,8 +593,13 @@ DROP TABLE IF EXISTS `mid_term_memory`;
 CREATE TABLE `mid_term_memory` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+    `source_type` VARCHAR(32) NOT NULL DEFAULT 'UNKNOWN' COMMENT '记忆来源类型',
+    `source_id` VARCHAR(128) DEFAULT NULL COMMENT '来源记录ID',
     `summary` TEXT NOT NULL COMMENT 'LLM提炼的对话记忆摘要',
     `importance` DOUBLE NOT NULL DEFAULT 1.0 COMMENT '重要性权重（用于遗忘曲线，初始值1.0）',
+    `confidence` DOUBLE NOT NULL DEFAULT 0.5 COMMENT 'AI置信度，范围0到1',
+    `match_allowed` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否允许参与匹配',
+    `hidden` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否被用户隐藏',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     `valid_until` DATETIME DEFAULT NULL COMMENT '记忆有效期截止时间，过期后自动降低权重，NULL 表示永不过期',
@@ -590,7 +608,8 @@ CREATE TABLE `mid_term_memory` (
     KEY `idx_mid_term_memory_user_id` (`user_id`),
     KEY `idx_mid_term_memory_created_at` (`user_id`, `created_at`),
     KEY `idx_mid_term_memory_importance` (`user_id`, `importance`),
-    KEY `idx_mid_term_memory_valid_until` (`user_id`, `valid_until`)
+    KEY `idx_mid_term_memory_valid_until` (`user_id`, `valid_until`),
+    KEY `idx_mid_term_memory_lifecycle` (`user_id`, `hidden`, `match_allowed`, `valid_until`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'AI中期对话记忆压缩表';
 
 DROP TABLE IF EXISTS `image_file`;

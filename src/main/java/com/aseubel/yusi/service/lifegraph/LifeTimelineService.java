@@ -12,6 +12,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -37,7 +38,8 @@ public class LifeTimelineService {
      */
     public List<LifeChapter> getLifeChapters(String userId) {
         // 1. 获取所有 Event 类型的实体
-        List<LifeGraphEntity> events = entityRepository.findByUserIdAndType(userId, LifeGraphEntity.EntityType.Event);
+        List<LifeGraphEntity> events = entityRepository.findAllVisibleByUserIdAndType(
+                userId, LifeGraphEntity.EntityType.Event, LocalDateTime.now());
         
         // 过滤掉没有日期的事件
         List<TimelineNode> nodes = events.stream()

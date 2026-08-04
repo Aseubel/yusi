@@ -13,4 +13,6 @@ public interface LifeGraphMentionRepository extends JpaRepository<LifeGraphMenti
     List<LifeGraphMention> findByUserIdAndDiaryId(String userId, String diaryId);
 
     int deleteByUserIdAndDiaryId(String userId, String diaryId);
+
+    int deleteByUserIdAndEntityId(String userId, Long entityId);
 }
