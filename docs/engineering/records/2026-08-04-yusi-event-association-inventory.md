@@ -15,13 +15,13 @@
 1. 当前多数业务记录已经能通过主键或业务键定位；P0 已为日记变更触发的异步认知任务补上来源变更 ID，失败重试可以继续沿用同一来源。
 2. `SoulMatch.id` 可以继续作为 `matchId` 使用；匹配推荐和连接生命周期需要在后续阶段增加独立的 `connectionId`，不能把推荐记录直接等同于连接。
 3. 情景室的 `code` 可以作为 `situationId`，报告目前内嵌在房间记录中；情景室仍保持独立小游戏，只有用户主动带入时才与对话或匹配建立一次性关联。
-4. 当前聊天 `requestId` 已经作为用户可见的 `runId` 使用，但只存在于流式请求和 SSE 事件中，尚未与聊天记忆行、模型调用或工具调用持久关联。
+4. 当前聊天 `requestId` 已经作为用户可见的 `runId` 使用，并已持久化低敏生命周期摘要；它尚未与聊天记忆行、模型调用或完整工具调用 Trace 关联。
 
 ## 现状盘点
 
 | 领域 | 现有记录/关联 | 当前可回答的问题 | 缺少的关联 |
 | --- | --- | --- | --- |
-| 聊天 AgentRun | `requestId` / `runId`、工具 `toolCallId` | 一次流式任务有哪些公开阶段和工具活动 | `ChatMemoryMessage` 没有 `runId`；模型、检索和工具未形成服务端持久 Trace |
+| 聊天 AgentRun | `requestId` / `runId`、工具 `toolCallId`、`AgentRunTrace.id` | 一次流式任务有哪些公开阶段、工具活动、工具次数、耗时和终态 | `ChatMemoryMessage` 没有 `runId`；模型、检索和完整工具 Schema 未形成服务端 Trace |
 | 聊天记忆 | `ChatMemoryMessage.id`、`memoryId`（当前为用户 ID） | 这条记忆行属于哪个用户、何时写入 | 由哪次对话请求产生；用户消息与回答的同一任务关联 |
 | 日记变更 | `eventId`、`diaryId`、`userId`、`DiaryChangedEvent.Type` | 哪篇日记发生了什么类型的变更 | 变更事件本身尚未作为独立产品事件持久化 |
 | Embedding 任务 | 任务 `id`、`diaryId`、`userId`、`triggerEventId`、状态和重试字段 | 任务是否成功、失败和重试，以及由哪次日记变更触发 | 任务状态尚未和统一服务端 Trace 汇总 |

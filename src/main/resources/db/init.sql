@@ -445,6 +445,29 @@ CREATE TABLE IF NOT EXISTS `chat_memory_message` (
     KEY `idx_memory_id_summarized` (`memory_id`, `is_summarized`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'AI 对话记忆存储表';
 
+DROP TABLE IF EXISTS `agent_run_trace`;
+
+CREATE TABLE `agent_run_trace` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `run_id` VARCHAR(64) NOT NULL COMMENT 'AgentRun ID',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+    `scene` VARCHAR(32) NOT NULL COMMENT '运行场景',
+    `status` VARCHAR(20) NOT NULL COMMENT '运行状态: RUNNING/COMPLETED/FAILED/CANCELLED',
+    `current_stage` VARCHAR(32) DEFAULT NULL COMMENT '最近公开阶段',
+    `tool_count` INT NOT NULL DEFAULT 0 COMMENT '已完成工具调用数量',
+    `failure_category` VARCHAR(64) DEFAULT NULL COMMENT '低敏失败分类',
+    `cancel_source` VARCHAR(32) DEFAULT NULL COMMENT '取消来源',
+    `started_at` DATETIME NOT NULL COMMENT '开始时间',
+    `completed_at` DATETIME DEFAULT NULL COMMENT '终态时间',
+    `duration_ms` BIGINT DEFAULT NULL COMMENT '运行时长毫秒',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_agent_run_trace_user_run` (`user_id`, `run_id`),
+    KEY `idx_agent_run_trace_user_created` (`user_id`, `created_at`),
+    KEY `idx_agent_run_trace_status` (`status`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'AgentRun 生命周期摘要';
+
 -- Life Graph Merge Judgment - 实体合并判断记录
 -- 用于记录已分析过的候选对，避免重复调用 LLM
 DROP TABLE IF EXISTS `life_graph_merge_judgment`;

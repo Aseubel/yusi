@@ -1,0 +1,110 @@
+package com.aseubel.yusi.service.ai.runtime;
+
+import com.aseubel.yusi.pojo.entity.AgentRunTrace;
+import com.aseubel.yusi.repository.AgentRunTraceRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.Optional;
+
+/**
+ * Persists a low-sensitivity lifecycle summary for an AgentRun.
+ */
+@Service
+@RequiredArgsConstructor
+public class AgentRunTraceService {
+
+    private final AgentRunTraceRepository traceRepository;
+
+    @Transactional
+    public void start(String userId, String runId, String scene) {
+        if (isBlank(userId) || isBlank(runId)) {
+            return;
+        }
+        if (traceRepository.findByUserIdAndRunId(userId, runId).isPresent()) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        traceRepository.save(AgentRunTrace.builder()
+                .userId(userId)
+                .runId(runId)
+                .scene(isBlank(scene) ? "unknown" : scene)
+                .status(AgentRunTrace.Status.RUNNING)
+                .currentStage("preparing")
+                .toolCount(0)
+                .startedAt(now)
+                .createdAt(now)
+                .updatedAt(now)
+                .build());
+    }
+
+    @Transactional
+    public void stage(String userId, String runId, String stage) {
+        findRunning(userId, runId).ifPresent(trace -> {
+            trace.setCurrentStage(stage);
+            traceRepository.save(trace);
+        });
+    }
+
+    @Transactional
+    public void toolCompleted(String userId, String runId) {
+        findRunning(userId, runId).ifPresent(trace -> {
+            trace.setToolCount((trace.getToolCount() == null ? 0 : trace.getToolCount()) + 1);
+            traceRepository.save(trace);
+        });
+    }
+
+    @Transactional
+    public void complete(String userId, String runId) {
+        finish(userId, runId, AgentRunTrace.Status.COMPLETED, null, null);
+    }
+
+    @Transactional
+    public void fail(String userId, String runId, String failureCategory) {
+        finish(userId, runId, AgentRunTrace.Status.FAILED,
+                isBlank(failureCategory) ? "agent_error" : failureCategory, null);
+    }
+
+    @Transactional
+    public void cancel(String userId, String runId, String cancelSource) {
+        finish(userId, runId, AgentRunTrace.Status.CANCELLED, null,
+                isBlank(cancelSource) ? "stream_closed" : cancelSource);
+    }
+
+    private void finish(String userId, String runId, AgentRunTrace.Status status,
+            String failureCategory, String cancelSource) {
+        findRunning(userId, runId).ifPresent(trace -> {
+            LocalDateTime completedAt = LocalDateTime.now();
+            trace.setStatus(status);
+            trace.setCurrentStage(status.name().toLowerCase());
+            trace.setFailureCategory(failureCategory);
+            trace.setCancelSource(cancelSource);
+            trace.setCompletedAt(completedAt);
+            trace.setDurationMs(calculateDuration(trace.getStartedAt(), completedAt));
+            traceRepository.save(trace);
+        });
+    }
+
+    private Optional<AgentRunTrace> findRunning(String userId, String runId) {
+        if (isBlank(userId) || isBlank(runId)) {
+            return Optional.empty();
+        }
+        return traceRepository.findByUserIdAndRunId(userId, runId)
+                .filter(trace -> trace.getStatus() == AgentRunTrace.Status.RUNNING);
+    }
+
+    private long calculateDuration(LocalDateTime startedAt, LocalDateTime completedAt) {
+        if (startedAt == null) {
+            return 0L;
+        }
+        return Math.max(0L, Duration.between(startedAt, completedAt).toMillis());
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.isBlank();
+    }
+}

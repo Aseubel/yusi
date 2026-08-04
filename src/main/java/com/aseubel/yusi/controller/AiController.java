@@ -27,12 +27,13 @@ import com.aseubel.yusi.repository.SoulReportRepository;
 import com.aseubel.yusi.pojo.entity.CognitiveConflict;
 import com.aseubel.yusi.service.agent.AgentPersonaConfigService;
 import com.aseubel.yusi.service.agent.AgentGrowthService;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
+import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import com.aseubel.yusi.service.ai.runtime.AiLockService;
 import com.aseubel.yusi.service.ai.runtime.ChatStreamCancellationRegistry;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
 import com.aseubel.yusi.service.cognition.MidMemoryFusionService;
-import com.aseubel.yusi.service.ai.model.ModelRouteContext;
-import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.oss.OssService;
 import com.aseubel.yusi.pojo.entity.UserNotification;
@@ -128,6 +129,9 @@ public class AiController {
 
     @Autowired
     private ChatStreamCancellationRegistry chatStreamCancellationRegistry;
+
+    @Autowired
+    private AgentRunTraceService agentRunTraceService;
 
     @Auth
     @GetMapping("/chat/history")
@@ -235,10 +239,13 @@ public class AiController {
             throw new AiLockException("您有一个AI请求正在处理中，请等待完成后再试");
         }
 
+        traceRunStarted(userId, requestId);
+
         SseEmitter emitter = new SseEmitter(180000L);
         ChatStreamCancellationRegistry.ChatStreamSession session;
         try {
             session = chatStreamCancellationRegistry.register(userId, requestId, emitter, () -> {
+                traceRunCancelled(userId, requestId, "stream_closed");
                 UserContext.clear();
                 ModelRouteContextHolder.clear();
                 aiLockService.releaseLock(userId);
@@ -264,6 +271,7 @@ public class AiController {
                 String violationMessage = sensitiveWordUtils.checkAndHandleViolation(userId, message);
                 if (violationMessage != null) {
                     if (session.isActive()) {
+                        traceRunCompleted(userId, requestId);
                         sendAgentEvent(emitter, session, AgentStreamEvent.responseDelta(requestId, violationMessage));
                         sendAgentEvent(emitter, session, AgentStreamEvent.runCompleted(requestId));
                         session.complete();
@@ -351,6 +359,7 @@ public class AiController {
                             Long durationMs = toolExecution.duration() != null
                                     ? toolExecution.duration().toMillis()
                                     : null;
+                            traceRunToolCompleted(session.getUserId(), requestId);
                             sendAgentEvent(emitter, session, AgentStreamEvent.toolCompleted(
                                     requestId,
                                     requestToExecute.id(),
@@ -361,16 +370,19 @@ public class AiController {
                             emitAgentStage(emitter, session, requestId, lastStage, "thinking");
                         })
                         .onCompleteResponse(response -> {
+                            traceRunCompleted(userId, requestId);
                             sendAgentEvent(emitter, session, AgentStreamEvent.runCompleted(requestId));
                             session.complete();
                         })
                         .onError(error -> {
+                            traceRunFailed(userId, requestId, "agent_error");
                             sendAgentEvent(emitter, session, AgentStreamEvent.runFailed(requestId));
                             session.fail(error);
                         })
                         .start();
             } catch (Exception e) {
                 log.error("Error during AI chat stream", e);
+                traceRunFailed(userId, requestId, "agent_error");
                 sendAgentEvent(emitter, session, AgentStreamEvent.runFailed(requestId));
                 session.fail(e);
             } finally {
@@ -396,6 +408,7 @@ public class AiController {
             }
         } while (!lastStage.compareAndSet(previous, stage));
 
+        traceRunStage(session.getUserId(), runId, stage);
         sendAgentEvent(emitter, session, AgentStreamEvent.stage(runId, stage));
     }
 
@@ -432,8 +445,46 @@ public class AiController {
         if (request == null || StrUtil.isBlank(request.getRequestId())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "requestId不能为空");
         }
-        chatStreamCancellationRegistry.cancel(UserContext.getUserId(), request.getRequestId());
+        String userId = UserContext.getUserId();
+        String runId = request.getRequestId();
+        chatStreamCancellationRegistry.cancel(userId, runId);
+        traceRunCancelled(userId, runId, "user");
         return Response.success();
+    }
+
+    private void traceRunStarted(String userId, String runId) {
+        runTrace("start", () -> agentRunTraceService.start(userId, runId, "chat"));
+    }
+
+    private void traceRunStage(String userId, String runId, String stage) {
+        runTrace("stage", () -> agentRunTraceService.stage(userId, runId, stage));
+    }
+
+    private void traceRunToolCompleted(String userId, String runId) {
+        runTrace("tool", () -> agentRunTraceService.toolCompleted(userId, runId));
+    }
+
+    private void traceRunCompleted(String userId, String runId) {
+        runTrace("complete", () -> agentRunTraceService.complete(userId, runId));
+    }
+
+    private void traceRunFailed(String userId, String runId, String failureCategory) {
+        runTrace("fail", () -> agentRunTraceService.fail(userId, runId, failureCategory));
+    }
+
+    private void traceRunCancelled(String userId, String runId, String cancelSource) {
+        runTrace("cancel", () -> agentRunTraceService.cancel(userId, runId, cancelSource));
+    }
+
+    private void runTrace(String operation, Runnable action) {
+        if (agentRunTraceService == null) {
+            return;
+        }
+        try {
+            action.run();
+        } catch (RuntimeException exception) {
+            log.warn("AgentRun trace {} failed; continuing chat stream", operation, exception);
+        }
     }
 
     private List<ImageContent> buildImageContents(String userId, List<String> images) {

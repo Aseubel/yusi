@@ -87,6 +87,10 @@ SSE 的每一个增量 token 都直接落库。
 `response.delta`、`run.completed` 和 `run.failed` 是上述产品事件的实时安全投影。
 `response.delta` 默认只用于界面，不作为产品事件落库。
 
+当前服务端已持久化 `agent_run_trace` 生命周期摘要，覆盖 `runId`、用户、场景、
+最近阶段、工具完成次数、耗时和终态。它不是完整 Trace；Prompt、模型、记忆召回、
+工具 Schema 和 Token 元数据仍需在后续阶段以低敏、可访问控制的方式补充。
+
 ### 记忆与认知
 
 | 事件名 | 触发时机 | 关键关联 | 评测用途 |
@@ -211,8 +215,8 @@ stateDiagram-v2
    新建通用事件平台。
 2. 将当前聊天 SSE 的 `runId`、工具状态和终态语义固定为 UI 契约，并为旧版
    文本流保留兼容层。
-3. 选择 AgentRun 和连接反馈作为第一批服务端 Trace，先记录生命周期和耗时，
-   再增加 Prompt、模型和 Token 元数据。
+3. AgentRun 生命周期和耗时摘要已作为第一批服务端 Trace 落地；下一步再增加
+   Prompt、模型、记忆召回和 Token 元数据，并保持安全边界。
 4. 记忆查看、纠正、隐藏和删除完成权限设计后，才把 `memory.*` 事件接入匹配
    和对话消费方。
 5. 完成上述事件和评测回放后，再决定是否引入持久化 Agentic Runtime 或训练。
