@@ -75,6 +75,6 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Docker build successful. Restarting container..."
-docker compose up -d yusi
+docker compose --env-file yusi_prod.env up -d yusi
 
 echo "Done."

@@ -1,0 +1,1 @@
+docker compose --env-file yusi_prod.env -f mcp/docker-compose.yml up -d
