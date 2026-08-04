@@ -5,8 +5,10 @@ import com.aliyun.sdk.service.oss2.credentials.StaticCredentialsProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 @Configuration
+@Profile("!test")
 @EnableConfigurationProperties(OssProperties.class)
 public class OssConfig {
 

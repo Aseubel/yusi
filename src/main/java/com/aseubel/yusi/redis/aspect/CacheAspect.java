@@ -19,6 +19,7 @@ import org.redisson.api.RScript;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Profile;
 
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -35,6 +36,7 @@ import static com.aseubel.yusi.redis.common.CacheConstants.*;
 @Slf4j
 @Aspect
 @Component
+@Profile("!test")
 @RequiredArgsConstructor
 public class CacheAspect {
 

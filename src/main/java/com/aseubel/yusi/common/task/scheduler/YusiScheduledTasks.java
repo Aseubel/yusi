@@ -15,6 +15,7 @@ import com.aseubel.yusi.service.room.RoomScheduler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.context.annotation.Profile;
 
 /**
  * Central registry for application-level scheduled entry points.
@@ -22,6 +23,7 @@ import org.springframework.stereotype.Component;
  * coordination stay in this infrastructure boundary.
  */
 @Component
+@Profile("!test")
 @RequiredArgsConstructor
 public class YusiScheduledTasks {
 
