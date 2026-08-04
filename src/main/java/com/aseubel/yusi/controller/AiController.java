@@ -18,6 +18,7 @@ import com.aseubel.yusi.pojo.dto.agent.AgentPersonaConfigRequest;
 import com.aseubel.yusi.pojo.dto.agent.AgentGrowthResponse;
 import com.aseubel.yusi.pojo.dto.chat.ChatCancelRequest;
 import com.aseubel.yusi.pojo.dto.chat.ChatRequest;
+import com.aseubel.yusi.pojo.dto.chat.AgentStreamEvent;
 import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.pojo.entity.SoulReport;
@@ -40,7 +41,6 @@ import com.aseubel.yusi.redis.service.IRedisService;
 import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 
-import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.ChatMessageSerializer;
@@ -52,6 +52,7 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.service.TokenStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
@@ -65,6 +66,7 @@ import org.springframework.data.domain.PageRequest;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -88,6 +90,13 @@ public class AiController {
 
     @Autowired
     private OssService ossService;
+
+    /**
+     * Kept with a default value so direct controller unit tests do not need a
+     * Spring context just to exercise the stream lifecycle.
+     */
+    @Autowired
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     private final ThreadPoolTaskExecutor threadPoolExecutor;
 
@@ -242,9 +251,11 @@ public class AiController {
         emitter.onCompletion(session::cancel);
         emitter.onTimeout(session::cancel);
         emitter.onError(error -> session.cancel());
+        sendAgentEvent(emitter, session, AgentStreamEvent.runStarted(requestId));
 
         try {
             threadPoolExecutor.execute(() -> {
+            AtomicReference<String> lastStage = new AtomicReference<>("preparing");
             try {
                 if (!session.isActive()) {
                     return;
@@ -253,7 +264,8 @@ public class AiController {
                 String violationMessage = sensitiveWordUtils.checkAndHandleViolation(userId, message);
                 if (violationMessage != null) {
                     if (session.isActive()) {
-                        emitter.send(SseEmitter.event().data(violationMessage));
+                        sendAgentEvent(emitter, session, AgentStreamEvent.responseDelta(requestId, violationMessage));
+                        sendAgentEvent(emitter, session, AgentStreamEvent.runCompleted(requestId));
                         session.complete();
                     }
                     return;
@@ -261,6 +273,8 @@ public class AiController {
                 if (!session.isActive()) {
                     return;
                 }
+
+                emitAgentStage(emitter, session, requestId, lastStage, "thinking");
 
                 // 构建三明治模板内容，用于强调systemprompt
                 String sandwichContent = String.format(PersistentChatMemoryStore.SANDWITCH_TEMPLATE, message);
@@ -290,8 +304,12 @@ public class AiController {
                                 return;
                             }
                             try {
-                                emitter.send(SseEmitter.event().data(partialResponse.text()));
-                            } catch (IOException | IllegalStateException e) {
+                                if (StrUtil.isNotBlank(partialResponse.text())) {
+                                    emitAgentStage(emitter, session, requestId, lastStage, "responding");
+                                    sendAgentEvent(emitter, session,
+                                            AgentStreamEvent.responseDelta(requestId, partialResponse.text()));
+                                }
+                            } catch (RuntimeException e) {
                                 session.fail(e);
                             }
                         })
@@ -299,21 +317,61 @@ public class AiController {
                             if (context != null) {
                                 session.bind(context.streamingHandle());
                             }
+                            emitAgentStage(emitter, session, requestId, lastStage, "thinking");
                         })
                         .onPartialToolCallWithContext((partialToolCall, context) -> {
                             if (context != null) {
                                 session.bind(context.streamingHandle());
                             }
                         })
+                        .onRetrieved(contents -> {
+                            emitAgentStage(emitter, session, requestId, lastStage, "retrieving");
+                        })
+                        .onIntermediateResponse(response -> {
+                            emitAgentStage(emitter, session, requestId, lastStage, "thinking");
+                        })
+                        .beforeToolExecution(beforeToolExecution -> {
+                            if (beforeToolExecution == null || beforeToolExecution.request() == null) {
+                                return;
+                            }
+                            var requestToExecute = beforeToolExecution.request();
+                            String toolName = requestToExecute.name();
+                            emitAgentStage(emitter, session, requestId, lastStage, "tool");
+                            sendAgentEvent(emitter, session, AgentStreamEvent.toolStarted(
+                                    requestId,
+                                    requestToExecute.id(),
+                                    toolName,
+                                    resolveToolSource(toolName)));
+                        })
+                        .onToolExecuted(toolExecution -> {
+                            if (toolExecution == null || toolExecution.request() == null) {
+                                return;
+                            }
+                            var requestToExecute = toolExecution.request();
+                            Long durationMs = toolExecution.duration() != null
+                                    ? toolExecution.duration().toMillis()
+                                    : null;
+                            sendAgentEvent(emitter, session, AgentStreamEvent.toolCompleted(
+                                    requestId,
+                                    requestToExecute.id(),
+                                    requestToExecute.name(),
+                                    resolveToolSource(requestToExecute.name()),
+                                    !toolExecution.hasFailed(),
+                                    durationMs));
+                            emitAgentStage(emitter, session, requestId, lastStage, "thinking");
+                        })
                         .onCompleteResponse(response -> {
+                            sendAgentEvent(emitter, session, AgentStreamEvent.runCompleted(requestId));
                             session.complete();
                         })
                         .onError(error -> {
+                            sendAgentEvent(emitter, session, AgentStreamEvent.runFailed(requestId));
                             session.fail(error);
                         })
                         .start();
             } catch (Exception e) {
                 log.error("Error during AI chat stream", e);
+                sendAgentEvent(emitter, session, AgentStreamEvent.runFailed(requestId));
                 session.fail(e);
             } finally {
                 UserContext.clear();
@@ -326,6 +384,46 @@ public class AiController {
         }
 
         return emitter;
+    }
+
+    private void emitAgentStage(SseEmitter emitter, ChatStreamCancellationRegistry.ChatStreamSession session,
+            String runId, AtomicReference<String> lastStage, String stage) {
+        String previous;
+        do {
+            previous = lastStage.get();
+            if (stage.equals(previous)) {
+                return;
+            }
+        } while (!lastStage.compareAndSet(previous, stage));
+
+        sendAgentEvent(emitter, session, AgentStreamEvent.stage(runId, stage));
+    }
+
+    protected void sendAgentEvent(SseEmitter emitter, ChatStreamCancellationRegistry.ChatStreamSession session,
+            AgentStreamEvent event) {
+        if (!session.isActive()) {
+            return;
+        }
+        try {
+            emitter.send(SseEmitter.event()
+                    .name(event.type())
+                    .data(objectMapper.writeValueAsString(event)));
+        } catch (IOException | IllegalStateException e) {
+            session.fail(e);
+        }
+    }
+
+    private String resolveToolSource(String toolName) {
+        if ("web_search".equals(toolName)) {
+            return "mcp";
+        }
+        if ("searchMemories".equals(toolName)
+                || "searchLifeGraph".equals(toolName)
+                || "searchDiary".equals(toolName)
+                || "updateUserPersona".equals(toolName)) {
+            return "local";
+        }
+        return "tool";
     }
 
     @Auth

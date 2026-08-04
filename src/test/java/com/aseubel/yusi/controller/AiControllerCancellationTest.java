@@ -3,28 +3,39 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.utils.SensitiveWordUtils;
+import com.aseubel.yusi.pojo.dto.chat.AgentStreamEvent;
 import com.aseubel.yusi.pojo.dto.chat.ChatCancelRequest;
 import com.aseubel.yusi.pojo.dto.chat.ChatRequest;
 import com.aseubel.yusi.service.ai.runtime.AiLockService;
 import com.aseubel.yusi.service.ai.runtime.ChatStreamCancellationRegistry;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.oss.OssService;
+import dev.langchain4j.agent.tool.ToolExecutionRequest;
+import dev.langchain4j.invocation.InvocationContext;
 import dev.langchain4j.model.chat.response.PartialResponse;
 import dev.langchain4j.model.chat.response.PartialResponseContext;
 import dev.langchain4j.model.chat.response.StreamingHandle;
 import dev.langchain4j.service.TokenStream;
+import dev.langchain4j.service.tool.BeforeToolExecution;
+import dev.langchain4j.service.tool.ToolExecution;
+import dev.langchain4j.service.tool.ToolExecutionResult;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Answers.RETURNS_SELF;
 import static org.mockito.ArgumentMatchers.any;
@@ -48,11 +59,11 @@ class AiControllerCancellationTest {
     private final ChatStreamCancellationRegistry registry = new ChatStreamCancellationRegistry();
     private final AtomicReference<Runnable> submittedTask = new AtomicReference<>();
 
-    private AiController controller;
+    private RecordingAiController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new AiController(threadPoolExecutor, sensitiveWordUtils);
+        controller = new RecordingAiController(threadPoolExecutor, sensitiveWordUtils);
         ReflectionTestUtils.setField(controller, "diaryAssistant", diaryAssistant);
         ReflectionTestUtils.setField(controller, "aiLockService", aiLockService);
         ReflectionTestUtils.setField(controller, "ossService", ossService);
@@ -137,5 +148,87 @@ class AiControllerCancellationTest {
 
         verify(handle, times(1)).cancel();
         verify(aiLockService, times(1)).releaseLock("user-1");
+    }
+
+    @Test
+    void emitsSafeToolLifecycleEventsForMcpToolFailure() {
+        TokenStream tokenStream = tokenStream();
+        when(diaryAssistant.chatWithMessage(eq("user-1"), anyString(), anyList())).thenReturn(tokenStream);
+
+        controller.chatStream(ChatRequest.builder()
+                .requestId("request-tool")
+                .message("查一下最新消息")
+                .build(), "zh-CN");
+        submittedTask.get().run();
+        UserContext.setUserId("user-1");
+
+        ArgumentCaptor<Consumer<BeforeToolExecution>> beforeCaptor = ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<Consumer<ToolExecution>> completedCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(tokenStream).beforeToolExecution(beforeCaptor.capture());
+        verify(tokenStream).onToolExecuted(completedCaptor.capture());
+
+        InvocationContext invocationContext = mock(InvocationContext.class);
+        ToolExecutionRequest request = ToolExecutionRequest.builder()
+                .id("tool-call-1")
+                .name("web_search")
+                .arguments("{\"query\":\"secret\"}")
+                .build();
+
+        beforeCaptor.getValue().accept(BeforeToolExecution.builder()
+                .request(request)
+                .invocationContext(invocationContext)
+                .build());
+        completedCaptor.getValue().accept(ToolExecution.builder()
+                .request(request)
+                .result(ToolExecutionResult.builder()
+                        .isError(true)
+                        .resultText("private tool output")
+                        .build())
+                .startTime(LocalDateTime.of(2026, 8, 4, 12, 0, 0))
+                .finishTime(LocalDateTime.of(2026, 8, 4, 12, 0, 1, 500_000_000))
+                .invocationContext(invocationContext)
+                .build());
+
+        AgentStreamEvent toolStarted = controller.events().stream()
+                .filter(event -> "tool.started".equals(event.type()))
+                .findFirst()
+                .orElse(null);
+        AgentStreamEvent toolCompleted = controller.events().stream()
+                .filter(event -> "tool.completed".equals(event.type()))
+                .findFirst()
+                .orElse(null);
+
+        assertNotNull(toolStarted);
+        assertEquals("tool-call-1", toolStarted.toolCallId());
+        assertEquals("web_search", toolStarted.toolName());
+        assertEquals("mcp", toolStarted.toolSource());
+        assertNotNull(toolCompleted);
+        assertEquals("tool-call-1", toolCompleted.toolCallId());
+        assertFalse(toolCompleted.success());
+        assertEquals(1500L, toolCompleted.durationMs());
+        assertTrue(controller.events().stream().allMatch(event -> event.text() == null));
+    }
+
+    private static final class RecordingAiController extends AiController {
+
+        private final List<AgentStreamEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+        private RecordingAiController(ThreadPoolTaskExecutor threadPoolExecutor,
+                SensitiveWordUtils sensitiveWordUtils) {
+            super(threadPoolExecutor, sensitiveWordUtils);
+        }
+
+        @Override
+        protected void sendAgentEvent(SseEmitter emitter,
+                ChatStreamCancellationRegistry.ChatStreamSession session,
+                AgentStreamEvent event) {
+            if (session.isActive()) {
+                events.add(event);
+            }
+        }
+
+        private List<AgentStreamEvent> events() {
+            return events;
+        }
     }
 }
