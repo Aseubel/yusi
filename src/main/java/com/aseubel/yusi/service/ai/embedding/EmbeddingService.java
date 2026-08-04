@@ -46,10 +46,10 @@ public class EmbeddingService {
         switch (event.getType()) {
             case WRITE:
             case MODIFY:
-                createUpsertTask(diary);
+                createUpsertTask(diary, event.getEventId());
                 break;
             case DELETE:
-                createDeleteTask(diary);
+                createDeleteTask(diary, event.getEventId());
                 break;
             default:
                 break;
@@ -60,7 +60,7 @@ public class EmbeddingService {
      * 创建 UPSERT 任务
      * 如果已有相同日记的待处理任务，则跳过（去重）
      */
-    private void createUpsertTask(Diary diary) {
+    private void createUpsertTask(Diary diary, String triggerEventId) {
         // 去重检查：如果已有相同日记的待处理任务，跳过
         List<EmbeddingTask> pending = taskRepository.findPendingByDiaryId(diary.getDiaryId());
         if (!pending.isEmpty()) {
@@ -68,17 +68,18 @@ public class EmbeddingService {
             return;
         }
 
-        EmbeddingTask task = EmbeddingTask.createUpsertTask(diary.getDiaryId(), diary.getUserId());
+        EmbeddingTask task = EmbeddingTask.createUpsertTask(diary.getDiaryId(), diary.getUserId(), triggerEventId);
         taskRepository.save(task);
-        log.debug("创建 Embedding UPSERT 任务: diaryId={}, userId={}", diary.getDiaryId(), diary.getUserId());
+        log.debug("创建 Embedding UPSERT 任务: diaryId={}, userId={}, triggerEventId={}",
+                diary.getDiaryId(), diary.getUserId(), triggerEventId);
     }
 
     /**
      * 创建 DELETE 任务
      */
-    private void createDeleteTask(Diary diary) {
-        EmbeddingTask task = EmbeddingTask.createDeleteTask(diary.getDiaryId(), diary.getUserId());
+    private void createDeleteTask(Diary diary, String triggerEventId) {
+        EmbeddingTask task = EmbeddingTask.createDeleteTask(diary.getDiaryId(), diary.getUserId(), triggerEventId);
         taskRepository.save(task);
-        log.debug("创建 Embedding DELETE 任务: diaryId={}", diary.getDiaryId());
+        log.debug("创建 Embedding DELETE 任务: diaryId={}, triggerEventId={}", diary.getDiaryId(), triggerEventId);
     }
 }

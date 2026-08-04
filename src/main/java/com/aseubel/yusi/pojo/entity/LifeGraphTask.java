@@ -44,6 +44,12 @@ public class LifeGraphTask {
     @Column(name = "user_id", nullable = false, length = 64)
     private String userId;
 
+    /**
+     * 触发任务的日记变更事件 ID；同一任务重试时保持不变。
+     */
+    @Column(name = "trigger_event_id", length = 64)
+    private String triggerEventId;
+
     @Column(name = "task_type", nullable = false)
     @Enumerated(EnumType.STRING)
     private TaskType taskType;
@@ -92,9 +98,14 @@ public class LifeGraphTask {
     }
 
     public static LifeGraphTask createUpsertTask(String diaryId, String userId) {
+        return createUpsertTask(diaryId, userId, null);
+    }
+
+    public static LifeGraphTask createUpsertTask(String diaryId, String userId, String triggerEventId) {
         return LifeGraphTask.builder()
                 .diaryId(diaryId)
                 .userId(userId)
+                .triggerEventId(triggerEventId)
                 .taskType(TaskType.UPSERT)
                 .status(TaskStatus.PENDING)
                 .retryCount(0)
@@ -106,9 +117,14 @@ public class LifeGraphTask {
     }
 
     public static LifeGraphTask createDeleteTask(String diaryId, String userId) {
+        return createDeleteTask(diaryId, userId, null);
+    }
+
+    public static LifeGraphTask createDeleteTask(String diaryId, String userId, String triggerEventId) {
         return LifeGraphTask.builder()
                 .diaryId(diaryId)
                 .userId(userId)
+                .triggerEventId(triggerEventId)
                 .taskType(TaskType.DELETE)
                 .status(TaskStatus.PENDING)
                 .retryCount(0)

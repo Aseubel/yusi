@@ -279,6 +279,7 @@ CREATE TABLE `embedding_task` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `diary_id` VARCHAR(255) NOT NULL COMMENT '关联的日记业务ID',
     `user_id` VARCHAR(255) NOT NULL COMMENT '关联的用户ID',
+    `trigger_event_id` VARCHAR(64) DEFAULT NULL COMMENT '触发任务的日记变更事件ID',
     `task_type` VARCHAR(32) NOT NULL COMMENT '任务类型: UPSERT(新增/修改) / DELETE(删除)',
     `status` VARCHAR(32) NOT NULL COMMENT '任务状态: PENDING/PROCESSING/COMPLETED/FAILED',
     `retry_count` INT DEFAULT 0 COMMENT '重试次数',
@@ -290,6 +291,7 @@ CREATE TABLE `embedding_task` (
     PRIMARY KEY (`id`),
     KEY `idx_embedding_task_status` (`status`),
     KEY `idx_embedding_task_diary_id` (`diary_id`),
+    KEY `idx_embedding_task_trigger_event` (`trigger_event_id`),
     KEY `idx_embedding_task_next_retry` (`next_retry_at`),
     KEY `idx_embedding_task_created` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'Milvus Embedding 任务表';
@@ -390,6 +392,7 @@ CREATE TABLE `life_graph_task` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `diary_id` VARCHAR(255) NOT NULL COMMENT '关联的日记业务ID',
     `user_id` VARCHAR(64) NOT NULL COMMENT '关联的用户ID',
+    `trigger_event_id` VARCHAR(64) DEFAULT NULL COMMENT '触发任务的日记变更事件ID',
     `task_type` VARCHAR(32) NOT NULL COMMENT '任务类型: UPSERT/DELETE',
     `status` VARCHAR(32) NOT NULL COMMENT '任务状态: PENDING/PROCESSING/COMPLETED/FAILED',
     `retry_count` INT DEFAULT 0 COMMENT '重试次数',
@@ -401,6 +404,7 @@ CREATE TABLE `life_graph_task` (
     PRIMARY KEY (`id`),
     KEY `idx_life_graph_task_status` (`status`),
     KEY `idx_life_graph_task_diary_id` (`diary_id`),
+    KEY `idx_life_graph_task_trigger_event` (`trigger_event_id`),
     KEY `idx_life_graph_task_next_retry` (`next_retry_at`),
     KEY `idx_life_graph_task_created` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '人生图谱抽取任务表';

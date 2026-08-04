@@ -47,6 +47,12 @@ public class EmbeddingTask {
     private String userId;
 
     /**
+     * 触发任务的日记变更事件 ID；同一任务重试时保持不变。
+     */
+    @Column(name = "trigger_event_id", length = 64)
+    private String triggerEventId;
+
+    /**
      * 任务类型: UPSERT(新增/修改) / DELETE(删除)
      */
     @Column(name = "task_type", nullable = false)
@@ -121,9 +127,14 @@ public class EmbeddingTask {
      * 创建新增/修改任务
      */
     public static EmbeddingTask createUpsertTask(String diaryId, String userId) {
+        return createUpsertTask(diaryId, userId, null);
+    }
+
+    public static EmbeddingTask createUpsertTask(String diaryId, String userId, String triggerEventId) {
         return EmbeddingTask.builder()
                 .diaryId(diaryId)
                 .userId(userId)
+                .triggerEventId(triggerEventId)
                 .taskType(TaskType.UPSERT)
                 .status(TaskStatus.PENDING)
                 .retryCount(0)
@@ -138,9 +149,14 @@ public class EmbeddingTask {
      * 创建删除任务
      */
     public static EmbeddingTask createDeleteTask(String diaryId, String userId) {
+        return createDeleteTask(diaryId, userId, null);
+    }
+
+    public static EmbeddingTask createDeleteTask(String diaryId, String userId, String triggerEventId) {
         return EmbeddingTask.builder()
                 .diaryId(diaryId)
                 .userId(userId)
+                .triggerEventId(triggerEventId)
                 .taskType(TaskType.DELETE)
                 .status(TaskStatus.PENDING)
                 .retryCount(0)

@@ -33,17 +33,17 @@ public class LifeGraphTaskCreator {
         switch (event.getType()) {
             case WRITE:
             case MODIFY:
-                createUpsertTask(diary);
+                createUpsertTask(diary, event.getEventId());
                 break;
             case DELETE:
-                createDeleteTask(diary);
+                createDeleteTask(diary, event.getEventId());
                 break;
             default:
                 break;
         }
     }
 
-    private void createUpsertTask(Diary diary) {
+    private void createUpsertTask(Diary diary, String triggerEventId) {
         List<LifeGraphTask> pending = taskRepository.findPendingByDiaryId(diary.getDiaryId());
         if (!pending.isEmpty()) {
             return;
@@ -52,7 +52,7 @@ public class LifeGraphTaskCreator {
         String plainContent = diary.getPlainContent();
         boolean canProcessImmediately = plainContent != null && !plainContent.isBlank();
 
-        LifeGraphTask task = LifeGraphTask.createUpsertTask(diary.getDiaryId(), diary.getUserId());
+        LifeGraphTask task = LifeGraphTask.createUpsertTask(diary.getDiaryId(), diary.getUserId(), triggerEventId);
         if (canProcessImmediately) {
             task.setStatus(LifeGraphTask.TaskStatus.PROCESSING);
         }
@@ -72,8 +72,8 @@ public class LifeGraphTaskCreator {
         }
     }
 
-    private void createDeleteTask(Diary diary) {
-        LifeGraphTask task = LifeGraphTask.createDeleteTask(diary.getDiaryId(), diary.getUserId());
+    private void createDeleteTask(Diary diary, String triggerEventId) {
+        LifeGraphTask task = LifeGraphTask.createDeleteTask(diary.getDiaryId(), diary.getUserId(), triggerEventId);
         taskRepository.save(task);
     }
 }
