@@ -15,6 +15,8 @@ import java.util.List;
 public class MatchRecommendationResponse {
 
     private Long matchId;
+    private Long connectionId;
+    private String connectionStatus;
     private String counterpartUserId;
     private String counterpartUserName;
     private String recommendationLetter;

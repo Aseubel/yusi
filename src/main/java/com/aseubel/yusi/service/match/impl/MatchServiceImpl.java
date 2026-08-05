@@ -3,11 +3,15 @@ package com.aseubel.yusi.service.match.impl;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.utils.ModelUtils;
 import com.aseubel.yusi.pojo.dto.match.MatchRecommendationResponse;
 import com.aseubel.yusi.pojo.dto.match.MatchRerankResult;
 import com.aseubel.yusi.pojo.dto.match.MatchStatusResponse;
 import com.aseubel.yusi.pojo.entity.MatchProfile;
+import com.aseubel.yusi.pojo.entity.SoulConnection;
+import com.aseubel.yusi.pojo.entity.SoulConnectionStatus;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.redis.annotation.QueryCache;
@@ -20,6 +24,7 @@ import com.aseubel.yusi.service.match.ConnectionGuideService;
 import com.aseubel.yusi.service.match.MatchFeedbackService;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
 import com.aseubel.yusi.service.match.MatchService;
+import com.aseubel.yusi.service.match.SoulConnectionLifecycleService;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -39,6 +44,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -49,6 +55,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -72,12 +79,15 @@ public class MatchServiceImpl implements MatchService {
     private static final int PENDING_RESPONSE_COOLDOWN_DAYS = 7;
     private static final int SKIP_COOLDOWN_DAYS = 30;
     private static final int MAX_HISTORY_PENALTY = 18;
+    private static final Set<String> CONNECTION_FEEDBACK_CATEGORIES = Set.of(
+            "LIKE", "DEEP_INTERACTION", "DO_NOT_CONTINUE");
 
     private final UserService userService;
     private final SoulMatchRepository soulMatchRepository;
     private final DiaryRepository diaryRepository;
     private final MatchProfileAssembler matchProfileAssembler;
     private final ConnectionGuideService connectionGuideService;
+    private final SoulConnectionLifecycleService connectionLifecycleService;
     private final MatchFeedbackService matchFeedbackService;
     private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
@@ -470,6 +480,11 @@ public class MatchServiceImpl implements MatchService {
 
         SoulMatch latest = history.get(0);
         LocalDateTime now = LocalDateTime.now();
+        if (history.stream()
+                .map(SoulMatch::getId)
+                .anyMatch(matchId -> matchFeedbackService.hasStrongNegativeSignal(matchId))) {
+            return PairHistoryFeedback.exclude("strong_negative_signal", MAX_HISTORY_PENALTY);
+        }
         if (history.stream().anyMatch(match -> Boolean.TRUE.equals(match.getIsMatched()))) {
             return PairHistoryFeedback.exclude("already_matched", MAX_HISTORY_PENALTY);
         }
@@ -670,17 +685,25 @@ public class MatchServiceImpl implements MatchService {
     @Override
     @UpdateCache(key = "'match:list:' + #userId + ':*'", evictOnly = true)
     @UpdateCache(key = "'match:status:' + #userId", evictOnly = true)
+    @Transactional
     public MatchRecommendationResponse handleMatchAction(String userId, Long matchId, Integer action) {
-        SoulMatch match = soulMatchRepository.findById(matchId).orElse(null);
-        if (match == null)
-            return null;
+        if (!Integer.valueOf(1).equals(action) && !Integer.valueOf(2).equals(action)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "匹配动作不合法");
+        }
+        SoulMatch match = requireMatch(matchId, userId);
+        boolean isUserA = userId.equals(match.getUserAId());
+        Integer currentStatus = isUserA ? match.getStatusA() : match.getStatusB();
+        if (Integer.valueOf(2).equals(currentStatus) && Integer.valueOf(1).equals(action)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "已拒绝的推荐不能恢复");
+        }
+        if (Integer.valueOf(2).equals(currentStatus) && Integer.valueOf(2).equals(action)) {
+            return toRecommendationResponse(userId, match);
+        }
 
-        if (userId.equals(match.getUserAId())) {
+        if (isUserA) {
             match.setStatusA(action);
-        } else if (userId.equals(match.getUserBId())) {
-            match.setStatusB(action);
         } else {
-            return null; // Not involved
+            match.setStatusB(action);
         }
 
         // Check for match
@@ -690,12 +713,92 @@ public class MatchServiceImpl implements MatchService {
 
         match.setUpdateTime(LocalDateTime.now());
         SoulMatch saved = soulMatchRepository.save(match);
+        SoulConnection connection = Integer.valueOf(1).equals(action)
+                ? connectionLifecycleService.accept(saved, userId)
+                : connectionLifecycleService.decline(saved, userId, "USER_DECLINED");
 
-        // F9.5: 记录 ACCEPT/SKIP 反馈；互动和举报由 MatchFeedbackService 的专用入口记录
         String feedbackAction = Integer.valueOf(1).equals(action) ? "ACCEPT" : "SKIP";
-        matchFeedbackService.recordFeedback(saved.getId(), userId, feedbackAction);
+        matchFeedbackService.recordConnectionFeedback(connection != null ? connection.getId() : null,
+                saved.getId(), userId, feedbackAction);
 
         return toRecommendationResponse(userId, saved);
+    }
+
+    @Override
+    @UpdateCache(key = "'match:list:' + #userId + ':*'", evictOnly = true)
+    @UpdateCache(key = "'match:status:' + #userId", evictOnly = true)
+    @Transactional
+    public MatchRecommendationResponse submitConnectionFeedback(String userId, Long matchId, String category) {
+        SoulMatch match = requireMatch(matchId, userId);
+        String normalizedCategory = normalizeConnectionCategory(category);
+        SoulConnection connection = connectionLifecycleService.findByMatchId(matchId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_ERROR, "尚未建立连接，无法提交反馈"));
+        if (connection.getStatus().isTerminal() || connection.getStatus() == SoulConnectionStatus.REPORTED) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "当前连接已结束，无法提交反馈");
+        }
+
+        if ("DO_NOT_CONTINUE".equals(normalizedCategory)) {
+            connection = connectionLifecycleService.end(match, userId, normalizedCategory);
+        }
+        matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId, normalizedCategory);
+        if ("DEEP_INTERACTION".equals(normalizedCategory)
+                && matchFeedbackService.hasMutualDeepInteraction(connection, match)) {
+            connection = connectionLifecycleService.markMutualResonance(match, userId);
+        }
+        return toRecommendationResponse(userId, match);
+    }
+
+    @Override
+    @UpdateCache(key = "'match:list:' + #userId + ':*'", evictOnly = true)
+    @UpdateCache(key = "'match:status:' + #userId", evictOnly = true)
+    @Transactional
+    public MatchRecommendationResponse endConnection(String userId, Long matchId, String reasonCategory) {
+        SoulMatch match = requireMatch(matchId, userId);
+        SoulConnection connection = connectionLifecycleService.end(match, userId,
+                StrUtil.blankToDefault(reasonCategory, "USER_ENDED"));
+        matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId, "DO_NOT_CONTINUE");
+        return toRecommendationResponse(userId, match);
+    }
+
+    @Override
+    @UpdateCache(key = "'match:list:' + #userId + ':*'", evictOnly = true)
+    @UpdateCache(key = "'match:status:' + #userId", evictOnly = true)
+    @Transactional
+    public MatchRecommendationResponse reportConnection(String userId, Long matchId, String reasonCategory) {
+        SoulMatch match = requireMatch(matchId, userId);
+        SoulConnection connection = connectionLifecycleService.report(match, userId,
+                StrUtil.blankToDefault(reasonCategory, "UNSAFE"));
+        matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId, "REPORT");
+        return toRecommendationResponse(userId, match);
+    }
+
+    @Override
+    @UpdateCache(key = "'match:list:' + #userId + ':*'", evictOnly = true)
+    @UpdateCache(key = "'match:status:' + #userId", evictOnly = true)
+    @Transactional
+    public MatchRecommendationResponse blockConnection(String userId, Long matchId, String reasonCategory) {
+        SoulMatch match = requireMatch(matchId, userId);
+        SoulConnection connection = connectionLifecycleService.block(match, userId,
+                StrUtil.blankToDefault(reasonCategory, "USER_BLOCKED"));
+        matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId, "BLOCK");
+        return toRecommendationResponse(userId, match);
+    }
+
+    private SoulMatch requireMatch(Long matchId, String userId) {
+        SoulMatch match = soulMatchRepository.findById(matchId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "匹配不存在"));
+        if (!userId.equals(match.getUserAId()) && !userId.equals(match.getUserBId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权操作该匹配");
+        }
+        return match;
+    }
+
+    private String normalizeConnectionCategory(String category) {
+        String normalized = StrUtil.blankToDefault(category, "").trim().toUpperCase(Locale.ROOT);
+        if (!CONNECTION_FEEDBACK_CATEGORIES.contains(normalized)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "连接反馈类型不合法");
+        }
+        return normalized;
     }
 
     @Override
@@ -734,6 +837,8 @@ public class MatchServiceImpl implements MatchService {
         boolean isUserA = currentUserId.equals(match.getUserAId());
         String counterpartUserId = isUserA ? match.getUserBId() : match.getUserAId();
         User counterpart = userService.getUserByUserId(counterpartUserId);
+        SoulConnection connection = connectionLifecycleService.findByMatchId(match.getId()).orElse(null);
+        SoulConnectionStatus connectionStatus = connectionLifecycleService.resolveStatus(match, currentUserId);
 
         // F9.1: 生成匹配后破冰引导
         List<String> iceBreakers = List.of();
@@ -755,6 +860,8 @@ public class MatchServiceImpl implements MatchService {
 
         return MatchRecommendationResponse.builder()
                 .matchId(match.getId())
+                .connectionId(connection != null ? connection.getId() : null)
+                .connectionStatus(connectionStatus.name())
                 .counterpartUserId(counterpartUserId)
                 .counterpartUserName(counterpart != null ? counterpart.getUserName() : null)
                 .recommendationLetter(isUserA ? match.getLetterAtoB() : match.getLetterBtoA())

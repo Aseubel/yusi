@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Collection;
 
 @Repository
 public interface MatchFeedbackRepository extends JpaRepository<MatchFeedback, Long> {
@@ -14,4 +15,10 @@ public interface MatchFeedbackRepository extends JpaRepository<MatchFeedback, Lo
 
     /** 统计用户某类反馈数量 */
     long countByUserIdAndAction(String userId, String action);
+
+    /** 统计一次匹配是否出现过强负面连接信号。 */
+    long countByMatchIdAndActionIn(Long matchId, Collection<String> actions);
+
+    boolean existsByConnectionIdAndUserIdAndActionIn(Long connectionId, String userId,
+            Collection<String> actions);
 }

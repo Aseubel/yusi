@@ -35,12 +35,16 @@ public class MatchFeedback {
     @Column(name = "match_id", nullable = false)
     private Long matchId;
 
+    /** 独立连接 ID；历史推荐反馈可以为空。 */
+    @Column(name = "connection_id")
+    private Long connectionId;
+
     /** 用户 ID */
     @Column(name = "user_id", nullable = false, length = 64)
     private String userId;
 
-    /** 反馈动作: ACCEPT / SKIP / INTERACT / REPORT */
-    @Column(name = "action", nullable = false, length = 16)
+    /** 反馈动作或连接反馈类别: ACCEPT / SKIP / INTERACT / REPORT / LIKE / DEEP_INTERACTION */
+    @Column(name = "action", nullable = false, length = 32)
     private String action;
 
     /** 互动深度（仅在 INTERACT 时有意义）: 消息条数 */

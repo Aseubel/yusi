@@ -210,6 +210,28 @@ CREATE TABLE `soul_match` (
     KEY `idx_soul_match_create_time` (`create_time`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '灵魂匹配表';
 
+DROP TABLE IF EXISTS `soul_connection`;
+
+CREATE TABLE `soul_connection` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '连接 ID',
+    `match_id` BIGINT NOT NULL COMMENT '原始匹配 ID',
+    `user_a_id` VARCHAR(64) NOT NULL COMMENT '用户 A ID',
+    `user_b_id` VARCHAR(64) NOT NULL COMMENT '用户 B ID',
+    `status` VARCHAR(32) NOT NULL COMMENT '连接状态',
+    `started_at` DATETIME DEFAULT NULL COMMENT '开始互动时间',
+    `ended_at` DATETIME DEFAULT NULL COMMENT '结束或阻断时间',
+    `last_action` VARCHAR(32) DEFAULT NULL COMMENT '最近一次连接动作',
+    `last_action_by` VARCHAR(64) DEFAULT NULL COMMENT '最近动作操作者',
+    `reason_category` VARCHAR(64) DEFAULT NULL COMMENT '结束或安全原因类别',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_soul_connection_match_id` (`match_id`),
+    KEY `idx_soul_connection_user_a` (`user_a_id`),
+    KEY `idx_soul_connection_user_b` (`user_b_id`),
+    KEY `idx_soul_connection_status` (`status`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '灵魂连接生命周期表';
+
 DROP TABLE IF EXISTS `match_profile`;
 
 CREATE TABLE `match_profile` (
@@ -636,13 +658,15 @@ DROP TABLE IF EXISTS `match_feedback`;
 CREATE TABLE `match_feedback` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `match_id` BIGINT NOT NULL COMMENT '关联的匹配记录ID',
+    `connection_id` BIGINT DEFAULT NULL COMMENT '独立连接 ID',
     `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
-    `action` VARCHAR(16) NOT NULL COMMENT '反馈动作: ACCEPT/SKIP/INTERACT/REPORT',
+    `action` VARCHAR(32) NOT NULL COMMENT '反馈动作或连接反馈类别',
     `interaction_depth` INT DEFAULT NULL COMMENT '互动深度（消息条数，仅INTERACT时有效）',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '反馈时间',
     PRIMARY KEY (`id`),
     KEY `idx_match_feedback_user` (`user_id`),
     KEY `idx_match_feedback_match` (`match_id`),
+    KEY `idx_match_feedback_connection_user` (`connection_id`, `user_id`, `action`),
     KEY `idx_match_feedback_action` (`user_id`, `action`),
     KEY `idx_match_feedback_created` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '匹配反馈记录表';

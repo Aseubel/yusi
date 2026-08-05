@@ -31,6 +31,14 @@ public interface MatchService {
      */
     MatchRecommendationResponse handleMatchAction(String userId, Long matchId, Integer action);
 
+    MatchRecommendationResponse submitConnectionFeedback(String userId, Long matchId, String category);
+
+    MatchRecommendationResponse endConnection(String userId, Long matchId, String reasonCategory);
+
+    MatchRecommendationResponse reportConnection(String userId, Long matchId, String reasonCategory);
+
+    MatchRecommendationResponse blockConnection(String userId, Long matchId, String reasonCategory);
+
     /**
      * Get match status for a user.
      * 

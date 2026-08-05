@@ -12,6 +12,7 @@ import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.SoulMessage;
 import com.aseubel.yusi.repository.SoulMatchRepository;
 import com.aseubel.yusi.repository.SoulMessageRepository;
+import com.aseubel.yusi.service.match.SoulConnectionLifecycleService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,6 +37,9 @@ public class SoulChatController {
     private SoulMatchRepository matchRepository;
 
     @Autowired
+    private SoulConnectionLifecycleService connectionLifecycleService;
+
+    @Autowired
     private SimpMessagingTemplate messagingTemplate;
 
     @Autowired
@@ -50,9 +54,7 @@ public class SoulChatController {
         SoulMatch match = matchRepository.findById(request.getMatchId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "匹配不存在"));
 
-        if (!Boolean.TRUE.equals(match.getIsMatched())) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "尚未建立连接，无法发送消息");
-        }
+        connectionLifecycleService.assertChatAllowed(match, senderId);
 
         String receiverId;
         if (senderId.equals(match.getUserAId())) {

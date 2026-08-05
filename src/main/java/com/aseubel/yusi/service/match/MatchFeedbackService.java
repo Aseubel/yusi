@@ -2,6 +2,8 @@ package com.aseubel.yusi.service.match;
 
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.pojo.entity.MatchFeedback;
+import com.aseubel.yusi.pojo.entity.SoulConnection;
+import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.repository.MatchFeedbackRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -52,11 +54,24 @@ public class MatchFeedbackService {
      */
     @Transactional
     public void recordFeedback(Long matchId, String userId, String action, Integer interactionDepth) {
+        recordConnectionFeedback(null, matchId, userId, action, interactionDepth);
+    }
+
+    /** 记录带独立连接 ID 的连接反馈。 */
+    @Transactional
+    public void recordConnectionFeedback(Long connectionId, Long matchId, String userId, String action) {
+        recordConnectionFeedback(connectionId, matchId, userId, action, null);
+    }
+
+    @Transactional
+    public void recordConnectionFeedback(Long connectionId, Long matchId, String userId,
+            String action, Integer interactionDepth) {
         if (matchId == null || StrUtil.isBlank(userId) || StrUtil.isBlank(action)) {
             return;
         }
         try {
             feedbackRepository.save(MatchFeedback.builder()
+                    .connectionId(connectionId)
                     .matchId(matchId)
                     .userId(userId)
                     .action(action)
@@ -114,5 +129,23 @@ public class MatchFeedbackService {
      */
     public boolean hasStrongNegativeSignal(String userId) {
         return feedbackRepository.countByUserIdAndAction(userId, "REPORT") > 0;
+    }
+
+    /** 举报、拉黑或明确不继续时，后续不得重新推荐同一对象。 */
+    public boolean hasStrongNegativeSignal(Long matchId) {
+        return matchId != null && feedbackRepository.countByMatchIdAndActionIn(matchId,
+                List.of("REPORT", "UNSAFE", "BLOCK", "DO_NOT_CONTINUE")) > 0;
+    }
+
+    /** 只有双方都明确反馈互动很深，才进入双向共鸣状态。 */
+    public boolean hasMutualDeepInteraction(SoulConnection connection, SoulMatch match) {
+        if (connection == null || connection.getId() == null || match == null) {
+            return false;
+        }
+        List<String> deepInteraction = List.of("DEEP_INTERACTION");
+        return feedbackRepository.existsByConnectionIdAndUserIdAndActionIn(
+                        connection.getId(), match.getUserAId(), deepInteraction)
+                && feedbackRepository.existsByConnectionIdAndUserIdAndActionIn(
+                        connection.getId(), match.getUserBId(), deepInteraction);
     }
 }
