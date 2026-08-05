@@ -130,3 +130,34 @@ flowchart LR
 | 前端单元测试 | Vitest（当前覆盖流式聊天工具） | 持续补充 |
 | 压力测试 | 未进行 | 建议生产前完成 |
 | AI 模型性能基准 | 未建立 | 建议监控沉淀 |
+
+---
+
+## 5. LLM 网关路由治理验证（2026-08-05）
+
+### 5.1 环境
+
+- Java 21、Spring Boot 3.4.5、Maven Wrapper
+- Node.js/pnpm、React 19、Vite
+- 未使用真实 Provider API key；后端 focused suite 使用 mock Provider/Redis
+- 前端开发服务：`http://localhost:5174`
+
+### 5.2 自动化结果
+
+| 命令 | 结果 |
+|:---|:---|
+| `./mvnw -Dtest=ModelConfigCenterTest,ChatModelProviderRegistryTest,ModelRoutePolicyMatcherTest,ModelRouterServiceTest,ModelInvocationErrorClassifierTest,ModelProxyFactoryTest,ModelUsageExtractorTest,ModelManagementControllerTest test` | ✅ 24 tests passed |
+| `./mvnw -DskipTests compile` | ✅ BUILD SUCCESS |
+| `pnpm --dir frontend test --run` | ✅ 4 files / 14 tests passed |
+| `pnpm --dir frontend lint` | ✅ exit 0 |
+| `pnpm --dir frontend build` | ✅ TypeScript/Vite/PWA build succeeded |
+| `git diff --check` | ✅ no output |
+
+新增回归覆盖：数据库 active 快照版本冲突、Redis 发布失败时本地版本不替换、失败审计追加顺序、全禁用 Chat 模型不得作为主 tier、密钥掩码不回传以及模型显示名称随治理请求保存。
+
+### 5.3 静态与手动检查
+
+- `application-dev.yml`、`application-prod.yml` 均包含 v2 `schema-version`、`default-route`、`tiers` 和 `routes`，ASR 仍保留 `SPEECH_TO_TEXT` 能力边界，YAML 未新增真实密钥。
+- `frontend/src/pages/admin/ModelManagement.tsx` 及 `model-management/` 未命中 `rawConfig`、`Textarea` 或 `/model/config`；JSON 只通过折叠高级兼容导出区生成。
+- `src/main/java/.../controller` 与 `src/main/java/.../pojo/dto/model` 的 `apikey/apiKey` 扫描只命中 `apiKeyConfigured`，未暴露原始密钥字段。
+- 已启动本地前端并打开 `/admin/models`；现有认证守卫将无管理员会话重定向至登录页，因此桌面/移动控制台点击、路由预览、保存冲突和实际快照刷新无法在当前环境完成。没有使用凭据绕过认证。

@@ -608,6 +608,47 @@ CREATE TABLE `model_config_change_log` (
     KEY `idx_model_config_change_log_action` (`action`),
     KEY `idx_model_config_change_log_created_at` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '模型治理配置变更日志表';
+
+DROP TABLE IF EXISTS `model_call_trace`;
+
+CREATE TABLE `model_call_trace` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `request_id` VARCHAR(64) NOT NULL COMMENT '请求ID',
+    `attempt_id` VARCHAR(64) NOT NULL COMMENT 'Provider attempt ID',
+    `run_id` VARCHAR(64) DEFAULT NULL COMMENT '可选 AgentRun ID',
+    `user_id` VARCHAR(64) DEFAULT NULL COMMENT '可选用户ID',
+    `scene` VARCHAR(64) NOT NULL COMMENT '路由场景',
+    `language` VARCHAR(16) DEFAULT NULL COMMENT '路由语言',
+    `policy_id` VARCHAR(128) DEFAULT NULL COMMENT '命中的路由策略',
+    `policy_version` BIGINT DEFAULT NULL COMMENT '策略版本',
+    `route_reason` VARCHAR(1024) DEFAULT NULL COMMENT '可解释路由原因',
+    `primary_tier` VARCHAR(64) DEFAULT NULL COMMENT '主 tier',
+    `selected_tier` VARCHAR(64) DEFAULT NULL COMMENT '实际 tier',
+    `model_id` VARCHAR(128) DEFAULT NULL COMMENT '物理模型ID',
+    `provider` VARCHAR(64) DEFAULT NULL COMMENT 'Provider',
+    `model_name` VARCHAR(256) DEFAULT NULL COMMENT '供应商模型名',
+    `input_tokens` BIGINT DEFAULT NULL COMMENT '输入 token 数',
+    `output_tokens` BIGINT DEFAULT NULL COMMENT '输出 token 数',
+    `cached_tokens` BIGINT DEFAULT NULL COMMENT '缓存 token 数',
+    `cost` DECIMAL(20,10) DEFAULT NULL COMMENT '按价格快照计算的成本',
+    `price_version` VARCHAR(64) DEFAULT NULL COMMENT '价格版本',
+    `usage_source` VARCHAR(32) DEFAULT NULL COMMENT 'usage 来源',
+    `latency_ms` BIGINT DEFAULT NULL COMMENT '总延迟毫秒',
+    `ttft_ms` BIGINT DEFAULT NULL COMMENT '首 token 延迟毫秒',
+    `retry_index` INT NOT NULL DEFAULT 0 COMMENT '请求内重试序号',
+    `fallback_used` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否使用 fallback',
+    `status` VARCHAR(24) NOT NULL COMMENT '调用状态',
+    `error_code` VARCHAR(64) DEFAULT NULL COMMENT '归一化错误类型',
+    `finish_reason` VARCHAR(64) DEFAULT NULL COMMENT '结束原因',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_model_call_trace_request_attempt` (`request_id`, `attempt_id`),
+    KEY `idx_model_call_trace_created_scene` (`created_at`, `scene`),
+    KEY `idx_model_call_trace_tier_created` (`selected_tier`, `created_at`),
+    KEY `idx_model_call_trace_provider_created` (`provider`, `created_at`),
+    KEY `idx_model_call_trace_status_created` (`status`, `created_at`),
+    KEY `idx_model_call_trace_fallback_created` (`fallback_used`, `created_at`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '低敏 LLM 调用轨迹';
 -- Mid-Term Memory - AI 中期记忆压缩存储
 -- 存储对话的压缩摘要，用于给 AI 提供长期上下文
 DROP TABLE IF EXISTS `mid_term_memory`;

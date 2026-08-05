@@ -228,3 +228,32 @@ return first(ordered)
 - 推荐策略：
   - 配置更新时先写 MySQL，再写 Redis 并广播
   - 节点启动时优先读取 Redis，必要时回补 MySQL 基线
+
+## 10. v2 治理控制面
+
+v2 将原来的 `language + scene -> group` 拆成四层：
+
+1. `models[]` 是物理模型注册表，包含 provider、endpoint、能力、上下文窗口和价格快照。
+2. `tiers{}` 是逻辑模型层级，场景规则只引用 tier ID，不引用供应商真实模型名。
+3. `routes[]` 是按语言、场景、风险级别和优先级排序的固定策略，可声明有序 fallback tiers。
+4. `ModelRouteDecision` 在首次 Provider 调用前固定候选链；每一次模型尝试单独写入 `ModelCallTrace`。
+
+管理员主入口是路由矩阵和策略编辑器，模型注册表负责模型及 tier 成员选择，候选链预览只计算决策而不会发起模型调用。JSON 只保留在折叠的兼容导出区。
+
+### 10.1 版本化发布顺序
+
+`PUT /api/model/console` 必须携带 `expectedVersion`。服务端按以下顺序执行：
+
+1. 读取 active MySQL 快照并比较版本，过期版本返回 `CONFIG_VERSION_CONFLICT`。
+2. 归一化旧配置、校验 tier/route/model 引用并合并未修改的服务端密钥。
+3. 保存下一版本全量快照和脱敏审计记录。
+4. 写 Redis runtime bucket 并发布配置事件。
+5. Redis 成功后才替换本地 `AtomicReference`，触发模型实例注册表重载。
+
+Redis 发布失败时不替换本地配置，并追加失败审计记录。密钥不出现在治理 DTO、调用轨迹、路由预览或审计 JSON 中。
+
+### 10.2 调用轨迹与指标
+
+`model_call_trace` 只记录请求 ID、策略版本、路由原因、tier、模型、provider、usage、延迟、成本、错误分类和 fallback 标志。轨迹查询支持时间、场景、语言、tier、provider、模型、fallback 和状态过滤；不保存 prompt、回答、思维链或工具参数。
+
+第一版只实现固定规则、健康过滤、错误分类 fallback 和 token/成本统计。需要引入语义路由、学习路由或语义缓存时，必须先积累可回放轨迹并建立评测集。

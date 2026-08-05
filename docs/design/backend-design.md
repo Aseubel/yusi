@@ -619,6 +619,18 @@ sequenceDiagram
 | /api/model/groups/{group}/strategy | GET | 获取分组路由策略 |
 | /api/model/groups/strategy/switch | POST | 切换分组路由策略 |
 
+### 8.8 v2 模型网关治理 API
+
+| 接口 | 方法 | 说明 |
+|:---|:---|:---|
+| /api/model/console | GET | 返回脱敏治理快照、tier、路由矩阵、运行状态和指标 |
+| /api/model/console | PUT | 携带 expectedVersion 发布结构化模型治理配置 |
+| /api/model/routes/preview | POST | 根据请求上下文返回策略、候选链和排除原因，不调用 Provider |
+| /api/model/attempts | GET | 分页查询低敏调用尝试轨迹 |
+| /api/model/metrics | GET | 聚合 fallback、成功率、延迟、usage、成本和限流统计 |
+
+治理快照以 `models -> tiers -> routes -> immutable decision -> attempt` 为主链路。场景规则不得引用真实供应商模型名；供应商协议由 Provider Adapter 负责。配置发布采用 MySQL 版本校验、Redis 发布、本地引用替换的顺序，避免旧节点在 Redis 发布失败时误用半成品配置。
+
 ---
 
 ## 9. 关键技术亮点
