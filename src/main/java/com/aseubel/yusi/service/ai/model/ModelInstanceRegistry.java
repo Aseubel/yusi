@@ -1,12 +1,12 @@
 package com.aseubel.yusi.service.ai.model;
 
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
+import com.aseubel.yusi.service.ai.model.provider.ChatModelProviderAdapter;
+import com.aseubel.yusi.service.ai.model.provider.ChatModelProviderRegistry;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
-import dev.langchain4j.model.openai.OpenAiChatModel;
-import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -26,6 +26,7 @@ import java.time.Duration;
 public class ModelInstanceRegistry {
 
     private final ModelConfigCenter modelConfigCenter;
+    private final ChatModelProviderRegistry providerRegistry;
 
     private final Map<String, ModelInstance> instances = new ConcurrentHashMap<>();
 
@@ -43,7 +44,7 @@ public class ModelInstanceRegistry {
     }
 
     public synchronized void reload(ModelRoutingProperties config) {
-        instances.clear();
+        Map<String, ModelInstance> next = new ConcurrentHashMap<>();
         for (ModelRoutingProperties.ModelDefinition definition : config.getModels()) {
             if (!definition.isEnabled() || definition.getId() == null || definition.getId().isBlank()) {
                 continue;
@@ -52,32 +53,32 @@ public class ModelInstanceRegistry {
                     && !definition.supports(ModelCapability.STREAMING_CHAT)) {
                 continue;
             }
-            Duration timeout = Duration.ofSeconds(
-                    definition.getTimeoutSeconds() != null ? definition.getTimeoutSeconds() : 60);
-            OpenAiChatModel chatModel = OpenAiChatModel.builder()
-                    .baseUrl(definition.getBaseurl())
-                    .apiKey(definition.getApikey())
-                    .modelName(definition.getModel())
-                    .timeout(timeout)
-                    .build();
-            OpenAiStreamingChatModel streamingChatModel = OpenAiStreamingChatModel.builder()
-                    .baseUrl(definition.getBaseurl())
-                    .apiKey(definition.getApikey())
-                    .modelName(definition.getModel())
-                    .timeout(timeout)
-                    .build();
+            ChatModelProviderAdapter.ProviderClientBundle clients = providerRegistry.create(definition);
+            Set<ModelCapability> capabilities = definition.getCapabilities() == null
+                    || definition.getCapabilities().isEmpty()
+                    ? Set.of(ModelCapability.CHAT, ModelCapability.STREAMING_CHAT)
+                    : Set.copyOf(definition.getCapabilities());
+            ModelRoutingProperties.PricingDefinition pricing = definition.getPricing();
             ModelInstance instance = ModelInstance.builder()
                     .id(definition.getId())
                     .modelName(definition.getModel())
+                    .provider(clients.provider())
                     .weight(definition.getWeight() == null ? 100 : definition.getWeight())
                     .priority(definition.getPriority() == null ? 100 : definition.getPriority())
                     .languages(normalize(definition.getLanguages()))
                     .scenes(normalize(definition.getScenes()))
-                    .chatModel(chatModel)
-                    .streamingChatModel(streamingChatModel)
+                    .capabilities(capabilities)
+                    .contextWindowTokens(definition.getContextWindowTokens())
+                    .inputPricePerMillion(pricing == null ? null : pricing.getInputPerMillion())
+                    .outputPricePerMillion(pricing == null ? null : pricing.getOutputPerMillion())
+                    .priceVersion(pricing == null ? null : pricing.getPriceVersion())
+                    .chatModel(clients.chatModel())
+                    .streamingChatModel(clients.streamingChatModel())
                     .build();
-            instances.put(instance.getId(), instance);
+            next.put(instance.getId(), instance);
         }
+        instances.clear();
+        instances.putAll(next);
     }
 
     public Optional<ModelInstance> getById(String modelId) {

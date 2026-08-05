@@ -6,16 +6,23 @@ import lombok.Builder;
 import lombok.Value;
 
 import java.util.Set;
+import java.math.BigDecimal;
 
 @Value
 @Builder
 public class ModelInstance {
     String id;
     String modelName;
+    String provider;
     int weight;
     int priority;
     Set<String> languages;
     Set<String> scenes;
+    Set<ModelCapability> capabilities;
+    Integer contextWindowTokens;
+    BigDecimal inputPricePerMillion;
+    BigDecimal outputPricePerMillion;
+    String priceVersion;
     ChatModel chatModel;
     StreamingChatModel streamingChatModel;
 }

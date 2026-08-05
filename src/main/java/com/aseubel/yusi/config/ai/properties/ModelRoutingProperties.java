@@ -7,6 +7,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,12 +76,23 @@ public class ModelRoutingProperties {
          */
         private Integer timeoutSeconds = 60;
 
+        private Integer contextWindowTokens;
+
+        private PricingDefinition pricing = new PricingDefinition();
+
         public boolean supports(ModelCapability capability) {
             if (capabilities == null || capabilities.isEmpty()) {
                 return capability == ModelCapability.CHAT || capability == ModelCapability.STREAMING_CHAT;
             }
             return capabilities.contains(capability);
         }
+    }
+
+    @Data
+    public static class PricingDefinition {
+        private BigDecimal inputPerMillion;
+        private BigDecimal outputPerMillion;
+        private String priceVersion;
     }
 
     @Data
