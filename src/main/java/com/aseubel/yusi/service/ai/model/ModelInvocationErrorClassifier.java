@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai.model;
 
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.net.ConnectException;
 import java.net.SocketTimeoutException;
 import java.util.Locale;
@@ -22,7 +23,8 @@ public final class ModelInvocationErrorClassifier {
 
     private static Throwable unwrap(Throwable error) {
         Throwable current = error == null ? new IllegalStateException("Unknown model invocation failure") : error;
-        while ((current instanceof CompletionException || current instanceof ExecutionException)
+        while ((current instanceof CompletionException || current instanceof ExecutionException
+                || current instanceof InvocationTargetException)
                 && current.getCause() != null) {
             current = current.getCause();
         }

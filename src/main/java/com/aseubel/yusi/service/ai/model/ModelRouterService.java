@@ -205,6 +205,8 @@ public class ModelRouterService {
     private ModelRouteContext normalizeContext(ModelRouteContext context, ModelRoutingProperties properties) {
         return ModelRouteContext.builder()
                 .requestId(context == null ? null : context.getRequestId())
+                .runId(context == null ? null : context.getRunId())
+                .userId(context == null ? null : context.getUserId())
                 .language(normalize(valueOrDefault(context == null ? null : context.getLanguage(),
                         properties.getDefaultLanguage())))
                 .scene(normalize(valueOrDefault(context == null ? null : context.getScene(),

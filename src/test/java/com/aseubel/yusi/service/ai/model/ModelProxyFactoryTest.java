@@ -2,9 +2,13 @@ package com.aseubel.yusi.service.ai.model;
 
 import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
+import com.aseubel.yusi.service.ai.runtime.ModelCallAttemptEvent;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.PartialResponse;
 import dev.langchain4j.model.chat.response.PartialResponseContext;
 import dev.langchain4j.model.chat.response.PartialThinking;
@@ -13,6 +17,8 @@ import dev.langchain4j.model.chat.response.PartialToolCall;
 import dev.langchain4j.model.chat.response.PartialToolCallContext;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.chat.response.StreamingHandle;
+import dev.langchain4j.model.output.TokenUsage;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -27,10 +33,14 @@ import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.withSettings;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.never;
 
 class ModelProxyFactoryTest {
 
@@ -73,6 +83,81 @@ class ModelProxyFactoryTest {
         verify(downstream).onPartialToolCall(toolCall, toolContext);
     }
 
+    @Test
+    void fallbackUsesTheSameDecisionAndCreatesANewAttempt() {
+        ModelRouterService router = mock(ModelRouterService.class);
+        ModelStateCenter stateCenter = mock(ModelStateCenter.class);
+        SensitiveDataMaskService maskService = mock(SensitiveDataMaskService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        ChatModel primary = mock(ChatModel.class);
+        ChatModel backup = mock(ChatModel.class);
+        ModelInstance primaryInstance = instance("primary", primary, mock(StreamingChatModel.class));
+        ModelInstance backupInstance = instance("backup", backup, mock(StreamingChatModel.class));
+
+        when(router.plan(any(ModelRouteContext.class))).thenReturn(new ModelRouteDecision(
+                "request-1", "chat-zh", 7L, "balanced", List.of("fast"), List.of(
+                new ModelRouteCandidate("balanced", primaryInstance, true, null),
+                new ModelRouteCandidate("fast", backupInstance, true, "fallback-tier")),
+                "policy=chat-zh;primary-tier=balanced"));
+        when(router.resolveSceneDefinition(anyString(), anyString())).thenReturn(null);
+        when(stateCenter.allowRequest(anyString())).thenReturn(true);
+        when(maskService.mask(anyString())).thenReturn(new MaskResult("plain", Map.of(), false));
+        when(primary.chat(any(ChatRequest.class))).thenThrow(new RuntimeException("HTTP 429 Too Many Requests"));
+        when(backup.chat(any(ChatRequest.class))).thenReturn(ChatResponse.builder()
+                .aiMessage(AiMessage.from("ok"))
+                .tokenUsage(new TokenUsage(12, 4, 16))
+                .build());
+
+        ModelProxyFactory factory = new ModelProxyFactory(router, stateCenter, maskService, publisher,
+                new ModelUsageExtractor());
+        ChatResponse response = factory.createChatProxy("zh", "chat")
+                .chat(ChatRequest.builder().messages(List.of(UserMessage.from("hello"))).build());
+
+        assertEquals("ok", response.aiMessage().text());
+        var eventCaptor = org.mockito.ArgumentCaptor.forClass(ModelCallAttemptEvent.class);
+        verify(publisher, times(2)).publishEvent(eventCaptor.capture());
+        assertEquals(List.of("chat-zh", "chat-zh"), eventCaptor.getAllValues().stream()
+                .map(ModelCallAttemptEvent::policyId).toList());
+        assertEquals(List.of(false, true), eventCaptor.getAllValues().stream()
+                .map(ModelCallAttemptEvent::fallbackUsed).toList());
+    }
+
+    @Test
+    void streamDoesNotSwitchAfterFirstPartialResponse() {
+        ModelRouterService router = mock(ModelRouterService.class);
+        ModelStateCenter stateCenter = mock(ModelStateCenter.class);
+        SensitiveDataMaskService maskService = mock(SensitiveDataMaskService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        StreamingChatModel primary = mock(StreamingChatModel.class);
+        StreamingChatModel backup = mock(StreamingChatModel.class);
+        ModelInstance primaryInstance = instance("primary", mock(ChatModel.class), primary);
+        ModelInstance backupInstance = instance("backup", mock(ChatModel.class), backup);
+        when(router.plan(any(ModelRouteContext.class))).thenReturn(new ModelRouteDecision(
+                "request-2", "chat-zh", 7L, "balanced", List.of("fast"), List.of(
+                new ModelRouteCandidate("balanced", primaryInstance, true, null),
+                new ModelRouteCandidate("fast", backupInstance, true, "fallback-tier")),
+                "policy=chat-zh;primary-tier=balanced"));
+        when(router.resolveSceneDefinition(anyString(), anyString())).thenReturn(null);
+        when(stateCenter.allowRequest(anyString())).thenReturn(true);
+        when(maskService.mask(anyString())).thenReturn(new MaskResult("plain", Map.of(), false));
+        doAnswer(invocation -> {
+            StreamingChatResponseHandler handler = invocation.getArgument(1);
+            handler.onPartialResponse("partial");
+            handler.onError(new RuntimeException("HTTP 500 server error"));
+            return null;
+        }).when(primary).doChat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
+
+        StreamingChatResponseHandler downstream = mock(StreamingChatResponseHandler.class);
+        ModelProxyFactory factory = new ModelProxyFactory(router, stateCenter, maskService, publisher,
+                new ModelUsageExtractor());
+        factory.createStreamingProxy("zh", "chat").doChat(
+                ChatRequest.builder().messages(List.of(UserMessage.from("hello"))).build(), downstream);
+
+        verify(downstream).onPartialResponse("partial");
+        verify(downstream).onError(any(Throwable.class));
+        verifyNoInteractions(backup);
+    }
+
     private StreamingChatResponseHandler createWrappedHandler(StreamingChatResponseHandler downstream) {
         ModelRouterService router = mock(ModelRouterService.class);
         ModelStateCenter stateCenter = mock(ModelStateCenter.class);
@@ -104,5 +189,20 @@ class ModelProxyFactoryTest {
         var handlerCaptor = org.mockito.ArgumentCaptor.forClass(StreamingChatResponseHandler.class);
         verify(delegate).doChat(any(ChatRequest.class), handlerCaptor.capture());
         return handlerCaptor.getValue();
+    }
+
+    private ModelInstance instance(String id, ChatModel chatModel, StreamingChatModel streamingChatModel) {
+        return ModelInstance.builder()
+                .id(id)
+                .modelName(id)
+                .provider("openai-compatible")
+                .weight(100)
+                .priority(1)
+                .languages(Set.of())
+                .scenes(Set.of())
+                .capabilities(Set.of(ModelCapability.CHAT, ModelCapability.STREAMING_CHAT))
+                .chatModel(chatModel)
+                .streamingChatModel(streamingChatModel)
+                .build();
     }
 }

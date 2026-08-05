@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.ai.model;
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
 import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
+import com.aseubel.yusi.service.ai.runtime.ModelCallAttemptEvent;
 import dev.langchain4j.data.message.*;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -19,24 +20,44 @@ import dev.langchain4j.model.chat.response.PartialToolCallContext;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
 import dev.langchain4j.model.openai.OpenAiChatRequestParameters.Builder;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ModelProxyFactory {
 
     private final ModelRouterService modelRouterService;
     private final ModelStateCenter modelStateCenter;
     private final SensitiveDataMaskService maskService;
+    private final ApplicationEventPublisher eventPublisher;
+    private final ModelUsageExtractor usageExtractor;
+
+    public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
+            SensitiveDataMaskService maskService) {
+        this(modelRouterService, modelStateCenter, maskService, new NoopEventPublisher(), new ModelUsageExtractor());
+    }
+
+    @Autowired
+    public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
+            SensitiveDataMaskService maskService, ApplicationEventPublisher eventPublisher,
+            ModelUsageExtractor usageExtractor) {
+        this.modelRouterService = modelRouterService;
+        this.modelStateCenter = modelStateCenter;
+        this.maskService = maskService;
+        this.eventPublisher = eventPublisher;
+        this.usageExtractor = usageExtractor;
+    }
 
     public ChatModel createChatProxy(String defaultLanguage, String defaultScene) {
         InvocationHandler handler = new RoutingInvocationHandler(defaultLanguage, defaultScene, true);
@@ -65,36 +86,315 @@ public class ModelProxyFactory {
             if (method.getDeclaringClass() == Object.class) {
                 return method.invoke(this, args);
             }
-            Set<String> excluded = new HashSet<>();
-            Throwable lastError = null;
-            for (int i = 0; i < 4; i++) {
-                ModelRouteContext context = resolveContext();
-                ModelInstance selected = modelRouterService.select(context, excluded);
+            ModelRouteContext context = resolveContext();
+            ModelRouteDecision decision = modelRouterService.plan(context);
+            if (decision == null) {
+                ModelInstance legacySelected = modelRouterService.select(context, Set.of());
+                decision = legacyDecision(context, legacySelected);
+            }
+            List<ModelRouteCandidate> candidates = decision.attemptCandidates();
+            if (candidates.isEmpty()) {
+                throw new IllegalStateException("No available model instance for language: "
+                        + context.getLanguage() + ", scene: " + context.getScene());
+            }
+
+            ModelInvocationException lastError = null;
+            int attemptIndex = 0;
+            for (int candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {
+                ModelRouteCandidate candidate = candidates.get(candidateIndex);
+                ModelInstance selected = candidate.instance();
+                if (!chatMode) {
+                    invokeStreamingAttempt(decision, context, method, args, candidates,
+                            candidateIndex, attemptIndex++);
+                    return null;
+                }
                 if (!modelStateCenter.allowRequest(selected.getId())) {
-                    excluded.add(selected.getId());
                     continue;
                 }
+
                 long start = System.currentTimeMillis();
                 try {
-                    Object delegate = chatMode ? selected.getChatModel() : selected.getStreamingChatModel();
-                    Object result = invokeWithSceneParameters(delegate, method, args, context);
-                    modelStateCenter.recordSuccess(selected.getId(), selected.getModelName(),
-                            System.currentTimeMillis() - start);
+                    Object result = invokeWithSceneParameters(selected.getChatModel(), method, args, context);
+                    ChatResponse response = result instanceof ChatResponse chatResponse ? chatResponse : null;
+                    ModelUsageSnapshot usage = usageExtractor.extract(response, selected);
+                    long latency = System.currentTimeMillis() - start;
+                    modelStateCenter.recordSuccess(selected.getId(), selected.getModelName(), latency);
+                    publishAttempt(decision, context, candidate, usage, latency, null,
+                            attemptIndex, "SUCCESS", null);
                     return result;
                 } catch (Throwable throwable) {
-                    Throwable root = throwable.getCause() == null ? throwable : throwable.getCause();
-                    modelStateCenter.recordFailure(selected.getId(), selected.getModelName(),
-                            System.currentTimeMillis() - start, root);
-                    excluded.add(selected.getId());
-                    lastError = root;
-                    log.warn("AI model invocation failed, attempt {}/{}, model: {}, error: {}",
-                            i + 1, 4, selected.getModelName(), root.getMessage());
+                    ModelInvocationException normalized = normalize(throwable, selected);
+                    long latency = System.currentTimeMillis() - start;
+                    modelStateCenter.recordFailure(selected.getId(), selected.getModelName(), latency, normalized);
+                    publishAttempt(decision, context, candidate,
+                            ModelUsageSnapshot.unavailable(selected.getPriceVersion()), latency, null,
+                            attemptIndex, "FAILED", normalized.kind().name());
+                    lastError = normalized;
+                    log.warn("AI model invocation failed, attempt {}, model: {}, kind: {}, error: {}",
+                            attemptIndex + 1, selected.getModelName(), normalized.kind(), normalized.getMessage());
+                    if (!normalized.isFallbackEligible(false)) {
+                        throw normalized;
+                    }
                 }
+                attemptIndex++;
             }
             if (lastError != null) {
                 throw lastError;
             }
-            throw new IllegalStateException("No available model instance for language: " + defaultLanguage + ", scene: " + defaultScene);
+            throw new IllegalStateException("No available model instance for language: "
+                    + defaultLanguage + ", scene: " + defaultScene);
+        }
+
+        private void invokeStreamingAttempt(ModelRouteDecision decision, ModelRouteContext context,
+                Method method, Object[] args, List<ModelRouteCandidate> candidates,
+                int candidateIndex, int attemptIndex) throws Throwable {
+            ModelRouteCandidate candidate = candidates.get(candidateIndex);
+            ModelInstance selected = candidate.instance();
+            if (!modelStateCenter.allowRequest(selected.getId())) {
+                if (candidateIndex + 1 < candidates.size()) {
+                    invokeStreamingAttempt(decision, context, method, args, candidates,
+                            candidateIndex + 1, attemptIndex);
+                    return;
+                }
+                throw new IllegalStateException("No available streaming model candidate");
+            }
+
+            StreamingChatResponseHandler downstream = findStreamingHandler(args);
+            if (downstream == null) {
+                invokeWithSceneParameters(selected.getStreamingChatModel(), method, args, context);
+                return;
+            }
+            long start = System.currentTimeMillis();
+            AtomicBoolean emitted = new AtomicBoolean(false);
+            AtomicBoolean terminal = new AtomicBoolean(false);
+            AtomicLong firstOutputAt = new AtomicLong(-1L);
+            StreamingChatResponseHandler trackingHandler = new TrackingStreamingHandler(
+                    downstream, decision, context, candidate, candidates, candidateIndex,
+                    attemptIndex, start, emitted, terminal, firstOutputAt, method, args);
+            Object[] trackingArgs = args == null ? new Object[0] : args.clone();
+            for (int index = 0; index < trackingArgs.length; index++) {
+                if (trackingArgs[index] instanceof StreamingChatResponseHandler) {
+                    trackingArgs[index] = trackingHandler;
+                }
+            }
+            try {
+                invokeWithSceneParameters(selected.getStreamingChatModel(), method, trackingArgs, context);
+            } catch (Throwable throwable) {
+                if (terminal.get()) {
+                    return;
+                }
+                terminal.set(true);
+                handleStreamingFailure(decision, context, candidate, candidates, candidateIndex,
+                        attemptIndex, start, emitted.get(), firstOutputAt.get(), method, args,
+                        throwable, downstream);
+            }
+        }
+
+        private StreamingChatResponseHandler findStreamingHandler(Object[] args) {
+            if (args == null) {
+                return null;
+            }
+            for (Object arg : args) {
+                if (arg instanceof StreamingChatResponseHandler handler) {
+                    return handler;
+                }
+            }
+            return null;
+        }
+
+        private void handleStreamingFailure(ModelRouteDecision decision, ModelRouteContext context,
+                ModelRouteCandidate candidate, List<ModelRouteCandidate> candidates, int candidateIndex,
+                int attemptIndex, long start, boolean emitted, long firstOutputAt,
+                Method method, Object[] args, Throwable throwable, StreamingChatResponseHandler downstream) {
+            ModelInvocationException normalized = normalize(throwable, candidate.instance());
+            long latency = System.currentTimeMillis() - start;
+            modelStateCenter.recordFailure(candidate.modelId(), candidate.modelName(), latency, normalized);
+            publishAttempt(decision, context, candidate,
+                    ModelUsageSnapshot.unavailable(candidate.instance().getPriceVersion()), latency,
+                    firstOutputAt < 0 ? null : firstOutputAt - start, attemptIndex, "FAILED",
+                    normalized.kind().name());
+            if (!emitted && normalized.isFallbackEligible(false) && candidateIndex + 1 < candidates.size()) {
+                try {
+                    invokeStreamingAttempt(decision, context, method, args,
+                            candidates, candidateIndex + 1, attemptIndex + 1);
+                } catch (Throwable fallbackFailure) {
+                    downstream.onError(normalize(fallbackFailure, candidates.get(candidateIndex + 1).instance()));
+                }
+                return;
+            }
+            downstream.onError(normalized);
+        }
+
+        private ModelInvocationException normalize(Throwable throwable, ModelInstance selected) {
+            if (throwable instanceof ModelInvocationException normalized) {
+                return normalized;
+            }
+            return ModelInvocationErrorClassifier.classify(throwable, selected.getProvider(), selected.getId());
+        }
+
+        private void publishAttempt(ModelRouteDecision decision, ModelRouteContext context,
+                ModelRouteCandidate candidate, ModelUsageSnapshot usage, long latencyMs, Long ttftMs,
+                int retryIndex, String status, String errorCode) {
+            String requestId = firstNonBlank(context.getRequestId(), decision.requestId(), UUID.randomUUID().toString());
+            String finishReason = usage == null ? null : usage.finishReason();
+            ModelCallAttemptEvent event = new ModelCallAttemptEvent(
+                    requestId,
+                    UUID.randomUUID().toString(),
+                    context.getRunId(),
+                    context.getUserId(),
+                    context.getScene(),
+                    context.getLanguage(),
+                    decision.policyId(),
+                    decision.policyVersion(),
+                    decision.routeReason(),
+                    decision.primaryTier(),
+                    candidate.tierId(),
+                    candidate.modelId(),
+                    candidate.provider(),
+                    candidate.modelName(),
+                    usage,
+                    latencyMs,
+                    ttftMs,
+                    retryIndex,
+                    !candidate.tierId().equals(decision.primaryTier()),
+                    status,
+                    errorCode,
+                    finishReason);
+            try {
+                eventPublisher.publishEvent(event);
+            } catch (RuntimeException publishFailure) {
+                log.warn("Failed to publish model attempt event attemptId={}: {}",
+                        event.attemptId(), publishFailure.getMessage());
+            }
+        }
+
+        private String firstNonBlank(String... values) {
+            for (String value : values) {
+                if (value != null && !value.isBlank()) {
+                    return value;
+                }
+            }
+            return "unknown";
+        }
+
+        private ModelRouteDecision legacyDecision(ModelRouteContext context, ModelInstance selected) {
+            ModelRouteCandidate candidate = new ModelRouteCandidate(
+                    firstNonBlank(context.getGroup(), "legacy"), selected, true, null);
+            return new ModelRouteDecision(context.getRequestId(), "legacy", 0L,
+                    candidate.tierId(), List.of(), List.of(candidate),
+                    "policy=legacy;language=" + context.getLanguage() + ";scene=" + context.getScene());
+        }
+
+        private class TrackingStreamingHandler implements StreamingChatResponseHandler {
+            private final StreamingChatResponseHandler downstream;
+            private final ModelRouteDecision decision;
+            private final ModelRouteContext context;
+            private final ModelRouteCandidate candidate;
+            private final List<ModelRouteCandidate> candidates;
+            private final int candidateIndex;
+            private final int attemptIndex;
+            private final long start;
+            private final AtomicBoolean emitted;
+            private final AtomicBoolean terminal;
+            private final AtomicLong firstOutputAt;
+            private final Method method;
+            private final Object[] args;
+
+            private TrackingStreamingHandler(StreamingChatResponseHandler downstream,
+                    ModelRouteDecision decision, ModelRouteContext context, ModelRouteCandidate candidate,
+                    List<ModelRouteCandidate> candidates, int candidateIndex, int attemptIndex, long start,
+                    AtomicBoolean emitted, AtomicBoolean terminal, AtomicLong firstOutputAt,
+                    Method method, Object[] args) {
+                this.downstream = downstream;
+                this.decision = decision;
+                this.context = context;
+                this.candidate = candidate;
+                this.candidates = candidates;
+                this.candidateIndex = candidateIndex;
+                this.attemptIndex = attemptIndex;
+                this.start = start;
+                this.emitted = emitted;
+                this.terminal = terminal;
+                this.firstOutputAt = firstOutputAt;
+                this.method = method;
+                this.args = args;
+            }
+
+            @Override
+            public void onPartialResponse(String partialResponse) {
+                markOutput();
+                downstream.onPartialResponse(partialResponse);
+            }
+
+            @Override
+            public void onPartialResponse(PartialResponse partialResponse, PartialResponseContext responseContext) {
+                markOutput();
+                downstream.onPartialResponse(partialResponse, responseContext);
+            }
+
+            @Override
+            public void onPartialThinking(PartialThinking partialThinking) {
+                markOutput();
+                downstream.onPartialThinking(partialThinking);
+            }
+
+            @Override
+            public void onPartialThinking(PartialThinking partialThinking, PartialThinkingContext thinkingContext) {
+                markOutput();
+                downstream.onPartialThinking(partialThinking, thinkingContext);
+            }
+
+            @Override
+            public void onPartialToolCall(PartialToolCall partialToolCall) {
+                markOutput();
+                downstream.onPartialToolCall(partialToolCall);
+            }
+
+            @Override
+            public void onPartialToolCall(PartialToolCall partialToolCall, PartialToolCallContext toolCallContext) {
+                markOutput();
+                downstream.onPartialToolCall(partialToolCall, toolCallContext);
+            }
+
+            @Override
+            public void onCompleteToolCall(CompleteToolCall completeToolCall) {
+                markOutput();
+                downstream.onCompleteToolCall(completeToolCall);
+            }
+
+            @Override
+            public void onUnmappedRawEvent(Object event) {
+                markOutput();
+                downstream.onUnmappedRawEvent(event);
+            }
+
+            @Override
+            public void onCompleteResponse(ChatResponse completeResponse) {
+                if (terminal.compareAndSet(false, true)) {
+                    long latency = System.currentTimeMillis() - start;
+                    ModelUsageSnapshot usage = usageExtractor.extract(completeResponse, candidate.instance());
+                    modelStateCenter.recordSuccess(candidate.modelId(), candidate.modelName(), latency);
+                    publishAttempt(decision, context, candidate, usage, latency,
+                            firstOutputAt.get() < 0 ? null : firstOutputAt.get() - start,
+                            attemptIndex, "SUCCESS", null);
+                }
+                downstream.onCompleteResponse(completeResponse);
+            }
+
+            @Override
+            public void onError(Throwable error) {
+                if (!terminal.compareAndSet(false, true)) {
+                    downstream.onError(error);
+                    return;
+                }
+                handleStreamingFailure(decision, context, candidate, candidates, candidateIndex,
+                        attemptIndex, start, emitted.get(), firstOutputAt.get(), method, args, error, downstream);
+            }
+
+            private void markOutput() {
+                emitted.set(true);
+                firstOutputAt.compareAndSet(-1L, System.currentTimeMillis());
+            }
         }
 
         private Object invokeWithSceneParameters(Object delegate, Method method, Object[] args, ModelRouteContext context) throws Throwable {
@@ -388,10 +688,22 @@ public class ModelProxyFactory {
                     ? modelRouterService.resolveGroup(resolvedLanguage, resolvedScene)
                     : group;
             return ModelRouteContext.builder()
+                    .requestId(context == null ? null : context.getRequestId())
+                    .runId(context == null ? null : context.getRunId())
+                    .userId(context == null ? null : context.getUserId())
                     .language(resolvedLanguage)
                     .scene(resolvedScene)
                     .group(resolvedGroup)
+                    .riskLevel(context == null ? null : context.getRiskLevel())
+                    .estimatedInputTokens(context == null ? null : context.getEstimatedInputTokens())
+                    .reservedOutputTokens(context == null ? null : context.getReservedOutputTokens())
                     .build();
+        }
+    }
+
+    private static final class NoopEventPublisher implements ApplicationEventPublisher {
+        @Override
+        public void publishEvent(Object event) {
         }
     }
 }
