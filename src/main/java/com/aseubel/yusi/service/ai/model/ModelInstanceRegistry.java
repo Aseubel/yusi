@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai.model;
 
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
+import com.aseubel.yusi.config.ai.properties.ModelTierDefinition;
 import com.aseubel.yusi.service.ai.model.provider.ChatModelProviderAdapter;
 import com.aseubel.yusi.service.ai.model.provider.ChatModelProviderRegistry;
 import jakarta.annotation.PostConstruct;
@@ -17,9 +18,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
-import java.time.Duration;
 
 @Component
 @RequiredArgsConstructor
@@ -28,7 +28,7 @@ public class ModelInstanceRegistry {
     private final ModelConfigCenter modelConfigCenter;
     private final ChatModelProviderRegistry providerRegistry;
 
-    private final Map<String, ModelInstance> instances = new ConcurrentHashMap<>();
+    private final AtomicReference<Map<String, ModelInstance>> instances = new AtomicReference<>(Map.of());
 
     @PostConstruct
     public void init() {
@@ -44,7 +44,7 @@ public class ModelInstanceRegistry {
     }
 
     public synchronized void reload(ModelRoutingProperties config) {
-        Map<String, ModelInstance> next = new ConcurrentHashMap<>();
+        Map<String, ModelInstance> next = new java.util.LinkedHashMap<>();
         for (ModelRoutingProperties.ModelDefinition definition : config.getModels()) {
             if (!definition.isEnabled() || definition.getId() == null || definition.getId().isBlank()) {
                 continue;
@@ -77,12 +77,11 @@ public class ModelInstanceRegistry {
                     .build();
             next.put(instance.getId(), instance);
         }
-        instances.clear();
-        instances.putAll(next);
+        instances.set(Map.copyOf(next));
     }
 
     public Optional<ModelInstance> getById(String modelId) {
-        return Optional.ofNullable(instances.get(modelId));
+        return Optional.ofNullable(instances.get().get(modelId));
     }
 
     public List<ModelInstance> getGroupMembers(String groupId) {
@@ -91,14 +90,16 @@ public class ModelInstanceRegistry {
         if (group == null || group.getMembers() == null) {
             return Collections.emptyList();
         }
-        List<ModelInstance> members = new ArrayList<>();
-        for (String memberId : group.getMembers()) {
-            ModelInstance instance = instances.get(memberId);
-            if (instance != null) {
-                members.add(instance);
-            }
+        return membersForIds(group.getMembers());
+    }
+
+    public List<ModelInstance> getTierMembers(String tierId) {
+        ModelRoutingProperties properties = modelConfigCenter.getEffectiveConfig();
+        ModelTierDefinition tier = properties.getTiers().get(tierId);
+        if (tier != null && tier.getMembers() != null) {
+            return membersForIds(tier.getMembers());
         }
-        return members;
+        return getGroupMembers(tierId);
     }
 
     public List<ModelInstance> filterByLanguageAndScene(List<ModelInstance> candidates, String language, String scene) {
@@ -115,12 +116,12 @@ public class ModelInstanceRegistry {
     }
 
     public ChatModel getChatModel(String modelId) {
-        ModelInstance instance = instances.get(modelId);
+        ModelInstance instance = instances.get().get(modelId);
         return instance == null ? null : instance.getChatModel();
     }
 
     public StreamingChatModel getStreamingChatModel(String modelId) {
-        ModelInstance instance = instances.get(modelId);
+        ModelInstance instance = instances.get().get(modelId);
         return instance == null ? null : instance.getStreamingChatModel();
     }
 
@@ -136,5 +137,17 @@ public class ModelInstanceRegistry {
             return "";
         }
         return value.toLowerCase(Locale.ROOT);
+    }
+
+    private List<ModelInstance> membersForIds(List<String> memberIds) {
+        List<ModelInstance> members = new ArrayList<>();
+        Map<String, ModelInstance> current = instances.get();
+        for (String memberId : memberIds) {
+            ModelInstance instance = current.get(memberId);
+            if (instance != null) {
+                members.add(instance);
+            }
+        }
+        return members;
     }
 }

@@ -3,6 +3,8 @@ package com.aseubel.yusi.service.ai.model.provider;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
+import com.aseubel.yusi.service.ai.model.ModelInvocationErrorClassifier;
+import com.aseubel.yusi.service.ai.model.ModelInvocationException;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import org.springframework.stereotype.Component;
@@ -50,5 +52,10 @@ public class OpenAiCompatibleChatModelProvider implements ChatModelProviderAdapt
                 .timeout(timeout)
                 .build();
         return new ProviderClientBundle(providerId(), chatModel, streamingChatModel);
+    }
+
+    @Override
+    public ModelInvocationException normalize(Throwable error, String modelId) {
+        return ModelInvocationErrorClassifier.classify(error, providerId(), modelId);
     }
 }

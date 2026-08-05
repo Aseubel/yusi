@@ -6,7 +6,11 @@ import lombok.Value;
 @Value
 @Builder
 public class ModelRouteContext {
+    String requestId;
     String language;
     String scene;
     String group;
+    String riskLevel;
+    Integer estimatedInputTokens;
+    Integer reservedOutputTokens;
 }

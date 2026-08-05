@@ -9,8 +9,6 @@ import org.springframework.stereotype.Component;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Component
 @RequiredArgsConstructor
@@ -19,26 +17,16 @@ public class FailOverSelectionStrategy implements ModelSelectionStrategy {
     private final ModelRoutingProperties properties;
 
     @Override
-    public Optional<ModelInstance> select(String group, List<ModelInstance> candidates, Map<String, ModelRuntimeState> states) {
-        List<ModelInstance> sorted = candidates.stream()
-                .sorted(Comparator.comparingInt(ModelInstance::getPriority))
+    public List<ModelInstance> order(String tierId, List<ModelInstance> candidates,
+            Map<String, ModelRuntimeState> states) {
+        return candidates.stream()
+                .sorted(Comparator.comparing((ModelInstance candidate) -> !isAvailable(states.get(candidate.getId())))
+                        .thenComparingInt(ModelInstance::getPriority)
+                        .thenComparing(ModelInstance::getId))
                 .toList();
+    }
 
-        for (ModelInstance candidate : sorted) {
-            ModelRuntimeState state = states.get(candidate.getId());
-            
-            if (state == null || state.isAvailable()) {
-                return Optional.of(candidate);
-            }
-
-            if ("HALF_OPEN".equals(state.getPhase())) {
-                double probeRatio = properties.getHalfOpenProbeRatio();
-                if (ThreadLocalRandom.current().nextDouble() < probeRatio) {
-                    return Optional.of(candidate);
-                }
-            }
-        }
-
-        return sorted.stream().findFirst();
+    private boolean isAvailable(ModelRuntimeState state) {
+        return state == null || state.isAvailable() || "HALF_OPEN".equalsIgnoreCase(state.getPhase());
     }
 }

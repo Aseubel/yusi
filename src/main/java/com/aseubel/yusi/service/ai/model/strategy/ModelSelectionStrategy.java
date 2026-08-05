@@ -8,5 +8,11 @@ import java.util.Map;
 import java.util.Optional;
 
 public interface ModelSelectionStrategy {
-    Optional<ModelInstance> select(String group, List<ModelInstance> candidates, Map<String, ModelRuntimeState> states);
+    List<ModelInstance> order(String tierId, List<ModelInstance> candidates,
+            Map<String, ModelRuntimeState> states);
+
+    default Optional<ModelInstance> select(String tierId, List<ModelInstance> candidates,
+            Map<String, ModelRuntimeState> states) {
+        return order(tierId, candidates, states).stream().findFirst();
+    }
 }

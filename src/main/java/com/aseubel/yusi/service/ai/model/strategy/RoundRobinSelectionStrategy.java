@@ -6,12 +6,13 @@ import com.aseubel.yusi.service.ai.model.ModelRuntimeState;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.ThreadLocalRandom;
 
 @Component
 @RequiredArgsConstructor
@@ -21,32 +22,35 @@ public class RoundRobinSelectionStrategy implements ModelSelectionStrategy {
     private final Map<String, AtomicInteger> sequence = new ConcurrentHashMap<>();
 
     @Override
-    public Optional<ModelInstance> select(String group, List<ModelInstance> candidates, Map<String, ModelRuntimeState> states) {
+    public List<ModelInstance> order(String tierId, List<ModelInstance> candidates,
+            Map<String, ModelRuntimeState> states) {
         if (candidates.isEmpty()) {
-            return Optional.empty();
+            return List.of();
         }
+        List<ModelInstance> available = candidates.stream()
+                .filter(candidate -> isAvailable(states.get(candidate.getId())))
+                .toList();
+        List<ModelInstance> unavailable = candidates.stream()
+                .filter(candidate -> !isAvailable(states.get(candidate.getId())))
+                .toList();
+        AtomicInteger cursor = sequence.computeIfAbsent(tierId, g -> new AtomicInteger(0));
+        List<ModelInstance> ordered = rotate(available, cursor.getAndIncrement());
+        List<ModelInstance> result = new ArrayList<>(ordered.size() + unavailable.size());
+        result.addAll(ordered);
+        result.addAll(unavailable);
+        return List.copyOf(result);
+    }
 
-        for (ModelInstance candidate : candidates) {
-            ModelRuntimeState state = states.get(candidate.getId());
-            if (state != null && "HALF_OPEN".equals(state.getPhase())) {
-                double probeRatio = properties.getHalfOpenProbeRatio();
-                if (ThreadLocalRandom.current().nextDouble() < probeRatio) {
-                    return Optional.of(candidate);
-                }
-            }
+    private boolean isAvailable(ModelRuntimeState state) {
+        return state == null || state.isAvailable() || "HALF_OPEN".equalsIgnoreCase(state.getPhase());
+    }
+
+    private List<ModelInstance> rotate(List<ModelInstance> candidates, int offset) {
+        if (candidates.isEmpty()) {
+            return List.of();
         }
-
-        AtomicInteger cursor = sequence.computeIfAbsent(group, g -> new AtomicInteger(0));
-        int size = candidates.size();
-        for (int i = 0; i < size; i++) {
-            int index = Math.floorMod(cursor.getAndIncrement(), size);
-            ModelInstance candidate = candidates.get(index);
-            ModelRuntimeState state = states.get(candidate.getId());
-            if (state == null || state.isAvailable()) {
-                return Optional.of(candidate);
-            }
-        }
-
-        return Optional.of(candidates.get(Math.floorMod(cursor.get(), size)));
+        List<ModelInstance> result = new ArrayList<>(candidates);
+        Collections.rotate(result, -Math.floorMod(offset, result.size()));
+        return result;
     }
 }
