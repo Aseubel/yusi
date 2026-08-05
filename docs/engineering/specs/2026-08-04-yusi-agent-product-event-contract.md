@@ -1,7 +1,8 @@
 # Yusi Agent 产品事件与评测基线
 
-> **Status:** Draft v1
+> **Status:** Draft v1; connection lifecycle first slice implemented
 > **Date:** 2026-08-04
+> **Last Updated:** 2026-08-05
 > **Related Plan:** [Yusi Agent 产品与工程演进计划](../plans/2026-08-04-yusi-agent-product-roadmap.md)
 
 ## 目的
@@ -166,6 +167,11 @@ stateDiagram-v2
 - `REPORTED` 进入安全处理流程，是否转为 `BLOCKED` 由安全规则决定。
 - `MUTUAL_RESONANCE` 是反馈和行为推断出的质量状态，不是由消息数量单独决定。
 - 任何状态变更都需要记录操作者、来源和关联事件 ID。
+
+当前服务端实现映射如下：用户的接受动作不会把 `ACCEPTED` 作为稳定返回状态；单方接受后
+持久化为 `WAITING_REPLY`，双方接受后直接进入 `STARTED`。`ACCEPTED` 保留在状态契约中
+作为接受动作的中间语义，避免把“接受推荐”和“已经开始互动”混为一谈。当前实现已记录
+连接的最近动作、操作者和原因类别，但统一产品事件 ID 的落库仍属于 Phase 2 后续工作。
 
 ## 质量指标基线
 
