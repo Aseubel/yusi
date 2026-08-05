@@ -62,7 +62,7 @@ public class MatchController {
     }
 
     // Dev endpoint to trigger matching manually
-    @PostMapping("/run")
+    // @PostMapping("/run")
     public String runMatching() {
         matchService.runWeeklyMatching();
         return "Matching process triggered.";
