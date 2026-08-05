@@ -21,7 +21,7 @@ public class WebCorsConfig implements WebMvcConfigurer {
         String[] origins = StringUtils.commaDelimitedListToStringArray(allowedOrigin);
         registry.addMapping("/api/**")
                 .allowedOrigins(origins)
-                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("Authorization", "Content-Type", "Accept", "X-Refresh-Token",
                         "X-Old-Access-Token")
                 .exposedHeaders("Content-Type")
