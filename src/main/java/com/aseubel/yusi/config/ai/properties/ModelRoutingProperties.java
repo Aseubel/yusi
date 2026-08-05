@@ -7,7 +7,7 @@ import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -15,9 +15,13 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "model.routing", ignoreInvalidFields = true)
 public class ModelRoutingProperties {
 
+    private int schemaVersion = 2;
+
     private String defaultLanguage = "zh";
 
     private String defaultScene = "chat";
+
+    private String defaultTier;
 
     private String strategyChannel = RedisKey.MODEL_GROUP_STRATEGY_CHANNEL;
 
@@ -41,11 +45,17 @@ public class ModelRoutingProperties {
 
     private List<ModelDefinition> models = new ArrayList<>();
 
-    private Map<String, GroupDefinition> groups = new HashMap<>();
+    private Map<String, GroupDefinition> groups = new LinkedHashMap<>();
 
-    private Map<String, Map<String, SceneDefinition>> matrix = new HashMap<>();
+    private Map<String, Map<String, SceneDefinition>> matrix = new LinkedHashMap<>();
 
-    private Map<String, String> capabilityGroups = new HashMap<>();
+    private Map<String, ModelTierDefinition> tiers = new LinkedHashMap<>();
+
+    private List<RoutePolicyDefinition> routes = new ArrayList<>();
+
+    private RoutePolicyDefinition defaultRoute;
+
+    private Map<String, String> capabilityGroups = new LinkedHashMap<>();
 
     @Data
     public static class ModelDefinition {
@@ -86,6 +96,6 @@ public class ModelRoutingProperties {
         private Double temperature;
         private Double topP;
         private Integer maxCompletionTokens;
-        private Map<String, Object> customParameters = new HashMap<>();
+        private Map<String, Object> customParameters = new LinkedHashMap<>();
     }
 }

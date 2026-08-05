@@ -28,7 +28,8 @@ public enum ErrorCode {
     DEVICE_LIMIT_EXCEEDED(40104, 401, "设备登录数量超限"),
 
     // AI errors
-    AI_REQUEST_IN_PROGRESS(42901, 429, "AI请求处理中，请稍后再试");
+    AI_REQUEST_IN_PROGRESS(42901, 429, "AI请求处理中，请稍后再试"),
+    CONFIG_VERSION_CONFLICT(40901, 409, "模型治理配置版本已过期");
 
     private final int code;
     private final int httpStatus;

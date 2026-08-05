@@ -3,6 +3,8 @@ package com.aseubel.yusi.service.ai.model;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
+import com.aseubel.yusi.config.ai.properties.ModelTierDefinition;
+import com.aseubel.yusi.config.ai.properties.RoutePolicyDefinition;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
@@ -13,7 +15,11 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -33,11 +39,11 @@ public class ModelConfigCenter {
 
     @PostConstruct
     public void init() {
-        ModelRoutingProperties initial = cloneConfig(bootstrapProperties);
+        ModelRoutingProperties initial = normalizeLegacyConfig(cloneConfig(bootstrapProperties));
         String raw = redissonClient.<String>getBucket(bootstrapProperties.getRuntimeConfigKey()).get();
         if (raw != null && !raw.isBlank()) {
             try {
-                initial = objectMapper.readValue(raw, ModelRoutingProperties.class);
+                initial = normalizeLegacyConfig(objectMapper.readValue(raw, ModelRoutingProperties.class));
                 log.info("Loaded runtime model config from Redis");
             } catch (Exception e) {
                 log.warn("Failed to parse runtime model config from Redis, fallback bootstrap config");
@@ -58,7 +64,11 @@ public class ModelConfigCenter {
     }
 
     public ModelRoutingProperties getEffectiveConfig() {
-        return cloneConfig(currentConfig.get());
+        ModelRoutingProperties config = currentConfig.get();
+        if (config == null) {
+            return normalizeLegacyConfig(cloneConfig(bootstrapProperties));
+        }
+        return cloneConfig(config);
     }
 
     public ModelRoutingProperties getConfigForDisplay() {
@@ -74,9 +84,98 @@ public class ModelConfigCenter {
     }
 
     public void updateFromAdmin(ModelRoutingProperties request) {
-        ModelRoutingProperties merged = mergeSecrets(request, currentConfig.get());
-        validate(merged);
+        ModelRoutingProperties merged = normalizeLegacyConfig(mergeSecrets(request, currentConfig.get()));
+        validateForAdmin(merged);
         apply(merged, true);
+    }
+
+    ModelRoutingProperties normalizeLegacyConfig(ModelRoutingProperties source) {
+        ModelRoutingProperties normalized = cloneConfig(source);
+        if (normalized.getTiers() == null) {
+            normalized.setTiers(new LinkedHashMap<>());
+        }
+        if (normalized.getRoutes() == null) {
+            normalized.setRoutes(new ArrayList<>());
+        }
+
+        if (normalized.getSchemaVersion() >= 2
+                && !normalized.getTiers().isEmpty()
+                && !normalized.getRoutes().isEmpty()) {
+            return normalized;
+        }
+
+        if (normalized.getGroups() != null) {
+            normalized.getGroups().forEach((groupId, groupDefinition) -> {
+                if (normalized.getTiers().containsKey(groupId)) {
+                    return;
+                }
+                ModelTierDefinition tier = new ModelTierDefinition();
+                tier.setMembers(groupDefinition == null || groupDefinition.getMembers() == null
+                        ? new ArrayList<>() : new ArrayList<>(groupDefinition.getMembers()));
+                tier.setStrategy(groupDefinition == null || groupDefinition.getStrategy() == null
+                        ? ModelSelectionStrategyType.ROUND_ROBIN : groupDefinition.getStrategy());
+                tier.setDisplayName(groupId);
+                normalized.getTiers().put(groupId, tier);
+            });
+        }
+
+        if (normalized.getRoutes().isEmpty() && normalized.getMatrix() != null) {
+            normalized.getMatrix().forEach((language, sceneMap) -> {
+                if (sceneMap == null) {
+                    return;
+                }
+                sceneMap.forEach((scene, sceneDefinition) -> {
+                    if (sceneDefinition == null || sceneDefinition.getGroup() == null
+                            || sceneDefinition.getGroup().isBlank()) {
+                        return;
+                    }
+                    RoutePolicyDefinition route = new RoutePolicyDefinition();
+                    route.setId(normalize(language) + "-" + normalize(scene));
+                    route.setLanguage(normalize(language));
+                    route.setScene(normalize(scene));
+                    route.setPrimaryTier(sceneDefinition.getGroup());
+                    route.setMaxOutputTokens(sceneDefinition.getMaxTokens());
+                    route.setTemperature(sceneDefinition.getTemperature());
+                    route.setTopP(sceneDefinition.getTopP());
+                    route.setMaxCompletionTokens(sceneDefinition.getMaxCompletionTokens());
+                    route.setCustomParameters(sceneDefinition.getCustomParameters() == null
+                            ? new LinkedHashMap<>() : new LinkedHashMap<>(sceneDefinition.getCustomParameters()));
+                    normalized.getRoutes().add(route);
+                });
+            });
+        }
+
+        if (normalized.getDefaultTier() == null || normalized.getDefaultTier().isBlank()) {
+            normalized.setDefaultTier(resolveLegacyDefaultTier(normalized));
+        }
+        if (normalized.getDefaultRoute() == null && normalized.getDefaultTier() != null) {
+            RoutePolicyDefinition defaultRoute = new RoutePolicyDefinition();
+            defaultRoute.setId("default");
+            defaultRoute.setLanguage("*");
+            defaultRoute.setScene(normalized.getDefaultScene());
+            defaultRoute.setPrimaryTier(normalized.getDefaultTier());
+            defaultRoute.setPriority(0);
+            normalized.setDefaultRoute(defaultRoute);
+        }
+        normalized.setSchemaVersion(2);
+        return normalized;
+    }
+
+    void validateForAdmin(ModelRoutingProperties config) {
+        validate(normalizeLegacyConfig(config));
+    }
+
+    private String resolveLegacyDefaultTier(ModelRoutingProperties config) {
+        Map<String, ModelRoutingProperties.SceneDefinition> defaultScenes = config.getMatrix()
+                .get(normalize(config.getDefaultLanguage()));
+        if (defaultScenes != null) {
+            ModelRoutingProperties.SceneDefinition defaultScene = defaultScenes.get(normalize(config.getDefaultScene()));
+            if (defaultScene != null && defaultScene.getGroup() != null
+                    && config.getTiers().containsKey(defaultScene.getGroup())) {
+                return defaultScene.getGroup();
+            }
+        }
+        return config.getTiers().keySet().stream().findFirst().orElse(null);
     }
 
     public String secretPlaceholder() {
@@ -122,26 +221,76 @@ public class ModelConfigCenter {
         if (config.getModels() == null || config.getModels().isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "models 不能为空");
         }
-        if (config.getGroups() == null || config.getGroups().isEmpty()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "groups 不能为空");
-        }
         Set<String> modelIds = new HashSet<>();
         config.getModels().forEach(model -> {
             if (model.getId() == null || model.getId().isBlank()) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "model.id 不能为空");
             }
-            modelIds.add(model.getId());
+            if (!modelIds.add(model.getId())) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "model.id 重复: " + model.getId());
+            }
         });
-        config.getGroups().forEach((group, definition) -> {
-            if (definition.getMembers() == null || definition.getMembers().isEmpty()) {
-                throw new BusinessException(ErrorCode.PARAM_ERROR, "group[" + group + "] 必须至少包含一个成员");
+
+        if (config.getTiers() == null || config.getTiers().isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "tiers 不能为空");
+        }
+        config.getTiers().forEach((tierId, definition) -> {
+            if (definition == null || definition.getMembers() == null || definition.getMembers().isEmpty()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "tier[" + tierId + "] 必须至少包含一个成员");
             }
             definition.getMembers().forEach(member -> {
                 if (!modelIds.contains(member)) {
-                    throw new BusinessException(ErrorCode.PARAM_ERROR, "group[" + group + "] 引用了不存在的模型: " + member);
+                    throw new BusinessException(ErrorCode.PARAM_ERROR, "tier[" + tierId + "] 引用了不存在的模型: " + member);
                 }
             });
         });
+
+        if (config.getRoutes() == null || config.getRoutes().isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "routes 不能为空");
+        }
+        Set<String> routeIds = new HashSet<>();
+        config.getRoutes().forEach(route -> {
+            if (route == null || route.getId() == null || route.getId().isBlank()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "route.id 不能为空");
+            }
+            if (!routeIds.add(route.getId())) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "route.id 重复: " + route.getId());
+            }
+            if (route.getScene() == null || route.getScene().isBlank()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "route[" + route.getId() + "] 的 scene 不能为空");
+            }
+            if (route.getLanguage() == null || route.getLanguage().isBlank()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "route[" + route.getId() + "] 的 language 不能为空");
+            }
+            ModelTierDefinition primary = config.getTiers().get(route.getPrimaryTier());
+            if (primary == null) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR,
+                        "route[" + route.getId() + "] 的 primary-tier 不存在: " + route.getPrimaryTier());
+            }
+            if (!primary.isEnabled()) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR,
+                        "route[" + route.getId() + "] 的 primary-tier 已禁用: " + route.getPrimaryTier());
+            }
+            Set<String> fallbackIds = new HashSet<>();
+            if (route.getFallbackTiers() != null) {
+                route.getFallbackTiers().forEach(fallback -> {
+                    if (!fallbackIds.add(fallback)) {
+                        throw new BusinessException(ErrorCode.PARAM_ERROR,
+                                "route[" + route.getId() + "] 的 fallback-tier 重复: " + fallback);
+                    }
+                    if (!config.getTiers().containsKey(fallback)) {
+                        throw new BusinessException(ErrorCode.PARAM_ERROR,
+                                "route[" + route.getId() + "] 的 fallback-tier 不存在: " + fallback);
+                    }
+                });
+            }
+            if (route.getMaxInputTokens() != null && route.getMaxInputTokens() < 0
+                    || route.getMaxOutputTokens() != null && route.getMaxOutputTokens() < 0) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR,
+                        "route[" + route.getId() + "] 的 token 限制不能为负数");
+            }
+        });
+
         if (config.getCapabilityGroups() != null) {
             config.getCapabilityGroups().forEach((capabilityName, groupName) -> {
                 ModelCapability capability;
@@ -152,12 +301,12 @@ public class ModelConfigCenter {
                     throw new BusinessException(ErrorCode.PARAM_ERROR,
                             "不支持的模型 capability: " + capabilityName);
                 }
-                ModelRoutingProperties.GroupDefinition group = config.getGroups().get(groupName);
-                if (group == null || group.getMembers() == null || group.getMembers().isEmpty()) {
+                ModelTierDefinition tier = config.getTiers().get(groupName);
+                if (tier == null || tier.getMembers() == null || tier.getMembers().isEmpty()) {
                     throw new BusinessException(ErrorCode.PARAM_ERROR,
-                            "capability[" + capabilityName + "] 引用了不存在或为空的分组: " + groupName);
+                        "capability[" + capabilityName + "] 引用了不存在或为空的分组: " + groupName);
                 }
-                group.getMembers().forEach(member -> config.getModels().stream()
+                tier.getMembers().forEach(member -> config.getModels().stream()
                         .filter(model -> Objects.equals(model.getId(), member))
                         .findFirst()
                         .filter(model -> model.supports(capability))
