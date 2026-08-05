@@ -3,6 +3,7 @@ package com.aseubel.yusi.config.ai.properties;
 import com.aseubel.yusi.redis.common.RedisKey;
 import com.aseubel.yusi.service.ai.model.ModelSelectionStrategyType;
 import com.aseubel.yusi.service.ai.model.ModelCapability;
+import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -15,6 +16,8 @@ import java.util.Map;
 @Data
 @ConfigurationProperties(prefix = "model.routing", ignoreInvalidFields = true)
 public class ModelRoutingProperties {
+
+    private long version = 0L;
 
     private int schemaVersion = 2;
 
@@ -61,8 +64,11 @@ public class ModelRoutingProperties {
     @Data
     public static class ModelDefinition {
         private String id;
+        private String displayName;
         private String provider;
+        @JsonAlias("baseUrl")
         private String baseurl;
+        @JsonAlias("apiKey")
         private String apikey;
         private String model;
         private List<ModelCapability> capabilities = new ArrayList<>();
