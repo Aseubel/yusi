@@ -161,3 +161,17 @@ flowchart LR
 - `frontend/src/pages/admin/ModelManagement.tsx` 及 `model-management/` 未命中 `rawConfig`、`Textarea` 或 `/model/config`；JSON 仅通过折叠面板导出当前 schema v2 快照。
 - `src/main/java/.../controller` 与 `src/main/java/.../pojo/dto/model` 的 `apikey/apiKey` 扫描只命中 `apiKeyConfigured`，未暴露原始密钥字段。
 - 已启动本地前端并打开 `/admin/models`；现有认证守卫将无管理员会话重定向至登录页，因此桌面/移动控制台点击、路由预览、保存冲突和实际快照刷新无法在当前环境完成。没有使用凭据绕过认证。
+
+## 6. Gateway 预算预留与对账验证（2026-08-07）
+
+### 6.1 自动化结果
+
+| 命令 | 结果 |
+|:---|:---|
+| `./mvnw -Dtest=ChatModelProviderRegistryTest,ModelConfigCenterTest,ModelInvocationErrorClassifierTest,ModelProxyFactoryTest,ModelRoutePolicyMatcherTest,ModelRouterServiceTest,ModelTokenEstimatorTest,ModelUsageExtractorTest,ModelBudgetAdmissionTest,FailOverSelectionStrategyTest,RoundRobinSelectionStrategyTest,ModelManagementControllerTest,AiControllerCancellationTest test` | ✅ 48 tests passed |
+| `./mvnw -DskipTests compile` | ✅ BUILD SUCCESS |
+| `cmd.exe /c "C:\Users\YangZhiYao\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback\pnpm.cmd test --run"` | ✅ 4 files / 14 tests passed |
+| `cmd.exe /c "C:\Users\YangZhiYao\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback\pnpm.cmd run build"` | ✅ TypeScript/Vite/PWA build succeeded |
+| `git diff --check` | ✅ no output |
+
+新增覆盖：Redis admission 的四维 request/token charge 及 reconcile、限流拒绝不调用 Provider 且不污染模型健康状态、同步与流式 attempt 的未知 usage 保守挂账，以及 tenant trace 字段和存量表迁移。

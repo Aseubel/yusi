@@ -170,6 +170,7 @@ public class ModelRouterService {
                 .requestId(context == null ? null : context.getRequestId())
                 .runId(context == null ? null : context.getRunId())
                 .userId(context == null ? null : context.getUserId())
+                .tenantId(context == null ? null : context.getTenantId())
                 .language(normalize(valueOrDefault(context == null ? null : context.getLanguage(),
                         properties.getDefaultLanguage())))
                 .scene(normalize(valueOrDefault(context == null ? null : context.getScene(),
@@ -197,6 +198,7 @@ public class ModelRouterService {
                 .requestId(context.getRequestId())
                 .runId(context.getRunId())
                 .userId(context.getUserId())
+                .tenantId(context.getTenantId())
                 .language(context.getLanguage())
                 .scene(context.getScene())
                 .riskLevel(context.getRiskLevel())

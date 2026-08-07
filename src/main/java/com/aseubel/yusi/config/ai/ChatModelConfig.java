@@ -1,6 +1,7 @@
 package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
+import com.aseubel.yusi.config.ai.properties.ModelGatewayAdmissionProperties;
 import com.aseubel.yusi.service.ai.model.ModelProxyFactory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -9,7 +10,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties(ModelRoutingProperties.class)
+@EnableConfigurationProperties({ ModelRoutingProperties.class, ModelGatewayAdmissionProperties.class })
 public class ChatModelConfig {
 
     @Bean(name = "streamingChatModel")

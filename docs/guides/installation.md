@@ -265,7 +265,34 @@ model:
 
 治理控制台使用以下接口发布完整 schema v2 快照：`GET /api/model/console`、`PUT /api/model/console`、`POST /api/model/routes/preview`。更新必须携带 `expectedVersion`；API key 只返回配置状态，不返回原文。
 
-### 4.3 MCP Server 配置 (mcp/config.yaml)
+### 4.3 Gateway 多维限流与 Token 对账
+
+生产和开发配置在 `model.gateway.admission` 下启用固定窗口准入。每次模型 attempt 会原子预留请求数和 `input + reserved output` Token，Provider 返回真实 usage 后再 reconcile；usage 缺失或断流时保留预留值。Redis 不可用时默认拒绝新的模型 attempt，避免故障期间无上限放量。
+
+```yaml
+model:
+  gateway:
+    admission:
+      enabled: ${LLM_ADMISSION_ENABLED:true}
+      window-seconds: ${LLM_ADMISSION_WINDOW_SECONDS:60}
+      reservation-ttl-seconds: ${LLM_ADMISSION_RESERVATION_TTL_SECONDS:300}
+      user:
+        max-requests: ${LLM_USER_MAX_REQUESTS:60}
+        max-tokens: ${LLM_USER_MAX_TOKENS:200000}
+      tenant:
+        max-requests: ${LLM_TENANT_MAX_REQUESTS:0}
+        max-tokens: ${LLM_TENANT_MAX_TOKENS:0}
+      model:
+        max-requests: ${LLM_MODEL_MAX_REQUESTS:600}
+        max-tokens: ${LLM_MODEL_MAX_TOKENS:2000000}
+      provider:
+        max-requests: ${LLM_PROVIDER_MAX_REQUESTS:1000}
+        max-tokens: ${LLM_PROVIDER_MAX_TOKENS:4000000}
+```
+
+`tenantId` 只有调用方明确放入 `ModelRouteContext` 时才参与租户桶和 trace；当前登录模型只提供 `userId`，不会错误地把用户配额累计到虚构租户。限流拒绝会写入 `model_call_trace.status=REJECTED` 和 `error_code=LIMIT_EXCEEDED:*` 或存储不可用原因，可从 `/api/model/attempts` 查询。
+
+### 4.4 MCP Server 配置 (mcp/config.yaml)
 
 ```yaml
 server:

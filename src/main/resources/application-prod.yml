@@ -13,6 +13,23 @@ server:
     max-connections: 500 # 最大连接数
 
 model:
+  gateway:
+    admission:
+      enabled: ${LLM_ADMISSION_ENABLED:true}
+      window-seconds: ${LLM_ADMISSION_WINDOW_SECONDS:60}
+      reservation-ttl-seconds: ${LLM_ADMISSION_RESERVATION_TTL_SECONDS:300}
+      user:
+        max-requests: ${LLM_USER_MAX_REQUESTS:60}
+        max-tokens: ${LLM_USER_MAX_TOKENS:200000}
+      tenant:
+        max-requests: ${LLM_TENANT_MAX_REQUESTS:0}
+        max-tokens: ${LLM_TENANT_MAX_TOKENS:0}
+      model:
+        max-requests: ${LLM_MODEL_MAX_REQUESTS:600}
+        max-tokens: ${LLM_MODEL_MAX_TOKENS:2000000}
+      provider:
+        max-requests: ${LLM_PROVIDER_MAX_REQUESTS:1000}
+        max-tokens: ${LLM_PROVIDER_MAX_TOKENS:4000000}
   embedding:
     baseurl: ${EMBEDDING_MODEL_BASEURL:https://api.siliconflow.cn/v1}
     apikey: ${EMBEDDING_MODEL_APIKEY}

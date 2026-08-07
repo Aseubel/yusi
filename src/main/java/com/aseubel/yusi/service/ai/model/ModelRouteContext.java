@@ -9,6 +9,7 @@ public class ModelRouteContext {
     String requestId;
     String runId;
     String userId;
+    String tenantId;
     String language;
     String scene;
     String riskLevel;

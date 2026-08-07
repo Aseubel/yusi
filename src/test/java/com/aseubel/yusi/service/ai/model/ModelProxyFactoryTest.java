@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.ai.model;
 
+import com.aseubel.yusi.config.ai.properties.ModelGatewayAdmissionProperties;
 import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.ai.runtime.ModelCallAttemptEvent;
@@ -24,6 +25,9 @@ import dev.langchain4j.model.output.TokenUsage;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.redisson.api.RScript;
+import org.redisson.api.RedissonClient;
+import org.redisson.client.codec.StringCodec;
 
 import java.util.List;
 import java.util.Map;
@@ -33,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -122,6 +127,42 @@ class ModelProxyFactoryTest {
                 .map(ModelCallAttemptEvent::policyId).toList());
         assertEquals(List.of(false, true), eventCaptor.getAllValues().stream()
                 .map(ModelCallAttemptEvent::fallbackUsed).toList());
+    }
+
+    @Test
+    void admissionRejectionDoesNotInvokeProviderOrCountAsModelFailure() {
+        ModelRouterService router = mock(ModelRouterService.class);
+        ModelStateCenter stateCenter = mock(ModelStateCenter.class);
+        SensitiveDataMaskService maskService = mock(SensitiveDataMaskService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        ChatModel delegate = mock(ChatModel.class);
+        ModelInstance selected = instance("limited", delegate, mock(StreamingChatModel.class));
+        when(router.plan(any(ModelRouteContext.class))).thenReturn(new ModelRouteDecision(
+                "request-limit", "chat", 1L, "chat", List.of(),
+                List.of(new ModelRouteCandidate("chat", selected, true, null)),
+                "policy=chat;primary-tier=chat"));
+        when(stateCenter.allowRequest("limited")).thenReturn(true);
+
+        ModelGatewayAdmissionProperties properties = new ModelGatewayAdmissionProperties();
+        properties.getModel().setMaxRequests(1);
+        RedissonClient redissonClient = mock(RedissonClient.class);
+        RScript script = mock(RScript.class);
+        when(redissonClient.getScript(any(StringCodec.class))).thenReturn(script);
+        when(script.eval(any(RScript.Mode.class), anyString(), eq(RScript.ReturnType.INTEGER),
+                any(), any(Object[].class))).thenReturn(0L);
+        ModelBudgetAdmission admission = new ModelBudgetAdmission(properties, redissonClient);
+
+        ModelProxyFactory factory = new ModelProxyFactory(router, stateCenter, maskService, publisher,
+                new ModelUsageExtractor(), new ModelTokenEstimator(), admission);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> factory.createChatProxy("zh", "chat")
+                .chat(ChatRequest.builder().messages(List.of(UserMessage.from("hello"))).build()))
+                .isInstanceOf(ModelAdmissionDeniedException.class);
+        verify(delegate, never()).chat(any(ChatRequest.class));
+        verify(stateCenter, never()).recordFailure(anyString(), anyString(), anyLong(), any(Throwable.class));
+        var eventCaptor = org.mockito.ArgumentCaptor.forClass(ModelCallAttemptEvent.class);
+        verify(publisher).publishEvent(eventCaptor.capture());
+        assertEquals("REJECTED", eventCaptor.getValue().status());
     }
 
     @Test

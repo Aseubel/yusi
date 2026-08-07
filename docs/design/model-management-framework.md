@@ -30,6 +30,8 @@ flowchart LR
     State --> R2[(Redis<br/>instance state map)]
     Config --> P[(Redis Pub/Sub)]
     State --> P
+    E --> Budget[ModelBudgetAdmission<br/>reserve / reconcile]
+    Budget --> R3[(Redis<br/>atomic quota buckets)]
     P --> N1[Node A]
     P --> N2[Node B]
     P --> N3[Node C]
@@ -67,6 +69,9 @@ flowchart LR
 | `yusi:model:state:channel` | Pub/Sub Channel | 广播实例状态变化 |
 | `yusi:model:runtime:config` | String | 当前 schema v2 全量运行配置 |
 | `yusi:model:config:channel` | Pub/Sub Channel | 广播 schema v2 配置快照 |
+| `yusi:model:admission:<window>:<dimension>:<value>:requests` | String counter | 固定窗口请求数预留 |
+| `yusi:model:admission:<window>:<dimension>:<value>:tokens` | String counter | 固定窗口 Token 预留 |
+| `yusi:model:admission:reservation:<id>` | String with TTL | attempt 预留状态，支持幂等对账 |
 
 ## 4. 配置规范（YAML 示例）
 
@@ -145,6 +150,19 @@ model:
 请求进入 Provider 之前，Gateway 会基于 `ChatRequest` 做保守的输入 Token 估算，覆盖文本消息、工具名称与参数以及图片占位成本。路由决策把估算输入、route 的 `max-input-tokens`、route 的输出上限和模型的 `context-window-tokens` 一起用于候选过滤：主 tier 容量不足时，只有满足预算的 fallback tier 才能进入 attempt 链。
 
 route 未声明 `max-output-tokens` 或 `max-completion-tokens` 时，系统按 1024 token 预留输出空间。估算器不替代供应商 tokenizer；Provider 返回的真实 usage 仍是成本、审计和后续对账的唯一依据。没有配置模型 `context-window-tokens` 时不会凭空猜测供应商窗口，仍会执行 route 的显式输入上限。
+
+### 4.2 多维限流与 Token 对账
+
+`ModelBudgetAdmission` 在每个 Provider attempt 前用一段 Redis Lua 脚本同时检查并增加用户、租户、模型和 Provider 桶。每个维度可以独立配置请求数上限与 Token 上限；上限为 `0` 表示关闭该维度。当前应用没有独立租户身份时，`tenantId` 保持为空，不会把用户 ID 误当作租户 ID。
+
+调用生命周期按以下规则结算：
+
+1. `estimate`：根据实际 `ChatRequest` 估算输入，并结合 route 输出上限形成 attempt 预算。
+2. `reserve`：原子占用请求数和 `input + reserved output` Token；占用失败只产生 `REJECTED` attempt，不污染模型健康状态。
+3. `actual usage`：同步响应或流式完成事件提供供应商 usage。
+4. `reconcile`：按真实 usage 调整 Token 桶；usage 缺失、异常或断流时保留原预留值，避免错误释放已经消耗的额度。预留状态带 TTL，进程崩溃时不会永久占用。
+
+一次 fallback 会为备用模型创建新的 reservation；主 attempt 的未知消耗不会被释放。只有明确知道 Provider 尚未调用时，才允许调用 `release`。
 
 ## 5. 状态机流转图（被动监控）
 

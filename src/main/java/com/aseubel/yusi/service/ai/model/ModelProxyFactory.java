@@ -43,30 +43,40 @@ public class ModelProxyFactory {
     private final ApplicationEventPublisher eventPublisher;
     private final ModelUsageExtractor usageExtractor;
     private final ModelTokenEstimator tokenEstimator;
+    private final ModelBudgetAdmission budgetAdmission;
 
     public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
             SensitiveDataMaskService maskService) {
         this(modelRouterService, modelStateCenter, maskService, new NoopEventPublisher(),
-                new ModelUsageExtractor(), new ModelTokenEstimator());
+                new ModelUsageExtractor(), new ModelTokenEstimator(), new ModelBudgetAdmission());
     }
 
     public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
             SensitiveDataMaskService maskService, ApplicationEventPublisher eventPublisher,
             ModelUsageExtractor usageExtractor) {
         this(modelRouterService, modelStateCenter, maskService, eventPublisher, usageExtractor,
-                new ModelTokenEstimator());
+                new ModelTokenEstimator(), new ModelBudgetAdmission());
+    }
+
+    public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
+            SensitiveDataMaskService maskService, ApplicationEventPublisher eventPublisher,
+            ModelUsageExtractor usageExtractor, ModelTokenEstimator tokenEstimator) {
+        this(modelRouterService, modelStateCenter, maskService, eventPublisher, usageExtractor,
+                tokenEstimator, new ModelBudgetAdmission());
     }
 
     @Autowired
     public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
             SensitiveDataMaskService maskService, ApplicationEventPublisher eventPublisher,
-            ModelUsageExtractor usageExtractor, ModelTokenEstimator tokenEstimator) {
+            ModelUsageExtractor usageExtractor, ModelTokenEstimator tokenEstimator,
+            ModelBudgetAdmission budgetAdmission) {
         this.modelRouterService = modelRouterService;
         this.modelStateCenter = modelStateCenter;
         this.maskService = maskService;
         this.eventPublisher = eventPublisher;
         this.usageExtractor = usageExtractor;
         this.tokenEstimator = tokenEstimator;
+        this.budgetAdmission = budgetAdmission;
     }
 
     public ChatModel createChatProxy(String defaultLanguage, String defaultScene) {
@@ -235,12 +245,24 @@ public class ModelProxyFactory {
                     continue;
                 }
 
+                ModelBudgetPermit permit = budgetAdmission.reserve(context, candidate,
+                        tokenBudget(context, decision.routeParameters()));
+                if (!permit.granted()) {
+                    publishAttempt(decision, context, candidate, null, 0L, null,
+                            attemptIndex, "REJECTED", permit.reservationKey());
+                    lastError = new ModelAdmissionDeniedException(candidate.provider(), candidate.modelId(),
+                            permit.reservationKey());
+                    attemptIndex++;
+                    continue;
+                }
+
                 long start = System.currentTimeMillis();
                 try {
                     Object result = invokeWithRouteParameters(selected, selected.getChatModel(), method, args,
                             context, decision.routeParameters());
                     ChatResponse response = result instanceof ChatResponse chatResponse ? chatResponse : null;
                     ModelUsageSnapshot usage = usageExtractor.extract(response, selected);
+                    budgetAdmission.reconcile(permit, usage);
                     long latency = System.currentTimeMillis() - start;
                     modelStateCenter.recordSuccess(selected.getId(), selected.getModelName(), latency);
                     publishAttempt(decision, context, candidate, usage, latency, null,
@@ -248,6 +270,7 @@ public class ModelProxyFactory {
                     return result;
                 } catch (Throwable throwable) {
                     ModelInvocationException normalized = normalize(throwable, selected);
+                    budgetAdmission.reconcile(permit, null);
                     long latency = System.currentTimeMillis() - start;
                     modelStateCenter.recordFailure(selected.getId(), selected.getModelName(), latency, normalized);
                     publishAttempt(decision, context, candidate,
@@ -283,10 +306,30 @@ public class ModelProxyFactory {
                 throw new IllegalStateException("No available streaming model candidate");
             }
 
+            ModelBudgetPermit permit = budgetAdmission.reserve(context, candidate,
+                    tokenBudget(context, decision.routeParameters()));
+            if (!permit.granted()) {
+                publishAttempt(decision, context, candidate, null, 0L, null,
+                        attemptIndex, "REJECTED", permit.reservationKey());
+                if (candidateIndex + 1 < candidates.size()) {
+                    invokeStreamingAttempt(decision, context, method, args, candidates,
+                            candidateIndex + 1, attemptIndex + 1);
+                    return;
+                }
+                throw new ModelAdmissionDeniedException(candidate.provider(), candidate.modelId(),
+                        permit.reservationKey());
+            }
+
             StreamingChatResponseHandler downstream = findStreamingHandler(args);
             if (downstream == null) {
-                invokeWithRouteParameters(selected, selected.getStreamingChatModel(), method, args,
-                        context, decision.routeParameters());
+                try {
+                    invokeWithRouteParameters(selected, selected.getStreamingChatModel(), method, args,
+                            context, decision.routeParameters());
+                    budgetAdmission.reconcile(permit, null);
+                } catch (Throwable throwable) {
+                    budgetAdmission.reconcile(permit, null);
+                    throw throwable;
+                }
                 return;
             }
             long start = System.currentTimeMillis();
@@ -295,7 +338,7 @@ public class ModelProxyFactory {
             AtomicLong firstOutputAt = new AtomicLong(-1L);
             StreamingChatResponseHandler trackingHandler = new TrackingStreamingHandler(
                     downstream, decision, context, candidate, candidates, candidateIndex,
-                    attemptIndex, start, emitted, terminal, firstOutputAt, method, args);
+                    attemptIndex, start, emitted, terminal, firstOutputAt, method, args, permit);
             Object[] trackingArgs = args == null ? new Object[0] : args.clone();
             for (int index = 0; index < trackingArgs.length; index++) {
                 if (trackingArgs[index] instanceof StreamingChatResponseHandler) {
@@ -312,7 +355,7 @@ public class ModelProxyFactory {
                 terminal.set(true);
                 handleStreamingFailure(decision, context, candidate, candidates, candidateIndex,
                         attemptIndex, start, emitted.get(), firstOutputAt.get(), method, args,
-                        throwable, downstream);
+                        throwable, downstream, permit);
             }
         }
 
@@ -331,8 +374,10 @@ public class ModelProxyFactory {
         private void handleStreamingFailure(ModelRouteDecision decision, ModelRouteContext context,
                 ModelRouteCandidate candidate, List<ModelRouteCandidate> candidates, int candidateIndex,
                 int attemptIndex, long start, boolean emitted, long firstOutputAt,
-                Method method, Object[] args, Throwable throwable, StreamingChatResponseHandler downstream) {
+                Method method, Object[] args, Throwable throwable, StreamingChatResponseHandler downstream,
+                ModelBudgetPermit permit) {
             ModelInvocationException normalized = normalize(throwable, candidate.instance());
+            budgetAdmission.reconcile(permit, null);
             long latency = System.currentTimeMillis() - start;
             modelStateCenter.recordFailure(candidate.modelId(), candidate.modelName(), latency, normalized);
             publishAttempt(decision, context, candidate,
@@ -368,6 +413,7 @@ public class ModelProxyFactory {
                     UUID.randomUUID().toString(),
                     context.getRunId(),
                     context.getUserId(),
+                    context.getTenantId(),
                     context.getScene(),
                     context.getLanguage(),
                     decision.policyId(),
@@ -417,12 +463,13 @@ public class ModelProxyFactory {
             private final AtomicLong firstOutputAt;
             private final Method method;
             private final Object[] args;
+            private final ModelBudgetPermit permit;
 
             private TrackingStreamingHandler(StreamingChatResponseHandler downstream,
                     ModelRouteDecision decision, ModelRouteContext context, ModelRouteCandidate candidate,
                     List<ModelRouteCandidate> candidates, int candidateIndex, int attemptIndex, long start,
                     AtomicBoolean emitted, AtomicBoolean terminal, AtomicLong firstOutputAt,
-                    Method method, Object[] args) {
+                    Method method, Object[] args, ModelBudgetPermit permit) {
                 this.downstream = downstream;
                 this.decision = decision;
                 this.context = context;
@@ -436,6 +483,7 @@ public class ModelProxyFactory {
                 this.firstOutputAt = firstOutputAt;
                 this.method = method;
                 this.args = args;
+                this.permit = permit;
             }
 
             @Override
@@ -491,6 +539,7 @@ public class ModelProxyFactory {
                 if (terminal.compareAndSet(false, true)) {
                     long latency = System.currentTimeMillis() - start;
                     ModelUsageSnapshot usage = usageExtractor.extract(completeResponse, candidate.instance());
+                    budgetAdmission.reconcile(permit, usage);
                     modelStateCenter.recordSuccess(candidate.modelId(), candidate.modelName(), latency);
                     publishAttempt(decision, context, candidate, usage, latency,
                             firstOutputAt.get() < 0 ? null : firstOutputAt.get() - start,
@@ -506,13 +555,37 @@ public class ModelProxyFactory {
                     return;
                 }
                 handleStreamingFailure(decision, context, candidate, candidates, candidateIndex,
-                        attemptIndex, start, emitted.get(), firstOutputAt.get(), method, args, error, downstream);
+                        attemptIndex, start, emitted.get(), firstOutputAt.get(), method, args, error, downstream,
+                        permit);
             }
 
             private void markOutput() {
                 emitted.set(true);
                 firstOutputAt.compareAndSet(-1L, System.currentTimeMillis());
             }
+        }
+
+        private ModelTokenBudget tokenBudget(ModelRouteContext context, ModelRouteParameters routeParameters) {
+            long input = context == null || context.getEstimatedInputTokens() == null
+                    ? 0L : Math.max(0L, context.getEstimatedInputTokens());
+            long requestedOutput = context == null || context.getReservedOutputTokens() == null
+                    ? Long.MAX_VALUE : Math.max(0L, context.getReservedOutputTokens());
+            long routeOutput = routeParameters == null
+                    ? ModelRouteParameters.DEFAULT_OUTPUT_TOKENS
+                    : firstPositive(routeParameters.maxOutputTokens(), routeParameters.maxCompletionTokens(),
+                            ModelRouteParameters.DEFAULT_OUTPUT_TOKENS);
+            long output = Math.min(requestedOutput, routeOutput);
+            return new ModelTokenBudget(input, output == Long.MAX_VALUE ? routeOutput : output);
+        }
+
+        private long firstPositive(Integer first, Integer second, int fallback) {
+            if (first != null && first > 0) {
+                return first;
+            }
+            if (second != null && second > 0) {
+                return second;
+            }
+            return fallback;
         }
 
         private Object invokeWithRouteParameters(ModelInstance selected, Object delegate, Method method,
@@ -786,6 +859,7 @@ public class ModelProxyFactory {
                     .requestId(context == null ? null : context.getRequestId())
                     .runId(context == null ? null : context.getRunId())
                     .userId(context == null ? null : context.getUserId())
+                    .tenantId(context == null ? null : context.getTenantId())
                     .language(resolvedLanguage)
                     .scene(resolvedScene)
                     .riskLevel(context == null ? null : context.getRiskLevel())

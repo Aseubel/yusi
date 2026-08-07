@@ -43,6 +43,7 @@ public class ModelCallTraceService {
                 .attemptId(event.attemptId())
                 .runId(event.runId())
                 .userId(event.userId())
+                .tenantId(event.tenantId())
                 .scene(event.scene() == null ? "unknown" : event.scene())
                 .language(event.language())
                 .policyId(event.policyId())

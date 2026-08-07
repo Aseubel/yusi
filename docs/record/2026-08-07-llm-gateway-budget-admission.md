@@ -16,9 +16,16 @@
 
 ## 边界
 
-估算用于调用前准入，不声称等同于任何供应商 tokenizer，也不替代供应商返回的真实 usage。当前仍不对租户余额做 Redis token reserve/reconcile；成本统计以真实 usage 和价格快照为准。
+估算用于调用前准入，不声称等同于任何供应商 tokenizer，也不替代供应商返回的真实 usage。当前阶段把预算准入和 attempt 级 reserve/reconcile 接入 Redis：用户、租户（调用方提供时）、模型、Provider 都可以配置请求数和 Token 固定窗口。Redis Lua 脚本原子检查所有桶，真实 usage 到达后幂等调整 Token 预留；usage 缺失或断流按保守预留挂账，预留状态通过 TTL 自动兜底。成本统计仍以真实 usage 和价格快照为准。
+
+## 配置与边界
+
+- 配置入口为 `model.gateway.admission`，请求数和 Token 上限均为固定窗口值，`0` 表示关闭对应维度。
+- 当前应用没有租户识别服务，因此默认只填充 `userId`；之后接入租户后，将 `tenantId` 放入 `ModelRouteContext` 即可启用租户桶和 trace 查询。
+- Provider 调用已经开始后不自动释放未知 usage。只有确定没有调用 Provider 时才应使用 `ModelBudgetAdmission.release`。
+- 这仍然不是余额扣费系统：它控制窗口内并发放量和 Token 压力，价格结算继续由真实 usage、价格版本和调用 trace 负责。
 
 ## 验证
 
-- `./mvnw -Dtest=ModelTokenEstimatorTest,ModelRouterServiceTest,ModelProxyFactoryTest test`
+- `./mvnw -Dtest=ModelBudgetAdmissionTest,ModelTokenEstimatorTest,ModelRouterServiceTest,ModelProxyFactoryTest test`
 - `git diff --check`
