@@ -544,7 +544,7 @@ flowchart TB
 | 实例注册表 | ModelInstanceRegistry | 模型实例动态创建，配置变更自动 reload |
 | 状态中心 | ModelStateCenter | 熔断状态管理 (UP/HALF_OPEN/DOWN) |
 | Provider 注册表 | ChatModelProviderRegistry | 按 provider/protocol 创建 Chat/Streaming Chat 客户端 |
-| 路由服务 | ModelRouterService | 根据 language/scene/risk 生成有序候选链 |
+| 路由服务 | ModelRouterService | 根据 scene/risk 生成有序候选链 |
 | 路由决策 | ModelRouteDecision | 固定单次请求的候选、参数和路由原因 |
 | 代理工厂 | ModelProxyFactory | 动态代理、协议参数适配、错误分类与 fallback |
 

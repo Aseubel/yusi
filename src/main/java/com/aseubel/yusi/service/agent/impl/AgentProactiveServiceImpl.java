@@ -10,6 +10,8 @@ import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.repository.UserNotificationRepository;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.agent.AgentProactiveService;
 import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.user.UserService;
@@ -170,7 +172,16 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
                     .replace("{{personalityStyle}}", config.getPersonalityStyle())
                     .replace("{{midTermMemories}}", midTermMemories);
 
-            AiMessage aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+            ModelRouteContextHolder.set(ModelRouteContext.builder()
+                    .scene(PromptKey.AGENT_PROACTIVE_GREETING.getKey())
+                    .userId(user.getUserId())
+                    .build());
+            AiMessage aiMessage;
+            try {
+                aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+            } finally {
+                ModelRouteContextHolder.clear();
+            }
             greetingMessage = aiMessage.text();
 
             if (StrUtil.isBlank(greetingMessage)) {

@@ -76,7 +76,7 @@ class ModelManagementControllerTest {
         when(service.previewRoute(any(ModelRoutePreviewRequest.class))).thenReturn(preview);
 
         Response<ModelRoutePreviewResponse> response = controller.previewRoute(
-                ModelRoutePreviewRequest.builder().language("zh").scene("chat").build());
+                ModelRoutePreviewRequest.builder().scene("chat").build());
 
         assertThat(response.getData().getPolicyId()).isEqualTo("chat-zh");
         verify(service).previewRoute(any(ModelRoutePreviewRequest.class));

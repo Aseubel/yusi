@@ -35,14 +35,12 @@ model:
   routing:
     version: 0
     schema-version: 2
-    default-language: zh
     default-scene: chat
-    default-tier: chat-zh
+    default-tier: chat-primary
     default-route:
       id: default
-      language: '*'
-      scene: chat
-      primary-tier: chat-zh
+      scene: '*'
+      primary-tier: chat-primary
       priority: 0
     state-channel: yusi:model:state:channel
     instance-state-map-key: yusi:model:state:instances
@@ -59,8 +57,7 @@ model:
         capabilities: [CHAT, STREAMING_CHAT]
         weight: 100
         priority: 2
-        languages: [zh, en]
-        scenes: [chat, situation-analysis, memory-extract, emotion-analysis, soul-match]
+        scenes: [chat, logic, graphrag-extract, graphrag-merge-suggest, memory-extract, soul-match, soul-match-letter, emotion-analysis, cognition-routing, soul-weekly-report, cognitive-conflict, memory-fusion, agent-persona, agent-proactive-greeting, image-understanding]
       - id: deepseek
         provider: deepseek
         protocol: CHAT_COMPLETIONS
@@ -70,8 +67,7 @@ model:
         capabilities: [CHAT, STREAMING_CHAT]
         weight: 0
         priority: 1
-        languages: [zh, en]
-        scenes: [chat, situation-analysis, memory-extract, emotion-analysis, soul-match]
+        scenes: [chat, logic, graphrag-extract, graphrag-merge-suggest, memory-extract, soul-match, soul-match-letter, emotion-analysis, cognition-routing, soul-weekly-report, cognitive-conflict, memory-fusion, agent-persona, agent-proactive-greeting, image-understanding]
       - id: whisper-asr
         enabled: ${ASR_ENABLED:false}
         provider: openai
@@ -89,34 +85,58 @@ model:
         timeout-seconds: 120
         capabilities: [SPEECH_TO_TEXT]
     tiers:
-      chat-zh:
-        display-name: Chat / Chinese
-        description: General Chinese chat with ordered fallback
+      chat-primary:
+        display-name: Chat primary
+        description: General chat and multimodal traffic
         strategy: FAIL_OVER
         members: [qwen, deepseek]
         capabilities: [CHAT, STREAMING_CHAT]
-      analysis-zh:
-        display-name: Analysis / Chinese
-        description: Situation and memory analysis
+      logic:
+        display-name: Logic analysis
+        description: Situation room analysis
         strategy: FAIL_OVER
         members: [qwen, deepseek]
         capabilities: [CHAT, STREAMING_CHAT]
-      memory-zh:
-        display-name: Memory / Chinese
-        description: Memory extraction
+      graph:
+        display-name: GraphRAG
+        description: Entity extraction and merge suggestions
         strategy: FAIL_OVER
         members: [qwen, deepseek]
         capabilities: [CHAT, STREAMING_CHAT]
-      emotion-zh:
-        display-name: Emotion / Chinese
-        description: Emotion analysis with weighted routing
+      memory:
+        display-name: Memory
+        description: Memory extraction and fusion
+        strategy: FAIL_OVER
+        members: [qwen, deepseek]
+        capabilities: [CHAT, STREAMING_CHAT]
+      emotion:
+        display-name: Emotion analysis
+        description: Emotion extraction and classification
         strategy: WEIGHTED_RANDOM
         members: [qwen, deepseek]
         capabilities: [CHAT, STREAMING_CHAT]
-      match-zh:
-        display-name: Soul match / Chinese
-        description: Match explanation and resonance analysis
+      match:
+        display-name: Soul match
+        description: Match ranking and recommendation letters
         strategy: FAIL_OVER
+        members: [qwen, deepseek]
+        capabilities: [CHAT, STREAMING_CHAT]
+      cognition:
+        display-name: Cognition
+        description: Cognition routing and conflict detection
+        strategy: FAIL_OVER
+        members: [qwen, deepseek]
+        capabilities: [CHAT, STREAMING_CHAT]
+      report:
+        display-name: Reports
+        description: Weekly soul reports
+        strategy: LEAST_LATENCY
+        members: [qwen, deepseek]
+        capabilities: [CHAT, STREAMING_CHAT]
+      agent:
+        display-name: Agent proactive
+        description: Proactive agent greetings
+        strategy: LEAST_LATENCY
         members: [qwen, deepseek]
         capabilities: [CHAT, STREAMING_CHAT]
       asr-default:
@@ -126,39 +146,84 @@ model:
         members: [whisper-asr, dashscope-asr]
         capabilities: [SPEECH_TO_TEXT]
     routes:
-      - id: zh-chat
-        language: zh
+      - id: chat
         scene: chat
         risk-level: LOW
-        primary-tier: chat-zh
+        primary-tier: chat-primary
         priority: 100
-      - id: zh-situation-analysis
-        language: zh
-        scene: situation-analysis
+      - id: logic
+        scene: logic
         risk-level: LOW
-        primary-tier: analysis-zh
+        primary-tier: logic
         max-output-tokens: 256
         temperature: 0.1
         priority: 100
-      - id: zh-emotion-analysis
-        language: zh
+      - id: graphrag-extract
+        scene: graphrag-extract
+        risk-level: LOW
+        primary-tier: graph
+        priority: 100
+      - id: graphrag-merge-suggest
+        scene: graphrag-merge-suggest
+        risk-level: LOW
+        primary-tier: graph
+        priority: 100
+      - id: memory-extract
+        scene: memory-extract
+        risk-level: LOW
+        primary-tier: memory
+        priority: 100
+      - id: memory-fusion
+        scene: memory-fusion
+        risk-level: LOW
+        primary-tier: memory
+        priority: 100
+      - id: soul-match
+        scene: soul-match
+        risk-level: MEDIUM
+        primary-tier: match
+        priority: 100
+      - id: soul-match-letter
+        scene: soul-match-letter
+        risk-level: MEDIUM
+        primary-tier: match
+        priority: 100
+      - id: emotion-analysis
         scene: emotion-analysis
         risk-level: LOW
-        primary-tier: emotion-zh
+        primary-tier: emotion
         max-output-tokens: 32
         temperature: 0.3
         priority: 100
-      - id: zh-memory-extract
-        language: zh
-        scene: memory-extract
+      - id: cognition-routing
+        scene: cognition-routing
         risk-level: LOW
-        primary-tier: memory-zh
+        primary-tier: cognition
         priority: 100
-      - id: zh-soul-match
-        language: zh
-        scene: soul-match
+      - id: cognitive-conflict
+        scene: cognitive-conflict
+        risk-level: LOW
+        primary-tier: cognition
+        priority: 100
+      - id: soul-weekly-report
+        scene: soul-weekly-report
+        risk-level: LOW
+        primary-tier: report
+        priority: 100
+      - id: agent-persona
+        scene: agent-persona
+        risk-level: LOW
+        primary-tier: chat-primary
+        priority: 100
+      - id: agent-proactive-greeting
+        scene: agent-proactive-greeting
+        risk-level: LOW
+        primary-tier: agent
+        priority: 100
+      - id: image-understanding
+        scene: image-understanding
         risk-level: MEDIUM
-        primary-tier: match-zh
+        primary-tier: chat-primary
         priority: 100
 yusi:
   web:

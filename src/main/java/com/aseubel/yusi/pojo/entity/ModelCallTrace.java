@@ -54,9 +54,6 @@ public class ModelCallTrace {
     @Column(name = "scene", nullable = false, length = 64)
     private String scene;
 
-    @Column(name = "language", length = 16)
-    private String language;
-
     @Column(name = "policy_id", length = 128)
     private String policyId;
 

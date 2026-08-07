@@ -100,7 +100,7 @@ class AiControllerCancellationTest {
                 .requestId("request-1")
                 .message("hello")
                 .images(List.of())
-                .build(), "zh-CN");
+                .build());
         submittedTask.get().run();
         UserContext.setUserId("user-1");
 
@@ -128,7 +128,7 @@ class AiControllerCancellationTest {
         controller.chatStream(ChatRequest.builder()
                 .requestId("request-2")
                 .message("hello")
-                .build(), null);
+                .build());
         submittedTask.get().run();
         UserContext.setUserId("user-1");
 
@@ -158,7 +158,7 @@ class AiControllerCancellationTest {
         controller.chatStream(ChatRequest.builder()
                 .requestId("request-provider-error")
                 .message("hello")
-                .build(), "zh-CN");
+                .build());
         submittedTask.get().run();
         UserContext.setUserId("user-1");
 
@@ -180,7 +180,7 @@ class AiControllerCancellationTest {
         controller.chatStream(ChatRequest.builder()
                 .requestId("request-tool")
                 .message("查一下最新消息")
-                .build(), "zh-CN");
+                .build());
         submittedTask.get().run();
         UserContext.setUserId("user-1");
 

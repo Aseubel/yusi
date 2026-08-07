@@ -210,7 +210,7 @@ public class MemoryCompressionService {
         try {
             // Step 1: LLM 调用（事务外，避免长时间持有 DB 连接）
             ModelRouteContextHolder
-                    .set(ModelRouteContext.builder().scene(PromptKey.MEMORY_EXTRACT.getKey()).language("zh").build());
+                    .set(ModelRouteContext.builder().scene(PromptKey.MEMORY_EXTRACT.getKey()).build());
 
             String summaryText = memoryCompressionAssistant.extractMemory(prompt);
 

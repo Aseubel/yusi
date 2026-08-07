@@ -5,6 +5,8 @@ import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.*;
 import com.aseubel.yusi.repository.*;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.aseubel.yusi.service.user.UserService;
@@ -106,7 +108,16 @@ public class SoulReportGenerator {
         String template = promptManager.getPrompt(PromptKey.SOUL_WEEKLY_REPORT);
         String prompt = template.replace("{{context}}", context);
         
-        AiMessage aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+        ModelRouteContextHolder.set(ModelRouteContext.builder()
+                .scene(PromptKey.SOUL_WEEKLY_REPORT.getKey())
+                .userId(userId)
+                .build());
+        AiMessage aiMessage;
+        try {
+            aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+        } finally {
+            ModelRouteContextHolder.clear();
+        }
         String markdown = aiMessage.text();
 
         // 提取第一行作为标题

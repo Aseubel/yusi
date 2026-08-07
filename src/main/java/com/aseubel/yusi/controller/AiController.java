@@ -10,7 +10,6 @@ import com.aseubel.yusi.common.exception.AiLockException;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.ratelimit.RateLimiter;
-import com.aseubel.yusi.common.utils.ModelUtils;
 import com.aseubel.yusi.common.utils.SensitiveWordUtils;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.config.ai.PersistentChatMemoryStore;
@@ -220,8 +219,7 @@ public class AiController {
     @Auth
     @RateLimiter(key = "chatStream", time = 60, count = 20, limitType = LimitType.USER)
     @PostMapping(value = "/chat/stream", produces = "text/event-stream")
-    public SseEmitter chatStream(@RequestBody ChatRequest request,
-            @RequestHeader(value = "Accept-Language", required = false) String language) {
+    public SseEmitter chatStream(@RequestBody ChatRequest request) {
         String userId = UserContext.getUserId();
         String requestId = request.getRequestId();
         String message = request.getMessage();
@@ -297,7 +295,6 @@ public class AiController {
                         .requestId(requestId)
                         .runId(requestId)
                         .userId(userId)
-                        .language(ModelUtils.normalizeLanguage(language))
                         .scene(PromptKey.CHAT.getKey())
                         .build());
 

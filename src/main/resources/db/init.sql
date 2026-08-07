@@ -618,7 +618,6 @@ CREATE TABLE `model_call_trace` (
     `run_id` VARCHAR(64) DEFAULT NULL COMMENT '可选 AgentRun ID',
     `user_id` VARCHAR(64) DEFAULT NULL COMMENT '可选用户ID',
     `scene` VARCHAR(64) NOT NULL COMMENT '路由场景',
-    `language` VARCHAR(16) DEFAULT NULL COMMENT '路由语言',
     `policy_id` VARCHAR(128) DEFAULT NULL COMMENT '命中的路由策略',
     `policy_version` BIGINT DEFAULT NULL COMMENT '策略版本',
     `route_reason` VARCHAR(1024) DEFAULT NULL COMMENT '可解释路由原因',

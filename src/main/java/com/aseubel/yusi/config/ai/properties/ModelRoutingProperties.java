@@ -21,8 +21,6 @@ public class ModelRoutingProperties {
 
     private int schemaVersion = 2;
 
-    private String defaultLanguage = "zh";
-
     private String defaultScene = "chat";
 
     private String defaultTier;
@@ -65,7 +63,6 @@ public class ModelRoutingProperties {
         private List<ModelCapability> capabilities = new ArrayList<>();
         private Integer weight = 100;
         private Integer priority = 100;
-        private List<String> languages = new ArrayList<>();
         private List<String> scenes = new ArrayList<>();
         private boolean enabled = true;
         /**

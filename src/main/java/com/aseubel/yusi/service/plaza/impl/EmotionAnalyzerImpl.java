@@ -25,7 +25,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class EmotionAnalyzerImpl implements EmotionAnalyzer {
 
-    // 使用专门的情感分析模型，避免使用复杂的 situation-analysis 场景
+    // 使用专门的情感分析场景，避免与通用逻辑分析混用
     private final ChatModel chatModel;
     private final PromptManager promptManager;
 
@@ -49,7 +49,7 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
             AiMessage aiMessage;
             try {
                 ModelRouteContextHolder
-                        .set(ModelRouteContext.builder().scene(PromptKey.EMOTION_ANALYSIS.getKey()).language("zh").build());
+                        .set(ModelRouteContext.builder().scene(PromptKey.EMOTION_ANALYSIS.getKey()).build());
                 aiMessage = chatModel.chat(userMessage).aiMessage();
             } finally {
                 ModelRouteContextHolder.clear();

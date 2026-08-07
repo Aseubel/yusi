@@ -26,8 +26,6 @@ public class ModelGovernanceSnapshot {
     @Builder.Default
     private int schemaVersion = 2;
 
-    private String defaultLanguage;
-
     private String defaultScene;
 
     private String defaultTier;
@@ -70,8 +68,6 @@ public class ModelGovernanceSnapshot {
         private String priceVersion;
         private int weight;
         private int priority;
-        @Builder.Default
-        private List<String> languages = new ArrayList<>();
         @Builder.Default
         private List<String> scenes = new ArrayList<>();
         private boolean enabled;

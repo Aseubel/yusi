@@ -10,7 +10,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ModelRoutePreviewRequest {
-    private String language;
     private String scene;
     private String riskLevel;
     private Integer estimatedInputTokens;

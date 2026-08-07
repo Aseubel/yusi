@@ -72,13 +72,11 @@ model:
     model: dummy
   routing:
     schema-version: 2
-    default-language: zh
     default-scene: chat
     default-tier: test-chat
     default-route:
       id: default
-      language: '*'
-      scene: chat
+      scene: '*'
       primary-tier: test-chat
       priority: 0
     models:
@@ -96,8 +94,7 @@ model:
         strategy: FAIL_OVER
         capabilities: [CHAT, STREAMING_CHAT]
     routes:
-      - id: zh-chat
-        language: zh
+      - id: chat
         scene: chat
         primary-tier: test-chat
         priority: 100

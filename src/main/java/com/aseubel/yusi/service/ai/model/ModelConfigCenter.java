@@ -389,9 +389,6 @@ public class ModelConfigCenter {
         if (route.getScene() == null || route.getScene().isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "route[" + route.getId() + "] 的 scene 不能为空");
         }
-        if (route.getLanguage() == null || route.getLanguage().isBlank()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "route[" + route.getId() + "] 的 language 不能为空");
-        }
         ModelTierDefinition primary = config.getTiers().get(route.getPrimaryTier());
         if (primary == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
@@ -401,10 +398,10 @@ public class ModelConfigCenter {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "route[" + route.getId() + "] 的 primary-tier 已禁用: " + route.getPrimaryTier());
         }
-        if (!hasEnabledChatModel(config, primary)) {
+        if (!hasEnabledChatModel(config, primary, route.getScene())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
-                    "route[" + route.getId() + "] 的 primary-tier 没有启用的 Chat 模型: "
-                            + route.getPrimaryTier());
+                    "route[" + route.getId() + "] 的 primary-tier 没有启用的 Chat 模型支持 scene: "
+                            + route.getScene());
         }
         Set<String> fallbackIds = new HashSet<>();
         if (route.getFallbackTiers() != null) {
@@ -416,6 +413,11 @@ public class ModelConfigCenter {
                 if (!config.getTiers().containsKey(fallback)) {
                     throw new BusinessException(ErrorCode.PARAM_ERROR,
                             "route[" + route.getId() + "] 的 fallback-tier 不存在: " + fallback);
+                }
+                if (!hasEnabledChatModel(config, config.getTiers().get(fallback), route.getScene())) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR,
+                            "route[" + route.getId() + "] 的 fallback-tier 没有启用的 Chat 模型支持 scene: "
+                                    + route.getScene());
                 }
             });
         }
@@ -435,7 +437,7 @@ public class ModelConfigCenter {
         }
     }
 
-    private boolean hasEnabledChatModel(ModelRoutingProperties config, ModelTierDefinition tier) {
+    private boolean hasEnabledChatModel(ModelRoutingProperties config, ModelTierDefinition tier, String scene) {
         if (tier.getMembers() == null) {
             return false;
         }
@@ -447,7 +449,19 @@ public class ModelConfigCenter {
                 .anyMatch(model -> model != null
                         && model.isEnabled()
                         && (model.supports(ModelCapability.CHAT)
-                        || model.supports(ModelCapability.STREAMING_CHAT)));
+                        || model.supports(ModelCapability.STREAMING_CHAT))
+                        && supportsScene(model, scene));
+    }
+
+    private boolean supportsScene(ModelRoutingProperties.ModelDefinition model, String scene) {
+        if (scene == null || scene.isBlank() || "*".equals(scene.trim())) {
+            return true;
+        }
+        List<String> scenes = model.getScenes();
+        return scenes == null || scenes.isEmpty() || scenes.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .anyMatch(scene.trim()::equalsIgnoreCase);
     }
 
     private ModelRoutingProperties cloneConfig(ModelRoutingProperties source) {

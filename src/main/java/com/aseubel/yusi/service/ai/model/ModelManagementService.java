@@ -70,7 +70,6 @@ public class ModelManagementService {
         return ModelGovernanceSnapshot.builder()
                 .version(config.getVersion())
                 .schemaVersion(config.getSchemaVersion())
-                .defaultLanguage(config.getDefaultLanguage())
                 .defaultScene(config.getDefaultScene())
                 .defaultTier(config.getDefaultTier())
                 .models(models)
@@ -96,7 +95,6 @@ public class ModelManagementService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "scene 不能为空");
         }
         ModelRouteContext context = ModelRouteContext.builder()
-                .language(request.getLanguage())
                 .scene(request.getScene())
                 .riskLevel(request.getRiskLevel())
                 .estimatedInputTokens(request.getEstimatedInputTokens())
@@ -210,7 +208,6 @@ public class ModelManagementService {
                 predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("createdAt"), query.getTo()));
             }
             addLike(predicates, criteriaBuilder, root, "scene", query.getScene());
-            addLike(predicates, criteriaBuilder, root, "language", query.getLanguage());
             addLike(predicates, criteriaBuilder, root, "userId", query.getUserId());
             addLike(predicates, criteriaBuilder, root, "selectedTier", query.getModelTier());
             addLike(predicates, criteriaBuilder, root, "provider", query.getProvider());
@@ -260,7 +257,6 @@ public class ModelManagementService {
                 .priceVersion(pricing == null ? null : pricing.getPriceVersion())
                 .weight(model.getWeight() == null ? 100 : model.getWeight())
                 .priority(model.getPriority() == null ? 100 : model.getPriority())
-                .languages(model.getLanguages() == null ? List.of() : model.getLanguages())
                 .scenes(model.getScenes() == null ? List.of() : model.getScenes())
                 .enabled(model.isEnabled())
                 .build();

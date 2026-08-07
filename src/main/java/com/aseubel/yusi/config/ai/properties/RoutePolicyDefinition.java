@@ -14,8 +14,6 @@ public class RoutePolicyDefinition {
 
     private String scene;
 
-    private String language;
-
     private String riskLevel = "LOW";
 
     private String primaryTier;

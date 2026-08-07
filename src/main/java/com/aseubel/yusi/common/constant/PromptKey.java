@@ -79,6 +79,11 @@ public enum PromptKey {
     AGENT_PERSONA("agent-persona"),
 
     /**
+     * Image understanding for cognition ingestion.
+     */
+    IMAGE_UNDERSTANDING("image-understanding"),
+
+    /**
      * Agent proactive greeting prompt (F8.2)
      */
     AGENT_PROACTIVE_GREETING("agent-proactive-greeting");

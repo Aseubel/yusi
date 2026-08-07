@@ -1,6 +1,9 @@
 package com.aseubel.yusi.service.cognition.impl;
 
+import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.cognition.ImageUnderstandingService;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.oss.OssService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.Content;
@@ -41,7 +44,16 @@ public class LangChainImageUnderstandingService implements ImageUnderstandingSer
             if (contents.size() == 1) {
                 return null;
             }
-            AiMessage message = chatModel.chat(UserMessage.from(contents)).aiMessage();
+            ModelRouteContextHolder.set(ModelRouteContext.builder()
+                    .scene(PromptKey.IMAGE_UNDERSTANDING.getKey())
+                    .userId(userId)
+                    .build());
+            AiMessage message;
+            try {
+                message = chatModel.chat(UserMessage.from(contents)).aiMessage();
+            } finally {
+                ModelRouteContextHolder.clear();
+            }
             return message == null ? null : message.text();
         } catch (Exception e) {
             log.warn("图片认知理解失败，继续文本认知链路: {}", e.getMessage());

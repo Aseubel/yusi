@@ -44,7 +44,6 @@ public class ModelCallTraceService {
                 .runId(event.runId())
                 .userId(event.userId())
                 .scene(event.scene() == null ? "unknown" : event.scene())
-                .language(event.language())
                 .policyId(event.policyId())
                 .policyVersion(event.policyVersion())
                 .routeReason(event.routeReason())

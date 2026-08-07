@@ -36,7 +36,7 @@ Its guiding idea is simple: **know your vibe, find your tribe.** Understanding c
 | Life Graph | Extract people, places, events, and emotions into an explorable relationship graph |
 | Situation Room | Record choices in concrete scenarios and generate behavioral and emotional analysis |
 | Soul Matching | Explore deeper resonance through behavior and narratives instead of profile labels |
-| Model Control Plane | Route models by language and scene with weights, priorities, health state, and failover |
+| Model Control Plane | Route models by business scene with weights, priorities, health state, and failover |
 | MCP Gateway | Expose memory tools through MCP; a Go gateway calls Java internal capabilities over gRPC |
 
 ## Architecture

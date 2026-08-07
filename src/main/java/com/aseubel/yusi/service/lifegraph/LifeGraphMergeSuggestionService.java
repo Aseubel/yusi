@@ -114,7 +114,7 @@ public class LifeGraphMergeSuggestionService {
         try {
             com.aseubel.yusi.service.ai.model.ModelRouteContextHolder.set(
                     com.aseubel.yusi.service.ai.model.ModelRouteContext.builder()
-                            .scene("situation-analysis").language("zh").build());
+                            .scene(PromptKey.GRAPHRAG_MERGE_SUGGEST.getKey()).build());
             response = assistant.analyzeMergeCandidates(prompt, candidatesJson);
         } finally {
             com.aseubel.yusi.service.ai.model.ModelRouteContextHolder.clear();

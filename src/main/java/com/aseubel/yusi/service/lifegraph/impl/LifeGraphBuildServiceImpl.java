@@ -73,8 +73,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
 
         String raw;
         try {
-            ModelRouteContextHolder.set(ModelRouteContext.builder().scene(PromptKey.GRAPHRAG_EXTRACT.getKey())
-                    .language("zh").build());
+            ModelRouteContextHolder.set(ModelRouteContext.builder().scene(PromptKey.GRAPHRAG_EXTRACT.getKey()).build());
             raw = extractor.extract(prompt, knownEntities, entryDate, title, placeName, address, coordinates,
                     plainContent);
         } finally {

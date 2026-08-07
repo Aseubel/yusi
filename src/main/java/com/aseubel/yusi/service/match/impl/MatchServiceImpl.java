@@ -5,7 +5,6 @@ import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
-import com.aseubel.yusi.common.utils.ModelUtils;
 import com.aseubel.yusi.pojo.dto.match.MatchRecommendationResponse;
 import com.aseubel.yusi.pojo.dto.match.MatchRerankResult;
 import com.aseubel.yusi.pojo.dto.match.MatchStatusResponse;
@@ -100,7 +99,6 @@ public class MatchServiceImpl implements MatchService {
     public void runWeeklyMatching() {
         log.info("Starting weekly matching process...");
         ModelRouteContextHolder.set(ModelRouteContext.builder()
-                .language(ModelUtils.normalizeLanguage("zh"))
                 .scene(PromptKey.SOUL_MATCH.getKey())
                 .build());
         try {
@@ -237,8 +235,7 @@ public class MatchServiceImpl implements MatchService {
         return CompletableFuture.supplyAsync(() -> {
             try {
                 ModelRouteContextHolder.set(ModelRouteContext.builder()
-                        .language(ModelUtils.normalizeLanguage("zh"))
-                        .scene(PromptKey.SOUL_MATCH.getKey())
+                        .scene(PromptKey.SOUL_MATCH_LETTER.getKey())
                         .build());
                 String template = promptManager.getPrompt(PromptKey.SOUL_MATCH_LETTER);
                 String prompt = template

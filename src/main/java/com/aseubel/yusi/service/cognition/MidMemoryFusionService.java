@@ -6,6 +6,8 @@ import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.user.UserService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -109,7 +111,16 @@ public class MidMemoryFusionService {
                     .replace("{{timeA}}", timeA)
                     .replace("{{timeB}}", timeB);
 
-            AiMessage aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+            ModelRouteContextHolder.set(ModelRouteContext.builder()
+                    .scene(PromptKey.MEMORY_FUSION.getKey())
+                    .userId(userId)
+                    .build());
+            AiMessage aiMessage;
+            try {
+                aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+            } finally {
+                ModelRouteContextHolder.clear();
+            }
             String raw = aiMessage.text();
 
             JsonNode result = objectMapper.readTree(extractJson(raw));

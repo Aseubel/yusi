@@ -72,7 +72,6 @@ class ModelBudgetAdmissionTest {
                 .id("model-1")
                 .modelName("model-1")
                 .provider("provider-1")
-                .languages(Set.of())
                 .scenes(Set.of())
                 .chatModel(mock(ChatModel.class))
                 .streamingChatModel(mock(StreamingChatModel.class))

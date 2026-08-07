@@ -14,28 +14,28 @@ class ModelRoutePolicyMatcherTest {
     private final ModelRoutePolicyMatcher matcher = new ModelRoutePolicyMatcher();
 
     @Test
-    void exactLanguageAndSceneWinsOverWildcardAndDefault() {
+    void exactSceneWinsOverWildcardAndDefault() {
         ModelRoutingProperties properties = properties(
-                route("default", "*", "*", "fast", 0),
-                route("chat-any", "*", "chat", "fast", 300),
-                route("chat-zh", "zh", "chat", "balanced", 100));
+                route("default", "*", "fast", 0),
+                route("chat-any", "chat", "fast", 300),
+                route("chat-exact", "chat", "balanced", 100));
 
         RoutePolicyDefinition selected = matcher.match(properties,
-                ModelRouteContext.builder().language("ZH").scene("chat").build());
+                ModelRouteContext.builder().scene("chat").build());
 
-        assertThat(selected.getId()).isEqualTo("chat-zh");
+        assertThat(selected.getId()).isEqualTo("chat-any");
     }
 
     @Test
-    void exactSceneWithWildcardLanguageBeatsDefaultRoute() {
+    void exactSceneBeatsDefaultRoute() {
         ModelRoutingProperties properties = properties(
-                route("default", "*", "*", "fast", 0),
-                route("chat-any", "*", "chat", "balanced", 10));
+                route("default", "*", "fast", 0),
+                route("chat", "chat", "balanced", 10));
 
         RoutePolicyDefinition selected = matcher.match(properties,
-                ModelRouteContext.builder().language("en").scene("chat").build());
+                ModelRouteContext.builder().scene("chat").build());
 
-        assertThat(selected.getId()).isEqualTo("chat-any");
+        assertThat(selected.getId()).isEqualTo("chat");
     }
 
     private ModelRoutingProperties properties(RoutePolicyDefinition... routes) {
@@ -45,10 +45,9 @@ class ModelRoutePolicyMatcherTest {
         return properties;
     }
 
-    private RoutePolicyDefinition route(String id, String language, String scene, String tier, int priority) {
+    private RoutePolicyDefinition route(String id, String scene, String tier, int priority) {
         RoutePolicyDefinition route = new RoutePolicyDefinition();
         route.setId(id);
-        route.setLanguage(language);
         route.setScene(scene);
         route.setPrimaryTier(tier);
         route.setPriority(priority);

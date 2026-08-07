@@ -15,11 +15,11 @@ public class ChatModelConfig {
 
     @Bean(name = "streamingChatModel")
     public StreamingChatModel streamingChatModel(ModelProxyFactory modelProxyFactory) {
-        return modelProxyFactory.createStreamingProxy("zh", "chat");
+        return modelProxyFactory.createStreamingProxy("chat");
     }
 
     @Bean(name = "chatModel")
     public ChatModel chatModel(ModelProxyFactory modelProxyFactory) {
-        return modelProxyFactory.createChatProxy("zh", "chat");
+        return modelProxyFactory.createChatProxy("chat");
     }
 }

@@ -43,7 +43,7 @@ public class SituationReportService {
             try {
                 com.aseubel.yusi.service.ai.model.ModelRouteContextHolder.set(
                         com.aseubel.yusi.service.ai.model.ModelRouteContext.builder()
-                                .scene(PromptKey.LOGIC.getKey()).language("zh")
+                                .scene(PromptKey.LOGIC.getKey())
                                 .maskSensitiveData(false)
                                 .build());
                 situationRoomAgent.analyzeReport(scenarioString, userAnswersJson)

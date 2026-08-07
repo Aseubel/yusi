@@ -79,13 +79,13 @@ public class ModelProxyFactory {
         this.budgetAdmission = budgetAdmission;
     }
 
-    public ChatModel createChatProxy(String defaultLanguage, String defaultScene) {
-        InvocationHandler handler = new RoutingInvocationHandler(defaultLanguage, defaultScene, true);
+    public ChatModel createChatProxy(String defaultScene) {
+        InvocationHandler handler = new RoutingInvocationHandler(defaultScene, true);
         return (ChatModel) Proxy.newProxyInstance(ChatModel.class.getClassLoader(), new Class[] { ChatModel.class }, handler);
     }
 
-    public StreamingChatModel createStreamingProxy(String defaultLanguage, String defaultScene) {
-        InvocationHandler handler = new RoutingInvocationHandler(defaultLanguage, defaultScene, false);
+    public StreamingChatModel createStreamingProxy(String defaultScene) {
+        InvocationHandler handler = new RoutingInvocationHandler(defaultScene, false);
         return (StreamingChatModel) Proxy.newProxyInstance(StreamingChatModel.class.getClassLoader(),
                 new Class[] { StreamingChatModel.class }, handler);
     }
@@ -208,12 +208,10 @@ public class ModelProxyFactory {
     }
 
     private class RoutingInvocationHandler implements InvocationHandler {
-        private final String defaultLanguage;
         private final String defaultScene;
         private final boolean chatMode;
 
-        private RoutingInvocationHandler(String defaultLanguage, String defaultScene, boolean chatMode) {
-            this.defaultLanguage = defaultLanguage;
+        private RoutingInvocationHandler(String defaultScene, boolean chatMode) {
             this.defaultScene = defaultScene;
             this.chatMode = chatMode;
         }
@@ -227,8 +225,8 @@ public class ModelProxyFactory {
             ModelRouteDecision decision = modelRouterService.plan(context);
             List<ModelRouteCandidate> candidates = decision.attemptCandidates();
             if (candidates.isEmpty()) {
-                throw new IllegalStateException("No available model instance for language: "
-                        + context.getLanguage() + ", scene: " + context.getScene());
+                throw new IllegalStateException("No available model instance for scene: "
+                        + context.getScene());
             }
 
             ModelInvocationException lastError = null;
@@ -288,8 +286,7 @@ public class ModelProxyFactory {
             if (lastError != null) {
                 throw lastError;
             }
-            throw new IllegalStateException("No available model instance for language: "
-                    + defaultLanguage + ", scene: " + defaultScene);
+            throw new IllegalStateException("No available model instance for scene: " + context.getScene());
         }
 
         private void invokeStreamingAttempt(ModelRouteDecision decision, ModelRouteContext context,
@@ -414,7 +411,6 @@ public class ModelProxyFactory {
                     context.getRunId(),
                     context.getUserId(),
                     context.getScene(),
-                    context.getLanguage(),
                     decision.policyId(),
                     decision.policyVersion(),
                     decision.routeReason(),
@@ -842,9 +838,7 @@ public class ModelProxyFactory {
 
         private ModelRouteContext resolveContext(ChatRequest request) {
             ModelRouteContext context = ModelRouteContextHolder.get();
-            String language = context == null ? null : context.getLanguage();
             String scene = context == null ? null : context.getScene();
-            String resolvedLanguage = Objects.requireNonNullElse(language, defaultLanguage);
             String resolvedScene = Objects.requireNonNullElse(scene, defaultScene);
             Integer estimatedInputTokens = context == null ? null : context.getEstimatedInputTokens();
             if (estimatedInputTokens == null && request != null) {
@@ -858,7 +852,6 @@ public class ModelProxyFactory {
                     .requestId(context == null ? null : context.getRequestId())
                     .runId(context == null ? null : context.getRunId())
                     .userId(context == null ? null : context.getUserId())
-                    .language(resolvedLanguage)
                     .scene(resolvedScene)
                     .riskLevel(context == null ? null : context.getRiskLevel())
                     .estimatedInputTokens(estimatedInputTokens)

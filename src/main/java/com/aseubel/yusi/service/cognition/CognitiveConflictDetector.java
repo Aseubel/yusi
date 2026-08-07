@@ -6,6 +6,8 @@ import com.aseubel.yusi.pojo.entity.CognitiveConflict;
 import com.aseubel.yusi.pojo.entity.UserPersona;
 import com.aseubel.yusi.repository.CognitiveConflictRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -75,7 +77,16 @@ public class CognitiveConflictDetector {
                     .replace("{{existingBelief}}", existingBelief)
                     .replace("{{newObservation}}", newInsight);
 
-            AiMessage aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+            ModelRouteContextHolder.set(ModelRouteContext.builder()
+                    .scene(PromptKey.COGNITIVE_CONFLICT.getKey())
+                    .userId(userId)
+                    .build());
+            AiMessage aiMessage;
+            try {
+                aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+            } finally {
+                ModelRouteContextHolder.clear();
+            }
             String raw = aiMessage.text();
 
             JsonNode result = objectMapper.readTree(extractJson(raw));

@@ -54,7 +54,7 @@ class ModelRouterServiceTest {
 
     @Test
     void fallbackTierIsAppendedOnlyAfterPrimaryTierCandidates() {
-        ModelRouteDecision decision = router.plan(context("zh", "summary"));
+        ModelRouteDecision decision = router.plan(context("summary"));
 
         assertThat(decision.candidates()).extracting(ModelRouteCandidate::tierId)
                 .containsExactly("fast", "fast", "balanced", "balanced");
@@ -63,13 +63,13 @@ class ModelRouterServiceTest {
 
     @Test
     void unavailablePrimaryModelIsRecordedAndHealthyFallbackRemainsSelectable() {
-        ModelRouteDecision decision = router.plan(context("zh", "chat"));
+        ModelRouteDecision decision = router.plan(context("chat"));
 
         assertThat(decision.candidates()).anyMatch(candidate ->
                 candidate.modelId().equals("qwen") && "DOWN".equals(candidate.excludedReason()));
         assertThat(decision.candidates()).anyMatch(candidate ->
                 candidate.tierId().equals("fast") && candidate.available());
-        assertThat(decision.routeReason()).contains("policy=chat-zh", "language=zh", "scene=chat");
+        assertThat(decision.routeReason()).contains("policy=chat", "scene=chat");
     }
 
     @Test
@@ -80,7 +80,6 @@ class ModelRouterServiceTest {
         when(instanceRegistry.getTierMembers("fast")).thenReturn(List.of(longFallback));
 
         ModelRouteDecision decision = router.plan(ModelRouteContext.builder()
-                .language("zh")
                 .scene("chat")
                 .estimatedInputTokens(20)
                 .reservedOutputTokens(16)
@@ -98,13 +97,12 @@ class ModelRouterServiceTest {
     @Test
     void routeInputLimitExcludesCandidatesBeforeInvocation() {
         RoutePolicyDefinition route = properties.getRoutes().stream()
-                .filter(candidate -> candidate.getId().equals("chat-zh"))
+                .filter(candidate -> candidate.getId().equals("chat"))
                 .findFirst()
                 .orElseThrow();
         route.setMaxInputTokens(10);
 
         ModelRouteDecision decision = router.plan(ModelRouteContext.builder()
-                .language("zh")
                 .scene("chat")
                 .estimatedInputTokens(11)
                 .build());
@@ -115,32 +113,31 @@ class ModelRouterServiceTest {
         assertThat(decision.attemptCandidates()).isEmpty();
     }
 
-    private ModelRouteContext context(String language, String scene) {
-        return ModelRouteContext.builder().language(language).scene(scene).build();
+    private ModelRouteContext context(String scene) {
+        return ModelRouteContext.builder().scene(scene).build();
     }
 
     private ModelRoutingProperties config() {
         ModelRoutingProperties properties = new ModelRoutingProperties();
         properties.setDefaultTier("fast");
-        properties.setDefaultRoute(route("default", "*", "*", "fast", 0));
+        properties.setDefaultRoute(route("default", "*", "fast", 0));
         properties.setRoutes(List.of(
-                routeWithFallback("chat-zh", "zh", "chat", "balanced", List.of("fast"), 100),
-                routeWithFallback("summary-zh", "zh", "summary", "fast", List.of("balanced"), 100)));
+                routeWithFallback("chat", "chat", "balanced", List.of("fast"), 100),
+                routeWithFallback("summary", "summary", "fast", List.of("balanced"), 100)));
         properties.setTiers(new LinkedHashMap<>(Map.of(
                 "balanced", tier(List.of("qwen", "balanced-backup"), FAIL_OVER),
                 "fast", tier(List.of("fast-primary", "fast-backup"), FAIL_OVER))));
         return properties;
     }
 
-    private RoutePolicyDefinition route(String id, String language, String scene, String tier, int priority) {
-        return routeWithFallback(id, language, scene, tier, List.of(), priority);
+    private RoutePolicyDefinition route(String id, String scene, String tier, int priority) {
+        return routeWithFallback(id, scene, tier, List.of(), priority);
     }
 
-    private RoutePolicyDefinition routeWithFallback(String id, String language, String scene, String tier,
+    private RoutePolicyDefinition routeWithFallback(String id, String scene, String tier,
             List<String> fallbackTiers, int priority) {
         RoutePolicyDefinition route = new RoutePolicyDefinition();
         route.setId(id);
-        route.setLanguage(language);
         route.setScene(scene);
         route.setPrimaryTier(tier);
         route.setFallbackTiers(fallbackTiers);
@@ -167,7 +164,6 @@ class ModelRouterServiceTest {
                 .priority(priority)
                 .weight(100)
                 .capabilities(Set.of(ModelCapability.CHAT, ModelCapability.STREAMING_CHAT))
-                .languages(Set.of())
                 .scenes(Set.of())
                 .contextWindowTokens(contextWindowTokens)
                 .build();

@@ -38,7 +38,6 @@ public class CognitionRoutingServiceImpl implements CognitionRoutingService {
             try {
                 ModelRouteContextHolder.set(ModelRouteContext.builder()
                         .scene(PromptKey.COGNITION_ROUTING.getKey())
-                        .language("zh")
                         .build());
                 aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
             } finally {

@@ -38,8 +38,8 @@ public class ModelRouterService {
         ModelRouteContext normalizedContext = normalizeContext(context, properties);
         RoutePolicyDefinition policy = routePolicyMatcher.match(properties, normalizedContext);
         if (policy == null || policy.getPrimaryTier() == null || policy.getPrimaryTier().isBlank()) {
-            throw new IllegalStateException("No model route configured for language: "
-                    + normalizedContext.getLanguage() + ", scene: " + normalizedContext.getScene());
+            throw new IllegalStateException("No model route configured for scene: "
+                    + normalizedContext.getScene());
         }
         ModelRouteContext budgetContext = applyRouteBudget(normalizedContext, policy);
 
@@ -82,7 +82,6 @@ public class ModelRouterService {
                 ? ModelSelectionStrategyType.ROUND_ROBIN : primaryDefinition.getStrategy();
         String routeReason = "policy=" + safe(policy.getId(), "default")
                 + ";policy-version=" + properties.getVersion()
-                + ";language=" + normalizedContext.getLanguage()
                 + ";scene=" + normalizedContext.getScene()
                 + ";risk=" + safe(normalizedContext.getRiskLevel(), policy.getRiskLevel())
                 + ";estimated-input-tokens=" + numberOrUnknown(budgetContext.getEstimatedInputTokens())
@@ -129,9 +128,6 @@ public class ModelRouterService {
         if (!supports(instance, ModelCapability.CHAT) && !supports(instance, ModelCapability.STREAMING_CHAT)) {
             return "UNSUPPORTED_CAPABILITY";
         }
-        if (!supportsValue(instance.getLanguages(), context.getLanguage())) {
-            return "LANGUAGE_MISMATCH";
-        }
         if (!supportsValue(instance.getScenes(), context.getScene())) {
             return "SCENE_MISMATCH";
         }
@@ -170,8 +166,6 @@ public class ModelRouterService {
                 .requestId(context == null ? null : context.getRequestId())
                 .runId(context == null ? null : context.getRunId())
                 .userId(context == null ? null : context.getUserId())
-                .language(normalize(valueOrDefault(context == null ? null : context.getLanguage(),
-                        properties.getDefaultLanguage())))
                 .scene(normalize(valueOrDefault(context == null ? null : context.getScene(),
                         properties.getDefaultScene())))
                 .riskLevel(context == null ? null : context.getRiskLevel())
@@ -197,7 +191,6 @@ public class ModelRouterService {
                 .requestId(context.getRequestId())
                 .runId(context.getRunId())
                 .userId(context.getUserId())
-                .language(context.getLanguage())
                 .scene(context.getScene())
                 .riskLevel(context.getRiskLevel())
                 .estimatedInputTokens(context.getEstimatedInputTokens())

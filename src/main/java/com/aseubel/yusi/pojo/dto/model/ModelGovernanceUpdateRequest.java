@@ -22,7 +22,6 @@ public class ModelGovernanceUpdateRequest {
     private long expectedVersion;
     @Builder.Default
     private int schemaVersion = 2;
-    private String defaultLanguage;
     private String defaultScene;
     private String defaultTier;
     @Builder.Default
@@ -35,9 +34,6 @@ public class ModelGovernanceUpdateRequest {
     public ModelRoutingProperties toProperties() {
         ModelRoutingProperties properties = new ModelRoutingProperties();
         properties.setSchemaVersion(schemaVersion <= 0 ? 2 : schemaVersion);
-        if (defaultLanguage != null && !defaultLanguage.isBlank()) {
-            properties.setDefaultLanguage(defaultLanguage);
-        }
         if (defaultScene != null && !defaultScene.isBlank()) {
             properties.setDefaultScene(defaultScene);
         }

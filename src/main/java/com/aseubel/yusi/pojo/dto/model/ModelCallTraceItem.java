@@ -19,7 +19,6 @@ public class ModelCallTraceItem {
     private String attemptId;
     private String userId;
     private String scene;
-    private String language;
     private String policyId;
     private String routeReason;
     private String primaryTier;
@@ -46,7 +45,6 @@ public class ModelCallTraceItem {
                 .attemptId(trace.getAttemptId())
                 .userId(trace.getUserId())
                 .scene(trace.getScene())
-                .language(trace.getLanguage())
                 .policyId(trace.getPolicyId())
                 .routeReason(trace.getRouteReason())
                 .primaryTier(trace.getPrimaryTier())

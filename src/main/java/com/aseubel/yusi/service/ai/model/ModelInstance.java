@@ -17,7 +17,6 @@ public class ModelInstance {
     ModelProtocol protocol;
     int weight;
     int priority;
-    Set<String> languages;
     Set<String> scenes;
     Set<ModelCapability> capabilities;
     Integer contextWindowTokens;

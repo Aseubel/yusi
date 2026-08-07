@@ -4,7 +4,7 @@
 
 现有系统已具备 Prompt 管理与热更新机制，但模型侧仍以静态 Bean 方式装配，无法满足以下诉求：
 
-- 按语言（zh/en/ja）与场景（聊天、情景分析、记忆提取）进行多维路由
+- 按业务场景（聊天、认知、记忆、GraphRAG、匹配、报告等）进行可解释路由
 - 多实例运行时状态共享（健康度、QPS、延迟、可用性）
 - tier 级固定策略与有序故障回退（轮询、最低延迟、权重随机、故障转移）
 - 零额外探针的被动监控与故障恢复
@@ -46,7 +46,7 @@ flowchart LR
   - `schemaVersion`: 固定为 `2`
   - `models[]`: 物理模型注册表（provider/protocol/endpoint/key/model/能力/上下文/价格）
   - `tiers{}`: 逻辑模型层级（成员列表、选择策略、能力边界）
-  - `routes[]`: 语言、场景、风险、预算与 fallback tier 规则
+  - `routes[]`: 场景、风险、预算与 fallback tier 规则
   - `defaultRoute`: 未命中特定规则时使用的默认路由
 
 ### 3.2 运行时模型
@@ -79,12 +79,10 @@ flowchart LR
 model:
   routing:
     schema-version: 2
-    default-language: zh
     default-scene: chat
     default-tier: chat-balanced
     default-route:
       id: default
-      language: '*'
       scene: '*'
       primary-tier: chat-balanced
       fallback-tiers: [chat-fast]
@@ -103,8 +101,7 @@ model:
         context-window-tokens: ${CHAT_MODEL_CONTEXT_WINDOW_TOKENS}
         weight: 100
         priority: 1
-        languages: [zh, en, ja]
-        scenes: [chat, situation-analysis, memory-extract]
+        scenes: [chat, logic, graphrag-extract, graphrag-merge-suggest, memory-extract, soul-match, soul-match-letter, emotion-analysis, cognition-routing, soul-weekly-report, cognitive-conflict, memory-fusion, agent-persona, agent-proactive-greeting, image-understanding]
       - id: responses-model
         display-name: Responses model
         provider: openai-compatible
@@ -133,8 +130,7 @@ model:
         members: [responses-model, anthropic-model]
         capabilities: [CHAT, STREAMING_CHAT]
     routes:
-      - id: zh-chat
-        language: zh
+      - id: chat
         scene: chat
         risk-level: LOW
         primary-tier: chat-balanced
@@ -219,7 +215,7 @@ return first(ordered)
 ## 7. 异常处理与降级策略
 
 - 路由降级
-  - `language+scene` 未命中时，使用 `defaultRoute`
+  - `scene` 未命中时，使用 `defaultRoute`
   - primary tier 无可用候选时，按 `fallback-tiers` 顺序继续尝试
 - 故障降级
   - 实例连续失败触发 `DOWN`，选择层自动剔除
@@ -286,7 +282,7 @@ schema v2 将模型治理拆成四层：
 
 1. `models[]` 是物理模型注册表，包含 provider、endpoint、能力、上下文窗口和价格快照。
 2. `tiers{}` 是逻辑模型层级，场景规则只引用 tier ID，不引用供应商真实模型名。
-3. `routes[]` 是按语言、场景、风险级别和优先级排序的固定策略，可声明有序 fallback tiers。
+3. `routes[]` 是按场景、风险级别和优先级排序的固定策略，可声明有序 fallback tiers。
 4. `ModelRouteDecision` 在首次 Provider 调用前固定候选链；每一次模型尝试单独写入 `ModelCallTrace`。
 
 管理员主入口是路由矩阵和策略编辑器，模型注册表负责模型及 tier 成员选择，候选链预览只计算决策而不会发起模型调用。导出的 JSON 始终是当前 schema v2 快照，不提供旧格式转换或旧 endpoint。
@@ -305,6 +301,6 @@ Redis 发布失败时不替换本地配置，并追加失败审计记录。密�
 
 ### 10.2 调用轨迹与指标
 
-`model_call_trace` 只记录请求 ID、策略版本、路由原因、tier、模型、provider、usage、延迟、成本、错误分类和 fallback 标志。轨迹查询支持时间、场景、语言、tier、provider、模型、fallback 和状态过滤；不保存 prompt、回答、思维链或工具参数。
+`model_call_trace` 只记录请求 ID、策略版本、路由原因、tier、模型、provider、usage、延迟、成本、错误分类和 fallback 标志。轨迹查询支持时间、场景、tier、provider、模型、fallback 和状态过滤；不保存 prompt、回答、思维链或工具参数。
 
 第一版只实现固定规则、健康过滤、错误分类 fallback 和 token/成本统计。需要引入语义路由、学习路由或语义缓存时，必须先积累可回放轨迹并建立评测集。

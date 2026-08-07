@@ -117,7 +117,7 @@ class ModelProxyFactoryTest {
 
         ModelProxyFactory factory = new ModelProxyFactory(router, stateCenter, maskService, publisher,
                 new ModelUsageExtractor());
-        ChatResponse response = factory.createChatProxy("zh", "chat")
+        ChatResponse response = factory.createChatProxy("chat")
                 .chat(ChatRequest.builder().messages(List.of(UserMessage.from("hello"))).build());
 
         assertEquals("ok", response.aiMessage().text());
@@ -155,7 +155,7 @@ class ModelProxyFactoryTest {
         ModelProxyFactory factory = new ModelProxyFactory(router, stateCenter, maskService, publisher,
                 new ModelUsageExtractor(), new ModelTokenEstimator(), admission);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> factory.createChatProxy("zh", "chat")
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> factory.createChatProxy("chat")
                 .chat(ChatRequest.builder().messages(List.of(UserMessage.from("hello"))).build()))
                 .isInstanceOf(ModelAdmissionDeniedException.class);
         verify(delegate, never()).chat(any(ChatRequest.class));
@@ -192,7 +192,7 @@ class ModelProxyFactoryTest {
         StreamingChatResponseHandler downstream = mock(StreamingChatResponseHandler.class);
         ModelProxyFactory factory = new ModelProxyFactory(router, stateCenter, maskService, publisher,
                 new ModelUsageExtractor());
-        factory.createStreamingProxy("zh", "chat").doChat(
+        factory.createStreamingProxy("chat").doChat(
                 ChatRequest.builder().messages(List.of(UserMessage.from("hello"))).build(), downstream);
 
         verify(downstream).onPartialResponse("partial");
@@ -251,7 +251,7 @@ class ModelProxyFactoryTest {
                 .build());
 
         ModelProxyFactory factory = new ModelProxyFactory(router, stateCenter, maskService);
-        factory.createChatProxy("zh", "chat").chat(ChatRequest.builder()
+        factory.createChatProxy("chat").chat(ChatRequest.builder()
                 .messages(List.of(UserMessage.from("请帮我总结这段内容")))
                 .parameters(OpenAiChatRequestParameters.builder().maxOutputTokens(64).build())
                 .build());
@@ -270,7 +270,6 @@ class ModelProxyFactoryTest {
         ModelInstance selected = ModelInstance.builder()
                 .id("model-1")
                 .modelName("model-1")
-                .languages(Set.of())
                 .scenes(Set.of())
                 .chatModel(mock(dev.langchain4j.model.chat.ChatModel.class))
                 .streamingChatModel(delegate)
@@ -288,7 +287,7 @@ class ModelProxyFactoryTest {
         doNothing().when(delegate).doChat(any(ChatRequest.class), any(StreamingChatResponseHandler.class));
 
         ModelProxyFactory factory = new ModelProxyFactory(router, stateCenter, maskService);
-        StreamingChatModel proxy = factory.createStreamingProxy("zh", "chat");
+        StreamingChatModel proxy = factory.createStreamingProxy("chat");
         proxy.doChat(ChatRequest.builder().messages(List.of(UserMessage.from("plain"))).build(), downstream);
 
         var handlerCaptor = org.mockito.ArgumentCaptor.forClass(StreamingChatResponseHandler.class);
@@ -303,7 +302,6 @@ class ModelProxyFactoryTest {
                 .provider("openai-compatible")
                 .weight(100)
                 .priority(1)
-                .languages(Set.of())
                 .scenes(Set.of())
                 .capabilities(Set.of(ModelCapability.CHAT, ModelCapability.STREAMING_CHAT))
                 .chatModel(chatModel)

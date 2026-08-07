@@ -36,7 +36,7 @@ Yusi（「予思」）把日记、对话和人生经历组织成可持续积累�
 | Life Graph | 抽取人物、地点、事件和情绪，构建可探索的人生关系图谱 |
 | Situation Room | 在具体情境中记录选择，生成行为与情绪分析 |
 | Soul Matching | 基于行为和叙事的深层理解探索精神共鸣，而非简单标签匹配 |
-| Model Control Plane | 按语言、场景和故障状态统一管理模型路由、权重与 failover |
+| Model Control Plane | 按业务场景和故障状态统一管理模型路由、权重与 failover |
 | MCP Gateway | 通过标准 MCP 对外提供记忆工具；Go 网关经 gRPC 调用 Java 内部能力，并复用后端鉴权与数据边界 |
 
 ## 架构概览

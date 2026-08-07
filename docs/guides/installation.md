@@ -192,12 +192,10 @@ docker exec -i yusi-mysql mysql -uroot -p123456 < src/main/resources/db/init.sql
 model:
   routing:
     schema-version: 2
-    default-language: zh        # 默认语言
     default-scene: chat        # 默认场景
     default-tier: chat-primary
     default-route:
       id: default
-      language: '*'
       scene: '*'
       risk-level: LOW
       primary-tier: chat-primary
@@ -217,8 +215,7 @@ model:
         capabilities: [CHAT, STREAMING_CHAT]
         weight: 100
         priority: 1
-        languages: [zh, en, ja]
-        scenes: [chat, situation-analysis, memory-extract]
+        scenes: [chat, logic, graphrag-extract, graphrag-merge-suggest, memory-extract, soul-match, soul-match-letter, emotion-analysis, cognition-routing, soul-weekly-report, cognitive-conflict, memory-fusion, agent-persona, agent-proactive-greeting, image-understanding]
       - id: responses-model
         display-name: Responses model
         provider: openai-compatible
@@ -247,8 +244,7 @@ model:
         members: [claude-messages]
         capabilities: [CHAT, STREAMING_CHAT]
     routes:
-      - id: zh-chat
-        language: zh
+      - id: chat
         scene: chat
         risk-level: LOW
         primary-tier: chat-primary

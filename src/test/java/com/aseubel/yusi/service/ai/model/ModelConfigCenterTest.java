@@ -69,6 +69,19 @@ class ModelConfigCenterTest {
     }
 
     @Test
+    void rejectsRouteWhosePrimaryTierHasNoModelForScene() {
+        ModelConfigCenter center = center();
+        ModelRoutingProperties config = validV2Config();
+        config.getModels().getFirst().setScenes(List.of("chat"));
+        config.getRoutes().getFirst().setScene("cognition-routing");
+
+        assertThatThrownBy(() -> center.validateForAdmin(config))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("支持 scene")
+                .hasMessageContaining("cognition-routing");
+    }
+
+    @Test
     void rejectsStaleVersionBeforeWritingRuntimeConfig() {
         ModelRoutingProperties current = validV2Config();
         current.setVersion(7L);
@@ -153,8 +166,7 @@ class ModelConfigCenterTest {
         config.setTiers(new LinkedHashMap<>(Map.of("balanced", tier)));
 
         RoutePolicyDefinition route = new RoutePolicyDefinition();
-        route.setId("chat-zh");
-        route.setLanguage("zh");
+        route.setId("chat");
         route.setScene("chat");
         route.setPrimaryTier("balanced");
         route.setEnabled(true);

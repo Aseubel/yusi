@@ -8,7 +8,6 @@ public record ModelCallAttemptEvent(
         String runId,
         String userId,
         String scene,
-        String language,
         String policyId,
         long policyVersion,
         String routeReason,

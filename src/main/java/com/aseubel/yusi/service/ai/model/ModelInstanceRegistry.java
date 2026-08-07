@@ -66,7 +66,6 @@ public class ModelInstanceRegistry {
                     .protocol(ModelProtocol.normalize(definition.getProtocol()))
                     .weight(definition.getWeight() == null ? 100 : definition.getWeight())
                     .priority(definition.getPriority() == null ? 100 : definition.getPriority())
-                    .languages(normalize(definition.getLanguages()))
                     .scenes(normalize(definition.getScenes()))
                     .capabilities(capabilities)
                     .contextWindowTokens(definition.getContextWindowTokens())
@@ -92,19 +91,6 @@ public class ModelInstanceRegistry {
             return List.of();
         }
         return membersForIds(tier.getMembers());
-    }
-
-    public List<ModelInstance> filterByLanguageAndScene(List<ModelInstance> candidates, String language, String scene) {
-        String normalizedLanguage = normalizeOne(language);
-        String normalizedScene = normalizeOne(scene);
-        List<ModelInstance> filtered = candidates.stream()
-                .filter(instance -> instance.getLanguages().isEmpty() || instance.getLanguages().contains(normalizedLanguage))
-                .filter(instance -> instance.getScenes().isEmpty() || instance.getScenes().contains(normalizedScene))
-                .toList();
-        if (!filtered.isEmpty()) {
-            return filtered;
-        }
-        return candidates;
     }
 
     public ChatModel getChatModel(String modelId) {
