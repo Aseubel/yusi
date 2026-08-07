@@ -28,11 +28,12 @@ class ModelRouterServiceTest {
     private final ModelInstanceRegistry instanceRegistry = mock(ModelInstanceRegistry.class);
     private final ModelStrategyRegistry strategyRegistry = mock(ModelStrategyRegistry.class);
     private final ModelStateCenter stateCenter = mock(ModelStateCenter.class);
+    private ModelRoutingProperties properties;
     private ModelRouterService router;
 
     @BeforeEach
     void setUp() {
-        ModelRoutingProperties properties = config();
+        properties = config();
         when(configCenter.getEffectiveConfig()).thenReturn(properties);
         when(strategyRegistry.build()).thenReturn(Map.of(
                 ROUND_ROBIN, new RoundRobinSelectionStrategy(properties),
@@ -69,6 +70,49 @@ class ModelRouterServiceTest {
         assertThat(decision.candidates()).anyMatch(candidate ->
                 candidate.tierId().equals("fast") && candidate.available());
         assertThat(decision.routeReason()).contains("policy=chat-zh", "language=zh", "scene=chat");
+    }
+
+    @Test
+    void contextWindowExcludesShortPrimaryAndKeepsLongFallback() {
+        ModelInstance shortPrimary = instance("short-primary", 1, 24);
+        ModelInstance longFallback = instance("long-fallback", 1, 128);
+        when(instanceRegistry.getTierMembers("balanced")).thenReturn(List.of(shortPrimary));
+        when(instanceRegistry.getTierMembers("fast")).thenReturn(List.of(longFallback));
+
+        ModelRouteDecision decision = router.plan(ModelRouteContext.builder()
+                .language("zh")
+                .scene("chat")
+                .estimatedInputTokens(20)
+                .reservedOutputTokens(16)
+                .build());
+
+        assertThat(decision.candidates()).anyMatch(candidate ->
+                candidate.modelId().equals("short-primary")
+                        && candidate.excludedReason().equals("CONTEXT_WINDOW_EXCEEDED"));
+        assertThat(decision.attemptCandidates()).extracting(ModelRouteCandidate::modelId)
+                .containsExactly("long-fallback");
+        assertThat(decision.routeReason()).contains(
+                "estimated-input-tokens=20", "reserved-output-tokens=16");
+    }
+
+    @Test
+    void routeInputLimitExcludesCandidatesBeforeInvocation() {
+        RoutePolicyDefinition route = properties.getRoutes().stream()
+                .filter(candidate -> candidate.getId().equals("chat-zh"))
+                .findFirst()
+                .orElseThrow();
+        route.setMaxInputTokens(10);
+
+        ModelRouteDecision decision = router.plan(ModelRouteContext.builder()
+                .language("zh")
+                .scene("chat")
+                .estimatedInputTokens(11)
+                .build());
+
+        assertThat(decision.candidates()).allMatch(candidate ->
+                "INPUT_TOKEN_LIMIT_EXCEEDED".equals(candidate.excludedReason())
+                        || "fallback-tier".equals(candidate.excludedReason()));
+        assertThat(decision.attemptCandidates()).isEmpty();
     }
 
     private ModelRouteContext context(String language, String scene) {
@@ -112,6 +156,10 @@ class ModelRouterServiceTest {
     }
 
     private ModelInstance instance(String id, int priority) {
+        return instance(id, priority, null);
+    }
+
+    private ModelInstance instance(String id, int priority, Integer contextWindowTokens) {
         return ModelInstance.builder()
                 .id(id)
                 .modelName(id)
@@ -121,6 +169,7 @@ class ModelRouterServiceTest {
                 .capabilities(Set.of(ModelCapability.CHAT, ModelCapability.STREAMING_CHAT))
                 .languages(Set.of())
                 .scenes(Set.of())
+                .contextWindowTokens(contextWindowTokens)
                 .build();
     }
 }

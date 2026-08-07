@@ -41,6 +41,7 @@ public class ModelRouterService {
             throw new IllegalStateException("No model route configured for language: "
                     + normalizedContext.getLanguage() + ", scene: " + normalizedContext.getScene());
         }
+        ModelRouteContext budgetContext = applyRouteBudget(normalizedContext, policy);
 
         List<String> fallbackTiers = policy.getFallbackTiers() == null
                 ? List.of() : policy.getFallbackTiers().stream()
@@ -67,7 +68,7 @@ public class ModelRouterService {
             String tierId = tierOrder.get(index);
             boolean fallback = index > 0;
             List<ModelRouteCandidate> tierCandidates = routeTier(
-                    properties, tierId, normalizedContext, states, fallback);
+                    properties, tierId, policy, budgetContext, states, fallback);
             candidates.addAll(tierCandidates);
             tierCandidates.stream()
                     .map(ModelRouteCandidate::excludedReason)
@@ -84,17 +85,20 @@ public class ModelRouterService {
                 + ";language=" + normalizedContext.getLanguage()
                 + ";scene=" + normalizedContext.getScene()
                 + ";risk=" + safe(normalizedContext.getRiskLevel(), policy.getRiskLevel())
+                + ";estimated-input-tokens=" + numberOrUnknown(budgetContext.getEstimatedInputTokens())
+                + ";reserved-output-tokens=" + numberOrUnknown(budgetContext.getReservedOutputTokens())
                 + ";primary-tier=" + primaryTier
                 + ";strategy=" + strategy.name()
                 + ";fallback-tiers=" + String.join(",", fallbackTiers)
                 + ";health-filter=" + (healthReasons.isEmpty() ? "none" : String.join(",", healthReasons));
-        return new ModelRouteDecision(normalizedContext.getRequestId(), policy.getId(),
+        return new ModelRouteDecision(budgetContext.getRequestId(), policy.getId(),
                 properties.getVersion(), primaryTier, fallbackTiers, candidates, routeReason,
                 ModelRouteParameters.from(policy));
     }
 
     private List<ModelRouteCandidate> routeTier(ModelRoutingProperties properties, String tierId,
-            ModelRouteContext context, Map<String, ModelRuntimeState> states, boolean fallback) {
+            RoutePolicyDefinition policy, ModelRouteContext context,
+            Map<String, ModelRuntimeState> states, boolean fallback) {
         ModelTierDefinition tier = properties.getTiers().get(tierId);
         List<ModelInstance> members = modelInstanceRegistry.getTierMembers(tierId);
         ModelSelectionStrategy strategy = strategies.getOrDefault(
@@ -107,7 +111,7 @@ public class ModelRouterService {
         List<ModelInstance> ordered = strategy.order(tierId, members, states);
         List<ModelRouteCandidate> result = new ArrayList<>(ordered.size());
         for (ModelInstance instance : ordered) {
-            String excludedReason = exclusionReason(tier, instance, context, states.get(instance.getId()));
+            String excludedReason = exclusionReason(policy, tier, instance, context, states.get(instance.getId()));
             boolean available = excludedReason == null;
             if (fallback && available) {
                 excludedReason = "fallback-tier";
@@ -117,7 +121,7 @@ public class ModelRouterService {
         return List.copyOf(result);
     }
 
-    private String exclusionReason(ModelTierDefinition tier, ModelInstance instance,
+    private String exclusionReason(RoutePolicyDefinition policy, ModelTierDefinition tier, ModelInstance instance,
             ModelRouteContext context, ModelRuntimeState state) {
         if (tier != null && !tier.isEnabled()) {
             return "TIER_DISABLED";
@@ -130,6 +134,19 @@ public class ModelRouterService {
         }
         if (!supportsValue(instance.getScenes(), context.getScene())) {
             return "SCENE_MISMATCH";
+        }
+        Integer estimatedInputTokens = context.getEstimatedInputTokens();
+        if (estimatedInputTokens != null && policy.getMaxInputTokens() != null
+                && estimatedInputTokens > policy.getMaxInputTokens()) {
+            return "INPUT_TOKEN_LIMIT_EXCEEDED";
+        }
+        if (estimatedInputTokens != null && instance.getContextWindowTokens() != null) {
+            long reservedOutputTokens = context.getReservedOutputTokens() == null
+                    ? 0L : Math.max(0L, context.getReservedOutputTokens());
+            long requestedTokens = (long) estimatedInputTokens + reservedOutputTokens;
+            if (requestedTokens > instance.getContextWindowTokens()) {
+                return "CONTEXT_WINDOW_EXCEEDED";
+            }
         }
         if (state != null && !state.isAvailable()
                 && !"HALF_OPEN".equalsIgnoreCase(state.getPhase())) {
@@ -164,6 +181,41 @@ public class ModelRouterService {
                 .build();
     }
 
+    private ModelRouteContext applyRouteBudget(ModelRouteContext context, RoutePolicyDefinition policy) {
+        Integer routeOutputTokens = smallerPositive(policy.getMaxOutputTokens(), policy.getMaxCompletionTokens());
+        if (routeOutputTokens == null) {
+            routeOutputTokens = ModelRouteParameters.DEFAULT_OUTPUT_TOKENS;
+        }
+        Integer requestedOutputTokens = context.getReservedOutputTokens();
+        Integer reservedOutputTokens;
+        if (requestedOutputTokens == null) {
+            reservedOutputTokens = routeOutputTokens;
+        } else {
+            reservedOutputTokens = Math.min(requestedOutputTokens, routeOutputTokens);
+        }
+        return ModelRouteContext.builder()
+                .requestId(context.getRequestId())
+                .runId(context.getRunId())
+                .userId(context.getUserId())
+                .language(context.getLanguage())
+                .scene(context.getScene())
+                .riskLevel(context.getRiskLevel())
+                .estimatedInputTokens(context.getEstimatedInputTokens())
+                .reservedOutputTokens(reservedOutputTokens)
+                .maskSensitiveData(context.isMaskSensitiveData())
+                .build();
+    }
+
+    private Integer smallerPositive(Integer first, Integer second) {
+        if (first == null || first <= 0) {
+            return second == null || second <= 0 ? null : second;
+        }
+        if (second == null || second <= 0) {
+            return first;
+        }
+        return Math.min(first, second);
+    }
+
     private String valueOrDefault(String value, String defaultValue) {
         return value == null || value.isBlank() ? defaultValue : value;
     }
@@ -174,5 +226,9 @@ public class ModelRouterService {
 
     private String safe(String value, String fallback) {
         return value == null || value.isBlank() ? safe(fallback, "") : value;
+    }
+
+    private String numberOrUnknown(Integer value) {
+        return value == null ? "unknown" : value.toString();
     }
 }

@@ -95,6 +95,7 @@ model:
         baseurl: ${CHAT_MODEL_BASEURL}
         apikey: ${CHAT_MODEL_APIKEY}
         model: ${CHAT_MODEL_NAME}
+        context-window-tokens: ${CHAT_MODEL_CONTEXT_WINDOW_TOKENS}
         weight: 100
         priority: 1
         languages: [zh, en, ja]
@@ -133,10 +134,17 @@ model:
         risk-level: LOW
         primary-tier: chat-balanced
         fallback-tiers: [chat-fast]
+        max-input-tokens: 12000
         max-output-tokens: 512
         enabled: true
         priority: 100
 ```
+
+### 4.1 预算与上下文准入
+
+请求进入 Provider 之前，Gateway 会基于 `ChatRequest` 做保守的输入 Token 估算，覆盖文本消息、工具名称与参数以及图片占位成本。路由决策把估算输入、route 的 `max-input-tokens`、route 的输出上限和模型的 `context-window-tokens` 一起用于候选过滤：主 tier 容量不足时，只有满足预算的 fallback tier 才能进入 attempt 链。
+
+route 未声明 `max-output-tokens` 或 `max-completion-tokens` 时，系统按 1024 token 预留输出空间。估算器不替代供应商 tokenizer；Provider 返回的真实 usage 仍是成本、审计和后续对账的唯一依据。没有配置模型 `context-window-tokens` 时不会凭空猜测供应商窗口，仍会执行 route 的显式输入上限。
 
 ## 5. 状态机流转图（被动监控）
 

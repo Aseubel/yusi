@@ -146,7 +146,7 @@ flowchart LR
 
 | 命令 | 结果 |
 |:---|:---|
-| `./mvnw -Dtest=ModelConfigCenterTest,ChatModelProviderRegistryTest,ModelRoutePolicyMatcherTest,ModelRouterServiceTest,ModelInvocationErrorClassifierTest,ModelProxyFactoryTest,ModelUsageExtractorTest,ModelManagementControllerTest,AiControllerCancellationTest test` | ✅ 33 tests passed |
+| `./mvnw -Dtest=ModelConfigCenterTest,ChatModelProviderRegistryTest,ModelRoutePolicyMatcherTest,ModelRouterServiceTest,ModelInvocationErrorClassifierTest,ModelProxyFactoryTest,ModelTokenEstimatorTest,ModelUsageExtractorTest,ModelManagementControllerTest,AiControllerCancellationTest test` | ✅ 38 tests passed |
 | `./mvnw -DskipTests compile` | ✅ BUILD SUCCESS |
 | `pnpm --dir frontend test --run` | ✅ 4 files / 14 tests passed |
 | `pnpm --dir frontend lint` | ✅ exit 0 |

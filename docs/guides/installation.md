@@ -213,6 +213,7 @@ model:
         baseurl: ${CHAT_MODEL_BASEURL}
         apikey: ${CHAT_MODEL_APIKEY}
         model: ${CHAT_MODEL_NAME}
+        context-window-tokens: ${CHAT_MODEL_CONTEXT_WINDOW_TOKENS}
         capabilities: [CHAT, STREAMING_CHAT]
         weight: 100
         priority: 1
@@ -252,12 +253,15 @@ model:
         risk-level: LOW
         primary-tier: chat-primary
         fallback-tiers: [chat-fallback]
+        max-input-tokens: 12000
         max-output-tokens: 512
         enabled: true
         priority: 100
 ```
 
 模型注册表中的 `protocol` 决定实际线协议：`CHAT_COMPLETIONS` 和 `RESPONSES` 由 OpenAI-compatible adapter 创建客户端，`ANTHROPIC_MESSAGES` 必须与 `anthropic` provider 配对。`openai`、`deepseek`、`dashscope` 是 OpenAI-compatible adapter 的 provider 别名；provider 与 protocol 不匹配时配置不会发布。
+
+路由会在调用 Provider 前做一次保守的 Token 估算：消息文本、工具参数和图片会计入输入预算，`max-input-tokens` 限制单条 route 的输入，模型的 `context-window-tokens` 限制估算输入与预留输出之和。未配置 route 输出上限时默认预留 1024 token；超出主模型上下文时会继续检查 fallback tier。该估算只负责准入和候选过滤，Provider 返回的真实 usage 才是成本与审计的最终依据。
 
 治理控制台使用以下接口发布完整 schema v2 快照：`GET /api/model/console`、`PUT /api/model/console`、`POST /api/model/routes/preview`。更新必须携带 `expectedVersion`；API key 只返回配置状态，不返回原文。
 

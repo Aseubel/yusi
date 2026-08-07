@@ -42,21 +42,31 @@ public class ModelProxyFactory {
     private final SensitiveDataMaskService maskService;
     private final ApplicationEventPublisher eventPublisher;
     private final ModelUsageExtractor usageExtractor;
+    private final ModelTokenEstimator tokenEstimator;
 
     public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
             SensitiveDataMaskService maskService) {
-        this(modelRouterService, modelStateCenter, maskService, new NoopEventPublisher(), new ModelUsageExtractor());
+        this(modelRouterService, modelStateCenter, maskService, new NoopEventPublisher(),
+                new ModelUsageExtractor(), new ModelTokenEstimator());
+    }
+
+    public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
+            SensitiveDataMaskService maskService, ApplicationEventPublisher eventPublisher,
+            ModelUsageExtractor usageExtractor) {
+        this(modelRouterService, modelStateCenter, maskService, eventPublisher, usageExtractor,
+                new ModelTokenEstimator());
     }
 
     @Autowired
     public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
             SensitiveDataMaskService maskService, ApplicationEventPublisher eventPublisher,
-            ModelUsageExtractor usageExtractor) {
+            ModelUsageExtractor usageExtractor, ModelTokenEstimator tokenEstimator) {
         this.modelRouterService = modelRouterService;
         this.modelStateCenter = modelStateCenter;
         this.maskService = maskService;
         this.eventPublisher = eventPublisher;
         this.usageExtractor = usageExtractor;
+        this.tokenEstimator = tokenEstimator;
     }
 
     public ChatModel createChatProxy(String defaultLanguage, String defaultScene) {
@@ -109,6 +119,9 @@ public class ModelProxyFactory {
         if (maxOutputTokens == null) {
             maxOutputTokens = parameters.maxCompletionTokens();
         }
+        Integer requestMaxOutputTokens = base == null ? null : base.maxOutputTokens();
+        Integer requestMaxCompletionTokens = base instanceof OpenAiChatRequestParameters openAiParameters
+                ? openAiParameters.maxCompletionTokens() : null;
 
         return switch (ModelProtocol.normalize(protocol)) {
             case CHAT_COMPLETIONS -> {
@@ -116,8 +129,10 @@ public class ModelProxyFactory {
                 if (base != null) {
                     builder.overrideWith(base);
                 }
-                if (parameters.maxOutputTokens() != null) {
-                    builder.maxOutputTokens(parameters.maxOutputTokens());
+                Integer effectiveMaxOutputTokens = smallerPositive(requestMaxOutputTokens,
+                        parameters.maxOutputTokens());
+                if (effectiveMaxOutputTokens != null) {
+                    builder.maxOutputTokens(effectiveMaxOutputTokens);
                 }
                 if (parameters.temperature() != null) {
                     builder.temperature(parameters.temperature());
@@ -125,8 +140,10 @@ public class ModelProxyFactory {
                 if (parameters.topP() != null) {
                     builder.topP(parameters.topP());
                 }
-                if (parameters.maxCompletionTokens() != null) {
-                    builder.maxCompletionTokens(parameters.maxCompletionTokens());
+                Integer effectiveMaxCompletionTokens = smallerPositive(requestMaxCompletionTokens,
+                        parameters.maxCompletionTokens());
+                if (effectiveMaxCompletionTokens != null) {
+                    builder.maxCompletionTokens(effectiveMaxCompletionTokens);
                 }
                 if (!parameters.customParameters().isEmpty()) {
                     builder.customParameters(parameters.customParameters());
@@ -138,8 +155,9 @@ public class ModelProxyFactory {
                 if (base != null) {
                     builder.overrideWith(base);
                 }
-                if (maxOutputTokens != null) {
-                    builder.maxOutputTokens(maxOutputTokens);
+                Integer effectiveMaxOutputTokens = smallerPositive(requestMaxOutputTokens, maxOutputTokens);
+                if (effectiveMaxOutputTokens != null) {
+                    builder.maxOutputTokens(effectiveMaxOutputTokens);
                 }
                 if (parameters.temperature() != null) {
                     builder.temperature(parameters.temperature());
@@ -154,8 +172,9 @@ public class ModelProxyFactory {
                 if (base != null) {
                     builder.overrideWith(base);
                 }
-                if (maxOutputTokens != null) {
-                    builder.maxOutputTokens(maxOutputTokens);
+                Integer effectiveMaxOutputTokens = smallerPositive(requestMaxOutputTokens, maxOutputTokens);
+                if (effectiveMaxOutputTokens != null) {
+                    builder.maxOutputTokens(effectiveMaxOutputTokens);
                 }
                 if (parameters.temperature() != null) {
                     builder.temperature(parameters.temperature());
@@ -166,6 +185,16 @@ public class ModelProxyFactory {
                 yield builder.build();
             }
         };
+    }
+
+    private static Integer smallerPositive(Integer first, Integer second) {
+        if (first == null || first <= 0) {
+            return second == null || second <= 0 ? null : second;
+        }
+        if (second == null || second <= 0) {
+            return first;
+        }
+        return Math.min(first, second);
     }
 
     private class RoutingInvocationHandler implements InvocationHandler {
@@ -184,7 +213,7 @@ public class ModelProxyFactory {
             if (method.getDeclaringClass() == Object.class) {
                 return method.invoke(this, args);
             }
-            ModelRouteContext context = resolveContext();
+            ModelRouteContext context = resolveContext(findChatRequest(args));
             ModelRouteDecision decision = modelRouterService.plan(context);
             List<ModelRouteCandidate> candidates = decision.attemptCandidates();
             if (candidates.isEmpty()) {
@@ -727,12 +756,32 @@ public class ModelProxyFactory {
             return response.toBuilder().aiMessage(builder.build()).build();
         }
 
-        private ModelRouteContext resolveContext() {
+        private ChatRequest findChatRequest(Object[] args) {
+            if (args == null) {
+                return null;
+            }
+            for (Object arg : args) {
+                if (arg instanceof ChatRequest chatRequest) {
+                    return chatRequest;
+                }
+            }
+            return null;
+        }
+
+        private ModelRouteContext resolveContext(ChatRequest request) {
             ModelRouteContext context = ModelRouteContextHolder.get();
             String language = context == null ? null : context.getLanguage();
             String scene = context == null ? null : context.getScene();
             String resolvedLanguage = Objects.requireNonNullElse(language, defaultLanguage);
             String resolvedScene = Objects.requireNonNullElse(scene, defaultScene);
+            Integer estimatedInputTokens = context == null ? null : context.getEstimatedInputTokens();
+            if (estimatedInputTokens == null && request != null) {
+                estimatedInputTokens = tokenEstimator.estimate(request);
+            }
+            Integer reservedOutputTokens = context == null ? null : context.getReservedOutputTokens();
+            if (reservedOutputTokens == null && request != null) {
+                reservedOutputTokens = tokenEstimator.requestedOutputTokens(request);
+            }
             return ModelRouteContext.builder()
                     .requestId(context == null ? null : context.getRequestId())
                     .runId(context == null ? null : context.getRunId())
@@ -740,8 +789,8 @@ public class ModelProxyFactory {
                     .language(resolvedLanguage)
                     .scene(resolvedScene)
                     .riskLevel(context == null ? null : context.getRiskLevel())
-                    .estimatedInputTokens(context == null ? null : context.getEstimatedInputTokens())
-                    .reservedOutputTokens(context == null ? null : context.getReservedOutputTokens())
+                    .estimatedInputTokens(estimatedInputTokens)
+                    .reservedOutputTokens(reservedOutputTokens)
                     .maskSensitiveData(context == null || context.isMaskSensitiveData())
                     .build();
         }

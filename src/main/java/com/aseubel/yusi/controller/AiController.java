@@ -294,6 +294,9 @@ public class AiController {
 
                 // 设置模型路由上下文
                 ModelRouteContextHolder.set(ModelRouteContext.builder()
+                        .requestId(requestId)
+                        .runId(requestId)
+                        .userId(userId)
                         .language(ModelUtils.normalizeLanguage(language))
                         .scene(PromptKey.CHAT.getKey())
                         .build());

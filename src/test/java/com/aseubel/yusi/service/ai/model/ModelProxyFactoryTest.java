@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
@@ -179,6 +180,8 @@ class ModelProxyFactoryTest {
 
         ChatRequest responses = ModelProxyFactory.adaptChatRequest(ModelProtocol.RESPONSES, input, routeParameters);
         ChatRequest anthropic = ModelProxyFactory.adaptChatRequest(ModelProtocol.ANTHROPIC_MESSAGES, input, routeParameters);
+        ChatRequest chatCompletions = ModelProxyFactory.adaptChatRequest(
+                ModelProtocol.CHAT_COMPLETIONS, input, routeParameters);
 
         assertEquals(OpenAiResponsesChatRequestParameters.class, responses.parameters().getClass());
         assertEquals(128, responses.parameters().maxOutputTokens());
@@ -186,6 +189,36 @@ class ModelProxyFactoryTest {
         assertEquals(AnthropicChatRequestParameters.class, anthropic.parameters().getClass());
         assertEquals(128, anthropic.parameters().maxOutputTokens());
         assertEquals("request-model", anthropic.modelName());
+        assertEquals(32, ((OpenAiChatRequestParameters) chatCompletions.parameters()).maxCompletionTokens());
+    }
+
+    @Test
+    void enrichesRouteContextWithRequestTokenBudget() {
+        ModelRouterService router = mock(ModelRouterService.class);
+        ModelStateCenter stateCenter = mock(ModelStateCenter.class);
+        SensitiveDataMaskService maskService = mock(SensitiveDataMaskService.class);
+        ChatModel delegate = mock(ChatModel.class);
+        ModelInstance instance = instance("budget-model", delegate, mock(StreamingChatModel.class));
+        when(router.plan(any(ModelRouteContext.class))).thenReturn(new ModelRouteDecision(
+                "request-budget", "chat", 1L, "chat", List.of(),
+                List.of(new ModelRouteCandidate("chat", instance, true, null)),
+                "policy=chat;primary-tier=chat"));
+        when(stateCenter.allowRequest("budget-model")).thenReturn(true);
+        when(maskService.mask(anyString())).thenReturn(new MaskResult("plain", Map.of(), false));
+        when(delegate.chat(any(ChatRequest.class))).thenReturn(ChatResponse.builder()
+                .aiMessage(AiMessage.from("ok"))
+                .build());
+
+        ModelProxyFactory factory = new ModelProxyFactory(router, stateCenter, maskService);
+        factory.createChatProxy("zh", "chat").chat(ChatRequest.builder()
+                .messages(List.of(UserMessage.from("请帮我总结这段内容")))
+                .parameters(OpenAiChatRequestParameters.builder().maxOutputTokens(64).build())
+                .build());
+
+        var contextCaptor = org.mockito.ArgumentCaptor.forClass(ModelRouteContext.class);
+        verify(router).plan(contextCaptor.capture());
+        assertThat(contextCaptor.getValue().getEstimatedInputTokens()).isPositive();
+        assertEquals(64, contextCaptor.getValue().getReservedOutputTokens());
     }
 
     private StreamingChatResponseHandler createWrappedHandler(StreamingChatResponseHandler downstream) {

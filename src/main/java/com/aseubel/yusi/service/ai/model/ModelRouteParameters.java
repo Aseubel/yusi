@@ -17,6 +17,8 @@ public record ModelRouteParameters(
         Integer maxCompletionTokens,
         Map<String, Object> customParameters) {
 
+    public static final int DEFAULT_OUTPUT_TOKENS = 1024;
+
     public ModelRouteParameters {
         customParameters = customParameters == null
                 ? Map.of()
@@ -27,12 +29,17 @@ public record ModelRouteParameters(
         if (route == null) {
             return new ModelRouteParameters(null, null, null, null, null, Map.of());
         }
+        Integer maxOutputTokens = route.getMaxOutputTokens();
+        Integer maxCompletionTokens = route.getMaxCompletionTokens();
+        if (maxOutputTokens == null && maxCompletionTokens == null) {
+            maxOutputTokens = DEFAULT_OUTPUT_TOKENS;
+        }
         return new ModelRouteParameters(
                 route.getMaxInputTokens(),
-                route.getMaxOutputTokens(),
+                maxOutputTokens,
                 route.getTemperature(),
                 route.getTopP(),
-                route.getMaxCompletionTokens(),
+                maxCompletionTokens,
                 route.getCustomParameters());
     }
 }
