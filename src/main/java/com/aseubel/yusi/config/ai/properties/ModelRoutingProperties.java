@@ -1,20 +1,20 @@
 package com.aseubel.yusi.config.ai.properties;
 
 import com.aseubel.yusi.redis.common.RedisKey;
-import com.aseubel.yusi.service.ai.model.ModelSelectionStrategyType;
 import com.aseubel.yusi.service.ai.model.ModelCapability;
+import com.aseubel.yusi.service.ai.model.ModelProtocol;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.util.ArrayList;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 @Data
-@ConfigurationProperties(prefix = "model.routing", ignoreInvalidFields = true)
+@ConfigurationProperties(prefix = "model.routing", ignoreUnknownFields = false)
 public class ModelRoutingProperties {
 
     private long version = 0L;
@@ -27,13 +27,9 @@ public class ModelRoutingProperties {
 
     private String defaultTier;
 
-    private String strategyChannel = RedisKey.MODEL_GROUP_STRATEGY_CHANNEL;
-
     private String stateChannel = RedisKey.MODEL_STATE_CHANNEL;
 
     private String instanceStateMapKey = RedisKey.MODEL_STATE_MAP;
-
-    private String groupStrategyMapKey = RedisKey.MODEL_GROUP_STRATEGY_MAP;
 
     private String runtimeConfigKey = RedisKey.MODEL_RUNTIME_CONFIG_KEY;
 
@@ -49,23 +45,18 @@ public class ModelRoutingProperties {
 
     private List<ModelDefinition> models = new ArrayList<>();
 
-    private Map<String, GroupDefinition> groups = new LinkedHashMap<>();
-
-    private Map<String, Map<String, SceneDefinition>> matrix = new LinkedHashMap<>();
-
     private Map<String, ModelTierDefinition> tiers = new LinkedHashMap<>();
 
     private List<RoutePolicyDefinition> routes = new ArrayList<>();
 
     private RoutePolicyDefinition defaultRoute;
 
-    private Map<String, String> capabilityGroups = new LinkedHashMap<>();
-
     @Data
     public static class ModelDefinition {
         private String id;
         private String displayName;
         private String provider;
+        private ModelProtocol protocol;
         @JsonAlias("baseUrl")
         private String baseurl;
         @JsonAlias("apiKey")
@@ -99,21 +90,5 @@ public class ModelRoutingProperties {
         private BigDecimal inputPerMillion;
         private BigDecimal outputPerMillion;
         private String priceVersion;
-    }
-
-    @Data
-    public static class GroupDefinition {
-        private List<String> members = new ArrayList<>();
-        private ModelSelectionStrategyType strategy = ModelSelectionStrategyType.ROUND_ROBIN;
-    }
-
-    @Data
-    public static class SceneDefinition {
-        private String group;
-        private Integer maxTokens;
-        private Double temperature;
-        private Double topP;
-        private Integer maxCompletionTokens;
-        private Map<String, Object> customParameters = new LinkedHashMap<>();
     }
 }

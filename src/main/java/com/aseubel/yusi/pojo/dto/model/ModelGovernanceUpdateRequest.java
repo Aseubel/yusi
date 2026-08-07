@@ -32,9 +32,6 @@ public class ModelGovernanceUpdateRequest {
     @Builder.Default
     private List<RoutePolicyDefinition> routes = new ArrayList<>();
     private RoutePolicyDefinition defaultRoute;
-    @Builder.Default
-    private Map<String, String> capabilityGroups = new LinkedHashMap<>();
-
     public ModelRoutingProperties toProperties() {
         ModelRoutingProperties properties = new ModelRoutingProperties();
         properties.setSchemaVersion(schemaVersion <= 0 ? 2 : schemaVersion);
@@ -51,7 +48,6 @@ public class ModelGovernanceUpdateRequest {
         properties.setTiers(tiers == null ? new LinkedHashMap<>() : tiers);
         properties.setRoutes(routes == null ? new ArrayList<>() : routes);
         properties.setDefaultRoute(defaultRoute);
-        properties.setCapabilityGroups(capabilityGroups == null ? new LinkedHashMap<>() : capabilityGroups);
         return properties;
     }
 }

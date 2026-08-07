@@ -26,7 +26,6 @@ class ModelRouterServiceTest {
 
     private final ModelConfigCenter configCenter = mock(ModelConfigCenter.class);
     private final ModelInstanceRegistry instanceRegistry = mock(ModelInstanceRegistry.class);
-    private final GroupStrategyManager groupStrategyManager = mock(GroupStrategyManager.class);
     private final ModelStrategyRegistry strategyRegistry = mock(ModelStrategyRegistry.class);
     private final ModelStateCenter stateCenter = mock(ModelStateCenter.class);
     private ModelRouterService router;
@@ -38,7 +37,6 @@ class ModelRouterServiceTest {
         when(strategyRegistry.build()).thenReturn(Map.of(
                 ROUND_ROBIN, new RoundRobinSelectionStrategy(properties),
                 FAIL_OVER, new FailOverSelectionStrategy(properties)));
-        when(groupStrategyManager.getStrategy(any())).thenReturn(FAIL_OVER);
         when(stateCenter.snapshot(anyCollection())).thenReturn(Map.of(
                 "qwen", ModelRuntimeState.builder().instanceId("qwen").available(false).phase("DOWN").build()));
 
@@ -49,8 +47,7 @@ class ModelRouterServiceTest {
         when(instanceRegistry.getTierMembers("balanced")).thenReturn(List.of(qwen, balancedBackup));
         when(instanceRegistry.getTierMembers("fast")).thenReturn(List.of(fastPrimary, fastBackup));
 
-        router = new ModelRouterService(configCenter, instanceRegistry, groupStrategyManager,
-                strategyRegistry, stateCenter);
+        router = new ModelRouterService(configCenter, instanceRegistry, strategyRegistry, stateCenter);
         router.init();
     }
 

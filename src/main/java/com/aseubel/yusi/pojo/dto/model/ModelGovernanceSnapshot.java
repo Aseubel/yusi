@@ -4,6 +4,7 @@ import com.aseubel.yusi.config.ai.properties.RoutePolicyDefinition;
 import com.aseubel.yusi.service.ai.model.ModelCapability;
 import com.aseubel.yusi.service.ai.model.ModelRuntimeState;
 import com.aseubel.yusi.service.ai.model.ModelSelectionStrategyType;
+import com.aseubel.yusi.service.ai.model.ModelProtocol;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -43,9 +44,6 @@ public class ModelGovernanceSnapshot {
     private RoutePolicyDefinition defaultRoute;
 
     @Builder.Default
-    private java.util.Map<String, String> capabilityGroups = new java.util.LinkedHashMap<>();
-
-    @Builder.Default
     private List<ModelRuntimeState> runtimeStates = new ArrayList<>();
 
     private ModelMetricSummary summary;
@@ -58,6 +56,7 @@ public class ModelGovernanceSnapshot {
         private String id;
         private String displayName;
         private String provider;
+        private ModelProtocol protocol;
         private String baseUrl;
         private String endpointHost;
         private String realModelId;

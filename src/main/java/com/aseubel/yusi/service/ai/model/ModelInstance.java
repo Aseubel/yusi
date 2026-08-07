@@ -14,6 +14,7 @@ public class ModelInstance {
     String id;
     String modelName;
     String provider;
+    ModelProtocol protocol;
     int weight;
     int priority;
     Set<String> languages;

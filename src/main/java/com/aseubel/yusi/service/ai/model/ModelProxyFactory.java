@@ -1,6 +1,5 @@
 package com.aseubel.yusi.service.ai.model;
 
-import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
 import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.ai.runtime.ModelCallAttemptEvent;
@@ -18,8 +17,9 @@ import dev.langchain4j.model.chat.response.PartialThinkingContext;
 import dev.langchain4j.model.chat.response.PartialToolCall;
 import dev.langchain4j.model.chat.response.PartialToolCallContext;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
+import dev.langchain4j.model.anthropic.AnthropicChatRequestParameters;
 import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
-import dev.langchain4j.model.openai.OpenAiChatRequestParameters.Builder;
+import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -70,6 +70,104 @@ public class ModelProxyFactory {
                 new Class[] { StreamingChatModel.class }, handler);
     }
 
+    static AiMessage normalizeAssistantMessage(AiMessage message) {
+        if (message != null && message.text() == null && !message.hasToolExecutionRequests()) {
+            return message.toBuilder().text("").build();
+        }
+        return message;
+    }
+
+    private static List<ChatMessage> normalizeMessages(List<ChatMessage> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return messages == null ? List.of() : messages;
+        }
+        return messages.stream()
+                .map(message -> message instanceof AiMessage aiMessage
+                        ? normalizeAssistantMessage(aiMessage) : message)
+                .toList();
+    }
+
+    static ChatRequest adaptChatRequest(ModelProtocol protocol, ChatRequest request,
+            ModelRouteParameters routeParameters) {
+        if (request == null) {
+            return null;
+        }
+        ChatRequestParameters parameters = buildProtocolParameters(
+                ModelProtocol.normalize(protocol), request.parameters(), routeParameters);
+        return request.toBuilder()
+                .messages(normalizeMessages(request.messages()))
+                .parameters(parameters)
+                .build();
+    }
+
+    private static ChatRequestParameters buildProtocolParameters(ModelProtocol protocol,
+            ChatRequestParameters base, ModelRouteParameters routeParameters) {
+        ModelRouteParameters parameters = routeParameters == null
+                ? new ModelRouteParameters(null, null, null, null, null, Map.of())
+                : routeParameters;
+        Integer maxOutputTokens = parameters.maxOutputTokens();
+        if (maxOutputTokens == null) {
+            maxOutputTokens = parameters.maxCompletionTokens();
+        }
+
+        return switch (ModelProtocol.normalize(protocol)) {
+            case CHAT_COMPLETIONS -> {
+                OpenAiChatRequestParameters.Builder builder = OpenAiChatRequestParameters.builder();
+                if (base != null) {
+                    builder.overrideWith(base);
+                }
+                if (parameters.maxOutputTokens() != null) {
+                    builder.maxOutputTokens(parameters.maxOutputTokens());
+                }
+                if (parameters.temperature() != null) {
+                    builder.temperature(parameters.temperature());
+                }
+                if (parameters.topP() != null) {
+                    builder.topP(parameters.topP());
+                }
+                if (parameters.maxCompletionTokens() != null) {
+                    builder.maxCompletionTokens(parameters.maxCompletionTokens());
+                }
+                if (!parameters.customParameters().isEmpty()) {
+                    builder.customParameters(parameters.customParameters());
+                }
+                yield builder.build();
+            }
+            case RESPONSES -> {
+                OpenAiResponsesChatRequestParameters.Builder builder = OpenAiResponsesChatRequestParameters.builder();
+                if (base != null) {
+                    builder.overrideWith(base);
+                }
+                if (maxOutputTokens != null) {
+                    builder.maxOutputTokens(maxOutputTokens);
+                }
+                if (parameters.temperature() != null) {
+                    builder.temperature(parameters.temperature());
+                }
+                if (parameters.topP() != null) {
+                    builder.topP(parameters.topP());
+                }
+                yield builder.build();
+            }
+            case ANTHROPIC_MESSAGES -> {
+                AnthropicChatRequestParameters.Builder builder = AnthropicChatRequestParameters.builder();
+                if (base != null) {
+                    builder.overrideWith(base);
+                }
+                if (maxOutputTokens != null) {
+                    builder.maxOutputTokens(maxOutputTokens);
+                }
+                if (parameters.temperature() != null) {
+                    builder.temperature(parameters.temperature());
+                }
+                if (parameters.topP() != null) {
+                    builder.topP(parameters.topP());
+                }
+                yield builder.build();
+            }
+        };
+    }
+
     private class RoutingInvocationHandler implements InvocationHandler {
         private final String defaultLanguage;
         private final String defaultScene;
@@ -88,10 +186,6 @@ public class ModelProxyFactory {
             }
             ModelRouteContext context = resolveContext();
             ModelRouteDecision decision = modelRouterService.plan(context);
-            if (decision == null) {
-                ModelInstance legacySelected = modelRouterService.select(context, Set.of());
-                decision = legacyDecision(context, legacySelected);
-            }
             List<ModelRouteCandidate> candidates = decision.attemptCandidates();
             if (candidates.isEmpty()) {
                 throw new IllegalStateException("No available model instance for language: "
@@ -114,7 +208,8 @@ public class ModelProxyFactory {
 
                 long start = System.currentTimeMillis();
                 try {
-                    Object result = invokeWithSceneParameters(selected.getChatModel(), method, args, context);
+                    Object result = invokeWithRouteParameters(selected, selected.getChatModel(), method, args,
+                            context, decision.routeParameters());
                     ChatResponse response = result instanceof ChatResponse chatResponse ? chatResponse : null;
                     ModelUsageSnapshot usage = usageExtractor.extract(response, selected);
                     long latency = System.currentTimeMillis() - start;
@@ -161,7 +256,8 @@ public class ModelProxyFactory {
 
             StreamingChatResponseHandler downstream = findStreamingHandler(args);
             if (downstream == null) {
-                invokeWithSceneParameters(selected.getStreamingChatModel(), method, args, context);
+                invokeWithRouteParameters(selected, selected.getStreamingChatModel(), method, args,
+                        context, decision.routeParameters());
                 return;
             }
             long start = System.currentTimeMillis();
@@ -178,7 +274,8 @@ public class ModelProxyFactory {
                 }
             }
             try {
-                invokeWithSceneParameters(selected.getStreamingChatModel(), method, trackingArgs, context);
+                invokeWithRouteParameters(selected, selected.getStreamingChatModel(), method, trackingArgs,
+                        context, decision.routeParameters());
             } catch (Throwable throwable) {
                 if (terminal.get()) {
                     return;
@@ -275,14 +372,6 @@ public class ModelProxyFactory {
                 }
             }
             return "unknown";
-        }
-
-        private ModelRouteDecision legacyDecision(ModelRouteContext context, ModelInstance selected) {
-            ModelRouteCandidate candidate = new ModelRouteCandidate(
-                    firstNonBlank(context.getGroup(), "legacy"), selected, true, null);
-            return new ModelRouteDecision(context.getRequestId(), "legacy", 0L,
-                    candidate.tierId(), List.of(), List.of(candidate),
-                    "policy=legacy;language=" + context.getLanguage() + ";scene=" + context.getScene());
         }
 
         private class TrackingStreamingHandler implements StreamingChatResponseHandler {
@@ -397,27 +486,13 @@ public class ModelProxyFactory {
             }
         }
 
-        private Object invokeWithSceneParameters(Object delegate, Method method, Object[] args, ModelRouteContext context) throws Throwable {
-            ModelRoutingProperties.SceneDefinition sceneDef = modelRouterService.resolveSceneDefinition(
-                    context.getLanguage(), context.getScene());
-            if (sceneDef == null || !hasSceneParameters(sceneDef)) {
-                // 无 scene 参数时也需要处理脱敏
-                return invokeWithMasking(context, delegate, method, args);
-            }
-            // 处理 ChatRequest 参数，同时保留其他参数（如 StreamingResponseHandler）
+        private Object invokeWithRouteParameters(ModelInstance selected, Object delegate, Method method,
+                Object[] args, ModelRouteContext context, ModelRouteParameters routeParameters) throws Throwable {
             if (args != null && args.length > 0 && args[0] instanceof ChatRequest chatRequest) {
-                ChatRequestParameters overrideParams = buildOverrideParameters(sceneDef);
-                ChatRequest newRequest = ChatRequest.builder()
-                        .messages(chatRequest.messages())
-                        .parameters(mergeParameters(chatRequest.parameters(), overrideParams))
-                        .build();
-                // 构建新的参数数组，保留原有其他参数
-                Object[] newArgs = new Object[args.length];
-                newArgs[0] = newRequest;
-                for (int i = 1; i < args.length; i++) {
-                    newArgs[i] = args[i];
-                }
-                return invokeWithMasking(context, delegate, method, newArgs);
+                ChatRequest adaptedRequest = adaptChatRequest(selected.getProtocol(), chatRequest, routeParameters);
+                Object[] adaptedArgs = args.clone();
+                adaptedArgs[0] = adaptedRequest;
+                return invokeWithMasking(context, delegate, method, adaptedArgs);
             }
             return invokeWithMasking(context, delegate, method, args);
         }
@@ -433,7 +508,7 @@ public class ModelProxyFactory {
          * 2. 无线程问题 — 拦截发生在最终 HTTP 调用前
          */
         private Object invokeWithMasking(ModelRouteContext context, Object delegate, Method method, Object[] args) throws Throwable {
-            if ("LOGIC".equalsIgnoreCase(context.getGroup())) {
+            if (!context.isMaskSensitiveData()) {
                 return method.invoke(delegate, args);
             }
 
@@ -441,24 +516,28 @@ public class ModelProxyFactory {
                 return method.invoke(delegate, args);
             }
 
-            // 1. 拼接所有消息文本，统一脱敏
+            // 1. 规范化消息并拼接所有文本，统一脱敏
             List<ChatMessage> originalMessages = chatRequest.messages();
-            String allText = extractAllText(originalMessages);
+            List<ChatMessage> normalizedMessages = normalizeMessages(originalMessages);
+            ChatRequest normalizedRequest = chatRequest.toBuilder()
+                    .messages(normalizedMessages)
+                    .build();
+            Object[] normalizedArgs = args.clone();
+            normalizedArgs[0] = normalizedRequest;
+            String allText = extractAllText(normalizedMessages);
             MaskResult maskResult = maskService.mask(allText);
 
             if (!maskResult.isHasMasked()) {
-                // 无敏感信息，直接调用
-                return method.invoke(delegate, args);
+                return method.invoke(delegate, normalizedArgs);
             }
 
             Map<String, String> mapping = maskResult.getMappingTable();
             log.debug("脱敏拦截: 映射表大小={}", mapping.size());
 
             // 2. 构建脱敏后的 ChatRequest
-            List<ChatMessage> maskedMessages = maskMessages(originalMessages, mapping);
-            ChatRequest maskedRequest = ChatRequest.builder()
+            List<ChatMessage> maskedMessages = maskMessages(normalizedMessages, mapping);
+            ChatRequest maskedRequest = chatRequest.toBuilder()
                     .messages(maskedMessages)
-                    .parameters(chatRequest.parameters())
                     .build();
             Object[] maskedArgs = new Object[args.length];
             maskedArgs[0] = maskedRequest;
@@ -499,8 +578,13 @@ public class ModelProxyFactory {
                             }
                         }
                     }
-                } else if (msg instanceof AiMessage am && am.text() != null) {
-                    sb.append(am.text()).append("\n");
+                } else if (msg instanceof AiMessage am) {
+                    if (am.text() != null) {
+                        sb.append(am.text()).append("\n");
+                    }
+                    if (am.thinking() != null) {
+                        sb.append(am.thinking()).append("\n");
+                    }
                 } else if (msg instanceof ToolExecutionResultMessage tm) {
                     sb.append(tm.text()).append("\n");
                 }
@@ -534,11 +618,15 @@ public class ModelProxyFactory {
                 }).collect(Collectors.toList());
                 return UserMessage.from(um.name(), maskedContents);
             } else if (msg instanceof AiMessage am) {
-                String maskedText = am.text() != null ? replaceAll(am.text(), reverseMapping) : null;
-                if (am.hasToolExecutionRequests()) {
-                    return AiMessage.from(maskedText, am.toolExecutionRequests());
+                AiMessage normalized = normalizeAssistantMessage(am);
+                AiMessage.Builder builder = normalized.toBuilder();
+                if (normalized.text() != null) {
+                    builder.text(replaceAll(normalized.text(), reverseMapping));
                 }
-                return maskedText != null ? AiMessage.from(maskedText) : am;
+                if (normalized.thinking() != null) {
+                    builder.thinking(replaceAll(normalized.thinking(), reverseMapping));
+                }
+                return builder.build();
             } else if (msg instanceof ToolExecutionResultMessage tm) {
                 return ToolExecutionResultMessage.from(tm.id(), tm.toolName(),
                         replaceAll(tm.text(), reverseMapping));
@@ -625,78 +713,36 @@ public class ModelProxyFactory {
          * 对 ChatResponse 中的 AiMessage 文本做 unmask
          */
         private ChatResponse unmaskChatResponse(ChatResponse response, Map<String, String> mapping) {
-            if (response == null || response.aiMessage() == null || response.aiMessage().text() == null) {
+            if (response == null || response.aiMessage() == null) {
                 return response;
             }
-            AiMessage original = response.aiMessage();
-            String unmasked = maskService.unmask(mapping, original.text());
-            AiMessage newAiMessage;
-            if (original.hasToolExecutionRequests()) {
-                newAiMessage = AiMessage.from(unmasked, original.toolExecutionRequests());
-            } else {
-                newAiMessage = AiMessage.from(unmasked);
+            AiMessage original = normalizeAssistantMessage(response.aiMessage());
+            AiMessage.Builder builder = original.toBuilder();
+            if (original.text() != null) {
+                builder.text(maskService.unmask(mapping, original.text()));
             }
-            return ChatResponse.builder()
-                    .aiMessage(newAiMessage)
-                    .metadata(response.metadata())
-                    .build();
-        }
-
-        private boolean hasSceneParameters(ModelRoutingProperties.SceneDefinition sceneDef) {
-            return sceneDef.getMaxTokens() != null
-                    || sceneDef.getTemperature() != null
-                    || sceneDef.getTopP() != null
-                    || sceneDef.getMaxCompletionTokens() != null
-                    || (sceneDef.getCustomParameters() != null && !sceneDef.getCustomParameters().isEmpty());
-        }
-
-        private ChatRequestParameters buildOverrideParameters(ModelRoutingProperties.SceneDefinition sceneDef) {
-            Builder builder = OpenAiChatRequestParameters.builder();
-            if (sceneDef.getMaxTokens() != null) {
-                builder.maxOutputTokens(sceneDef.getMaxTokens());
+            if (original.thinking() != null) {
+                builder.thinking(maskService.unmask(mapping, original.thinking()));
             }
-            if (sceneDef.getTemperature() != null) {
-                builder.temperature(sceneDef.getTemperature());
-            }
-            if (sceneDef.getTopP() != null) {
-                builder.topP(sceneDef.getTopP());
-            }
-            if (sceneDef.getMaxCompletionTokens() != null) {
-                builder.maxCompletionTokens(sceneDef.getMaxCompletionTokens());
-            }
-            if (sceneDef.getCustomParameters() != null && !sceneDef.getCustomParameters().isEmpty()) {
-                builder.customParameters(sceneDef.getCustomParameters());
-            }
-            return builder.build();
-        }
-
-        private ChatRequestParameters mergeParameters(ChatRequestParameters base, ChatRequestParameters override) {
-            if (base == null) {
-                return override;
-            }
-            return base.overrideWith(override);
+            return response.toBuilder().aiMessage(builder.build()).build();
         }
 
         private ModelRouteContext resolveContext() {
             ModelRouteContext context = ModelRouteContextHolder.get();
             String language = context == null ? null : context.getLanguage();
             String scene = context == null ? null : context.getScene();
-            String group = context == null ? null : context.getGroup();
             String resolvedLanguage = Objects.requireNonNullElse(language, defaultLanguage);
             String resolvedScene = Objects.requireNonNullElse(scene, defaultScene);
-            String resolvedGroup = group == null || group.isBlank()
-                    ? modelRouterService.resolveGroup(resolvedLanguage, resolvedScene)
-                    : group;
             return ModelRouteContext.builder()
                     .requestId(context == null ? null : context.getRequestId())
                     .runId(context == null ? null : context.getRunId())
                     .userId(context == null ? null : context.getUserId())
                     .language(resolvedLanguage)
                     .scene(resolvedScene)
-                    .group(resolvedGroup)
                     .riskLevel(context == null ? null : context.getRiskLevel())
                     .estimatedInputTokens(context == null ? null : context.getEstimatedInputTokens())
                     .reservedOutputTokens(context == null ? null : context.getReservedOutputTokens())
+                    .maskSensitiveData(context == null || context.isMaskSensitiveData())
                     .build();
         }
     }

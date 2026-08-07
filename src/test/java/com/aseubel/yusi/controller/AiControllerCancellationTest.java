@@ -151,6 +151,28 @@ class AiControllerCancellationTest {
     }
 
     @Test
+    void providerErrorEmitsRunFailedAndClosesSseNormally() {
+        TokenStream tokenStream = tokenStream();
+        when(diaryAssistant.chatWithMessage(eq("user-1"), anyString(), anyList())).thenReturn(tokenStream);
+
+        controller.chatStream(ChatRequest.builder()
+                .requestId("request-provider-error")
+                .message("hello")
+                .build(), "zh-CN");
+        submittedTask.get().run();
+        UserContext.setUserId("user-1");
+
+        ArgumentCaptor<Consumer<Throwable>> errorCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(tokenStream).onError(errorCaptor.capture());
+
+        errorCaptor.getValue().accept(new IllegalStateException("provider failed"));
+
+        assertTrue(controller.events().stream().anyMatch(event -> "run.failed".equals(event.type())));
+        assertTrue(registry.find("user-1", "request-provider-error").isEmpty());
+        verify(aiLockService).releaseLock("user-1");
+    }
+
+    @Test
     void emitsSafeToolLifecycleEventsForMcpToolFailure() {
         TokenStream tokenStream = tokenStream();
         when(diaryAssistant.chatWithMessage(eq("user-1"), anyString(), anyList())).thenReturn(tokenStream);

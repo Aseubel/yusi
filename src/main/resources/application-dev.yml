@@ -28,17 +28,15 @@ model:
       scene: chat
       primary-tier: chat-zh
       priority: 0
-    strategy-channel: yusi:model:group:strategy:channel
     state-channel: yusi:model:state:channel
     instance-state-map-key: yusi:model:state:instances
-    group-strategy-map-key: yusi:model:group:strategies
     failure-threshold: 3
     recovery-success-threshold: 2
     recovery-probe-interval-ms: 15000
-    capability-groups:
-      SPEECH_TO_TEXT: asr-default
     models:
       - id: qwen-main
+        provider: openai-compatible
+        protocol: CHAT_COMPLETIONS
         baseurl: ${CHAT_MODEL_BASEURL}
         apikey: ${CHAT_MODEL_APIKEY}
         model: ${CHAT_MODEL_NAME}
@@ -179,45 +177,6 @@ model:
         risk-level: LOW
         primary-tier: memory-zh
         priority: 100
-    groups:
-      chat-zh:
-        strategy: ROUND_ROBIN
-        members: [qwen-main]
-      analysis-zh:
-        strategy: LEAST_LATENCY
-        members: [qwen-main]
-      emotion-zh:
-        strategy: LEAST_LATENCY
-        members: [qwen-main]
-      memory-zh:
-        strategy: FAIL_OVER
-        members: [qwen-main]
-      chat-en:
-        strategy: WEIGHTED_RANDOM
-        members: [qwen-main]
-      chat-ja:
-        strategy: WEIGHTED_RANDOM
-        members: [qwen-main]
-      asr-default:
-        strategy: FAIL_OVER
-        members: [whisper-asr, dashscope-asr]
-    matrix:
-      zh:
-        chat: chat-zh
-        situation-analysis: analysis-zh
-        emotion-analysis: emotion-zh
-        memory-extract: memory-zh
-      en:
-        chat: chat-en
-        situation-analysis: analysis-zh
-        emotion-analysis: emotion-zh
-        memory-extract: memory-zh
-      ja:
-        chat: chat-ja
-        situation-analysis: analysis-zh
-        emotion-analysis: emotion-zh
-        memory-extract: memory-zh
-
 yusi:
   web:
     trusted-proxy-addresses: ${YUSI_TRUSTED_PROXY_ADDRESSES:}

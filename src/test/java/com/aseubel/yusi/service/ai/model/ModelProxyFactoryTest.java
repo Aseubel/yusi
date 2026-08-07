@@ -8,6 +8,9 @@ import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
+import dev.langchain4j.model.openai.OpenAiChatRequestParameters;
+import dev.langchain4j.model.openai.OpenAiResponsesChatRequestParameters;
+import dev.langchain4j.model.anthropic.AnthropicChatRequestParameters;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.PartialResponse;
 import dev.langchain4j.model.chat.response.PartialResponseContext;
@@ -29,7 +32,6 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -99,7 +101,6 @@ class ModelProxyFactoryTest {
                 new ModelRouteCandidate("balanced", primaryInstance, true, null),
                 new ModelRouteCandidate("fast", backupInstance, true, "fallback-tier")),
                 "policy=chat-zh;primary-tier=balanced"));
-        when(router.resolveSceneDefinition(anyString(), anyString())).thenReturn(null);
         when(stateCenter.allowRequest(anyString())).thenReturn(true);
         when(maskService.mask(anyString())).thenReturn(new MaskResult("plain", Map.of(), false));
         when(primary.chat(any(ChatRequest.class))).thenThrow(new RuntimeException("HTTP 429 Too Many Requests"));
@@ -137,7 +138,6 @@ class ModelProxyFactoryTest {
                 new ModelRouteCandidate("balanced", primaryInstance, true, null),
                 new ModelRouteCandidate("fast", backupInstance, true, "fallback-tier")),
                 "policy=chat-zh;primary-tier=balanced"));
-        when(router.resolveSceneDefinition(anyString(), anyString())).thenReturn(null);
         when(stateCenter.allowRequest(anyString())).thenReturn(true);
         when(maskService.mask(anyString())).thenReturn(new MaskResult("plain", Map.of(), false));
         doAnswer(invocation -> {
@@ -158,6 +158,36 @@ class ModelProxyFactoryTest {
         verifyNoInteractions(backup);
     }
 
+    @Test
+    void normalizesThinkingOnlyAssistantMessagesWithoutDroppingThinking() {
+        AiMessage normalized = ModelProxyFactory.normalizeAssistantMessage(
+                AiMessage.builder().thinking("internal reasoning").build());
+
+        assertEquals("", normalized.text());
+        assertEquals("internal reasoning", normalized.thinking());
+    }
+
+    @Test
+    void buildsProtocolSpecificRequestParameters() {
+        var routeParameters = new ModelRouteParameters(128, 128, 0.2D, 0.8D, 96, Map.of());
+
+        ChatRequest input = ChatRequest.builder()
+                .messages(List.of(UserMessage.from("hello")))
+                .modelName("request-model")
+                .parameters(OpenAiChatRequestParameters.builder().maxCompletionTokens(32).build())
+                .build();
+
+        ChatRequest responses = ModelProxyFactory.adaptChatRequest(ModelProtocol.RESPONSES, input, routeParameters);
+        ChatRequest anthropic = ModelProxyFactory.adaptChatRequest(ModelProtocol.ANTHROPIC_MESSAGES, input, routeParameters);
+
+        assertEquals(OpenAiResponsesChatRequestParameters.class, responses.parameters().getClass());
+        assertEquals(128, responses.parameters().maxOutputTokens());
+        assertEquals("request-model", responses.modelName());
+        assertEquals(AnthropicChatRequestParameters.class, anthropic.parameters().getClass());
+        assertEquals(128, anthropic.parameters().maxOutputTokens());
+        assertEquals("request-model", anthropic.modelName());
+    }
+
     private StreamingChatResponseHandler createWrappedHandler(StreamingChatResponseHandler downstream) {
         ModelRouterService router = mock(ModelRouterService.class);
         ModelStateCenter stateCenter = mock(ModelStateCenter.class);
@@ -172,9 +202,10 @@ class ModelProxyFactoryTest {
                 .streamingChatModel(delegate)
                 .build();
 
-        when(router.select(any(ModelRouteContext.class), anySet())).thenReturn(selected);
-        when(router.resolveGroup(anyString(), anyString())).thenReturn("chat");
-        when(router.resolveSceneDefinition(anyString(), anyString())).thenReturn(null);
+        when(router.plan(any(ModelRouteContext.class))).thenReturn(new ModelRouteDecision(
+                "request-3", "chat", 1L, "chat", List.of(),
+                List.of(new ModelRouteCandidate("chat", selected, true, null)),
+                "policy=chat;primary-tier=chat"));
         when(stateCenter.allowRequest("model-1")).thenReturn(true);
         when(maskService.mask(anyString())).thenReturn(
                 new MaskResult("MASK", Map.of("MASK", "plain"), true));

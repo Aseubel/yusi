@@ -146,7 +146,7 @@ flowchart LR
 
 | 命令 | 结果 |
 |:---|:---|
-| `./mvnw -Dtest=ModelConfigCenterTest,ChatModelProviderRegistryTest,ModelRoutePolicyMatcherTest,ModelRouterServiceTest,ModelInvocationErrorClassifierTest,ModelProxyFactoryTest,ModelUsageExtractorTest,ModelManagementControllerTest test` | ✅ 24 tests passed |
+| `./mvnw -Dtest=ModelConfigCenterTest,ChatModelProviderRegistryTest,ModelRoutePolicyMatcherTest,ModelRouterServiceTest,ModelInvocationErrorClassifierTest,ModelProxyFactoryTest,ModelUsageExtractorTest,ModelManagementControllerTest,AiControllerCancellationTest test` | ✅ 33 tests passed |
 | `./mvnw -DskipTests compile` | ✅ BUILD SUCCESS |
 | `pnpm --dir frontend test --run` | ✅ 4 files / 14 tests passed |
 | `pnpm --dir frontend lint` | ✅ exit 0 |
@@ -158,6 +158,6 @@ flowchart LR
 ### 5.3 静态与手动检查
 
 - `application-dev.yml`、`application-prod.yml` 均包含 v2 `schema-version`、`default-route`、`tiers` 和 `routes`，ASR 仍保留 `SPEECH_TO_TEXT` 能力边界，YAML 未新增真实密钥。
-- `frontend/src/pages/admin/ModelManagement.tsx` 及 `model-management/` 未命中 `rawConfig`、`Textarea` 或 `/model/config`；JSON 只通过折叠高级兼容导出区生成。
+- `frontend/src/pages/admin/ModelManagement.tsx` 及 `model-management/` 未命中 `rawConfig`、`Textarea` 或 `/model/config`；JSON 仅通过折叠面板导出当前 schema v2 快照。
 - `src/main/java/.../controller` 与 `src/main/java/.../pojo/dto/model` 的 `apikey/apiKey` 扫描只命中 `apiKeyConfigured`，未暴露原始密钥字段。
 - 已启动本地前端并打开 `/admin/models`；现有认证守卫将无管理员会话重定向至登录页，因此桌面/移动控制台点击、路由预览、保存冲突和实际快照刷新无法在当前环境完成。没有使用凭据绕过认证。

@@ -191,24 +191,75 @@ docker exec -i yusi-mysql mysql -uroot -p123456 < src/main/resources/db/init.sql
 ```yaml
 model:
   routing:
+    schema-version: 2
     default-language: zh        # 默认语言
     default-scene: chat        # 默认场景
+    default-tier: chat-primary
+    default-route:
+      id: default
+      language: '*'
+      scene: '*'
+      risk-level: LOW
+      primary-tier: chat-primary
+      fallback-tiers: [chat-fallback]
+      priority: 0
     failure-threshold: 3        # 熔断失败阈值
     recovery-success-threshold: 2  # 恢复成功阈值
-  models:
-    - id: qwen-main
-      baseurl: ${CHAT_MODEL_BASEURL}
-      apikey: ${CHAT_MODEL_APIKEY}
-      model: ${CHAT_MODEL_NAME}
-      weight: 100
-      priority: 1
-      languages: [zh, en, ja]
-      scenes: [chat, situation-analysis, memory-extract]
-  groups:
-    chat-zh:
-      strategy: ROUND_ROBIN
-      members: [qwen-main]
+    models:
+      - id: qwen-main
+        display-name: Qwen main
+        provider: dashscope
+        protocol: CHAT_COMPLETIONS
+        baseurl: ${CHAT_MODEL_BASEURL}
+        apikey: ${CHAT_MODEL_APIKEY}
+        model: ${CHAT_MODEL_NAME}
+        capabilities: [CHAT, STREAMING_CHAT]
+        weight: 100
+        priority: 1
+        languages: [zh, en, ja]
+        scenes: [chat, situation-analysis, memory-extract]
+      - id: responses-model
+        display-name: Responses model
+        provider: openai-compatible
+        protocol: RESPONSES
+        baseurl: ${RESPONSES_MODEL_BASEURL}
+        apikey: ${RESPONSES_MODEL_APIKEY}
+        model: ${RESPONSES_MODEL_NAME}
+        capabilities: [CHAT, STREAMING_CHAT]
+      - id: claude-messages
+        display-name: Claude Messages
+        provider: anthropic
+        protocol: ANTHROPIC_MESSAGES
+        baseurl: ${ANTHROPIC_BASEURL:https://api.anthropic.com}
+        apikey: ${ANTHROPIC_APIKEY}
+        model: ${ANTHROPIC_MODEL}
+        capabilities: [CHAT, STREAMING_CHAT]
+    tiers:
+      chat-primary:
+        display-name: Primary chat
+        strategy: FAIL_OVER
+        members: [qwen-main, responses-model]
+        capabilities: [CHAT, STREAMING_CHAT]
+      chat-fallback:
+        display-name: Fallback chat
+        strategy: FAIL_OVER
+        members: [claude-messages]
+        capabilities: [CHAT, STREAMING_CHAT]
+    routes:
+      - id: zh-chat
+        language: zh
+        scene: chat
+        risk-level: LOW
+        primary-tier: chat-primary
+        fallback-tiers: [chat-fallback]
+        max-output-tokens: 512
+        enabled: true
+        priority: 100
 ```
+
+模型注册表中的 `protocol` 决定实际线协议：`CHAT_COMPLETIONS` 和 `RESPONSES` 由 OpenAI-compatible adapter 创建客户端，`ANTHROPIC_MESSAGES` 必须与 `anthropic` provider 配对。`openai`、`deepseek`、`dashscope` 是 OpenAI-compatible adapter 的 provider 别名；provider 与 protocol 不匹配时配置不会发布。
+
+治理控制台使用以下接口发布完整 schema v2 快照：`GET /api/model/console`、`PUT /api/model/console`、`POST /api/model/routes/preview`。更新必须携带 `expectedVersion`；API key 只返回配置状态，不返回原文。
 
 ### 4.3 MCP Server 配置 (mcp/config.yaml)
 

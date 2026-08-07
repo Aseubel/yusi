@@ -487,20 +487,20 @@ flowchart TB
     subgraph Admin["管理后台"]
         ConfigUI["配置管理 UI"]
         Dashboard["监控大盘"]
-        StrategySwitch["策略切换"]
+        RoutePreview["路由预览"]
     end
 
     subgraph Governance["治理核心"]
         ConfigCenter["ModelConfigCenter (配置中心)"]
         StateCenter["ModelStateCenter (状态中心)"]
         InstanceRegistry["ModelInstanceRegistry (实例注册)"]
-        StrategyManager["GroupStrategyManager (策略管理)"]
+        ProviderRegistry["ChatModelProviderRegistry (Provider 注册)"]
     end
 
     subgraph Routing["智能路由层"]
         Router["ModelRouterService"]
         ProxyFactory["ModelProxyFactory"]
-        RoutingHandler["RoutingInvocationHandler"]
+        Decision["Immutable ModelRouteDecision"]
     end
 
     subgraph Strategies["路由策略"]
@@ -519,17 +519,17 @@ flowchart TB
     Admin -->|HTTP/Admin API| ConfigCenter
     Admin -->|HTTP/Admin API| Dashboard
     Admin -->|HTTP/Admin API| StateCenter
-    Admin -->|HTTP/Admin API| StrategyManager
+    Admin -->|HTTP/Admin API| RoutePreview
 
     ConfigCenter -->|发布配置| InstanceRegistry
     ConfigCenter -->|发布配置| Router
     StateCenter -->|状态订阅| Router
-    StrategyManager -->|策略查询| Router
+    InstanceRegistry --> ProviderRegistry
 
-    Router --> ProxyFactory
-    ProxyFactory --> RoutingHandler
-    RoutingHandler --> Strategies
-    Strategies --> Router
+    Router --> Decision
+    Decision --> ProxyFactory
+    ProxyFactory --> Strategies
+    Strategies --> Decision
 
     Router -->|选择实例| ModelInstance1
     Router -->|选择实例| ModelInstance2
@@ -543,9 +543,10 @@ flowchart TB
 | 配置中心 | ModelConfigCenter | 配置热加载与 Redis 广播发布 |
 | 实例注册表 | ModelInstanceRegistry | 模型实例动态创建，配置变更自动 reload |
 | 状态中心 | ModelStateCenter | 熔断状态管理 (UP/HALF_OPEN/DOWN) |
-| 策略管理器 | GroupStrategyManager | 分组策略 Redis 订阅 + 本地缓存 |
-| 路由服务 | ModelRouterService | 根据 language/scene 解析分组 |
-| 代理工厂 | ModelProxyFactory | 动态代理，集成熔断、重试 |
+| Provider 注册表 | ChatModelProviderRegistry | 按 provider/protocol 创建 Chat/Streaming Chat 客户端 |
+| 路由服务 | ModelRouterService | 根据 language/scene/risk 生成有序候选链 |
+| 路由决策 | ModelRouteDecision | 固定单次请求的候选、参数和路由原因 |
+| 代理工厂 | ModelProxyFactory | 动态代理、协议参数适配、错误分类与 fallback |
 
 ### 8.3 熔断机制 (三级状态机)
 
@@ -586,13 +587,14 @@ sequenceDiagram
     participant Redis as Redis
     participant Registry as ModelInstanceRegistry
 
-    Admin->>API: PUT /api/model/config
-    API->>Config: updateFromAdmin(request)
-    Config->>Config: validate() 校验配置
-    Config->>Config: apply(merged, publish=true)
+    Admin->>API: PUT /api/model/console
+    API->>Config: updateCanonical(request, expectedVersion)
+    Config->>Config: validate(schemaVersion=2)
+    Config->>Config: merge secrets and create next version
+    Config->>MySQL: save snapshot and audit
     Config->>Redis: SET runtimeConfigKey
     Config->>Redis: PUBLISH configChannel
-    Config->>Config: publishEvent(ModelConfigUpdatedEvent)
+    Config->>Config: publish ModelConfigUpdatedEvent
     Config->>Registry: onModelConfigUpdated()
     Registry->>Registry: reload(config)
     Note over Registry: 销毁旧实例，创建新实例
@@ -613,23 +615,25 @@ sequenceDiagram
 
 | 接口 | 方法 | 说明 |
 |:---|:---|:---|
-| /api/model/config | GET | 获取模型配置 (API Key 脱敏) |
-| /api/model/config | PUT | 更新模型配置 (热生效) |
 | /api/model/states | GET | 获取所有实例运行时状态 |
-| /api/model/groups/{group}/strategy | GET | 获取分组路由策略 |
-| /api/model/groups/strategy/switch | POST | 切换分组路由策略 |
-
-### 8.8 v2 模型网关治理 API
-
-| 接口 | 方法 | 说明 |
-|:---|:---|:---|
 | /api/model/console | GET | 返回脱敏治理快照、tier、路由矩阵、运行状态和指标 |
 | /api/model/console | PUT | 携带 expectedVersion 发布结构化模型治理配置 |
 | /api/model/routes/preview | POST | 根据请求上下文返回策略、候选链和排除原因，不调用 Provider |
 | /api/model/attempts | GET | 分页查询低敏调用尝试轨迹 |
 | /api/model/metrics | GET | 聚合 fallback、成功率、延迟、usage、成本和限流统计 |
 
-治理快照以 `models -> tiers -> routes -> immutable decision -> attempt` 为主链路。场景规则不得引用真实供应商模型名；供应商协议由 Provider Adapter 负责。配置发布采用 MySQL 版本校验、Redis 发布、本地引用替换的顺序，避免旧节点在 Redis 发布失败时误用半成品配置。
+治理快照以 `models -> tiers -> routes -> immutable decision -> attempt` 为主链路。场景规则不得引用真实供应商模型名；供应商协议由 Provider Adapter 负责。配置发布采用 MySQL 版本校验、Redis 发布、本地引用替换的顺序，避免 Redis 发布失败时本地误用半成品配置。
+
+### 8.8 Provider 与协议映射
+
+| `provider` | 支持的 `protocol` | 客户端 |
+|:---|:---|:---|
+| `openai-compatible` | `CHAT_COMPLETIONS` | `OpenAiChatModel` / `OpenAiStreamingChatModel` |
+| `openai-compatible` | `RESPONSES` | `OpenAiResponsesChatModel` / `OpenAiResponsesStreamingChatModel` |
+| `openai`、`deepseek`、`dashscope` | `CHAT_COMPLETIONS` 或 `RESPONSES` | 归一化到 OpenAI-compatible Provider Adapter |
+| `anthropic` | `ANTHROPIC_MESSAGES` | `AnthropicChatModel` / `AnthropicStreamingChatModel` |
+
+Provider alias 只表达供应商身份，线协议由 `protocol` 明确决定。Anthropic provider 不接受 OpenAI 协议，OpenAI-compatible provider 不接受 Anthropic Messages；组合不匹配时配置发布和实例重载失败。
 
 ---
 

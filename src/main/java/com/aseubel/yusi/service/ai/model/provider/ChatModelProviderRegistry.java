@@ -17,11 +17,11 @@ import java.util.stream.Collectors;
 public class ChatModelProviderRegistry {
 
     private static final Map<String, String> PROVIDER_ALIASES = Map.of(
-            "", "openai-compatible",
             "openai", "openai-compatible",
             "openai-compatible", "openai-compatible",
             "deepseek", "openai-compatible",
-            "dashscope", "openai-compatible");
+            "dashscope", "openai-compatible",
+            "anthropic", "anthropic");
 
     private final Map<String, ChatModelProviderAdapter> adapters;
 
@@ -37,9 +37,13 @@ public class ChatModelProviderRegistry {
                 ? "" : definition.getProvider().trim().toLowerCase(Locale.ROOT);
         String providerId = PROVIDER_ALIASES.get(configuredProvider);
         ChatModelProviderAdapter adapter = providerId == null ? null : adapters.get(providerId);
-        if (adapter == null || !adapter.supports(definition)) {
+        if (adapter == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "不支持的 Chat provider: " + definition.getProvider());
+        }
+        if (!adapter.supports(definition)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "Chat provider " + definition.getProvider() + " 不支持协议: " + definition.getProtocol());
         }
         log.debug("Creating Chat model client through provider adapter: provider={}, modelId={}",
                 providerId, definition.getId());

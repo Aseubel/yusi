@@ -318,7 +318,7 @@ public class AiController {
                                             AgentStreamEvent.responseDelta(requestId, partialResponse.text()));
                                 }
                             } catch (RuntimeException e) {
-                                session.fail(e);
+                                session.complete();
                             }
                         })
                         .onPartialThinkingWithContext((partialThinking, context) -> {
@@ -377,21 +377,21 @@ public class AiController {
                         .onError(error -> {
                             traceRunFailed(userId, requestId, "agent_error");
                             sendAgentEvent(emitter, session, AgentStreamEvent.runFailed(requestId));
-                            session.fail(error);
+                            session.complete();
                         })
                         .start();
             } catch (Exception e) {
                 log.error("Error during AI chat stream", e);
                 traceRunFailed(userId, requestId, "agent_error");
                 sendAgentEvent(emitter, session, AgentStreamEvent.runFailed(requestId));
-                session.fail(e);
+                session.complete();
             } finally {
                 UserContext.clear();
                 ModelRouteContextHolder.clear();
             }
             });
         } catch (RuntimeException exception) {
-            session.fail(exception);
+            session.complete();
             throw exception;
         }
 
@@ -422,7 +422,7 @@ public class AiController {
                     .name(event.type())
                     .data(objectMapper.writeValueAsString(event)));
         } catch (IOException | IllegalStateException e) {
-            session.fail(e);
+            session.complete();
         }
     }
 

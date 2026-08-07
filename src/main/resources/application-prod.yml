@@ -30,17 +30,15 @@ model:
       scene: chat
       primary-tier: chat-zh
       priority: 0
-    strategy-channel: yusi:model:group:strategy:channel
     state-channel: yusi:model:state:channel
     instance-state-map-key: yusi:model:state:instances
-    group-strategy-map-key: yusi:model:group:strategies
     failure-threshold: 3
     recovery-success-threshold: 2
     recovery-probe-interval-ms: 15000
-    capability-groups:
-      SPEECH_TO_TEXT: asr-default
     models:
       - id: qwen
+        provider: dashscope
+        protocol: CHAT_COMPLETIONS
         baseurl: ${QWEN_BASEURL:https://dashscope.aliyuncs.com/compatible-mode/v1}
         apikey: ${QWEN_APIKEY}
         model: ${QWEN_MODEL:qwen3.5-flash-2026-02-23}
@@ -50,6 +48,8 @@ model:
         languages: [zh, en]
         scenes: [chat, situation-analysis, memory-extract, emotion-analysis, soul-match]
       - id: deepseek
+        provider: deepseek
+        protocol: CHAT_COMPLETIONS
         baseurl: ${DEEPSEEK_BASEURL:https://api.deepseek.com}
         apikey: ${DEEPSEEK_APIKEY}
         model: ${DEEPSEEK_MODEL:deepseek-v4-flash}
@@ -146,43 +146,6 @@ model:
         risk-level: MEDIUM
         primary-tier: match-zh
         priority: 100
-    groups:
-      chat-zh:
-        strategy: FAIL_OVER
-        members: [qwen, deepseek]
-      analysis-zh:
-        strategy: FAIL_OVER
-        members: [qwen, deepseek]
-      memory-zh:
-        strategy: FAIL_OVER
-        members: [qwen, deepseek]
-      emotion-zh:
-        strategy: WEIGHTED_RANDOM
-        members: [qwen, deepseek]
-      match-zh:
-        strategy: FAIL_OVER
-        members: [qwen, deepseek]
-      asr-default:
-        strategy: FAIL_OVER
-        members: [whisper-asr, dashscope-asr]
-    matrix:
-      zh:
-        chat: 
-          group: chat-zh
-          temperature: 1.3
-          maxTokens: 256
-        situation-analysis: 
-          group: analysis-zh
-          temperature: 0.1
-        emotion-analysis: 
-          group: emotion-zh
-          temperature: 0.3
-          maxTokens: 32
-        memory-extract: 
-          group: memory-zh
-        soul-match:
-          group: match-zh
-
 yusi:
   web:
     allowed-origin: ${YUSI_WEB_ALLOWED_ORIGIN:https://app.aseubel.cn}

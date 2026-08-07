@@ -4,14 +4,14 @@
 
 ## 目标
 
-将按 `language + scene -> group` 的粗粒度选择升级为应用内可解释网关，并把管理员主流程迁移到可视化模型注册表、路由矩阵、策略编辑器、候选链预览和运行状态面板。
+将模型治理收敛为 schema v2 应用内可解释网关，并把管理员主流程迁移到可视化模型注册表、tier 路由矩阵、策略编辑器、候选链预览和运行状态面板。
 
 ## 发布边界
 
 - 第一版只启用固定规则、逻辑 tier、健康过滤、错误分类 fallback、usage/成本元数据和审计。
 - 场景规则只引用内部 tier ID；真实模型名只存在于物理模型注册表。
-- OpenAI-compatible Chat/Streaming Chat 由 Provider Adapter 统一出口；ASR 继续使用独立能力边界。
-- JSON 仅作为高级兼容导出，不作为日常编辑入口。
+- `CHAT_COMPLETIONS`、`RESPONSES` 和 `ANTHROPIC_MESSAGES` 由 Provider Adapter 按 provider/protocol 组合统一创建同步与流式客户端；ASR 继续使用独立能力边界。
+- 控制台保存完整 schema v2 快照；JSON 导出只表示当前 v2 快照，不提供旧格式转换。
 - 调用轨迹不保存 prompt、回答、思维链、工具参数或工具结果。
 
 ## 配置发布与回滚
@@ -39,13 +39,13 @@
 
 ## 数据与指标
 
-`model_runtime_config` 保存 active 全量配置和版本；`model_config_change_log` 记录 `UPDATE_CONFIG`、`SWITCH_STRATEGY` 和失败原因；`model_call_trace` 保存低敏调用尝试。成本未知时显示 `unknown cost`，不得用默认价格伪造精确成本。
+`model_runtime_config` 保存 active 全量配置和版本；`model_config_change_log` 记录 `UPDATE_CONFIG`、回滚和失败原因；`model_call_trace` 保存低敏调用尝试。成本未知时显示 `unknown cost`，不得用默认价格伪造精确成本。
 
 ## 发布顺序
 
-1. 先部署后端兼容读取版本，确认旧 `groups/matrix` 能归一化为 v2。
-2. 再部署可视化前端，确认未保存草稿、版本冲突和密钥掩码状态可见。
-3. 最后启用 v2 写入；保留上一份 Redis 配置和 MySQL 版本供回滚。
+1. 部署包含 v2 schema 校验、三种协议 adapter 和版本化发布的后端。
+2. 部署可视化前端，确认未保存草稿、版本冲突和密钥状态可见。
+3. 发布 v2 配置；保留上一份 Redis 配置和 MySQL 版本供回滚。
 
 ## 阶段门
 
@@ -54,7 +54,7 @@
 ## 验证证据
 
 - 环境：Java 21、Spring Boot 3.4.5、Node.js/pnpm；focused suite 未使用真实 Provider API key。
-- 后端 focused Maven suite：`./mvnw -Dtest=ModelConfigCenterTest,ChatModelProviderRegistryTest,ModelRoutePolicyMatcherTest,ModelRouterServiceTest,ModelInvocationErrorClassifierTest,ModelProxyFactoryTest,ModelUsageExtractorTest,ModelManagementControllerTest test`，24 tests passed。
+- 后端 focused Maven suite：`./mvnw -Dtest=ModelConfigCenterTest,ChatModelProviderRegistryTest,ModelRoutePolicyMatcherTest,ModelRouterServiceTest,ModelInvocationErrorClassifierTest,ModelProxyFactoryTest,ModelUsageExtractorTest,ModelManagementControllerTest,AiControllerCancellationTest test`，33 tests passed。
 - 后端编译：`./mvnw -DskipTests compile`，`BUILD SUCCESS`。
 - 前端 Vitest suite：`pnpm --dir frontend test --run`，4 个测试文件、14 tests passed。
 - 前端 ESLint：`pnpm --dir frontend lint`，exit 0。

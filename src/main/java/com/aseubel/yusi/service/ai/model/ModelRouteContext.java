@@ -11,8 +11,9 @@ public class ModelRouteContext {
     String userId;
     String language;
     String scene;
-    String group;
     String riskLevel;
     Integer estimatedInputTokens;
     Integer reservedOutputTokens;
+    @Builder.Default
+    boolean maskSensitiveData = true;
 }

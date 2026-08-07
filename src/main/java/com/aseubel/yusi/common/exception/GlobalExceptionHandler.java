@@ -11,14 +11,15 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
-import java.util.Objects;
-
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public Response<String> handleMethodArgumentNotValidException(MethodArgumentNotValidException e) {
+        if (isStreamingResponse()) {
+            return null;
+        }
         setStatus(HttpServletResponse.SC_OK);
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getField() + ": " + error.getDefaultMessage())
@@ -32,6 +33,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ConstraintViolationException.class)
     public Response<String> handleConstraintViolationException(ConstraintViolationException e) {
+        if (isStreamingResponse()) {
+            return null;
+        }
         setStatus(HttpServletResponse.SC_OK);
         String message = e.getConstraintViolations().stream()
                 .map(violation -> violation.getPropertyPath() + ": " + violation.getMessage())
@@ -45,6 +49,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
     public Response<String> handleBusinessException(BusinessException e) {
+        if (isStreamingResponse()) {
+            return null;
+        }
         // Business exceptions are expected, do not log error stack trace
         setStatus(HttpServletResponse.SC_OK);
         ErrorCode ec = e.getErrorCode();
@@ -57,18 +64,28 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NoResourceFoundException.class)
     public Response<String> handleNoResourceFoundException(NoResourceFoundException e) {
+        if (isStreamingResponse()) {
+            return null;
+        }
         setStatus(HttpServletResponse.SC_NOT_FOUND);
         return Response.<String>builder().code(ErrorCode.RESOURCE_NOT_FOUND.getCode()).info(e.getMessage()).build();
     }
 
     @ExceptionHandler(RateLimitException.class)
     public Response<String> handleRateLimitException(RateLimitException e) {
+        if (isStreamingResponse()) {
+            return null;
+        }
         setStatus(ErrorCode.RATE_LIMIT_EXCEEDED.getHttpStatus());
         return Response.<String>builder().code(ErrorCode.RATE_LIMIT_EXCEEDED.getCode()).info(e.getMessage()).build();
     }
 
     @ExceptionHandler(Exception.class)
     public Response<String> handleException(Exception e) {
+        if (isStreamingResponse()) {
+            log.debug("Ignoring exception after SSE response started: {}", e.getMessage());
+            return null;
+        }
         log.error("System error", e);
         setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         return Response.fail("系统内部错误: " + e.getMessage());
@@ -76,6 +93,9 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AuthorizationException.class)
     public Response<String> handleAuthorizationException(AuthorizationException e) {
+        if (isStreamingResponse()) {
+            return null;
+        }
         ErrorCode ec = e.getErrorCode();
         setStatus(ec != null ? ec.getHttpStatus() : HttpServletResponse.SC_UNAUTHORIZED);
         int code = ec != null ? ec.getCode() : ErrorCode.UNAUTHORIZED.getCode();
@@ -84,12 +104,18 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AuthenticationException.class)
     public Response<String> handleAuthenticationException(AuthenticationException e) {
+        if (isStreamingResponse()) {
+            return null;
+        }
         setStatus(HttpServletResponse.SC_FORBIDDEN);
         return Response.<String>builder().code(ErrorCode.FORBIDDEN.getCode()).info(e.getMessage()).build();
     }
 
     @ExceptionHandler(AiLockException.class)
     public Response<String> handleAiLockException(AiLockException e) {
+        if (isStreamingResponse()) {
+            return null;
+        }
         setStatus(ErrorCode.AI_REQUEST_IN_PROGRESS.getHttpStatus());
         return Response.<String>builder()
                 .code(ErrorCode.AI_REQUEST_IN_PROGRESS.getCode())
@@ -98,10 +124,26 @@ public class GlobalExceptionHandler {
     }
 
     private void setStatus(int code) {
-        HttpServletResponse response = ((ServletRequestAttributes) Objects
-                .requireNonNull(RequestContextHolder.getRequestAttributes())).getResponse();
+        HttpServletResponse response = currentResponse();
         if (response != null) {
             response.setStatus(code);
         }
+    }
+
+    private boolean isStreamingResponse() {
+        HttpServletResponse response = currentResponse();
+        if (response == null) {
+            return false;
+        }
+        String contentType = response.getContentType();
+        return response.isCommitted()
+                || (contentType != null && contentType.startsWith("text/event-stream"));
+    }
+
+    private HttpServletResponse currentResponse() {
+        if (!(RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attributes)) {
+            return null;
+        }
+        return attributes.getResponse();
     }
 }

@@ -49,7 +49,7 @@ BDI 和 Human-in-the-Loop 适合“计划 -> 工具调用 -> 等待用户确认 
 - Embedding 后续迁移到同一 endpoint 配置契约，但保留 EmbeddingModel 专用 adapter。
 - capability 组与 endpoint 成员独立于 Chat 场景矩阵，避免把 ASR 当作聊天模型创建或参与聊天路由。
 
-当前 bootstrap 配置已将 ASR endpoint 放入 model.routing.models，并通过 capability-groups.SPEECH_TO_TEXT 选择 asr-default。model.speech.asr 不再是运行时配置来源。
+当前 bootstrap 配置已将 ASR endpoint 放入 model.routing.models，并通过声明 `SPEECH_TO_TEXT` 能力的 tier 选择语音识别候选。`model.speech.asr` 不再是运行时配置来源。
 
 当前 ASR registry 按 endpoint priority 顺序执行失败转移；接入现有 ModelStateCenter 的延迟、熔断和半开探测仍是后续工作。
 

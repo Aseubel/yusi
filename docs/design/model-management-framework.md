@@ -6,11 +6,11 @@
 
 - 按语言（zh/en/ja）与场景（聊天、情景分析、记忆提取）进行多维路由
 - 多实例运行时状态共享（健康度、QPS、延迟、可用性）
-- 分组级动态策略切换（轮询、最低延迟、权重随机、故障转移）
+- tier 级固定策略与有序故障回退（轮询、最低延迟、权重随机、故障转移）
 - 零额外探针的被动监控与故障恢复
 - 多节点间秒级状态一致性
 
-为此在现有 Prompt 管理模式基础上，新增统一的模型治理层，实现“配置驱动 + 运行时动态决策 + Redis 共享状态”。
+为此在现有 Prompt 管理模式基础上，新增统一的模型治理层，实现“schema v2 配置驱动 + 运行时动态决策 + Redis 共享状态”。
 
 ## 2. 总体架构
 
@@ -18,18 +18,22 @@
 flowchart LR
     A[业务入口<br/>AiController / MemoryCompressionService] --> B[模型代理层<br/>ChatModel/StreamingChatModel Proxy]
     B --> C[ModelRouterService]
-    C --> D[GroupStrategyManager]
-    C --> E[ModelInstanceRegistry]
-    C --> F[ModelStateCenter]
-    D --> R1[(Redis<br/>group strategy map)]
-    F --> R2[(Redis<br/>instance state map)]
-    F --> P[(Redis Pub/Sub)]
+    C --> D[ModelRouteDecision]
+    D --> E[ModelProxyFactory]
+    E --> F[Provider Adapter]
+    F --> M1[Chat Completions]
+    F --> M2[Responses]
+    F --> M3[Anthropic Messages]
+    Config[ModelConfigCenter] --> C
+    Config --> R1[(Redis<br/>runtime config bucket)]
+    State[ModelStateCenter] --> C
+    State --> R2[(Redis<br/>instance state map)]
+    Config --> P[(Redis Pub/Sub)]
+    State --> P
     P --> N1[Node A]
     P --> N2[Node B]
     P --> N3[Node C]
-    E --> M1[OpenAI 实例1]
-    E --> M2[OpenAI 实例2]
-    E --> M3[OpenAI 实例N]
+    E --> Registry[ModelInstanceRegistry]
 ```
 
 ## 3. 核心数据模型
@@ -37,10 +41,11 @@ flowchart LR
 ### 3.1 配置模型（YAML -> Properties）
 
 - `ModelRoutingProperties`
-  - `models[]`: 物理模型实例定义（endpoint/key/modelName/weight/priority/支持语言/支持场景）
-  - `groups{}`: 模型组定义（成员列表 + 默认策略）
-  - `matrix{language.scene -> group}`: 多维映射矩阵
-  - `bindings{beanName -> 默认 scene/language/group}`: 业务 Bean 与路由绑定
+  - `schemaVersion`: 固定为 `2`
+  - `models[]`: 物理模型注册表（provider/protocol/endpoint/key/model/能力/上下文/价格）
+  - `tiers{}`: 逻辑模型层级（成员列表、选择策略、能力边界）
+  - `routes[]`: 语言、场景、风险、预算与 fallback tier 规则
+  - `defaultRoute`: 未命中特定规则时使用的默认路由
 
 ### 3.2 运行时模型
 
@@ -51,29 +56,42 @@ flowchart LR
   - `consecutiveFailures`, `consecutiveSuccesses`
   - `phase(UP/HALF_OPEN/DOWN)`, `nextProbeAt`, `lastError`
 - `ModelStateEvent`: 状态广播事件
-- `GroupStrategyEvent`: 策略切换广播事件
+- `ModelRouteDecision`: 请求级不可变候选链和路由原因
+- `ModelCallTrace`: 每一次调用尝试的低敏审计元数据
 
 ### 3.3 Redis Key Schema
 
 | Key | Type | 说明 |
 |---|---|---|
 | `yusi:model:state:instances` | Hash | `field=instanceId`，`value=ModelRuntimeState` |
-| `yusi:model:group:strategies` | Hash | `field=groupId`，`value=strategyName` |
 | `yusi:model:state:channel` | Pub/Sub Channel | 广播实例状态变化 |
-| `yusi:model:group:strategy:channel` | Pub/Sub Channel | 广播组策略切换 |
+| `yusi:model:runtime:config` | String | 当前 schema v2 全量运行配置 |
+| `yusi:model:config:channel` | Pub/Sub Channel | 广播 schema v2 配置快照 |
 
 ## 4. 配置规范（YAML 示例）
 
 ```yaml
 model:
   routing:
+    schema-version: 2
     default-language: zh
     default-scene: chat
+    default-tier: chat-balanced
+    default-route:
+      id: default
+      language: '*'
+      scene: '*'
+      primary-tier: chat-balanced
+      fallback-tiers: [chat-fast]
+      priority: 0
     failure-threshold: 3
     recovery-success-threshold: 2
     recovery-probe-interval-ms: 15000
     models:
-      - id: qwen-main
+      - id: chat-completions-model
+        display-name: Chat Completions model
+        provider: openai-compatible
+        protocol: CHAT_COMPLETIONS
         baseurl: ${CHAT_MODEL_BASEURL}
         apikey: ${CHAT_MODEL_APIKEY}
         model: ${CHAT_MODEL_NAME}
@@ -81,38 +99,43 @@ model:
         priority: 1
         languages: [zh, en, ja]
         scenes: [chat, situation-analysis, memory-extract]
-    groups:
-      chat-zh:
-        strategy: ROUND_ROBIN
-        members: [qwen-main]
-      analysis-zh:
+      - id: responses-model
+        display-name: Responses model
+        provider: openai-compatible
+        protocol: RESPONSES
+        baseurl: ${RESPONSES_MODEL_BASEURL}
+        apikey: ${RESPONSES_MODEL_APIKEY}
+        model: ${RESPONSES_MODEL_NAME}
+        capabilities: [CHAT, STREAMING_CHAT]
+      - id: anthropic-model
+        display-name: Anthropic Messages model
+        provider: anthropic
+        protocol: ANTHROPIC_MESSAGES
+        baseurl: ${ANTHROPIC_BASEURL:https://api.anthropic.com}
+        apikey: ${ANTHROPIC_APIKEY}
+        model: ${ANTHROPIC_MODEL}
+        capabilities: [CHAT, STREAMING_CHAT]
+    tiers:
+      chat-fast:
+        display-name: Fast
         strategy: LEAST_LATENCY
-        members: [qwen-main]
-      memory-zh:
+        members: [chat-completions-model]
+        capabilities: [CHAT, STREAMING_CHAT]
+      chat-balanced:
+        display-name: Balanced
         strategy: FAIL_OVER
-        members: [qwen-main]
-    matrix:
-      zh:
-        chat: chat-zh
-        situation-analysis: analysis-zh
-        memory-extract: memory-zh
-      en:
-        chat: chat-zh
-        situation-analysis: analysis-zh
-        memory-extract: memory-zh
-      ja:
-        chat: chat-zh
-        situation-analysis: analysis-zh
-        memory-extract: memory-zh
-    bindings:
-      streamingChatModel:
+        members: [responses-model, anthropic-model]
+        capabilities: [CHAT, STREAMING_CHAT]
+    routes:
+      - id: zh-chat
+        language: zh
         scene: chat
-      logicModel:
-        scene: situation-analysis
-      chatModel:
-        scene: situation-analysis
-      jsonChatModel:
-        scene: memory-extract
+        risk-level: LOW
+        primary-tier: chat-balanced
+        fallback-tiers: [chat-fast]
+        max-output-tokens: 512
+        enabled: true
+        priority: 100
 ```
 
 ## 5. 状态机流转图（被动监控）
@@ -170,8 +193,8 @@ return first(ordered)
 ## 7. 异常处理与降级策略
 
 - 路由降级
-  - `language+scene` 未命中时，回退默认语言矩阵
-  - 组无可用实例时，回退首个成员（保证可执行）
+  - `language+scene` 未命中时，使用 `defaultRoute`
+  - primary tier 无可用候选时，按 `fallback-tiers` 顺序继续尝试
 - 故障降级
   - 实例连续失败触发 `DOWN`，选择层自动剔除
   - `DOWN` 状态仅在恢复窗口到达后由真实流量触发探测
@@ -179,23 +202,25 @@ return first(ordered)
   - `HALF_OPEN` 成功达到阈值后自动恢复 `UP`
   - `HALF_OPEN` 一次失败立即回落 `DOWN`
 - 一致性保障
-  - 所有状态变更与策略切换都写 Redis + Pub/Sub 广播
+  - 配置快照和状态变更分别写入 Redis 并通过对应 Pub/Sub channel 广播
   - 各节点订阅事件并更新本地缓存，实现秒级收敛
 
-## 8. 运行时热切换能力
+## 8. 运行时配置发布能力
 
-通过管理接口可在运行时切换任意组的策略，无需重启：
+通过治理控制台可在运行时发布完整 schema v2 配置，无需重启：
 
-- `POST /api/model/groups/strategy/switch`
-- `GET /api/model/groups/{group}/strategy`
+- `GET /api/model/console`
+- `PUT /api/model/console`
+- `POST /api/model/routes/preview`
 - `GET /api/model/states`
 
-策略切换流程：
+配置发布流程：
 
-1. 写入 `yusi:model:group:strategies`
-2. 发布 `GroupStrategyEvent`
-3. 各节点订阅后更新本地策略缓存
-4. 下一次请求立即按新策略生效
+1. 读取 active MySQL 快照并校验 `expectedVersion`
+2. 校验模型、tier、route 引用，合并未修改的服务端密钥
+3. 保存下一版本快照和脱敏审计
+4. 写入 `yusi:model:runtime:config` 并发布 `yusi:model:config:channel`
+5. Redis 成功后替换本地配置并重载模型实例
 
 ## 9. SQL 落地与执行说明
 
@@ -205,7 +230,7 @@ return first(ordered)
   - 作用：持久化模型治理运行时全量配置（JSON）
   - 关键字段：`config_key`、`config_json`、`version`、`updated_at`
 - `model_config_change_log`
-  - 作用：记录配置更新/策略切换/回滚等治理动作
+  - 作用：记录配置更新、回滚和失败原因等治理动作
   - 关键字段：`change_id`、`action`、`before_json`、`after_json`、`success`
 
 ### 9.2 脚本位置
@@ -231,21 +256,21 @@ return first(ordered)
 
 ## 10. v2 治理控制面
 
-v2 将原来的 `language + scene -> group` 拆成四层：
+schema v2 将模型治理拆成四层：
 
 1. `models[]` 是物理模型注册表，包含 provider、endpoint、能力、上下文窗口和价格快照。
 2. `tiers{}` 是逻辑模型层级，场景规则只引用 tier ID，不引用供应商真实模型名。
 3. `routes[]` 是按语言、场景、风险级别和优先级排序的固定策略，可声明有序 fallback tiers。
 4. `ModelRouteDecision` 在首次 Provider 调用前固定候选链；每一次模型尝试单独写入 `ModelCallTrace`。
 
-管理员主入口是路由矩阵和策略编辑器，模型注册表负责模型及 tier 成员选择，候选链预览只计算决策而不会发起模型调用。JSON 只保留在折叠的兼容导出区。
+管理员主入口是路由矩阵和策略编辑器，模型注册表负责模型及 tier 成员选择，候选链预览只计算决策而不会发起模型调用。导出的 JSON 始终是当前 schema v2 快照，不提供旧格式转换或旧 endpoint。
 
 ### 10.1 版本化发布顺序
 
 `PUT /api/model/console` 必须携带 `expectedVersion`。服务端按以下顺序执行：
 
 1. 读取 active MySQL 快照并比较版本，过期版本返回 `CONFIG_VERSION_CONFLICT`。
-2. 归一化旧配置、校验 tier/route/model 引用并合并未修改的服务端密钥。
+2. 校验 schema v2 的 tier/route/model 引用并合并未修改的服务端密钥。
 3. 保存下一版本全量快照和脱敏审计记录。
 4. 写 Redis runtime bucket 并发布配置事件。
 5. Redis 成功后才替换本地 `AtomicReference`，触发模型实例注册表重载。

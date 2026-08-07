@@ -10,6 +10,7 @@ import com.aseubel.yusi.pojo.entity.ModelRuntimeConfig;
 import com.aseubel.yusi.repository.ModelConfigChangeLogRepository;
 import com.aseubel.yusi.repository.ModelRuntimeConfigRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
@@ -19,9 +20,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -38,7 +37,6 @@ public class ModelConfigCenter {
     private static final String ACTIVE_CONFIG_KEY = "active";
     private static final String SECRET_PLACEHOLDER = "******";
     private static final String UPDATE_CONFIG = "UPDATE_CONFIG";
-    private static final String SWITCH_STRATEGY = "SWITCH_STRATEGY";
 
     private final ModelRoutingProperties bootstrapProperties;
     private final RedissonClient redissonClient;
@@ -48,9 +46,6 @@ public class ModelConfigCenter {
     private final ModelConfigChangeLogRepository changeLogRepository;
     private final AtomicReference<ModelRoutingProperties> currentConfig = new AtomicReference<>();
 
-    /**
-     * Kept for focused unit tests and compatibility with callers that construct the center directly.
-     */
     public ModelConfigCenter(ModelRoutingProperties bootstrapProperties,
             RedissonClient redissonClient,
             ObjectMapper objectMapper,
@@ -75,7 +70,7 @@ public class ModelConfigCenter {
 
     @PostConstruct
     public void init() {
-        ModelRoutingProperties initial = normalizeLegacyConfig(cloneConfig(bootstrapProperties));
+        ModelRoutingProperties initial = cloneConfig(bootstrapProperties);
         boolean loaded = false;
 
         if (runtimeConfigRepository != null) {
@@ -95,14 +90,15 @@ public class ModelConfigCenter {
             String raw = redissonClient.<String>getBucket(bootstrapProperties.getRuntimeConfigKey()).get();
             if (raw != null && !raw.isBlank()) {
                 try {
-                    initial = normalizeLegacyConfig(objectMapper.readValue(raw, ModelRoutingProperties.class));
+                    initial = readRuntimeConfig(raw, null);
                     log.info("Loaded runtime model config from Redis, version={}", initial.getVersion());
-                } catch (Exception exception) {
-                    log.warn("Failed to parse runtime model config from Redis, fallback bootstrap config");
+                } catch (RuntimeException exception) {
+                    log.warn("Failed to load canonical v2 model config from Redis: {}", exception.getMessage());
                 }
             }
         }
 
+        validate(initial);
         applyLocal(initial);
         if (redissonClient == null) {
             return;
@@ -112,154 +108,34 @@ public class ModelConfigCenter {
                 return;
             }
             try {
-                ModelRoutingProperties incoming = objectMapper.readValue(message, ModelRoutingProperties.class);
-                applyLocal(normalizeLegacyConfig(incoming));
-            } catch (Exception exception) {
-                log.warn("Failed to consume model config event: {}", exception.getMessage());
+                applyLocal(readRuntimeConfig(message, null));
+            } catch (RuntimeException exception) {
+                log.warn("Failed to consume canonical v2 model config event: {}", exception.getMessage());
             }
         });
     }
 
     public ModelRoutingProperties getEffectiveConfig() {
         ModelRoutingProperties config = currentConfig.get();
-        if (config == null) {
-            return normalizeLegacyConfig(cloneConfig(bootstrapProperties));
-        }
-        return cloneConfig(config);
+        return cloneConfig(config == null ? bootstrapProperties : config);
     }
 
     public long getCurrentVersion() {
         return getEffectiveConfig().getVersion();
     }
 
-    public ModelRoutingProperties getConfigForDisplay() {
-        ModelRoutingProperties config = getEffectiveConfig();
-        if (config.getModels() != null) {
-            config.getModels().forEach(model -> {
-                if (model.getApikey() != null && !model.getApikey().isBlank()) {
-                    model.setApikey(SECRET_PLACEHOLDER);
-                }
-            });
-        }
-        return config;
-    }
-
-    /**
-     * Legacy endpoint update. It remains last-write-wins for clients that do not send a version.
-     */
-    public void updateFromAdmin(ModelRoutingProperties request) {
-        long expectedVersion = request != null && request.getVersion() > 0
-                ? request.getVersion() : getCurrentVersion();
-        updateFromAdmin(request, expectedVersion, null);
-    }
-
     @Transactional(noRollbackFor = ModelRuntimePublishException.class)
-    public ModelRoutingProperties updateFromAdmin(ModelRoutingProperties request,
+    public ModelRoutingProperties updateCanonical(ModelRoutingProperties request,
             long expectedVersion, String operatorId) {
-        return updateVersioned(request, expectedVersion, operatorId, UPDATE_CONFIG, null);
-    }
-
-    public ModelRoutingProperties switchStrategy(String tierId,
-            ModelSelectionStrategyType strategy, String operatorId) {
-        if (tierId == null || tierId.isBlank() || strategy == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "tier 和 strategy 不能为空");
-        }
-        ModelRoutingProperties current = getEffectiveConfig();
-        ModelRoutingProperties normalized = normalizeLegacyConfig(current);
-        ModelTierDefinition tier = normalized.getTiers().get(tierId);
-        if (tier == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "未知 tier: " + tierId);
-        }
-        ModelRoutingProperties next = cloneConfig(normalized);
-        next.getTiers().get(tierId).setStrategy(strategy);
-        if (next.getGroups() != null && next.getGroups().containsKey(tierId)) {
-            next.getGroups().get(tierId).setStrategy(strategy);
-        }
-        return updateVersioned(next, current.getVersion(), operatorId, SWITCH_STRATEGY, tierId);
-    }
-
-    ModelRoutingProperties normalizeLegacyConfig(ModelRoutingProperties source) {
-        ModelRoutingProperties normalized = cloneConfig(source);
-        if (normalized.getTiers() == null) {
-            normalized.setTiers(new LinkedHashMap<>());
-        }
-        if (normalized.getRoutes() == null) {
-            normalized.setRoutes(new ArrayList<>());
-        }
-
-        if (normalized.getSchemaVersion() >= 2
-                && !normalized.getTiers().isEmpty()
-                && !normalized.getRoutes().isEmpty()) {
-            return normalized;
-        }
-
-        if (normalized.getGroups() != null) {
-            normalized.getGroups().forEach((groupId, groupDefinition) -> {
-                if (normalized.getTiers().containsKey(groupId)) {
-                    return;
-                }
-                ModelTierDefinition tier = new ModelTierDefinition();
-                tier.setMembers(groupDefinition == null || groupDefinition.getMembers() == null
-                        ? new ArrayList<>() : new ArrayList<>(groupDefinition.getMembers()));
-                tier.setStrategy(groupDefinition == null || groupDefinition.getStrategy() == null
-                        ? ModelSelectionStrategyType.ROUND_ROBIN : groupDefinition.getStrategy());
-                tier.setDisplayName(groupId);
-                normalized.getTiers().put(groupId, tier);
-            });
-        }
-
-        if (normalized.getRoutes().isEmpty() && normalized.getMatrix() != null) {
-            normalized.getMatrix().forEach((language, sceneMap) -> {
-                if (sceneMap == null) {
-                    return;
-                }
-                sceneMap.forEach((scene, sceneDefinition) -> {
-                    if (sceneDefinition == null || sceneDefinition.getGroup() == null
-                            || sceneDefinition.getGroup().isBlank()) {
-                        return;
-                    }
-                    RoutePolicyDefinition route = new RoutePolicyDefinition();
-                    route.setId(normalize(language) + "-" + normalize(scene));
-                    route.setLanguage(normalize(language));
-                    route.setScene(normalize(scene));
-                    route.setPrimaryTier(sceneDefinition.getGroup());
-                    route.setMaxOutputTokens(sceneDefinition.getMaxTokens());
-                    route.setTemperature(sceneDefinition.getTemperature());
-                    route.setTopP(sceneDefinition.getTopP());
-                    route.setMaxCompletionTokens(sceneDefinition.getMaxCompletionTokens());
-                    route.setCustomParameters(sceneDefinition.getCustomParameters() == null
-                            ? new LinkedHashMap<>() : new LinkedHashMap<>(sceneDefinition.getCustomParameters()));
-                    normalized.getRoutes().add(route);
-                });
-            });
-        }
-
-        if (normalized.getDefaultTier() == null || normalized.getDefaultTier().isBlank()) {
-            normalized.setDefaultTier(resolveLegacyDefaultTier(normalized));
-        }
-        if (normalized.getDefaultRoute() == null && normalized.getDefaultTier() != null) {
-            RoutePolicyDefinition defaultRoute = new RoutePolicyDefinition();
-            defaultRoute.setId("default");
-            defaultRoute.setLanguage("*");
-            defaultRoute.setScene(normalized.getDefaultScene());
-            defaultRoute.setPrimaryTier(normalized.getDefaultTier());
-            defaultRoute.setPriority(0);
-            normalized.setDefaultRoute(defaultRoute);
-        }
-        normalized.setSchemaVersion(2);
-        return normalized;
+        return updateVersioned(request, expectedVersion, operatorId);
     }
 
     void validateForAdmin(ModelRoutingProperties config) {
-        validate(normalizeLegacyConfig(config));
-    }
-
-    public String secretPlaceholder() {
-        return SECRET_PLACEHOLDER;
+        validate(config);
     }
 
     private synchronized ModelRoutingProperties updateVersioned(ModelRoutingProperties request,
-            long expectedVersion, String operatorId, String action, String tierId) {
+            long expectedVersion, String operatorId) {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "模型治理配置不能为空");
         }
@@ -270,7 +146,7 @@ public class ModelConfigCenter {
                             + ", 提交版本为 " + expectedVersion);
         }
 
-        ModelRoutingProperties merged = normalizeLegacyConfig(mergeSecrets(request, current));
+        ModelRoutingProperties merged = mergeSecrets(request, current);
         validate(merged);
         merged.setVersion(current.getVersion() + 1);
 
@@ -278,15 +154,13 @@ public class ModelConfigCenter {
         String afterJson = toAuditJson(merged);
         try {
             saveRuntimeSnapshot(merged, operatorId);
-            saveChangeLog(operatorId, action, tierId, beforeJson, afterJson, true, null);
+            saveChangeLog(operatorId, beforeJson, afterJson, true, null);
             publishRuntimeConfig(merged);
         } catch (ModelRuntimePublishException exception) {
-            saveChangeLogSafely(operatorId, action, tierId, beforeJson, afterJson, false,
-                    exception.getMessage());
+            saveChangeLogSafely(operatorId, beforeJson, afterJson, false, exception.getMessage());
             throw exception;
         } catch (RuntimeException exception) {
-            saveChangeLogSafely(operatorId, action, tierId, beforeJson, afterJson, false,
-                    exception.getMessage());
+            saveChangeLogSafely(operatorId, beforeJson, afterJson, false, exception.getMessage());
             throw exception;
         }
 
@@ -328,16 +202,15 @@ public class ModelConfigCenter {
         runtimeConfigRepository.save(snapshot);
     }
 
-    private void saveChangeLog(String operatorId, String action, String tierId,
-            String beforeJson, String afterJson, boolean success, String errorMessage) {
+    private void saveChangeLog(String operatorId, String beforeJson, String afterJson,
+            boolean success, String errorMessage) {
         if (changeLogRepository == null) {
             return;
         }
         ModelConfigChangeLog changeLog = ModelConfigChangeLog.builder()
                 .changeId(UUID.randomUUID().toString().replace("-", ""))
                 .operatorId(operatorId)
-                .action(action)
-                .groupName(tierId)
+                .action(UPDATE_CONFIG)
                 .beforeJson(beforeJson)
                 .afterJson(afterJson)
                 .success(success)
@@ -346,11 +219,10 @@ public class ModelConfigCenter {
         changeLogRepository.save(changeLog);
     }
 
-    private void saveChangeLogSafely(String operatorId, String action, String tierId,
-            String beforeJson, String afterJson, boolean success, String errorMessage) {
+    private void saveChangeLogSafely(String operatorId, String beforeJson, String afterJson,
+            boolean success, String errorMessage) {
         try {
-            saveChangeLog(operatorId, action, tierId, beforeJson, afterJson, success,
-                    truncate(errorMessage));
+            saveChangeLog(operatorId, beforeJson, afterJson, success, truncate(errorMessage));
         } catch (RuntimeException logException) {
             log.warn("Failed to persist model config failure audit: {}", logException.getMessage());
         }
@@ -371,11 +243,15 @@ public class ModelConfigCenter {
 
     private ModelRoutingProperties readRuntimeConfig(String raw, Long version) {
         try {
-            ModelRoutingProperties config = normalizeLegacyConfig(
-                    objectMapper.readValue(raw, ModelRoutingProperties.class));
+            JsonNode root = objectMapper.readTree(raw);
+            if (root.has("groups") || root.has("matrix")) {
+                throw new IllegalArgumentException("model routing config only accepts schema v2 tiers and routes");
+            }
+            ModelRoutingProperties config = objectMapper.treeToValue(root, ModelRoutingProperties.class);
             if (version != null && version > config.getVersion()) {
                 config.setVersion(version);
             }
+            validate(config);
             return config;
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Failed to parse runtime model config", exception);
@@ -402,19 +278,6 @@ public class ModelConfigCenter {
         return toRuntimeJson(redacted);
     }
 
-    private String resolveLegacyDefaultTier(ModelRoutingProperties config) {
-        Map<String, ModelRoutingProperties.SceneDefinition> defaultScenes = config.getMatrix()
-                .get(normalize(config.getDefaultLanguage()));
-        if (defaultScenes != null) {
-            ModelRoutingProperties.SceneDefinition defaultScene = defaultScenes.get(normalize(config.getDefaultScene()));
-            if (defaultScene != null && defaultScene.getGroup() != null
-                    && config.getTiers().containsKey(defaultScene.getGroup())) {
-                return defaultScene.getGroup();
-            }
-        }
-        return config.getTiers().keySet().stream().findFirst().orElse(null);
-    }
-
     private ModelRoutingProperties mergeSecrets(ModelRoutingProperties incoming,
             ModelRoutingProperties current) {
         ModelRoutingProperties merged = cloneConfig(incoming);
@@ -437,6 +300,9 @@ public class ModelConfigCenter {
     }
 
     private void validate(ModelRoutingProperties config) {
+        if (config == null || config.getSchemaVersion() != 2) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "模型治理配置必须使用 schema-version: 2");
+        }
         if (config.getModels() == null || config.getModels().isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "models 不能为空");
         }
@@ -445,6 +311,7 @@ public class ModelConfigCenter {
             if (model == null || model.getId() == null || model.getId().isBlank()) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "model.id 不能为空");
             }
+            validateModel(model);
             if (!modelIds.add(model.getId())) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "model.id 重复: " + model.getId());
             }
@@ -459,12 +326,18 @@ public class ModelConfigCenter {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "tier[" + tierId + "] 必须至少包含一个成员");
             }
             definition.getMembers().forEach(member -> {
-                if (!modelIds.contains(member)) {
+                if (member == null || !modelIds.contains(member)) {
                     throw new BusinessException(ErrorCode.PARAM_ERROR,
                             "tier[" + tierId + "] 引用了不存在的模型: " + member);
                 }
             });
         });
+
+        if (config.getDefaultTier() != null && !config.getDefaultTier().isBlank()
+                && !config.getTiers().containsKey(config.getDefaultTier())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "default-tier 引用了不存在的 tier: " + config.getDefaultTier());
+        }
 
         if (config.getRoutes() == null || config.getRoutes().isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "routes 不能为空");
@@ -475,47 +348,33 @@ public class ModelConfigCenter {
             validateRoute(config, config.getDefaultRoute(), new HashSet<>());
         }
 
-        if (config.getCapabilityGroups() != null) {
-            config.getCapabilityGroups().forEach((capabilityName, groupName) -> {
-                ModelCapability capability;
-                try {
-                    capability = ModelCapability.valueOf(capabilityName.toUpperCase(Locale.ROOT)
-                            .replace('-', '_'));
-                } catch (Exception exception) {
-                    throw new BusinessException(ErrorCode.PARAM_ERROR,
-                            "不支持的模型 capability: " + capabilityName);
-                }
-                ModelTierDefinition tier = config.getTiers().get(groupName);
-                if (tier == null || tier.getMembers() == null || tier.getMembers().isEmpty()) {
-                    throw new BusinessException(ErrorCode.PARAM_ERROR,
-                            "capability[" + capabilityName + "] 引用了不存在或为空的分组: " + groupName);
-                }
-                tier.getMembers().forEach(member -> config.getModels().stream()
-                        .filter(model -> Objects.equals(model.getId(), member))
-                        .findFirst()
-                        .filter(model -> model.supports(capability))
-                        .orElseThrow(() -> new BusinessException(ErrorCode.PARAM_ERROR,
-                                "capability[" + capabilityName + "] 的成员不支持该能力: " + member)));
-            });
+    }
+
+    private void validateModel(ModelRoutingProperties.ModelDefinition model) {
+        if (model.getProvider() == null || model.getProvider().isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "model[" + model.getId() + "] 的 provider 不能为空");
         }
-        if (config.getMatrix() != null && config.getGroups() != null) {
-            config.getMatrix().forEach((lang, sceneMap) -> {
-                if (sceneMap == null) {
-                    return;
-                }
-                sceneMap.forEach((scene, sceneDef) -> {
-                    if (sceneDef == null || sceneDef.getGroup() == null || sceneDef.getGroup().isBlank()) {
-                        throw new BusinessException(ErrorCode.PARAM_ERROR,
-                                "matrix[" + normalize(lang) + "." + normalize(scene) + "] 的 group 不能为空");
-                    }
-                    if (!config.getGroups().containsKey(sceneDef.getGroup())
-                            && !config.getTiers().containsKey(sceneDef.getGroup())) {
-                        throw new BusinessException(ErrorCode.PARAM_ERROR,
-                                "matrix[" + normalize(lang) + "." + normalize(scene)
-                                        + "] 引用了不存在的分组: " + sceneDef.getGroup());
-                    }
-                });
-            });
+        boolean chatModel = model.supports(ModelCapability.CHAT)
+                || model.supports(ModelCapability.STREAMING_CHAT);
+        if (!chatModel) {
+            return;
+        }
+        if (model.getProtocol() == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "model[" + model.getId() + "] 的 protocol 不能为空");
+        }
+        String provider = model.getProvider().trim().toLowerCase(Locale.ROOT);
+        boolean openAiProvider = Set.of("openai", "openai-compatible", "deepseek", "dashscope")
+                .contains(provider);
+        boolean openAiProtocol = model.getProtocol() == ModelProtocol.CHAT_COMPLETIONS
+                || model.getProtocol() == ModelProtocol.RESPONSES;
+        boolean anthropicProvider = "anthropic".equals(provider);
+        if (!((openAiProvider && openAiProtocol)
+                || (anthropicProvider && model.getProtocol() == ModelProtocol.ANTHROPIC_MESSAGES))) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "model[" + model.getId() + "] 的 provider 与 protocol 不匹配: "
+                            + model.getProvider() + "/" + model.getProtocol());
         }
     }
 
@@ -561,9 +420,18 @@ public class ModelConfigCenter {
             });
         }
         if (route.getMaxInputTokens() != null && route.getMaxInputTokens() < 0
-                || route.getMaxOutputTokens() != null && route.getMaxOutputTokens() < 0) {
+                || route.getMaxOutputTokens() != null && route.getMaxOutputTokens() < 0
+                || route.getMaxCompletionTokens() != null && route.getMaxCompletionTokens() < 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "route[" + route.getId() + "] 的 token 限制不能为负数");
+        }
+        if (route.getTemperature() != null && (route.getTemperature() < 0 || route.getTemperature() > 2)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "route[" + route.getId() + "] 的 temperature 必须在 0 到 2 之间");
+        }
+        if (route.getTopP() != null && (route.getTopP() < 0 || route.getTopP() > 1)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "route[" + route.getId() + "] 的 top-p 必须在 0 到 1 之间");
         }
     }
 
@@ -590,15 +458,12 @@ public class ModelConfigCenter {
     }
 
     private void applyLocal(ModelRoutingProperties config) {
+        validate(config);
         ModelRoutingProperties cloned = cloneConfig(config);
         currentConfig.set(cloned);
         if (eventPublisher != null) {
             eventPublisher.publishEvent(new ModelConfigUpdatedEvent(this, cloned));
         }
-    }
-
-    private String normalize(String value) {
-        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
     }
 
     private String truncate(String message) {

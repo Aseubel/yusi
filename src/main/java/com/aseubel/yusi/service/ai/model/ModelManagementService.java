@@ -40,39 +40,14 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ModelManagementService {
 
-    private final GroupStrategyManager groupStrategyManager;
     private final ModelStateCenter modelStateCenter;
     private final ModelConfigCenter modelConfigCenter;
     private final ModelRouterService modelRouterService;
     private final ModelInstanceRegistry modelInstanceRegistry;
     private final ModelCallTraceRepository modelCallTraceRepository;
 
-    public void switchGroupStrategy(String group, ModelSelectionStrategyType strategy) {
-        switchGroupStrategy(group, strategy, null);
-    }
-
-    public void switchGroupStrategy(String group, ModelSelectionStrategyType strategy, String operatorId) {
-        modelConfigCenter.switchStrategy(group, strategy, operatorId);
-    }
-
-    public ModelSelectionStrategyType getGroupStrategy(String group) {
-        ModelTierDefinition tier = modelConfigCenter.getEffectiveConfig().getTiers().get(group);
-        if (tier != null && tier.getStrategy() != null) {
-            return tier.getStrategy();
-        }
-        return groupStrategyManager.getStrategy(group);
-    }
-
     public List<ModelRuntimeState> listModelStates() {
         return modelStateCenter.listStates();
-    }
-
-    public ModelRoutingProperties getModelConfigForDisplay() {
-        return modelConfigCenter.getConfigForDisplay();
-    }
-
-    public void updateModelConfig(ModelRoutingProperties request) {
-        modelConfigCenter.updateFromAdmin(request);
     }
 
     public ModelGovernanceSnapshot getGovernanceSnapshot() {
@@ -102,7 +77,6 @@ public class ModelManagementService {
                 .tiers(tiers)
                 .routes(config.getRoutes() == null ? List.of() : config.getRoutes())
                 .defaultRoute(config.getDefaultRoute())
-                .capabilityGroups(config.getCapabilityGroups() == null ? Map.of() : config.getCapabilityGroups())
                 .runtimeStates(runtimeStates)
                 .summary(summary)
                 .build();
@@ -112,7 +86,7 @@ public class ModelManagementService {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "模型治理配置不能为空");
         }
-        ModelRoutingProperties updated = modelConfigCenter.updateFromAdmin(
+        ModelRoutingProperties updated = modelConfigCenter.updateCanonical(
                 request.toProperties(), request.getExpectedVersion(), operatorId);
         return updated.getVersion();
     }
@@ -272,6 +246,7 @@ public class ModelManagementService {
                 .id(model.getId())
                 .displayName(isBlank(model.getDisplayName()) ? model.getId() : model.getDisplayName())
                 .provider(model.getProvider())
+                .protocol(ModelProtocol.normalize(model.getProtocol()))
                 .baseUrl(endpoint)
                 .endpointHost(endpointHost(endpoint))
                 .realModelId(model.getModel())

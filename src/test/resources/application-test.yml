@@ -71,11 +71,36 @@ model:
     apikey: dummy
     model: dummy
   routing:
+    schema-version: 2
     default-language: zh
     default-scene: chat
-    models: []
-    groups: {}
-    matrix: {}
+    default-tier: test-chat
+    default-route:
+      id: default
+      language: '*'
+      scene: chat
+      primary-tier: test-chat
+      priority: 0
+    models:
+      - id: test-chat
+        provider: openai-compatible
+        protocol: CHAT_COMPLETIONS
+        baseurl: http://localhost
+        apikey: dummy
+        model: dummy
+        capabilities: [CHAT, STREAMING_CHAT]
+    tiers:
+      test-chat:
+        display-name: Test Chat
+        members: [test-chat]
+        strategy: FAIL_OVER
+        capabilities: [CHAT, STREAMING_CHAT]
+    routes:
+      - id: zh-chat
+        language: zh
+        scene: chat
+        primary-tier: test-chat
+        priority: 100
 
 milvus:
   uri: http://127.0.0.1:19530

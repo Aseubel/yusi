@@ -63,6 +63,7 @@ public class ModelInstanceRegistry {
                     .id(definition.getId())
                     .modelName(definition.getModel())
                     .provider(clients.provider())
+                    .protocol(ModelProtocol.normalize(definition.getProtocol()))
                     .weight(definition.getWeight() == null ? 100 : definition.getWeight())
                     .priority(definition.getPriority() == null ? 100 : definition.getPriority())
                     .languages(normalize(definition.getLanguages()))
@@ -84,22 +85,13 @@ public class ModelInstanceRegistry {
         return Optional.ofNullable(instances.get().get(modelId));
     }
 
-    public List<ModelInstance> getGroupMembers(String groupId) {
-        ModelRoutingProperties properties = modelConfigCenter.getEffectiveConfig();
-        ModelRoutingProperties.GroupDefinition group = properties.getGroups().get(groupId);
-        if (group == null || group.getMembers() == null) {
-            return Collections.emptyList();
-        }
-        return membersForIds(group.getMembers());
-    }
-
     public List<ModelInstance> getTierMembers(String tierId) {
         ModelRoutingProperties properties = modelConfigCenter.getEffectiveConfig();
         ModelTierDefinition tier = properties.getTiers().get(tierId);
-        if (tier != null && tier.getMembers() != null) {
-            return membersForIds(tier.getMembers());
+        if (tier == null || tier.getMembers() == null) {
+            return List.of();
         }
-        return getGroupMembers(tierId);
+        return membersForIds(tier.getMembers());
     }
 
     public List<ModelInstance> filterByLanguageAndScene(List<ModelInstance> candidates, String language, String scene) {

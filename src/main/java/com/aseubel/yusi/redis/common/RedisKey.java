@@ -18,9 +18,7 @@ public class RedisKey {
 
     public static final String MODEL_PREFIX = REDIS_KEY_PREFIX + "model" + SEPARATOR;
     public static final String MODEL_STATE_MAP = MODEL_PREFIX + "state:instances";
-    public static final String MODEL_GROUP_STRATEGY_MAP = MODEL_PREFIX + "group:strategies";
     public static final String MODEL_STATE_CHANNEL = MODEL_PREFIX + "state:channel";
-    public static final String MODEL_GROUP_STRATEGY_CHANNEL = MODEL_PREFIX + "group:strategy:channel";
     public static final String MODEL_RUNTIME_CONFIG_KEY = MODEL_PREFIX + "runtime:config";
     public static final String MODEL_CONFIG_CHANNEL = MODEL_PREFIX + "config:channel";
 

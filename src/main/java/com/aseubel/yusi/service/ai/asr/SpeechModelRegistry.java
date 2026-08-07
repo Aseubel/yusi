@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai.asr;
 
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
+import com.aseubel.yusi.config.ai.properties.ModelTierDefinition;
 import com.aseubel.yusi.service.ai.model.ModelCapability;
 import com.aseubel.yusi.service.ai.model.ModelConfigCenter;
 import com.aseubel.yusi.service.ai.model.ModelConfigUpdatedEvent;
@@ -15,7 +16,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.annotation.PostConstruct;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -27,8 +27,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class SpeechModelRegistry {
 
     private static final ModelCapability CAPABILITY = ModelCapability.SPEECH_TO_TEXT;
-    private static final String DEFAULT_GROUP = "asr-default";
-
     private final ModelConfigCenter modelConfigCenter;
     private final ObjectMapper objectMapper;
     private final RestTemplateBuilder restTemplateBuilder;
@@ -85,8 +83,11 @@ public class SpeechModelRegistry {
     }
 
     private SpeechToTextClient createClient(ModelRoutingProperties.ModelDefinition definition) {
-        String provider = definition.getProvider() == null
-                ? "openai" : definition.getProvider().trim().toLowerCase();
+        if (definition.getProvider() == null || definition.getProvider().isBlank()) {
+            log.warn("跳过未声明 provider 的 ASR 模型: modelId={}", definition.getId());
+            return null;
+        }
+        String provider = definition.getProvider().trim().toLowerCase();
         return switch (provider) {
             case "openai", "openai-compatible" ->
                     new OpenAiSpeechToTextClient(definition, objectMapper, restTemplateBuilder);
@@ -101,13 +102,20 @@ public class SpeechModelRegistry {
     }
 
     private List<SpeechToTextClient> candidates(ModelRoutingProperties config) {
-        Map<String, String> capabilityGroups = config.getCapabilityGroups();
-        String groupId = capabilityGroups == null
-                ? DEFAULT_GROUP : capabilityGroups.getOrDefault(CAPABILITY.name(),
-                capabilityGroups.getOrDefault("speech-to-text", DEFAULT_GROUP));
-        ModelRoutingProperties.GroupDefinition group = config.getGroups().get(groupId);
-        List<String> memberIds = group == null || group.getMembers() == null
-                ? new ArrayList<>(clients.keySet()) : group.getMembers();
+        if (config == null || config.getTiers() == null) {
+            return List.of();
+        }
+        List<String> memberIds = config.getTiers().entrySet().stream()
+                .filter(entry -> {
+                    ModelTierDefinition tier = entry.getValue();
+                    List<String> members = tier == null ? null : tier.getMembers();
+                    return tier != null && tier.isEnabled()
+                            && members != null && !members.isEmpty()
+                            && supportsSpeechToText(tier, members);
+                })
+                .flatMap(entry -> entry.getValue().getMembers().stream())
+                .distinct()
+                .toList();
         return memberIds.stream()
                 .map(clients::get)
                 .filter(client -> client != null)
@@ -115,5 +123,17 @@ public class SpeechModelRegistry {
                         definitions.get(client.modelId()).getPriority() == null
                                 ? 100 : definitions.get(client.modelId()).getPriority()))
                 .toList();
+    }
+
+    private boolean supportsSpeechToText(ModelTierDefinition tier, List<String> memberIds) {
+        if (tier == null || memberIds == null || memberIds.isEmpty()) {
+            return false;
+        }
+        if (tier.getCapabilities() != null && tier.getCapabilities().contains(CAPABILITY)) {
+            return true;
+        }
+        return memberIds != null && memberIds.stream()
+                .map(definitions::get)
+                .anyMatch(definition -> definition != null && definition.supports(CAPABILITY));
     }
 }
