@@ -38,8 +38,6 @@ class ModelBudgetAdmissionTest {
         properties.setKeyPrefix("test:admission:");
         properties.getUser().setMaxRequests(10);
         properties.getUser().setMaxTokens(1_000);
-        properties.getTenant().setMaxRequests(20);
-        properties.getTenant().setMaxTokens(2_000);
         properties.getModel().setMaxRequests(30);
         properties.getModel().setMaxTokens(3_000);
         properties.getProvider().setMaxRequests(40);
@@ -55,7 +53,7 @@ class ModelBudgetAdmissionTest {
         ModelBudgetPermit permit = admission.reserve(context(), candidate(), new ModelTokenBudget(20, 10));
 
         assertThat(permit.granted()).isTrue();
-        assertThat(permit.charges()).hasSize(8);
+        assertThat(permit.charges()).hasSize(6);
         assertThat(permit.charges()).allMatch(charge -> charge.reservedAmount() == 1L
                 || charge.reservedAmount() == 30L);
 
@@ -66,7 +64,7 @@ class ModelBudgetAdmissionTest {
     }
 
     private ModelRouteContext context() {
-        return ModelRouteContext.builder().userId("user-1").tenantId("tenant-1").build();
+        return ModelRouteContext.builder().userId("user-1").build();
     }
 
     private ModelRouteCandidate candidate() {

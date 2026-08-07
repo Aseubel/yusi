@@ -279,9 +279,6 @@ model:
       user:
         max-requests: ${LLM_USER_MAX_REQUESTS:60}
         max-tokens: ${LLM_USER_MAX_TOKENS:200000}
-      tenant:
-        max-requests: ${LLM_TENANT_MAX_REQUESTS:0}
-        max-tokens: ${LLM_TENANT_MAX_TOKENS:0}
       model:
         max-requests: ${LLM_MODEL_MAX_REQUESTS:600}
         max-tokens: ${LLM_MODEL_MAX_TOKENS:2000000}
@@ -290,7 +287,7 @@ model:
         max-tokens: ${LLM_PROVIDER_MAX_TOKENS:4000000}
 ```
 
-`tenantId` 只有调用方明确放入 `ModelRouteContext` 时才参与租户桶和 trace；当前登录模型只提供 `userId`，不会错误地把用户配额累计到虚构租户。限流拒绝会写入 `model_call_trace.status=REJECTED` 和 `error_code=LIMIT_EXCEEDED:*` 或存储不可用原因，可从 `/api/model/attempts` 查询。
+当前 Yusi 按用户、模型和 Provider 维度做准入，不引入尚未落地的组织/租户边界。限流拒绝会写入 `model_call_trace.status=REJECTED` 和 `error_code=LIMIT_EXCEEDED:*` 或存储不可用原因，可从 `/api/model/attempts` 查询。
 
 ### 4.4 MCP Server 配置 (mcp/config.yaml)
 

@@ -174,4 +174,4 @@ flowchart LR
 | `cmd.exe /c "C:\Users\YangZhiYao\.cache\codex-runtimes\codex-primary-runtime\dependencies\bin\fallback\pnpm.cmd run build"` | ✅ TypeScript/Vite/PWA build succeeded |
 | `git diff --check` | ✅ no output |
 
-新增覆盖：Redis admission 的四维 request/token charge 及 reconcile、限流拒绝不调用 Provider 且不污染模型健康状态、同步与流式 attempt 的未知 usage 保守挂账，以及 tenant trace 字段和存量表迁移。
+新增覆盖：Redis admission 的三维 request/token charge 及 reconcile、限流拒绝不调用 Provider 且不污染模型健康状态，以及同步与流式 attempt 的未知 usage 保守挂账。

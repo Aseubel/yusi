@@ -17,7 +17,6 @@ public class ModelCallTraceQuery {
     private String scene;
     private String language;
     private String userId;
-    private String tenantId;
     private String modelTier;
     private String provider;
     private String model;

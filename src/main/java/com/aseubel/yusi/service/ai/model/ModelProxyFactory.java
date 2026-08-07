@@ -413,7 +413,6 @@ public class ModelProxyFactory {
                     UUID.randomUUID().toString(),
                     context.getRunId(),
                     context.getUserId(),
-                    context.getTenantId(),
                     context.getScene(),
                     context.getLanguage(),
                     decision.policyId(),
@@ -859,7 +858,6 @@ public class ModelProxyFactory {
                     .requestId(context == null ? null : context.getRequestId())
                     .runId(context == null ? null : context.getRunId())
                     .userId(context == null ? null : context.getUserId())
-                    .tenantId(context == null ? null : context.getTenantId())
                     .language(resolvedLanguage)
                     .scene(resolvedScene)
                     .riskLevel(context == null ? null : context.getRiskLevel())

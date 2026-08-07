@@ -18,7 +18,6 @@ public class ModelCallTraceItem {
     private String requestId;
     private String attemptId;
     private String userId;
-    private String tenantId;
     private String scene;
     private String language;
     private String policyId;
@@ -46,7 +45,6 @@ public class ModelCallTraceItem {
                 .requestId(trace.getRequestId())
                 .attemptId(trace.getAttemptId())
                 .userId(trace.getUserId())
-                .tenantId(trace.getTenantId())
                 .scene(trace.getScene())
                 .language(trace.getLanguage())
                 .policyId(trace.getPolicyId())

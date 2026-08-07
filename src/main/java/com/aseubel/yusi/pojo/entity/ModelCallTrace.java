@@ -51,9 +51,6 @@ public class ModelCallTrace {
     @Column(name = "user_id", length = 64)
     private String userId;
 
-    @Column(name = "tenant_id", length = 64)
-    private String tenantId;
-
     @Column(name = "scene", nullable = false, length = 64)
     private String scene;
 

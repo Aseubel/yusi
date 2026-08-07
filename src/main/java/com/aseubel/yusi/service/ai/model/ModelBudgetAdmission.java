@@ -212,8 +212,6 @@ public class ModelBudgetAdmission {
                 / Math.max(1L, properties.getWindowSeconds() * 1000L));
         addScopeCharges(charges, "user", value(context == null ? null : context.getUserId()),
                 properties.getUser(), budget, window);
-        addScopeCharges(charges, "tenant", value(context == null ? null : context.getTenantId()),
-                properties.getTenant(), budget, window);
         addScopeCharges(charges, "model", candidate == null ? null : candidate.modelId(),
                 properties.getModel(), budget, window);
         addScopeCharges(charges, "provider", candidate == null ? null : candidate.provider(),

@@ -153,7 +153,7 @@ route 未声明 `max-output-tokens` 或 `max-completion-tokens` 时，系统按 
 
 ### 4.2 多维限流与 Token 对账
 
-`ModelBudgetAdmission` 在每个 Provider attempt 前用一段 Redis Lua 脚本同时检查并增加用户、租户、模型和 Provider 桶。每个维度可以独立配置请求数上限与 Token 上限；上限为 `0` 表示关闭该维度。当前应用没有独立租户身份时，`tenantId` 保持为空，不会把用户 ID 误当作租户 ID。
+`ModelBudgetAdmission` 在每个 Provider attempt 前用一段 Redis Lua 脚本同时检查并增加用户、模型和 Provider 桶。每个维度可以独立配置请求数上限与 Token 上限；上限为 `0` 表示关闭该维度。Yusi 当前没有组织/租户身份模型，因此成本和配额先按用户归因。
 
 调用生命周期按以下规则结算：
 

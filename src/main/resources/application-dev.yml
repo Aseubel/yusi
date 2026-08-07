@@ -19,9 +19,6 @@ model:
       user:
         max-requests: ${LLM_USER_MAX_REQUESTS:60}
         max-tokens: ${LLM_USER_MAX_TOKENS:200000}
-      tenant:
-        max-requests: ${LLM_TENANT_MAX_REQUESTS:0}
-        max-tokens: ${LLM_TENANT_MAX_TOKENS:0}
       model:
         max-requests: ${LLM_MODEL_MAX_REQUESTS:600}
         max-tokens: ${LLM_MODEL_MAX_TOKENS:2000000}

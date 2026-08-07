@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS `model_call_trace` (
     `attempt_id` VARCHAR(64) NOT NULL COMMENT 'Provider attempt ID',
     `run_id` VARCHAR(64) DEFAULT NULL COMMENT '可选 AgentRun ID',
     `user_id` VARCHAR(64) DEFAULT NULL COMMENT '可选用户ID',
-    `tenant_id` VARCHAR(64) DEFAULT NULL COMMENT '可选租户ID',
     `scene` VARCHAR(64) NOT NULL COMMENT '路由场景',
     `language` VARCHAR(16) DEFAULT NULL COMMENT '路由语言',
     `policy_id` VARCHAR(128) DEFAULT NULL COMMENT '命中的路由策略',

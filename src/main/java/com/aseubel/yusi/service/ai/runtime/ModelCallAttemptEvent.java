@@ -7,7 +7,6 @@ public record ModelCallAttemptEvent(
         String attemptId,
         String runId,
         String userId,
-        String tenantId,
         String scene,
         String language,
         String policyId,

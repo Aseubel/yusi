@@ -212,7 +212,6 @@ public class ModelManagementService {
             addLike(predicates, criteriaBuilder, root, "scene", query.getScene());
             addLike(predicates, criteriaBuilder, root, "language", query.getLanguage());
             addLike(predicates, criteriaBuilder, root, "userId", query.getUserId());
-            addLike(predicates, criteriaBuilder, root, "tenantId", query.getTenantId());
             addLike(predicates, criteriaBuilder, root, "selectedTier", query.getModelTier());
             addLike(predicates, criteriaBuilder, root, "provider", query.getProvider());
             addLike(predicates, criteriaBuilder, root, "modelId", query.getModel());

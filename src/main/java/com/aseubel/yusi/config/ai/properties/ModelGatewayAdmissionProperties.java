@@ -25,8 +25,6 @@ public class ModelGatewayAdmissionProperties {
 
     private ScopeLimit user = new ScopeLimit();
 
-    private ScopeLimit tenant = new ScopeLimit();
-
     private ScopeLimit model = new ScopeLimit();
 
     private ScopeLimit provider = new ScopeLimit();
@@ -44,13 +42,12 @@ public class ModelGatewayAdmissionProperties {
                     "model.gateway.admission.reservation-ttl-seconds must be positive");
         }
         validateLimit("user", user);
-        validateLimit("tenant", tenant);
         validateLimit("model", model);
         validateLimit("provider", provider);
     }
 
     public boolean hasConfiguredLimit() {
-        return enabled && (hasLimit(user) || hasLimit(tenant) || hasLimit(model) || hasLimit(provider));
+        return enabled && (hasLimit(user) || hasLimit(model) || hasLimit(provider));
     }
 
     private boolean hasLimit(ScopeLimit limit) {
