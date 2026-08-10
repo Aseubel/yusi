@@ -113,6 +113,43 @@ class ModelRouterServiceTest {
         assertThat(decision.attemptCandidates()).isEmpty();
     }
 
+    @Test
+    void imageSceneExcludesTextOnlyCandidates() {
+        properties.setRoutes(List.of(route("image", "image-understanding", "fast", 100)));
+        ModelInstance textOnly = instance("text-only", 1);
+        when(instanceRegistry.getTierMembers("fast")).thenReturn(List.of(textOnly));
+
+        ModelRouteDecision decision = router.plan(context("image-understanding"));
+
+        assertThat(decision.candidates()).singleElement()
+                .satisfies(candidate -> {
+                    assertThat(candidate.modelId()).isEqualTo("text-only");
+                    assertThat(candidate.available()).isFalse();
+                    assertThat(candidate.excludedReason()).isEqualTo("UNSUPPORTED_CAPABILITY");
+                });
+        assertThat(decision.attemptCandidates()).isEmpty();
+    }
+
+    @Test
+    void imageSceneSelectsAnExplicitVlmCandidate() {
+        properties.setRoutes(List.of(route("image", "image-understanding", "fast", 100)));
+        ModelInstance vision = ModelInstance.builder()
+                .id("vision")
+                .modelName("vision-model")
+                .provider("openai-compatible")
+                .priority(1)
+                .weight(100)
+                .capabilities(Set.of(ModelCapability.VLM))
+                .scenes(Set.of("image-understanding"))
+                .build();
+        when(instanceRegistry.getTierMembers("fast")).thenReturn(List.of(vision));
+
+        ModelRouteDecision decision = router.plan(context("image-understanding"));
+
+        assertThat(decision.attemptCandidates()).extracting(ModelRouteCandidate::modelId)
+                .containsExactly("vision");
+    }
+
     private ModelRouteContext context(String scene) {
         return ModelRouteContext.builder().scene(scene).build();
     }

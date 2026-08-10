@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.cognition.impl;
 
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.cognition.ImageUnderstandingService;
+import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.oss.OssService;
@@ -26,6 +27,7 @@ public class LangChainImageUnderstandingService implements ImageUnderstandingSer
 
     private final ChatModel chatModel;
     private final OssService ossService;
+    private final PromptManager promptManager;
 
     @Override
     public String describe(String userId, List<String> imageObjectKeys) {
@@ -34,8 +36,7 @@ public class LangChainImageUnderstandingService implements ImageUnderstandingSer
         }
         try {
             List<Content> contents = new ArrayList<>();
-            contents.add(TextContent.from("请描述这些图片中与日记相关的客观场景、人物活动和情绪氛围。"
-                    + "不要猜测身份，不要输出隐私信息，只返回一段简洁中文描述。"));
+            contents.add(TextContent.from(promptManager.getPrompt(PromptKey.IMAGE_UNDERSTANDING)));
             for (String objectKey : imageObjectKeys) {
                 if (objectKey != null && !objectKey.isBlank()) {
                     contents.add(ImageContent.from(URI.create(ossService.generateOwnedUrl(objectKey, userId))));

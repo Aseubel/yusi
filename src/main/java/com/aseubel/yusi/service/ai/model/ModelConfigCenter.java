@@ -355,9 +355,10 @@ public class ModelConfigCenter {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "model[" + model.getId() + "] 的 provider 不能为空");
         }
-        boolean chatModel = model.supports(ModelCapability.CHAT)
-                || model.supports(ModelCapability.STREAMING_CHAT);
-        if (!chatModel) {
+        boolean chatCompatibleModel = model.supports(ModelCapability.CHAT)
+                || model.supports(ModelCapability.STREAMING_CHAT)
+                || model.supports(ModelCapability.VLM);
+        if (!chatCompatibleModel) {
             return;
         }
         if (model.getProtocol() == null) {
@@ -398,9 +399,11 @@ public class ModelConfigCenter {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "route[" + route.getId() + "] 的 primary-tier 已禁用: " + route.getPrimaryTier());
         }
-        if (!hasEnabledChatModel(config, primary, route.getScene())) {
+        if (!hasEnabledModelForScene(config, primary, route.getScene())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
-                    "route[" + route.getId() + "] 的 primary-tier 没有启用的 Chat 模型支持 scene: "
+                    "route[" + route.getId() + "] 的 primary-tier 没有启用的 "
+                            + ModelCapabilityPolicy.requiredCapabilityLabel(route.getScene())
+                            + " 模型支持 scene: "
                             + route.getScene());
         }
         Set<String> fallbackIds = new HashSet<>();
@@ -414,9 +417,11 @@ public class ModelConfigCenter {
                     throw new BusinessException(ErrorCode.PARAM_ERROR,
                             "route[" + route.getId() + "] 的 fallback-tier 不存在: " + fallback);
                 }
-                if (!hasEnabledChatModel(config, config.getTiers().get(fallback), route.getScene())) {
+                if (!hasEnabledModelForScene(config, config.getTiers().get(fallback), route.getScene())) {
                     throw new BusinessException(ErrorCode.PARAM_ERROR,
-                            "route[" + route.getId() + "] 的 fallback-tier 没有启用的 Chat 模型支持 scene: "
+                            "route[" + route.getId() + "] 的 fallback-tier 没有启用的 "
+                                    + ModelCapabilityPolicy.requiredCapabilityLabel(route.getScene())
+                                    + " 模型支持 scene: "
                                     + route.getScene());
                 }
             });
@@ -437,7 +442,7 @@ public class ModelConfigCenter {
         }
     }
 
-    private boolean hasEnabledChatModel(ModelRoutingProperties config, ModelTierDefinition tier, String scene) {
+    private boolean hasEnabledModelForScene(ModelRoutingProperties config, ModelTierDefinition tier, String scene) {
         if (tier.getMembers() == null) {
             return false;
         }
@@ -448,12 +453,11 @@ public class ModelConfigCenter {
                         .orElse(null))
                 .anyMatch(model -> model != null
                         && model.isEnabled()
-                        && (model.supports(ModelCapability.CHAT)
-                        || model.supports(ModelCapability.STREAMING_CHAT))
-                        && supportsScene(model, scene));
+                        && ModelCapabilityPolicy.supportsScene(model, scene)
+                        && declaresScene(model, scene));
     }
 
-    private boolean supportsScene(ModelRoutingProperties.ModelDefinition model, String scene) {
+    private boolean declaresScene(ModelRoutingProperties.ModelDefinition model, String scene) {
         if (scene == null || scene.isBlank() || "*".equals(scene.trim())) {
             return true;
         }

@@ -52,7 +52,7 @@ model:
         baseurl: ${CHAT_MODEL_BASEURL}
         apikey: ${CHAT_MODEL_APIKEY}
         model: ${CHAT_MODEL_NAME}
-        capabilities: [CHAT, STREAMING_CHAT]
+        capabilities: [CHAT, STREAMING_CHAT, VLM]
         weight: 100
         priority: 1
         scenes: [chat, logic, graphrag-extract, graphrag-merge-suggest, memory-extract, soul-match, soul-match-letter, emotion-analysis, cognition-routing, soul-weekly-report, cognitive-conflict, memory-fusion, agent-persona, agent-proactive-greeting, image-understanding]
@@ -79,6 +79,12 @@ model:
         strategy: ROUND_ROBIN
         members: [qwen-main]
         capabilities: [CHAT, STREAMING_CHAT]
+      vision:
+        display-name: Vision language models
+        description: Image understanding and visual cognition
+        strategy: FAIL_OVER
+        members: [qwen-main]
+        capabilities: [VLM]
       logic:
         display-name: Logic analysis
         description: Situation room analysis
@@ -209,7 +215,7 @@ model:
       - id: image-understanding
         scene: image-understanding
         risk-level: LOW
-        primary-tier: chat-primary
+        primary-tier: vision
         priority: 100
 yusi:
   web:

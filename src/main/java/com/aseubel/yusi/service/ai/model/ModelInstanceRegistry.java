@@ -50,7 +50,8 @@ public class ModelInstanceRegistry {
                 continue;
             }
             if (!definition.supports(ModelCapability.CHAT)
-                    && !definition.supports(ModelCapability.STREAMING_CHAT)) {
+                    && !definition.supports(ModelCapability.STREAMING_CHAT)
+                    && !definition.supports(ModelCapability.VLM)) {
                 continue;
             }
             ChatModelProviderAdapter.ProviderClientBundle clients = providerRegistry.create(definition);

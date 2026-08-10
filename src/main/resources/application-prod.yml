@@ -54,7 +54,7 @@ model:
         baseurl: ${QWEN_BASEURL:https://dashscope.aliyuncs.com/compatible-mode/v1}
         apikey: ${QWEN_APIKEY}
         model: ${QWEN_MODEL:qwen3.5-flash-2026-02-23}
-        capabilities: [CHAT, STREAMING_CHAT]
+        capabilities: [CHAT, STREAMING_CHAT, VLM]
         weight: 100
         priority: 2
         scenes: [chat, logic, graphrag-extract, graphrag-merge-suggest, memory-extract, soul-match, soul-match-letter, emotion-analysis, cognition-routing, soul-weekly-report, cognitive-conflict, memory-fusion, agent-persona, agent-proactive-greeting, image-understanding]
@@ -67,7 +67,7 @@ model:
         capabilities: [CHAT, STREAMING_CHAT]
         weight: 0
         priority: 1
-        scenes: [chat, logic, graphrag-extract, graphrag-merge-suggest, memory-extract, soul-match, soul-match-letter, emotion-analysis, cognition-routing, soul-weekly-report, cognitive-conflict, memory-fusion, agent-persona, agent-proactive-greeting, image-understanding]
+        scenes: [chat, logic, graphrag-extract, graphrag-merge-suggest, memory-extract, soul-match, soul-match-letter, emotion-analysis, cognition-routing, soul-weekly-report, cognitive-conflict, memory-fusion, agent-persona, agent-proactive-greeting]
       - id: whisper-asr
         enabled: ${ASR_ENABLED:false}
         provider: openai
@@ -91,6 +91,12 @@ model:
         strategy: FAIL_OVER
         members: [qwen, deepseek]
         capabilities: [CHAT, STREAMING_CHAT]
+      vision:
+        display-name: Vision language models
+        description: Image understanding and visual cognition
+        strategy: FAIL_OVER
+        members: [qwen]
+        capabilities: [VLM]
       logic:
         display-name: Logic analysis
         description: Situation room analysis
@@ -223,7 +229,7 @@ model:
       - id: image-understanding
         scene: image-understanding
         risk-level: MEDIUM
-        primary-tier: chat-primary
+        primary-tier: vision
         priority: 100
 yusi:
   web:

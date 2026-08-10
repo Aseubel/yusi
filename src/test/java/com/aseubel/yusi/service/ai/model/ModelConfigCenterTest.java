@@ -82,6 +82,29 @@ class ModelConfigCenterTest {
     }
 
     @Test
+    void rejectsImageRouteWhosePrimaryTierHasNoVlmModel() {
+        ModelConfigCenter center = center();
+        ModelRoutingProperties config = validV2Config();
+        config.getRoutes().getFirst().setScene("image-understanding");
+
+        assertThatThrownBy(() -> center.validateForAdmin(config))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("VLM")
+                .hasMessageContaining("image-understanding");
+    }
+
+    @Test
+    void acceptsImageRouteWithAnEnabledVlmModel() {
+        ModelConfigCenter center = center();
+        ModelRoutingProperties config = validV2Config();
+        config.getRoutes().getFirst().setScene("image-understanding");
+        config.getModels().getFirst().setCapabilities(List.of(ModelCapability.VLM));
+        config.getModels().getFirst().setScenes(List.of("image-understanding"));
+
+        center.validateForAdmin(config);
+    }
+
+    @Test
     void rejectsStaleVersionBeforeWritingRuntimeConfig() {
         ModelRoutingProperties current = validV2Config();
         current.setVersion(7L);

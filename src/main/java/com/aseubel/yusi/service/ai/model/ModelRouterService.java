@@ -125,7 +125,7 @@ public class ModelRouterService {
         if (tier != null && !tier.isEnabled()) {
             return "TIER_DISABLED";
         }
-        if (!supports(instance, ModelCapability.CHAT) && !supports(instance, ModelCapability.STREAMING_CHAT)) {
+        if (!ModelCapabilityPolicy.supportsScene(instance, context.getScene())) {
             return "UNSUPPORTED_CAPABILITY";
         }
         if (!supportsValue(instance.getScenes(), context.getScene())) {
@@ -150,11 +150,6 @@ public class ModelRouterService {
                     ? "DOWN" : state.getPhase().toUpperCase(Locale.ROOT);
         }
         return null;
-    }
-
-    private boolean supports(ModelInstance instance, ModelCapability capability) {
-        return instance.getCapabilities() == null || instance.getCapabilities().isEmpty()
-                || instance.getCapabilities().contains(capability);
     }
 
     private boolean supportsValue(Set<String> values, String expected) {
