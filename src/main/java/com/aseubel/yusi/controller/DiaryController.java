@@ -9,13 +9,9 @@ import com.aseubel.yusi.pojo.dto.diary.DiaryFootprint;
 import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentBinding;
 import com.aseubel.yusi.pojo.dto.diary.EditDiaryRequest;
 import com.aseubel.yusi.pojo.dto.diary.WriteDiaryRequest;
-import com.aseubel.yusi.pojo.dto.diary.VoiceDiaryResponse;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.service.diary.DiaryService;
-import com.aseubel.yusi.service.diary.VoiceTranscriptionService;
-import com.aseubel.yusi.common.ratelimit.LimitType;
-import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import jakarta.annotation.Resource;
 
 import java.util.List;
@@ -25,7 +21,6 @@ import org.springframework.data.web.PagedResourcesAssembler;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 /**
  * @author Aseubel
@@ -38,9 +33,6 @@ public class DiaryController {
 
     @Resource
     private DiaryService diaryService;
-
-    @jakarta.annotation.Resource
-    private VoiceTranscriptionService voiceTranscriptionService;
 
     @GetMapping("/list")
     public Response<PagedModel<EntityModel<Diary>>> getDiaryList(
@@ -76,16 +68,6 @@ public class DiaryController {
         diary.setUserId(UserContext.getUserId());
         diaryService.editDiary(diary);
         return Response.success();
-    }
-
-    /** 临时接收语音并返回转写结果，不保存音频文件。 */
-    @PostMapping("/voice/transcribe")
-    @RateLimiter(key = "voice-transcribe", time = 60, count = 10, limitType = LimitType.USER)
-    public Response<VoiceDiaryResponse> transcribeVoice(@RequestParam("file") MultipartFile file) {
-        String transcript = voiceTranscriptionService.transcribe(file);
-        return Response.success(VoiceDiaryResponse.builder()
-                .transcript(transcript)
-                .build());
     }
 
     @GetMapping("/{diaryId}")

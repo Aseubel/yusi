@@ -5,5 +5,5 @@ public enum ModelCapability {
     STREAMING_CHAT,
     VLM,
     EMBEDDING,
-    SPEECH_TO_TEXT
+    STREAMING_SPEECH_TO_TEXT
 }

@@ -45,15 +45,15 @@ BDI 和 Human-in-the-Loop 适合“计划 -> 工具调用 -> 等待用户确认 
 模型管理中心统一的是 endpoint 配置、能力声明、分组路由、密钥合并和热更新，不要求所有模型使用同一个客户端类型。
 
 - Chat/Streaming Chat 继续由 LangChain4j ChatModel / StreamingChatModel adapter 创建。
-- Speech-to-Text 由 SpeechModelRegistry 根据 SPEECH_TO_TEXT capability 创建 multipart HTTP adapter。
+- Streaming Speech-to-Text 由 SpeechModelRegistry 根据 STREAMING_SPEECH_TO_TEXT capability 创建双工会话 adapter；日记语音输入通过独立原生 WebSocket 传输 16kHz 单声道 PCM 分片。
 - Embedding 后续迁移到同一 endpoint 配置契约，但保留 EmbeddingModel 专用 adapter。
 - capability 组与 endpoint 成员独立于 Chat 场景矩阵，避免把 ASR 当作聊天模型创建或参与聊天路由。
 
-当前 bootstrap 配置已将 ASR endpoint 放入 model.routing.models，并通过声明 `SPEECH_TO_TEXT` 能力的 tier 选择语音识别候选。`model.speech.asr` 不再是运行时配置来源。
+当前 bootstrap 配置已将实时 ASR endpoint 放入 model.routing.models，并通过声明 `STREAMING_SPEECH_TO_TEXT` 能力的 tier 选择语音识别候选。浏览器端只发送实时 PCM 分片，服务端不创建临时音频文件；`model.speech.asr` 不再是运行时配置来源。
 
 当前 ASR registry 按 endpoint priority 顺序执行失败转移；接入现有 ModelStateCenter 的延迟、熔断和半开探测仍是后续工作。
 
-ASR provider adapter 位于 service/ai/asr：OpenAiSpeechToTextClient 处理 OpenAI multipart HTTP，DashScopeSpeechToTextClient 使用 DashScope Java SDK 的本地文件识别 API。service/diary 只保留 VoiceTranscriptionService 这个日记用例门面。
+实时 ASR provider adapter 位于 service/ai/asr：DashScopeStreamingSpeechToTextClient 使用 DashScope Java SDK 的 Recognition 双工 WebSocket API，按 `sendAudioFrame` / `stop` 推送和结束会话。OpenAI Whisper 的批量 transcription API 不参与语音输入链路；语音输入没有 diary service、OSS 或数据库持久化路径。
 
 ## 约束与风险
 
@@ -62,7 +62,7 @@ ASR provider adapter 位于 service/ai/asr：OpenAiSpeechToTextClient 处理 Ope
 - Agentic 流程必须把用户确认、幂等键、超时和恢复状态持久化，不能直接复用普通同步 Service 调用。
 - MCP 权限过滤必须在工具暴露前完成，避免把敏感数据访问交给提示词约束。
 - 当前 developer_config 仍保存明文 API Key，且一个用户只有一个 Key；生产化开放前应迁移为只存 hash 的多应用 Key 模型。
-- 当前语音 ASR 提供 OpenAI multipart HTTP 和 DashScope Java SDK 两个 provider adapter，部署时需显式配置 provider、模型和密钥；默认关闭。
+- 当前实时语音输入仅支持声明 `STREAMING_SPEECH_TO_TEXT` 能力且实现双工协议的 provider，部署时需显式配置 DashScope provider、实时模型和密钥；默认关闭。
 
 ## 参考
 

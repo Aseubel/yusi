@@ -68,22 +68,14 @@ model:
         weight: 0
         priority: 1
         scenes: [chat, logic, graphrag-extract, graphrag-merge-suggest, memory-extract, soul-match, soul-match-letter, emotion-analysis, cognition-routing, soul-weekly-report, cognitive-conflict, memory-fusion, agent-persona, agent-proactive-greeting]
-      - id: whisper-asr
-        enabled: ${ASR_ENABLED:false}
-        provider: openai
-        baseurl: ${ASR_BASE_URL:https://api.openai.com/v1/audio/transcriptions}
-        apikey: ${ASR_API_KEY:}
-        model: ${ASR_MODEL:whisper-1}
-        timeout-seconds: 120
-        capabilities: [SPEECH_TO_TEXT]
       - id: dashscope-asr
         enabled: ${DASHSCOPE_ASR_ENABLED:false}
         provider: dashscope
-        baseurl: ${DASHSCOPE_ASR_BASEURL:https://dashscope.aliyuncs.com/api/v1}
+        baseurl: ${DASHSCOPE_ASR_BASEURL:wss://dashscope.aliyuncs.com/api-ws/v1/inference}
         apikey: ${DASHSCOPE_API_KEY:}
         model: ${DASHSCOPE_ASR_MODEL:paraformer-realtime-v2}
         timeout-seconds: 120
-        capabilities: [SPEECH_TO_TEXT]
+        capabilities: [STREAMING_SPEECH_TO_TEXT]
     tiers:
       chat-primary:
         display-name: Chat primary
@@ -146,11 +138,11 @@ model:
         members: [qwen, deepseek]
         capabilities: [CHAT, STREAMING_CHAT]
       asr-default:
-        display-name: Speech recognition
-        description: OpenAI-compatible speech-to-text fallbacks
+        display-name: Streaming speech recognition
+        description: Duplex PCM speech input
         strategy: FAIL_OVER
-        members: [whisper-asr, dashscope-asr]
-        capabilities: [SPEECH_TO_TEXT]
+        members: [dashscope-asr]
+        capabilities: [STREAMING_SPEECH_TO_TEXT]
     routes:
       - id: chat
         scene: chat
@@ -235,6 +227,15 @@ yusi:
   web:
     allowed-origin: ${YUSI_WEB_ALLOWED_ORIGIN:https://app.aseubel.cn}
     trusted-proxy-addresses: ${YUSI_TRUSTED_PROXY_ADDRESSES:}
+  diary:
+    voice:
+      max-duration-seconds: ${YUSI_VOICE_MAX_DURATION_SECONDS:120}
+      handshake-timeout-seconds: ${YUSI_VOICE_HANDSHAKE_TIMEOUT_SECONDS:10}
+      idle-timeout-seconds: ${YUSI_VOICE_IDLE_TIMEOUT_SECONDS:20}
+      max-frame-bytes: ${YUSI_VOICE_MAX_FRAME_BYTES:65536}
+      max-audio-bytes: ${YUSI_VOICE_MAX_AUDIO_BYTES:3840000}
+      send-time-limit-millis: ${YUSI_VOICE_SEND_TIME_LIMIT_MILLIS:10000}
+      send-buffer-size-bytes: ${YUSI_VOICE_SEND_BUFFER_SIZE_BYTES:524288}
   jwt:
     secret: ${YUSI_JWT_SECRET}
   security:

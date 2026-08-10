@@ -1,10 +1,7 @@
 package com.aseubel.yusi.config;
 
-import com.aseubel.yusi.common.utils.JwtUtils;
 import com.aseubel.yusi.repository.SituationRoomRepository;
 import com.aseubel.yusi.repository.SoulMatchRepository;
-import com.aseubel.yusi.service.user.TokenService;
-import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -21,8 +18,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
 
-    private final JwtUtils jwtUtils;
-    private final TokenService tokenService;
+    private final WebSocketTokenAuthenticator tokenAuthenticator;
     private final SoulMatchRepository soulMatchRepository;
     private final SituationRoomRepository situationRoomRepository;
 
@@ -32,7 +28,7 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
         StompCommand command = accessor.getCommand();
         if (command == StompCommand.CONNECT) {
             String token = firstHeader(accessor, "Authorization");
-            String userId = authenticate(token);
+            String userId = tokenAuthenticator.authenticate(token);
             accessor.setUser(() -> userId);
             return message;
         }
@@ -48,25 +44,6 @@ public class WebSocketAuthChannelInterceptor implements ChannelInterceptor {
             }
         }
         return message;
-    }
-
-    private String authenticate(String header) {
-        if (header == null || !header.startsWith("Bearer ")) {
-            throw new IllegalArgumentException("WebSocket token is required");
-        }
-        String token = header.substring(7).trim();
-        if (token.isEmpty() || tokenService.isBlacklisted(token)) {
-            throw new IllegalArgumentException("Invalid WebSocket token");
-        }
-        Claims claims = jwtUtils.getClaims(token);
-        if (!"access".equals(claims.get("type", String.class))) {
-            throw new IllegalArgumentException("Access token is required");
-        }
-        String userId = claims.getSubject();
-        if (userId == null || !tokenService.isValidDeviceToken(userId, token)) {
-            throw new IllegalArgumentException("Invalid WebSocket token");
-        }
-        return userId;
     }
 
     private boolean isAllowedDestination(StompCommand command, String destination, String userId) {
