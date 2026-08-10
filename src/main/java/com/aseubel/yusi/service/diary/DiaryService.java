@@ -14,7 +14,11 @@ public interface DiaryService {
 
     Diary getDiary(String diaryId, String userId);
 
+    Diary getCachedDiary(String diaryId, String userId);
+
     Page<Diary> getDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc);
+
+    Page<Diary> getCachedDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc);
 
     String decryptDiaryContent(Diary diary);
 

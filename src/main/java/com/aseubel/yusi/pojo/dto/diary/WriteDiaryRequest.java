@@ -63,8 +63,6 @@ public class WriteDiaryRequest implements Serializable {
 
     private List<DiaryAttachmentBinding> attachmentBindings;
 
-    private String attachmentDisplayMode = "INLINE";
-
     public Diary toDiary() {
         return Diary.builder()
                 .userId(userId)
@@ -82,7 +80,6 @@ public class WriteDiaryRequest implements Serializable {
                 .images(images)
                 .audioObjectKey(audioObjectKey)
                 .attachmentBindingsJson(JSONUtil.toJsonStr(attachmentBindings == null ? List.of() : attachmentBindings))
-                .attachmentDisplayMode(attachmentDisplayMode)
                 .build();
     }
 }

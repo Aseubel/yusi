@@ -151,9 +151,11 @@ public class OssService {
     }
 
     private String generatePresignedUrl(String objectKey, int expireSeconds) {
-        validateObjectKey(objectKey);
+        if (objectKey == null || objectKey.isBlank() || objectKey.contains("..") || objectKey.contains("\\")) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "无效的 OSS 路径");
+        }
         if (expireSeconds < 1 || expireSeconds > MAX_URL_EXPIRE_SECONDS) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "图片链接有效期不合法");
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "OSS 链接有效期不合法");
         }
         try {
             GetObjectRequest request = GetObjectRequest.newBuilder()

@@ -146,9 +146,6 @@ public class Diary {
     @Column(name = "attachment_bindings", columnDefinition = "LONGTEXT")
     private String attachmentBindingsJson;
 
-    @Column(name = "attachment_display_mode", length = 16)
-    private String attachmentDisplayMode;
-
     /** Resolved attachment bindings returned by the diary API. */
     @Transient
     private List<com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentBinding> attachmentBindings;

@@ -44,7 +44,6 @@ import java.util.Set;
 public class DiaryServiceImpl implements DiaryService {
 
     private static final int MAX_ATTACHMENT_BINDINGS = 100;
-    private static final String DEFAULT_ATTACHMENT_DISPLAY_MODE = "INLINE";
 
     @Autowired
     private DiaryRepository diaryRepository;
@@ -73,7 +72,7 @@ public class DiaryServiceImpl implements DiaryService {
      * 失效该用户的日记列表缓存
      */
     @Override
-    @UpdateCache(key = "'diary:list:' + #diary.userId + ':*'", evictOnly = true)
+    @UpdateCache(key = "'diary:list:v3:' + #diary.userId + ':*'", evictOnly = true)
     public Diary addDiary(Diary diary) {
         validateDiaryAssets(diary);
         diary.generateId();
@@ -135,7 +134,7 @@ public class DiaryServiceImpl implements DiaryService {
      * 失效单个日记缓存和用户列表缓存
      */
     @Override
-    @UpdateCache(key = "'diary:detail:' + #diary.diaryId + ':' + #diary.userId", evictOnly = true)
+    @UpdateCache(key = "'diary:detail:v3:' + #diary.diaryId + ':' + #diary.userId", evictOnly = true)
     public Diary editDiary(Diary diary) {
         validateDiaryAssets(diary);
         Diary existingDiary = diaryRepository.findByDiaryIdAndUserId(diary.getDiaryId(), diary.getUserId());
@@ -183,14 +182,14 @@ public class DiaryServiceImpl implements DiaryService {
         }
     }
 
-    @UpdateCache(key = "'diary:detail:' + #diaryId + ':' + #userId", evictOnly = true)
+    @UpdateCache(key = "'diary:detail:v3:' + #diaryId + ':' + #userId", evictOnly = true)
     public void evictDiaryCache(String diaryId, String userId) {
     }
 
     /**
      * 失效用户日记列表缓存的辅助方法
      */
-    @UpdateCache(key = "'diary:list:' + #userId + ':*'", evictOnly = true)
+    @UpdateCache(key = "'diary:list:v3:' + #userId + ':*'", evictOnly = true)
     public void evictListCache(String userId) {
         // 空方法，仅用于触发缓存失效
     }
@@ -204,13 +203,23 @@ public class DiaryServiceImpl implements DiaryService {
      * 使用压缩缓存，日记内容较大，压缩可显著减少 Redis 内存占用
      */
     @Override
-    @QueryCache(key = "'diary:detail:' + #diaryId + ':' + #userId", ttl = 3600, compress = true)
     public Diary getDiary(String diaryId, String userId) {
+        Diary diary = self.getCachedDiary(diaryId, userId);
+        if (diary != null) {
+            enrichDiaryAssets(diary, userId);
+        }
+        return diary;
+    }
+
+    @Override
+    @QueryCache(key = "'diary:detail:v3:' + #diaryId + ':' + #userId", ttl = 3600, compress = true)
+    public Diary getCachedDiary(String diaryId, String userId) {
         Diary diary = diaryRepository.findByDiaryIdAndUserId(diaryId, userId);
         if (diary == null) {
             return null;
         }
         applyReadCrypto(diary);
+        prepareDiaryAssets(diary);
         return diary;
     }
 
@@ -219,8 +228,17 @@ public class DiaryServiceImpl implements DiaryService {
      * 使用压缩缓存，列表数据较大
      */
     @Override
-    @QueryCache(key = "'diary:list:' + #userId + ':' + #pageNum + ':' + #pageSize + ':' + #sortBy + ':' + #asc", ttl = 300, compress = true)
     public Page<Diary> getDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc) {
+        Page<Diary> page = self.getCachedDiaryList(userId, pageNum, pageSize, sortBy, asc);
+        if (page.hasContent()) {
+            page.getContent().forEach(diary -> enrichDiaryAssets(diary, userId));
+        }
+        return page;
+    }
+
+    @Override
+    @QueryCache(key = "'diary:list:v3:' + #userId + ':' + #pageNum + ':' + #pageSize + ':' + #sortBy + ':' + #asc", ttl = 300, compress = true)
+    public Page<Diary> getCachedDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc) {
         // 处理默认排序字段
         String actualSort = StrUtil.isBlank(sortBy) ? "entryDate" : sortBy;
 
@@ -231,7 +249,10 @@ public class DiaryServiceImpl implements DiaryService {
         Example<Diary> example = Example.of(Diary.builder().userId(userId).build());
         Page<Diary> page = diaryRepository.findAll(example, pageRequest);
         if (page.hasContent()) {
-            page.getContent().forEach(this::applyReadCrypto);
+            page.getContent().forEach(diary -> {
+                applyReadCrypto(diary);
+                prepareDiaryAssets(diary);
+            });
         }
         return page;
 
@@ -286,6 +307,29 @@ public class DiaryServiceImpl implements DiaryService {
         }
     }
 
+    private void prepareDiaryAssets(Diary diary) {
+        diary.setImageObjectKeys(parseImageObjectKeys(diary.getImages()));
+        diary.setAttachmentBindings(parseAttachmentBindings(diary.getAttachmentBindingsJson()));
+    }
+
+    private void enrichDiaryAssets(Diary diary, String userId) {
+        List<String> imageObjectKeys = diary.getImageObjectKeys();
+        if (imageObjectKeys == null) {
+            imageObjectKeys = parseImageObjectKeys(diary.getImages());
+            diary.setImageObjectKeys(imageObjectKeys);
+        }
+        if (!imageObjectKeys.isEmpty()) {
+            diary.setImages(JSONUtil.toJsonStr(ossService.generateOwnedUrls(imageObjectKeys, userId)));
+        } else {
+            diary.setImages(JSONUtil.toJsonStr(List.of()));
+        }
+        List<DiaryAttachmentBinding> bindings = diary.getAttachmentBindings();
+        if (bindings == null) {
+            bindings = parseAttachmentBindings(diary.getAttachmentBindingsJson());
+        }
+        diary.setAttachmentBindings(resolveAttachmentBindingsToUrls(bindings, userId));
+    }
+
     @Override
     public String convertImagesToUrls(String imagesJson, String userId) {
         if (StrUtil.isBlank(imagesJson)) {
@@ -307,6 +351,11 @@ public class DiaryServiceImpl implements DiaryService {
         if (bindings.isEmpty()) {
             return List.of();
         }
+        return resolveAttachmentBindingsToUrls(bindings, userId);
+    }
+
+    private List<DiaryAttachmentBinding> resolveAttachmentBindingsToUrls(
+            List<DiaryAttachmentBinding> bindings, String userId) {
         return bindings.stream()
                 .map(binding -> DiaryAttachmentBinding.builder()
                         .type(binding.getType())
@@ -337,7 +386,6 @@ public class DiaryServiceImpl implements DiaryService {
             }
         }
         diary.setAttachmentBindingsJson(serializeAttachmentBindings(bindings));
-        diary.setAttachmentDisplayMode(normalizeDisplayMode(diary.getAttachmentDisplayMode()));
 
         if (StrUtil.isNotBlank(diary.getAudioObjectKey())) {
             ossService.validateOwnedAudioObjectKey(diary.getAudioObjectKey(), diary.getUserId());
@@ -402,15 +450,6 @@ public class DiaryServiceImpl implements DiaryService {
                         .sortOrder(binding.getSortOrder())
                         .build())
                 .toList());
-    }
-
-    private String normalizeDisplayMode(String displayMode) {
-        String normalized = StrUtil.blankToDefault(displayMode, DEFAULT_ATTACHMENT_DISPLAY_MODE)
-                .trim().toUpperCase(Locale.ROOT);
-        if (!"INLINE".equals(normalized) && !"TRIGGER".equals(normalized)) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "日记附件展示模式不合法");
-        }
-        return normalized;
     }
 
     private String generateAttachmentUrl(DiaryAttachmentBinding binding, String userId) {

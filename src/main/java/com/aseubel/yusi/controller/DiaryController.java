@@ -1,12 +1,9 @@
 package com.aseubel.yusi.controller;
 
-import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONUtil;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.pojo.dto.ai.DiaryChatRequest;
 import com.aseubel.yusi.pojo.dto.diary.DiaryFootprint;
-import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentBinding;
 import com.aseubel.yusi.pojo.dto.diary.EditDiaryRequest;
 import com.aseubel.yusi.pojo.dto.diary.WriteDiaryRequest;
 import com.aseubel.yusi.pojo.entity.Diary;
@@ -48,9 +45,6 @@ public class DiaryController {
                     com.aseubel.yusi.common.exception.ErrorCode.FORBIDDEN, "无权访问其他用户的日记");
         }
         Page<Diary> diaryPage = diaryService.getDiaryList(currentUserId, pageNum, pageSize, sortBy, asc);
-        if (diaryPage.hasContent()) {
-            diaryPage.getContent().forEach(diary -> enrichDiaryAssets(diary, currentUserId));
-        }
         return Response.success(assembler.toModel(diaryPage));
     }
 
@@ -74,26 +68,7 @@ public class DiaryController {
     public Response<Diary> getDiary(@PathVariable("diaryId") String diaryId) {
         String currentUserId = UserContext.getUserId();
         Diary diary = diaryService.getDiary(diaryId, currentUserId);
-        if (diary != null) {
-            enrichDiaryAssets(diary, currentUserId);
-        }
         return Response.success(diary);
-    }
-
-    private void enrichDiaryAssets(Diary diary, String userId) {
-        if (StrUtil.isNotBlank(diary.getImages())) {
-            diary.setImageObjectKeys(JSONUtil.toList(diary.getImages(), String.class));
-            diary.setImages(diaryService.convertImagesToUrls(diary.getImages(), userId));
-        } else {
-            diary.setImageObjectKeys(List.of());
-            diary.setImages(JSONUtil.toJsonStr(List.of()));
-        }
-        List<DiaryAttachmentBinding> bindings = diaryService.convertAttachmentBindingsToUrls(
-                diary.getAttachmentBindingsJson(), userId);
-        diary.setAttachmentBindings(bindings);
-        if (StrUtil.isBlank(diary.getAttachmentDisplayMode())) {
-            diary.setAttachmentDisplayMode("INLINE");
-        }
     }
 
     @PostMapping("/chat")
