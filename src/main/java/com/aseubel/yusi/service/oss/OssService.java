@@ -669,6 +669,11 @@ public class OssService {
         }
     }
 
+    public String generateOwnedAudioUrl(String objectKey, String userId) {
+        validateOwnedAudioObjectKey(objectKey, userId);
+        return generatePresignedUrl(objectKey);
+    }
+
     private void validateOwnedObjectKey(String objectKey, String userId) {
         if (objectKey == null || userId == null || userId.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "无效的图片路径");

@@ -2,6 +2,7 @@ package com.aseubel.yusi.pojo.entity;
 
 import com.aseubel.yusi.common.utils.UuidUtils;
 import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateDeserializer;
@@ -136,6 +137,21 @@ public class Diary {
     /** 原始语音日记在 OSS 中的 object key。 */
     @Column(name = "audio_object_key", length = 512)
     private String audioObjectKey;
+
+    /**
+     * Generic attachment anchors, stored as JSON. The URL is resolved per
+     * response because OSS URLs are signed and short-lived.
+     */
+    @JsonIgnore
+    @Column(name = "attachment_bindings", columnDefinition = "LONGTEXT")
+    private String attachmentBindingsJson;
+
+    @Column(name = "attachment_display_mode", length = 16)
+    private String attachmentDisplayMode;
+
+    /** Resolved attachment bindings returned by the diary API. */
+    @Transient
+    private List<com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentBinding> attachmentBindings;
 
     public String generateId() {
         this.diaryId = UuidUtils.genUuidSimple();

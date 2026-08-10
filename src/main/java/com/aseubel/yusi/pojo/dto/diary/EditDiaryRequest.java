@@ -1,5 +1,6 @@
 package com.aseubel.yusi.pojo.dto.diary;
 
+import cn.hutool.json.JSONUtil;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
@@ -10,6 +11,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * @author Aseubel
@@ -60,6 +62,10 @@ public class EditDiaryRequest implements Serializable {
 
     private String audioObjectKey;
 
+    private List<DiaryAttachmentBinding> attachmentBindings;
+
+    private String attachmentDisplayMode = "INLINE";
+
     public Diary toDiary() {
         return Diary.builder()
                 .userId(userId)
@@ -77,6 +83,8 @@ public class EditDiaryRequest implements Serializable {
                 .placeId(placeId)
                 .images(images)
                 .audioObjectKey(audioObjectKey)
+                .attachmentBindingsJson(JSONUtil.toJsonStr(attachmentBindings == null ? List.of() : attachmentBindings))
+                .attachmentDisplayMode(attachmentDisplayMode)
                 .build();
     }
 }

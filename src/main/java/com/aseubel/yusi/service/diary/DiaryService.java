@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.diary;
 
 import com.aseubel.yusi.pojo.entity.Diary;
+import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentBinding;
 import org.springframework.data.domain.Page;
 
 import java.util.List;
@@ -26,4 +27,6 @@ public interface DiaryService {
     List<Diary> getFootprints(String userId);
 
     String convertImagesToUrls(String imagesJson, String userId);
+
+    List<DiaryAttachmentBinding> convertAttachmentBindingsToUrls(String bindingsJson, String userId);
 }

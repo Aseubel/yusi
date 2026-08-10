@@ -10,6 +10,7 @@ import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
 import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
+import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentBinding;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.redis.annotation.QueryCache;
@@ -31,12 +32,19 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 @Slf4j
 @Service
 public class DiaryServiceImpl implements DiaryService {
+
+    private static final int MAX_ATTACHMENT_BINDINGS = 100;
+    private static final String DEFAULT_ATTACHMENT_DISPLAY_MODE = "INLINE";
 
     @Autowired
     private DiaryRepository diaryRepository;
@@ -293,23 +301,123 @@ public class DiaryServiceImpl implements DiaryService {
         return JSONUtil.toJsonStr(ossService.generateOwnedUrls(objectKeys, userId));
     }
 
+    @Override
+    public List<DiaryAttachmentBinding> convertAttachmentBindingsToUrls(String bindingsJson, String userId) {
+        List<DiaryAttachmentBinding> bindings = parseAttachmentBindings(bindingsJson);
+        if (bindings.isEmpty()) {
+            return List.of();
+        }
+        return bindings.stream()
+                .map(binding -> DiaryAttachmentBinding.builder()
+                        .type(binding.getType())
+                        .objectKey(binding.getObjectKey())
+                        .paragraphId(binding.getParagraphId())
+                        .sortOrder(binding.getSortOrder())
+                        .url(generateAttachmentUrl(binding, userId))
+                        .build())
+                .toList();
+    }
+
     private void validateDiaryAssets(Diary diary) {
         if (diary == null || StrUtil.isBlank(diary.getUserId())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "用户身份不能为空");
         }
-        if (StrUtil.isNotBlank(diary.getImages())) {
-            try {
-                List<String> objectKeys = JSONUtil.toList(diary.getImages(), String.class);
-                ossService.validateOwnedObjectKeys(objectKeys, diary.getUserId());
-            } catch (BusinessException e) {
-                throw e;
-            } catch (RuntimeException e) {
-                throw new BusinessException(ErrorCode.PARAM_ERROR, "日记图片数据不合法");
+        List<String> imageObjectKeys = parseImageObjectKeys(diary.getImages());
+        ossService.validateOwnedObjectKeys(imageObjectKeys, diary.getUserId());
+
+        List<DiaryAttachmentBinding> bindings = parseAttachmentBindings(diary.getAttachmentBindingsJson());
+        Set<String> imageKeySet = new HashSet<>(imageObjectKeys);
+        for (DiaryAttachmentBinding binding : bindings) {
+            if ("IMAGE".equals(binding.getType())) {
+                if (!imageKeySet.contains(binding.getObjectKey())) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR, "图片绑定必须引用当前日记附件");
+                }
+            } else if ("AUDIO".equals(binding.getType())) {
+                ossService.validateOwnedAudioObjectKey(binding.getObjectKey(), diary.getUserId());
             }
         }
+        diary.setAttachmentBindingsJson(serializeAttachmentBindings(bindings));
+        diary.setAttachmentDisplayMode(normalizeDisplayMode(diary.getAttachmentDisplayMode()));
+
         if (StrUtil.isNotBlank(diary.getAudioObjectKey())) {
             ossService.validateOwnedAudioObjectKey(diary.getAudioObjectKey(), diary.getUserId());
         }
+    }
+
+    private List<String> parseImageObjectKeys(String imagesJson) {
+        if (StrUtil.isBlank(imagesJson)) {
+            return List.of();
+        }
+        try {
+            return JSONUtil.toList(imagesJson, String.class);
+        } catch (RuntimeException e) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "日记图片数据不合法");
+        }
+    }
+
+    private List<DiaryAttachmentBinding> parseAttachmentBindings(String bindingsJson) {
+        if (StrUtil.isBlank(bindingsJson)) {
+            return List.of();
+        }
+        final List<DiaryAttachmentBinding> bindings;
+        try {
+            bindings = JSONUtil.toList(bindingsJson, DiaryAttachmentBinding.class);
+        } catch (RuntimeException e) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "日记附件绑定数据不合法");
+        }
+        if (bindings == null || bindings.size() > MAX_ATTACHMENT_BINDINGS) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "日记附件绑定数量超出限制");
+        }
+        List<DiaryAttachmentBinding> normalized = new ArrayList<>(bindings.size());
+        for (int index = 0; index < bindings.size(); index++) {
+            DiaryAttachmentBinding binding = bindings.get(index);
+            if (binding == null || StrUtil.isBlank(binding.getType())
+                    || StrUtil.isBlank(binding.getObjectKey()) || StrUtil.isBlank(binding.getParagraphId())) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "日记附件绑定数据不完整");
+            }
+            String type = binding.getType().trim().toUpperCase(Locale.ROOT);
+            if (!"IMAGE".equals(type) && !"AUDIO".equals(type)) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "暂不支持的日记附件类型");
+            }
+            int sortOrder = binding.getSortOrder() == null ? index : binding.getSortOrder();
+            if (sortOrder < 0) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "日记附件排序值不合法");
+            }
+            normalized.add(DiaryAttachmentBinding.builder()
+                    .type(type)
+                    .objectKey(binding.getObjectKey().trim())
+                    .paragraphId(binding.getParagraphId().trim())
+                    .sortOrder(sortOrder)
+                    .build());
+        }
+        return normalized;
+    }
+
+    private String serializeAttachmentBindings(List<DiaryAttachmentBinding> bindings) {
+        return JSONUtil.toJsonStr(bindings.stream()
+                .map(binding -> DiaryAttachmentBinding.builder()
+                        .type(binding.getType())
+                        .objectKey(binding.getObjectKey())
+                        .paragraphId(binding.getParagraphId())
+                        .sortOrder(binding.getSortOrder())
+                        .build())
+                .toList());
+    }
+
+    private String normalizeDisplayMode(String displayMode) {
+        String normalized = StrUtil.blankToDefault(displayMode, DEFAULT_ATTACHMENT_DISPLAY_MODE)
+                .trim().toUpperCase(Locale.ROOT);
+        if (!"INLINE".equals(normalized) && !"TRIGGER".equals(normalized)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "日记附件展示模式不合法");
+        }
+        return normalized;
+    }
+
+    private String generateAttachmentUrl(DiaryAttachmentBinding binding, String userId) {
+        if ("IMAGE".equals(binding.getType())) {
+            return ossService.generateOwnedUrl(binding.getObjectKey(), userId);
+        }
+        return ossService.generateOwnedAudioUrl(binding.getObjectKey(), userId);
     }
 
     private void publishDiaryEvents(Diary diary, String plainContent, DiaryChangedEvent.Type type) {

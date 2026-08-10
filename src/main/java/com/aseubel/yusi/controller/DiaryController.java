@@ -6,6 +6,7 @@ import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.pojo.dto.ai.DiaryChatRequest;
 import com.aseubel.yusi.pojo.dto.diary.DiaryFootprint;
+import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentBinding;
 import com.aseubel.yusi.pojo.dto.diary.EditDiaryRequest;
 import com.aseubel.yusi.pojo.dto.diary.WriteDiaryRequest;
 import com.aseubel.yusi.pojo.dto.diary.VoiceDiaryResponse;
@@ -13,11 +14,9 @@ import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.service.diary.DiaryService;
 import com.aseubel.yusi.service.diary.VoiceTranscriptionService;
-import com.aseubel.yusi.service.oss.OssService;
 import com.aseubel.yusi.common.ratelimit.LimitType;
 import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import jakarta.annotation.Resource;
-import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
 
@@ -33,16 +32,12 @@ import org.springframework.web.multipart.MultipartFile;
  * @date 2025/5/7 上午9:57
  */
 @Auth
-@Slf4j
 @RestController()
 @RequestMapping("/api/diary")
 public class DiaryController {
 
     @Resource
     private DiaryService diaryService;
-
-    @jakarta.annotation.Resource
-    private OssService ossService;
 
     @jakarta.annotation.Resource
     private VoiceTranscriptionService voiceTranscriptionService;
@@ -62,12 +57,7 @@ public class DiaryController {
         }
         Page<Diary> diaryPage = diaryService.getDiaryList(currentUserId, pageNum, pageSize, sortBy, asc);
         if (diaryPage.hasContent()) {
-            diaryPage.getContent().forEach(diary -> {
-                if (StrUtil.isNotBlank(diary.getImages())) {
-                    diary.setImageObjectKeys(JSONUtil.toList(diary.getImages(), String.class));
-                    diary.setImages(diaryService.convertImagesToUrls(diary.getImages(), currentUserId));
-                }
-            });
+            diaryPage.getContent().forEach(diary -> enrichDiaryAssets(diary, currentUserId));
         }
         return Response.success(assembler.toModel(diaryPage));
     }
@@ -88,37 +78,40 @@ public class DiaryController {
         return Response.success();
     }
 
-    /** 上传语音并返回转写结果，客户端随后走普通日记保存链路。 */
+    /** 临时接收语音并返回转写结果，不保存音频文件。 */
     @PostMapping("/voice/transcribe")
     @RateLimiter(key = "voice-transcribe", time = 60, count = 10, limitType = LimitType.USER)
     public Response<VoiceDiaryResponse> transcribeVoice(@RequestParam("file") MultipartFile file) {
-        String userId = UserContext.getUserId();
-        String objectKey = ossService.uploadAudio(file, userId);
-        try {
-            String transcript = voiceTranscriptionService.transcribe(file);
-            return Response.success(VoiceDiaryResponse.builder()
-                    .transcript(transcript)
-                    .audioObjectKey(objectKey)
-                    .build());
-        } catch (RuntimeException e) {
-            try {
-                ossService.deleteOwnedAudioObject(objectKey, userId);
-            } catch (RuntimeException cleanupException) {
-                log.warn("语音转写失败且音频清理失败: objectKey={}", objectKey, cleanupException);
-            }
-            throw e;
-        }
+        String transcript = voiceTranscriptionService.transcribe(file);
+        return Response.success(VoiceDiaryResponse.builder()
+                .transcript(transcript)
+                .build());
     }
 
     @GetMapping("/{diaryId}")
     public Response<Diary> getDiary(@PathVariable("diaryId") String diaryId) {
         String currentUserId = UserContext.getUserId();
         Diary diary = diaryService.getDiary(diaryId, currentUserId);
-        if (diary != null && StrUtil.isNotBlank(diary.getImages())) {
-            diary.setImageObjectKeys(JSONUtil.toList(diary.getImages(), String.class));
-            diary.setImages(diaryService.convertImagesToUrls(diary.getImages(), currentUserId));
+        if (diary != null) {
+            enrichDiaryAssets(diary, currentUserId);
         }
         return Response.success(diary);
+    }
+
+    private void enrichDiaryAssets(Diary diary, String userId) {
+        if (StrUtil.isNotBlank(diary.getImages())) {
+            diary.setImageObjectKeys(JSONUtil.toList(diary.getImages(), String.class));
+            diary.setImages(diaryService.convertImagesToUrls(diary.getImages(), userId));
+        } else {
+            diary.setImageObjectKeys(List.of());
+            diary.setImages(JSONUtil.toJsonStr(List.of()));
+        }
+        List<DiaryAttachmentBinding> bindings = diaryService.convertAttachmentBindingsToUrls(
+                diary.getAttachmentBindingsJson(), userId);
+        diary.setAttachmentBindings(bindings);
+        if (StrUtil.isBlank(diary.getAttachmentDisplayMode())) {
+            diary.setAttachmentDisplayMode("INLINE");
+        }
     }
 
     @PostMapping("/chat")
