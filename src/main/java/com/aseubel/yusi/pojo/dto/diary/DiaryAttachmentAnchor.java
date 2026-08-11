@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * A location inside a diary block that can host an attachment marker.
+ * A text range inside a diary paragraph that can host an attachment marker.
  *
  * <p>The quote and its surrounding context allow the client to relocate an
  * anchor after text is inserted before it without relying on stale offsets.</p>

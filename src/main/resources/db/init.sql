@@ -67,7 +67,7 @@ CREATE TABLE `diary` (
     `place_id` VARCHAR(255) DEFAULT NULL COMMENT '地图 POI ID（用于去重和关联）',
     `images` TEXT NULL COMMENT '图片列表（JSON数组格式存储OSS objectKey）',
     `audio_object_key` VARCHAR(512) NULL COMMENT '语音日记原始音频 OSS object key',
-    `attachment_bindings` LONGTEXT NULL COMMENT '日记附件与段落绑定（JSON数组）',
+    `attachment_bindings` LONGTEXT NULL COMMENT '日记附件与文字范围绑定（JSON数组）',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_diary_diary_id` (`diary_id`),
     KEY `idx_diary_user_id` (`user_id`),

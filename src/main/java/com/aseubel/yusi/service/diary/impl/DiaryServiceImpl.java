@@ -73,7 +73,7 @@ public class DiaryServiceImpl implements DiaryService {
      * 失效该用户的日记列表缓存
      */
     @Override
-    @UpdateCache(key = "'diary:list:v3:' + #diary.userId + ':*'", evictOnly = true)
+    @UpdateCache(key = "'diary:list:v4:' + #diary.userId + ':*'", evictOnly = true)
     public Diary addDiary(Diary diary) {
         validateDiaryAssets(diary);
         diary.generateId();
@@ -135,7 +135,7 @@ public class DiaryServiceImpl implements DiaryService {
      * 失效单个日记缓存和用户列表缓存
      */
     @Override
-    @UpdateCache(key = "'diary:detail:v3:' + #diary.diaryId + ':' + #diary.userId", evictOnly = true)
+    @UpdateCache(key = "'diary:detail:v4:' + #diary.diaryId + ':' + #diary.userId", evictOnly = true)
     public Diary editDiary(Diary diary) {
         validateDiaryAssets(diary);
         Diary existingDiary = diaryRepository.findByDiaryIdAndUserId(diary.getDiaryId(), diary.getUserId());
@@ -183,14 +183,14 @@ public class DiaryServiceImpl implements DiaryService {
         }
     }
 
-    @UpdateCache(key = "'diary:detail:v3:' + #diaryId + ':' + #userId", evictOnly = true)
+    @UpdateCache(key = "'diary:detail:v4:' + #diaryId + ':' + #userId", evictOnly = true)
     public void evictDiaryCache(String diaryId, String userId) {
     }
 
     /**
      * 失效用户日记列表缓存的辅助方法
      */
-    @UpdateCache(key = "'diary:list:v3:' + #userId + ':*'", evictOnly = true)
+    @UpdateCache(key = "'diary:list:v4:' + #userId + ':*'", evictOnly = true)
     public void evictListCache(String userId) {
         // 空方法，仅用于触发缓存失效
     }
@@ -213,7 +213,7 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     @Override
-    @QueryCache(key = "'diary:detail:v3:' + #diaryId + ':' + #userId", ttl = 3600, compress = true)
+    @QueryCache(key = "'diary:detail:v4:' + #diaryId + ':' + #userId", ttl = 3600, compress = true)
     public Diary getCachedDiary(String diaryId, String userId) {
         Diary diary = diaryRepository.findByDiaryIdAndUserId(diaryId, userId);
         if (diary == null) {
@@ -238,7 +238,7 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     @Override
-    @QueryCache(key = "'diary:list:v3:' + #userId + ':' + #pageNum + ':' + #pageSize + ':' + #sortBy + ':' + #asc", ttl = 300, compress = true)
+    @QueryCache(key = "'diary:list:v4:' + #userId + ':' + #pageNum + ':' + #pageSize + ':' + #sortBy + ':' + #asc", ttl = 300, compress = true)
     public Page<Diary> getCachedDiaryList(String userId, int pageNum, int pageSize, String sortBy, boolean asc) {
         // 处理默认排序字段
         String actualSort = StrUtil.isBlank(sortBy) ? "entryDate" : sortBy;
@@ -376,7 +376,7 @@ public class DiaryServiceImpl implements DiaryService {
         List<String> imageObjectKeys = parseImageObjectKeys(diary.getImages());
         ossService.validateOwnedObjectKeys(imageObjectKeys, diary.getUserId());
 
-        List<DiaryAttachmentBinding> bindings = parseAttachmentBindings(diary.getAttachmentBindingsJson());
+        List<DiaryAttachmentBinding> bindings = parseAttachmentBindingsForWrite(diary.getAttachmentBindingsJson());
         Set<String> imageKeySet = new HashSet<>(imageObjectKeys);
         for (DiaryAttachmentBinding binding : bindings) {
             if ("IMAGE".equals(binding.getType())) {
@@ -406,6 +406,14 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     private List<DiaryAttachmentBinding> parseAttachmentBindings(String bindingsJson) {
+        return parseAttachmentBindings(bindingsJson, false);
+    }
+
+    private List<DiaryAttachmentBinding> parseAttachmentBindingsForWrite(String bindingsJson) {
+        return parseAttachmentBindings(bindingsJson, true);
+    }
+
+    private List<DiaryAttachmentBinding> parseAttachmentBindings(String bindingsJson, boolean rejectLegacyBindings) {
         if (StrUtil.isBlank(bindingsJson)) {
             return List.of();
         }
@@ -434,6 +442,14 @@ public class DiaryServiceImpl implements DiaryService {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "日记附件排序值不合法");
             }
             DiaryAttachmentAnchor anchor = normalizeAttachmentAnchor(binding.getAnchor());
+            if (anchor == null) {
+                if (rejectLegacyBindings) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR, "日记附件必须绑定到选中文字");
+                }
+                // Existing rows may still contain the removed paragraph-only shape;
+                // the migration clears them and reads must not render them.
+                continue;
+            }
             normalized.add(DiaryAttachmentBinding.builder()
                     .type(type)
                     .objectKey(binding.getObjectKey().trim())

@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * A diary attachment anchored to a block or text range in the diary content.
+ * A diary attachment anchored to a text range in the diary content.
  *
  * <p>The type field is deliberately string based so new attachment kinds can
  * be introduced without changing the diary storage shape.</p>
@@ -23,6 +23,7 @@ public class DiaryAttachmentBinding {
 
     private String objectKey;
 
+    /** Identifies the HTML paragraph that contains the text range. */
     private String paragraphId;
 
     private Integer sortOrder;

@@ -139,7 +139,7 @@ public class Diary {
     private String audioObjectKey;
 
     /**
-     * Generic attachment anchors, stored as JSON. The URL is resolved per
+     * Text-range attachment bindings, stored as JSON. The URL is resolved per
      * response because OSS URLs are signed and short-lived.
      */
     @JsonIgnore
