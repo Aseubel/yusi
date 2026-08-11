@@ -119,7 +119,8 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
         int days = "normal".equalsIgnoreCase(config.getProactiveFrequency()) ? 3 : 7;
         LocalDateTime since = LocalDateTime.now().minusDays(days);
         List<UserNotification> recentGreetings = notificationRepository
-                .findByUserIdAndTypeAndCreatedAtAfter(userId, "AGENT_GREETING", since);
+                .findByUserIdAndTypeAndCreatedAtAfterOrderByCreatedAtDescIdDesc(
+                        userId, UserNotification.NotificationType.AGENT_GREETING.name(), since);
         return recentGreetings != null && !recentGreetings.isEmpty();
     }
 
@@ -194,7 +195,7 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
 
         notificationService.createNotification(
                 user.getUserId(),
-                "AGENT_GREETING",
+                UserNotification.NotificationType.AGENT_GREETING,
                 "小予的问候",
                 greetingMessage,
                 null,

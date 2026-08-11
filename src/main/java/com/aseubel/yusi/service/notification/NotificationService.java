@@ -1,10 +1,17 @@
 package com.aseubel.yusi.service.notification;
 
 import cn.hutool.core.util.IdUtil;
+import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.pojo.dto.notification.AnnouncementResponse;
+import com.aseubel.yusi.pojo.dto.notification.PublishAnnouncementRequest;
+import com.aseubel.yusi.pojo.entity.NotificationAnnouncement;
 import com.aseubel.yusi.pojo.entity.UserNotification;
 import com.aseubel.yusi.redis.annotation.QueryCache;
 import com.aseubel.yusi.redis.annotation.UpdateCache;
+import com.aseubel.yusi.repository.NotificationAnnouncementRepository;
 import com.aseubel.yusi.repository.UserNotificationRepository;
+import com.aseubel.yusi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -13,7 +20,10 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 @Slf4j
 @Service
@@ -21,22 +31,32 @@ import java.util.List;
 public class NotificationService {
 
     private final UserNotificationRepository notificationRepository;
+    private final NotificationAnnouncementRepository announcementRepository;
+    private final UserRepository userRepository;
 
     /**
-     * 创建消息
+     * Creates a typed notification. Runtime producers should use this overload
+     * so a new notification type cannot silently drift from the API contract.
      */
     @UpdateCache(key = "'notifications:user:' + #userId + ':*'", evictOnly = true)
-    public UserNotification createNotification(String userId, String type, String title,
-                                                String content, String refType, String refId,
+    public UserNotification createNotification(String userId, UserNotification.NotificationType type,
+                                                String title, String content, String refType, String refId,
                                                 String extraData) {
+        return createNotification(userId, type, title, content, refType, refId, extraData, null);
+    }
+
+    private UserNotification createNotification(String userId, UserNotification.NotificationType type,
+                                                String title, String content, String refType, String refId,
+                                                String extraData, String announcementId) {
         UserNotification notification = UserNotification.builder()
                 .notificationId(IdUtil.fastSimpleUUID())
                 .userId(userId)
-                .type(type)
+                .type(type.name())
                 .title(title)
                 .content(content)
                 .refType(refType)
                 .refId(refId)
+                .announcementId(announcementId)
                 .extraData(extraData)
                 .isRead(false)
                 .build();
@@ -52,7 +72,7 @@ public class NotificationService {
         String title = "发现可能重复的实体";
         String content = String.format("\"%s\" 和 \"%s\" 可能是同一%s", nameA, nameB, getTypeLabel(type));
         return createNotification(userId,
-                UserNotification.NotificationType.MERGE_SUGGESTION.name(),
+                UserNotification.NotificationType.MERGE_SUGGESTION,
                 title, content,
                 UserNotification.RefType.MERGE_JUDGMENT.name(),
                 String.valueOf(judgmentId),
@@ -65,40 +85,112 @@ public class NotificationService {
     @UpdateCache(key = "'notifications:user:' + #userId + ':*'", evictOnly = true)
     public UserNotification createSystemNotification(String userId, String title, String content) {
         return createNotification(userId,
-                UserNotification.NotificationType.SYSTEM.name(),
+                UserNotification.NotificationType.SYSTEM,
                 title, content,
                 null, null, null);
     }
 
     /**
-     * 获取用户消息列表（分页）
+     * Publishes an administrator-authored announcement and materializes one
+     * inbox item per current user. The publication record is kept separately
+     * from inbox state so read/delete actions never mutate the source content.
      */
-    @QueryCache(key = "'notifications:list:' + #userId + ':' + #page + ':' + #size", ttl = 30)
-    public Page<UserNotification> getNotifications(String userId, int page, int size) {
-        Pageable pageable = PageRequest.of(page, size);
-        return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId, pageable);
+    @Transactional(rollbackFor = Exception.class)
+    @UpdateCache(key = "'notifications:user:*'", evictOnly = true)
+    public AnnouncementResponse publishAnnouncement(PublishAnnouncementRequest request, String publisherId) {
+        if (request == null || request.getTitle() == null || request.getContent() == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "公告标题和内容不能为空");
+        }
+        String title = request.getTitle().trim();
+        String content = request.getContent().trim();
+        if (title.isBlank() || content.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "公告标题和内容不能为空");
+        }
+        if (title.length() > 120 || content.length() > 5000) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "公告内容长度超出限制");
+        }
+        if (publisherId == null || publisherId.isBlank()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "发布者身份无效");
+        }
+        String audience = request.getAudience() == null || request.getAudience().isBlank()
+                ? NotificationAnnouncement.AudienceType.ALL.name()
+                : request.getAudience().trim().toUpperCase(Locale.ROOT);
+        if (!NotificationAnnouncement.AudienceType.ALL.name().equals(audience)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "暂不支持该公告受众类型");
+        }
+
+        List<String> userIds = userRepository.findAllUserIds().stream()
+                .filter(userId -> userId != null && !userId.isBlank())
+                .distinct()
+                .toList();
+        if (userIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.OPERATION_FAILED, "当前没有可接收公告的用户");
+        }
+
+        LocalDateTime publishedAt = LocalDateTime.now();
+        NotificationAnnouncement announcement = announcementRepository.save(NotificationAnnouncement.builder()
+                .announcementId(IdUtil.fastSimpleUUID())
+                .title(title)
+                .content(content)
+                .recipientCount((long) userIds.size())
+                .audienceType(audience)
+                .status(NotificationAnnouncement.Status.PUBLISHED.name())
+                .publishedBy(publisherId)
+                .publishedAt(publishedAt)
+                .createdAt(publishedAt)
+                .build());
+
+        List<UserNotification> inboxItems = new ArrayList<>(userIds.size());
+        for (String userId : userIds) {
+            inboxItems.add(UserNotification.builder()
+                    .notificationId(IdUtil.fastSimpleUUID())
+                    .userId(userId)
+                    .type(UserNotification.NotificationType.ANNOUNCEMENT.name())
+                    .title(title)
+                    .content(content)
+                    .refType(UserNotification.RefType.ANNOUNCEMENT.name())
+                    .refId(announcement.getAnnouncementId())
+                    .announcementId(announcement.getAnnouncementId())
+                    .isRead(false)
+                    .createdAt(publishedAt)
+                    .build());
+        }
+        notificationRepository.saveAll(inboxItems);
+
+        return AnnouncementResponse.from(announcement);
+    }
+
+    public Page<AnnouncementResponse> getAnnouncements(int page, int size) {
+        Pageable pageable = PageRequest.of(normalizePage(page), normalizeSize(size));
+        return announcementRepository.findAllByOrderByPublishedAtDescIdDesc(pageable)
+                .map(AnnouncementResponse::from);
     }
 
     /**
-     * 获取用户指定类型的消息
+     * 获取用户消息列表（分页）
      */
-    @QueryCache(key = "'notifications:type:' + #userId + ':' + #type", ttl = 30)
-    public List<UserNotification> getNotificationsByType(String userId, String type) {
-        return notificationRepository.findByUserIdAndTypeOrderByCreatedAtDesc(userId, type);
+    @QueryCache(key = "'notifications:user:' + #userId + ':list:' + #page + ':' + #size + ':' + (#type == null || #type.isBlank() ? 'ALL' : #type.trim().toUpperCase())", ttl = 30)
+    public Page<UserNotification> getNotifications(String userId, int page, int size, String type) {
+        Pageable pageable = PageRequest.of(normalizePage(page), normalizeSize(size));
+        String normalizedType = normalizeType(type);
+        if (normalizedType == null) {
+            return notificationRepository.findByUserIdOrderByCreatedAtDescIdDesc(userId, pageable);
+        }
+        return notificationRepository.findByUserIdAndTypeOrderByCreatedAtDescIdDesc(userId, normalizedType, pageable);
     }
 
     /**
      * 获取未读消息
      */
-    @QueryCache(key = "'notifications:unread:' + #userId", ttl = 10)
+    @QueryCache(key = "'notifications:user:' + #userId + ':unread'", ttl = 10)
     public List<UserNotification> getUnreadNotifications(String userId) {
-        return notificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDesc(userId);
+        return notificationRepository.findByUserIdAndIsReadFalseOrderByCreatedAtDescIdDesc(userId);
     }
 
     /**
      * 获取未读消息数量
      */
-    @QueryCache(key = "'notifications:unread:count:' + #userId", ttl = 10)
+    @QueryCache(key = "'notifications:user:' + #userId + ':unread-count'", ttl = 10)
     public long getUnreadCount(String userId) {
         return notificationRepository.countByUserIdAndIsReadFalse(userId);
     }
@@ -140,5 +232,30 @@ public class NotificationService {
             case "Concept" -> "概念";
             default -> type;
         };
+    }
+
+    private String normalizeType(String type) {
+        if (type == null || type.isBlank()) {
+            return null;
+        }
+        try {
+            return UserNotification.NotificationType.fromValue(type).name();
+        } catch (IllegalArgumentException e) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的通知类型");
+        }
+    }
+
+    private int normalizePage(int page) {
+        if (page < 0 || page > 10000) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "页码不合法");
+        }
+        return page;
+    }
+
+    private int normalizeSize(int size) {
+        if (size < 1 || size > 100) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "分页大小必须在1到100之间");
+        }
+        return size;
     }
 }

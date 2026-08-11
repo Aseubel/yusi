@@ -13,11 +13,14 @@ import com.aseubel.yusi.pojo.dto.admin.AdminStatsResponse;
 import com.aseubel.yusi.pojo.dto.admin.AdminPermissionResponse;
 import com.aseubel.yusi.pojo.dto.admin.AdminUserResponse;
 import com.aseubel.yusi.pojo.dto.admin.ScenarioAuditRequest;
+import com.aseubel.yusi.pojo.dto.notification.AnnouncementResponse;
+import com.aseubel.yusi.pojo.dto.notification.PublishAnnouncementRequest;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
 import com.aseubel.yusi.pojo.entity.Suggestion;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.service.ai.embedding.EmbeddingBatchService;
+import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.suggestion.SuggestionService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -32,6 +35,7 @@ import lombok.RequiredArgsConstructor;
 
 import java.util.HashMap;
 import java.util.Map;
+import jakarta.validation.Valid;
 
 @Auth
 @Slf4j
@@ -46,6 +50,7 @@ public class AdminController {
     private final SuggestionService suggestionService;
     private final EmbeddingBatchService embeddingBatchService;
     private final MemoryConfigProperties memoryConfigProperties;
+    private final NotificationService notificationService;
 
     private void checkAdminPermission() {
         String userId = UserContext.getUserId();
@@ -184,6 +189,21 @@ public class AdminController {
     public Response<Long> getPendingSuggestionCount() {
         checkAdminPermission();
         return Response.success(suggestionService.getPendingCount());
+    }
+
+    @GetMapping("/announcements")
+    public Response<Page<AnnouncementResponse>> getAnnouncements(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        checkAdminPermission();
+        return Response.success(notificationService.getAnnouncements(page, size));
+    }
+
+    @PostMapping("/announcements")
+    public Response<AnnouncementResponse> publishAnnouncement(
+            @Valid @RequestBody PublishAnnouncementRequest request) {
+        checkAdminPermission();
+        return Response.success(notificationService.publishAnnouncement(request, UserContext.getUserId()));
     }
 
     @PostMapping("/embeddings/full-sync")

@@ -18,17 +18,15 @@ public interface UserNotificationRepository extends JpaRepository<UserNotificati
     /**
      * 查询用户的所有消息（分页）
      */
-    Page<UserNotification> findByUserIdOrderByCreatedAtDesc(String userId, Pageable pageable);
+    Page<UserNotification> findByUserIdOrderByCreatedAtDescIdDesc(String userId, Pageable pageable);
 
-    /**
-     * 查询用户指定类型的消息
-     */
-    List<UserNotification> findByUserIdAndTypeOrderByCreatedAtDesc(String userId, String type);
+    Page<UserNotification> findByUserIdAndTypeOrderByCreatedAtDescIdDesc(
+            String userId, String type, Pageable pageable);
 
     /**
      * 查询用户的未读消息
      */
-    List<UserNotification> findByUserIdAndIsReadFalseOrderByCreatedAtDesc(String userId);
+    List<UserNotification> findByUserIdAndIsReadFalseOrderByCreatedAtDescIdDesc(String userId);
 
     /**
      * 统计用户未读消息数量
@@ -65,5 +63,6 @@ public interface UserNotificationRepository extends JpaRepository<UserNotificati
     /**
      * 查询用户在指定时间之后的指定类型通知，用于去重判断。
      */
-    List<UserNotification> findByUserIdAndTypeAndCreatedAtAfter(String userId, String type, LocalDateTime since);
+    List<UserNotification> findByUserIdAndTypeAndCreatedAtAfterOrderByCreatedAtDescIdDesc(
+            String userId, String type, LocalDateTime since);
 }

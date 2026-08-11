@@ -536,18 +536,38 @@ CREATE TABLE `life_graph_merge_judgment` (
 
 -- User Notification - 用户统一消息表
 -- 用于存储各类通知消息，便于统一消息中心展示
+DROP TABLE IF EXISTS `notification_announcement`;
+
+CREATE TABLE `notification_announcement` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `announcement_id` VARCHAR(64) NOT NULL COMMENT '公告唯一标识',
+    `title` VARCHAR(120) NOT NULL COMMENT '公告标题',
+    `content` TEXT NOT NULL COMMENT '公告正文',
+    `recipient_count` BIGINT NOT NULL DEFAULT 0 COMMENT '发布时的接收用户数',
+    `audience_type` VARCHAR(32) NOT NULL DEFAULT 'ALL' COMMENT '公告受众类型: ALL',
+    `status` VARCHAR(16) NOT NULL DEFAULT 'PUBLISHED' COMMENT '公告状态: PUBLISHED',
+    `published_by` VARCHAR(64) NOT NULL COMMENT '发布管理员用户ID',
+    `published_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '发布时间',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_announcement_id` (`announcement_id`),
+    KEY `idx_announcement_status_published` (`status`, `published_at`),
+    KEY `idx_announcement_publisher` (`published_by`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '管理员公告发布记录';
+
 DROP TABLE IF EXISTS `user_notification`;
 
 CREATE TABLE `user_notification` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `notification_id` VARCHAR(64) NOT NULL COMMENT '消息唯一标识',
     `user_id` VARCHAR(64) NOT NULL COMMENT '接收用户ID',
-    `type` VARCHAR(32) NOT NULL COMMENT '消息类型: MERGE_SUGGESTION/SYSTEM/REMINDER/ANNOUNCEMENT',
+    `type` VARCHAR(32) NOT NULL COMMENT '消息类型: MERGE_SUGGESTION/SYSTEM/REMINDER/ANNOUNCEMENT/SOUL_WEEKLY_REPORT/AGENT_GREETING/RESONANCE_SIGNAL/MUTUAL_RESONANCE',
     `title` VARCHAR(255) NOT NULL COMMENT '消息标题',
     `content` TEXT COMMENT '消息内容',
     `is_read` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已读: 0-未读, 1-已读',
     `ref_type` VARCHAR(32) DEFAULT NULL COMMENT '关联类型: MERGE_JUDGMENT/DIARY/ENTITY 等',
     `ref_id` VARCHAR(64) DEFAULT NULL COMMENT '关联记录ID',
+    `announcement_id` VARCHAR(64) DEFAULT NULL COMMENT '来源公告ID，仅公告消息使用',
     `extra_data` JSON DEFAULT NULL COMMENT '扩展数据(JSON格式)',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `read_at` DATETIME DEFAULT NULL COMMENT '阅读时间',
@@ -556,6 +576,8 @@ CREATE TABLE `user_notification` (
     KEY `idx_notification_user` (`user_id`),
     KEY `idx_notification_user_read` (`user_id`, `is_read`),
     KEY `idx_notification_user_type` (`user_id`, `type`),
+    KEY `idx_notification_announcement` (`announcement_id`),
+    UNIQUE KEY `uk_notification_user_announcement` (`user_id`, `announcement_id`),
     KEY `idx_notification_created` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户统一消息表';
 

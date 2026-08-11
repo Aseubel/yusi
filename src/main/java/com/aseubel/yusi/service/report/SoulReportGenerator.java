@@ -215,7 +215,7 @@ public class SoulReportGenerator {
         try {
             notificationService.createNotification(
                     userId,
-                    "SOUL_WEEKLY_REPORT",
+                    UserNotification.NotificationType.SOUL_WEEKLY_REPORT,
                     "你的灵魂周报已生成",
                     "小予为你准备了一份本周的灵魂周报，点击查看 →",
                     null,

@@ -20,6 +20,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.Locale;
 
 /**
  * 用户统一消息表
@@ -31,12 +32,14 @@ import java.time.LocalDateTime;
 @Table(
     name = "user_notification",
     uniqueConstraints = {
-        @UniqueConstraint(name = "uk_notification_id", columnNames = { "notification_id" })
+        @UniqueConstraint(name = "uk_notification_id", columnNames = { "notification_id" }),
+        @UniqueConstraint(name = "uk_notification_user_announcement", columnNames = { "user_id", "announcement_id" })
     },
     indexes = {
         @Index(name = "idx_notification_user", columnList = "user_id"),
         @Index(name = "idx_notification_user_read", columnList = "user_id, is_read"),
         @Index(name = "idx_notification_user_type", columnList = "user_id, type"),
+        @Index(name = "idx_notification_announcement", columnList = "announcement_id"),
         @Index(name = "idx_notification_created", columnList = "created_at")
     }
 )
@@ -57,7 +60,8 @@ public class UserNotification {
     private String userId;
 
     /**
-     * 消息类型: MERGE_SUGGESTION/SYSTEM/REMINDER/ANNOUNCEMENT
+     * Message type. SYSTEM is emitted by service workflows; ANNOUNCEMENT is
+     * authored and published by an administrator.
      */
     @Column(name = "type", nullable = false, length = 32)
     private String type;
@@ -80,6 +84,10 @@ public class UserNotification {
 
     @Column(name = "ref_id", length = 64)
     private String refId;
+
+    /** The immutable announcement that produced this inbox item, if any. */
+    @Column(name = "announcement_id", length = 64)
+    private String announcementId;
 
     @Column(name = "extra_data", columnDefinition = "JSON")
     @JdbcTypeCode(SqlTypes.JSON)
@@ -111,7 +119,18 @@ public class UserNotification {
         MERGE_SUGGESTION,   // 合并建议
         SYSTEM,             // 系统通知
         REMINDER,           // 提醒
-        ANNOUNCEMENT        // 公告
+        ANNOUNCEMENT,       // 管理员公告
+        SOUL_WEEKLY_REPORT, // 灵魂周报
+        AGENT_GREETING,     // 主动问候
+        RESONANCE_SIGNAL,   // 共鸣信号
+        MUTUAL_RESONANCE;   // 双向共鸣
+
+        public static NotificationType fromValue(String value) {
+            if (value == null || value.isBlank()) {
+                throw new IllegalArgumentException("Notification type is required");
+            }
+            return valueOf(value.trim().toUpperCase(Locale.ROOT));
+        }
     }
 
     /**
@@ -121,6 +140,7 @@ public class UserNotification {
         MERGE_JUDGMENT,     // 合并判断
         DIARY,              // 日记
         ENTITY,             // 实体
-        USER                // 用户
+        USER,               // 用户
+        ANNOUNCEMENT        // 管理员公告
     }
 }

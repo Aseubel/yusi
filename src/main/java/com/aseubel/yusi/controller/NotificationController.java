@@ -25,18 +25,10 @@ public class NotificationController {
     @GetMapping
     public Response<Page<UserNotification>> getNotifications(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String type) {
         String userId = UserContext.getUserId();
-        return Response.success(notificationService.getNotifications(userId, page, size));
-    }
-
-    /**
-     * 获取指定类型的消息
-     */
-    @GetMapping("/type/{type}")
-    public Response<List<UserNotification>> getNotificationsByType(@PathVariable String type) {
-        String userId = UserContext.getUserId();
-        return Response.success(notificationService.getNotificationsByType(userId, type));
+        return Response.success(notificationService.getNotifications(userId, page, size, type));
     }
 
     /**

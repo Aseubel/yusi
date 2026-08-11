@@ -4,6 +4,7 @@ import com.aseubel.yusi.pojo.entity.User;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -26,4 +27,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Page<User> findByUserNameContaining(String userName, Pageable pageable);
 
     Page<User> findByUserIdContaining(String userId, Pageable pageable);
+
+    @Query("SELECT u.userId FROM User u WHERE u.userId IS NOT NULL")
+    List<String> findAllUserIds();
 }

@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.entity.ResonanceSignal;
+import com.aseubel.yusi.pojo.entity.UserNotification;
 import com.aseubel.yusi.repository.ResonanceSignalRepository;
 import com.aseubel.yusi.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -106,7 +107,7 @@ public class ResonanceSignalService {
     private void notifyNewSignal(ResonanceSignal signal) {
         notificationService.createNotification(
                 signal.getToUserId(),
-                "RESONANCE_SIGNAL",
+                UserNotification.NotificationType.RESONANCE_SIGNAL,
                 "有人与你产生了共鸣",
                 "有人在广场感受到了与你的共鸣，向你发送了一个匿名信号。",
                 null,
@@ -119,7 +120,7 @@ public class ResonanceSignalService {
         for (String uid : new String[] { userIdA, userIdB }) {
             notificationService.createNotification(
                     uid,
-                    "MUTUAL_RESONANCE",
+                    UserNotification.NotificationType.MUTUAL_RESONANCE,
                     "双向共鸣！",
                     content,
                     null,
