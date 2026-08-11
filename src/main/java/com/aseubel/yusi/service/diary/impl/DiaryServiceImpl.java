@@ -10,6 +10,7 @@ import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
 import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
+import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentAnchor;
 import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentBinding;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.User;
@@ -362,6 +363,7 @@ public class DiaryServiceImpl implements DiaryService {
                         .objectKey(binding.getObjectKey())
                         .paragraphId(binding.getParagraphId())
                         .sortOrder(binding.getSortOrder())
+                        .anchor(copyAttachmentAnchor(binding.getAnchor()))
                         .url(generateAttachmentUrl(binding, userId))
                         .build())
                 .toList();
@@ -431,11 +433,13 @@ public class DiaryServiceImpl implements DiaryService {
             if (sortOrder < 0) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "日记附件排序值不合法");
             }
+            DiaryAttachmentAnchor anchor = normalizeAttachmentAnchor(binding.getAnchor());
             normalized.add(DiaryAttachmentBinding.builder()
                     .type(type)
                     .objectKey(binding.getObjectKey().trim())
                     .paragraphId(binding.getParagraphId().trim())
                     .sortOrder(sortOrder)
+                    .anchor(anchor)
                     .build());
         }
         return normalized;
@@ -448,8 +452,43 @@ public class DiaryServiceImpl implements DiaryService {
                         .objectKey(binding.getObjectKey())
                         .paragraphId(binding.getParagraphId())
                         .sortOrder(binding.getSortOrder())
+                        .anchor(copyAttachmentAnchor(binding.getAnchor()))
                         .build())
                 .toList());
+    }
+
+    private DiaryAttachmentAnchor normalizeAttachmentAnchor(DiaryAttachmentAnchor anchor) {
+        if (anchor == null) {
+            return null;
+        }
+        if (StrUtil.isBlank(anchor.getKind()) || !"TEXT_RANGE".equalsIgnoreCase(anchor.getKind())
+                || anchor.getStart() == null || anchor.getEnd() == null
+                || anchor.getStart() < 0 || anchor.getEnd() <= anchor.getStart()
+                || StrUtil.isBlank(anchor.getQuote())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "日记附件文字定位数据不合法");
+        }
+        return DiaryAttachmentAnchor.builder()
+                .kind("TEXT_RANGE")
+                .start(anchor.getStart())
+                .end(anchor.getEnd())
+                .quote(anchor.getQuote())
+                .prefix(anchor.getPrefix())
+                .suffix(anchor.getSuffix())
+                .build();
+    }
+
+    private DiaryAttachmentAnchor copyAttachmentAnchor(DiaryAttachmentAnchor anchor) {
+        if (anchor == null) {
+            return null;
+        }
+        return DiaryAttachmentAnchor.builder()
+                .kind(anchor.getKind())
+                .start(anchor.getStart())
+                .end(anchor.getEnd())
+                .quote(anchor.getQuote())
+                .prefix(anchor.getPrefix())
+                .suffix(anchor.getSuffix())
+                .build();
     }
 
     private String generateAttachmentUrl(DiaryAttachmentBinding binding, String userId) {
