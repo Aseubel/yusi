@@ -108,7 +108,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public AuthResponse refreshToken(String refreshToken, String oldAccessToken) {
-        log.info("收到刷新令牌请求");
+        log.debug("收到刷新令牌请求");
         
         if (!jwtUtils.validateToken(refreshToken)) {
             log.warn("刷新token无效: validateToken返回false");

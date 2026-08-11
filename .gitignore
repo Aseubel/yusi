@@ -40,3 +40,4 @@ prod_secrets.txt
 yusi_prod.env
 .env
 .codegraph/daemon.pid
+.promo

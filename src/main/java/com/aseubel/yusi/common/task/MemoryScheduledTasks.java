@@ -31,11 +31,11 @@ public class MemoryScheduledTasks {
      * 使用配置文件中的 Cron 表达式（默认每 30 分钟，可通过 yusi.memory.mid-term-scan-cron 覆盖）
      */
     public void scanAndSummarizeMidTermMemory() {
-        log.info("Starting mid-term memory fallback scan...");
+        log.debug("Starting mid-term memory fallback scan...");
 
         // 只取有未总结消息的 memoryId，避免全量用户扫描
         List<String> activeMemoryIds = chatMemoryMessageRepository.findMemoryIdsWithUnsummarizedMessages();
-        log.info("Found {} memoryIds with unsummarized messages", activeMemoryIds.size());
+        log.debug("Found {} memoryIds with unsummarized messages", activeMemoryIds.size());
 
         for (String memoryId : activeMemoryIds) {
             try {
@@ -45,6 +45,6 @@ public class MemoryScheduledTasks {
             }
         }
 
-        log.info("Finished mid-term memory fallback scan.");
+        log.debug("Finished mid-term memory fallback scan.");
     }
 }
