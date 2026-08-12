@@ -1,3 +1,6 @@
-yusi_prod.env
-.env
-prod_secrets.txt
+# Backend Dockerfile only needs the packaged JAR from target/.
+# Keeping the context small avoids copying the repository, frontend, docs and
+# local build output into every Docker build.
+**
+!target/
+!target/*.jar

@@ -13,6 +13,8 @@ SERVICE_NAME="yusi"
 IMAGE_NAME="yusi:latest"
 RUN_MAVEN=1
 NO_CACHE="${DOCKER_BUILD_NO_CACHE:-0}"
+PRUNE_DOCKER_CACHE="${DOCKER_PRUNE_BUILD_CACHE:-1}"
+MIN_FREE_GIB="${DOCKER_MIN_FREE_GIB:-2}"
 
 usage() {
     cat <<'EOF'
@@ -22,6 +24,7 @@ usage() {
 选项:
   --docker-only, --skip-maven  跳过 git pull、JDK 检查和 Maven，直接使用现有 target/*.jar 构建 Docker
   --no-cache                   禁用 Docker 构建缓存
+  --no-prune                   保留未使用的 Docker 构建缓存和悬空镜像
   -h, --help                  显示帮助
 
 示例:
@@ -39,6 +42,9 @@ while (($# > 0)); do
         --no-cache)
             NO_CACHE=1
             ;;
+        --no-prune)
+            PRUNE_DOCKER_CACHE=0
+            ;;
         -h|--help)
             usage
             exit 0
@@ -51,6 +57,36 @@ while (($# > 0)); do
     esac
     shift
 done
+
+prune_docker_build_cache() {
+    if [[ "$PRUNE_DOCKER_CACHE" != "1" ]]; then
+        return 0
+    fi
+
+    # 只回收未使用的 BuildKit 缓存和悬空镜像，不影响运行中的容器、卷或已被容器引用的镜像。
+    echo "回收未使用的 Docker 构建缓存..."
+    docker builder prune --all --force || true
+    docker image prune --force || true
+}
+
+check_docker_disk_space() {
+    local docker_root free_kib required_kib
+
+    docker_root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || printf '/var/lib/docker')"
+    free_kib="$(df -Pk "$docker_root" | awk 'NR == 2 { print $4 }')"
+    required_kib=$((MIN_FREE_GIB * 1024 * 1024))
+
+    if [[ -z "$free_kib" || ! "$free_kib" =~ ^[0-9]+$ ]]; then
+        echo "无法读取 Docker 所在磁盘的剩余空间: $docker_root" >&2
+        exit 1
+    fi
+
+    if (( free_kib < required_kib )); then
+        echo "Docker 所在磁盘剩余空间不足: $((free_kib / 1024)) MiB，可用至少 ${MIN_FREE_GIB} GiB。" >&2
+        echo "请先检查 docker system df -v 和 df -h，再清理无用镜像/日志或扩容磁盘。" >&2
+        exit 1
+    fi
+}
 
 # Define JDK version and installation path
 JDK_VERSION="21"
@@ -111,6 +147,10 @@ fi
 
 echo "Starting Docker build..."
 
+# 小磁盘部署机上，失败构建留下的中间层会持续增长；清理只针对未使用资源。
+prune_docker_build_cache
+check_docker_disk_space
+
 # 记录旧镜像 ID。构建成功并切换容器后，只回收这个项目上一版镜像。
 OLD_IMAGE_ID="$(docker image inspect "$IMAGE_NAME" --format '{{.Id}}' 2>/dev/null || true)"
 
@@ -127,6 +167,7 @@ if ! compgen -G "$SCRIPT_DIR/target/*.jar" > /dev/null; then
 fi
 
 if ! DOCKER_BUILDKIT=1 docker compose "${COMPOSE_ARGS[@]}" build "${BUILD_ARGS[@]}" "$SERVICE_NAME"; then
+    prune_docker_build_cache
     echo "Docker build failed."
     exit 1
 fi
@@ -141,5 +182,7 @@ if [[ -n "$OLD_IMAGE_ID" && "$OLD_IMAGE_ID" != "$NEW_IMAGE_ID" ]]; then
         echo "Previous image is still referenced by another container; leaving it untouched."
     fi
 fi
+
+prune_docker_build_cache
 
 echo "Done."
