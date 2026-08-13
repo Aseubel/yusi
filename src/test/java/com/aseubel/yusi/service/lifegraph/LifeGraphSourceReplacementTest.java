@@ -5,13 +5,16 @@ import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.LifeGraphRelation;
 import com.aseubel.yusi.pojo.entity.LifeGraphRelationEvidence;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
+import com.aseubel.yusi.pojo.entity.LifeGraphEntityEvidence;
 import com.aseubel.yusi.pojo.entity.LifeGraphMention;
 import com.aseubel.yusi.repository.LifeGraphEntityAliasRepository;
+import com.aseubel.yusi.repository.LifeGraphEntityEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphEntityRepository;
 import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.lifegraph.LifeGraphPromotionPolicy;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphExtractor;
 import com.aseubel.yusi.service.lifegraph.impl.LifeGraphBuildServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,6 +47,9 @@ class LifeGraphSourceReplacementTest {
     private LifeGraphEntityAliasRepository aliasRepository;
 
     @Mock
+    private LifeGraphEntityEvidenceRepository entityEvidenceRepository;
+
+    @Mock
     private LifeGraphRelationRepository relationRepository;
 
     @Mock
@@ -59,7 +65,7 @@ class LifeGraphSourceReplacementTest {
     private LifeGraphExtractor extractor;
 
     @Test
-    void invalidExtractionRemovesExistingDiaryContributionsAndRaisesForRetry() {
+    void invalidExtractionPreservesExistingDiaryContributionsAndRaisesForRetry() {
         when(entityRepository.findVisibleByUserId(eq("user-1"), any(), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
         when(aliasRepository.findTop200ByUserIdOrderByConfidenceDesc("user-1")).thenReturn(List.of());
@@ -69,8 +75,11 @@ class LifeGraphSourceReplacementTest {
 
         assertThrows(IllegalStateException.class, () -> service().upsertFromDiary(diary(), "content"));
 
-        verify(mentionRepository).deleteByUserIdAndDiaryId("user-1", "diary-1");
-        verify(evidenceRepository).deleteByUserIdAndSourceTypeAndSourceId("user-1", "DIARY", "diary-1");
+        verify(mentionRepository, never()).deleteByUserIdAndDiaryId("user-1", "diary-1");
+        verify(entityEvidenceRepository, never())
+                .deleteByUserIdAndSourceTypeAndSourceId("user-1", "DIARY", "diary-1");
+        verify(evidenceRepository, never())
+                .deleteByUserIdAndSourceTypeAndSourceId("user-1", "DIARY", "diary-1");
     }
 
     @Test
@@ -120,6 +129,13 @@ class LifeGraphSourceReplacementTest {
     void duplicateRelationsFromOneDiaryUseTheExactSourceOccurrenceCount() {
         AtomicReference<LifeGraphRelation> relationHolder = new AtomicReference<>();
         AtomicReference<LifeGraphRelationEvidence> evidenceHolder = new AtomicReference<>();
+        LifeGraphEntity userEntity = LifeGraphEntity.builder()
+                .id(1L)
+                .userId("user-1")
+                .type(LifeGraphEntity.EntityType.User)
+                .nameNorm("__user__")
+                .displayName("我")
+                .build();
 
         when(entityRepository.findVisibleByUserId(eq("user-1"), any(), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
@@ -131,26 +147,30 @@ class LifeGraphSourceReplacementTest {
         when(extractor.extract(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString())).thenReturn(""
                         + "{\"entities\":["
-                        + "{\"type\":\"Person\",\"displayName\":\"Alice\",\"nameNorm\":\"alice\"},"
+                        + "{\"type\":\"User\",\"displayName\":\"我\",\"nameNorm\":\"__user__\"},"
                         + "{\"type\":\"Event\",\"displayName\":\"Trip\",\"nameNorm\":\"trip\"}],"
                         + "\"relations\":["
-                        + "{\"source\":\"alice\",\"target\":\"trip\",\"type\":\"RELATED_TO\"},"
-                        + "{\"source\":\"alice\",\"target\":\"trip\",\"type\":\"RELATED_TO\"}],"
+                        + "{\"source\":\"__USER__\",\"target\":\"trip\",\"type\":\"PARTICIPATED_IN\","
+                        + "\"confidence\":0.9,\"evidenceSnippet\":\"我参加了Trip\"},"
+                        + "{\"source\":\"__USER__\",\"target\":\"trip\",\"type\":\"PARTICIPATED_IN\","
+                        + "\"confidence\":0.9,\"evidenceSnippet\":\"我参加了Trip\"}],"
                         + "\"mentions\":[]}");
         when(aliasRepository.findByUserIdAndAliasNorm(anyString(), anyString())).thenReturn(Optional.empty());
         when(entityRepository.findByUserIdAndTypeAndNameNorm(anyString(), any(), anyString()))
                 .thenReturn(Optional.empty());
+        when(entityRepository.findByUserIdAndTypeAndNameNorm(
+                "user-1", LifeGraphEntity.EntityType.User, "__user__"))
+                .thenReturn(Optional.of(userEntity));
         when(entityRepository.save(any(com.aseubel.yusi.pojo.entity.LifeGraphEntity.class)))
                 .thenAnswer(invocation -> {
                     com.aseubel.yusi.pojo.entity.LifeGraphEntity entity = invocation.getArgument(0);
-                    if (entity.getId() == null) {
-                        entity.setId(entity.getNameNorm().equals("alice") ? 11L
-                                : entity.getNameNorm().equals("trip") ? 12L : 1L);
+            if (entity.getId() == null) {
+                entity.setId(entity.getNameNorm().equals("trip") ? 12L : 1L);
                     }
                     return entity;
                 });
         when(relationRepository.findByUserIdAndSourceIdAndTargetIdAndType(
-                "user-1", 11L, 12L, "RELATED_TO"))
+                "user-1", 1L, 12L, "PARTICIPATED_IN"))
                 .thenAnswer(invocation -> Optional.ofNullable(relationHolder.get()));
         when(relationRepository.save(any(LifeGraphRelation.class))).thenAnswer(invocation -> {
             LifeGraphRelation relation = invocation.getArgument(0);
@@ -174,6 +194,7 @@ class LifeGraphSourceReplacementTest {
 
         service().upsertFromDiary(diary(), "content");
 
+        verify(relationRepository).save(any(LifeGraphRelation.class));
         assertEquals(2, relationHolder.get().getWeight());
         assertEquals(2, evidenceHolder.get().getOccurrenceCount());
     }
@@ -209,7 +230,14 @@ class LifeGraphSourceReplacementTest {
 
     @Test
     void extractedEntitiesGetDiarySourceRowsEvenWhenMentionPayloadIsEmpty() {
-        AtomicReference<LifeGraphMention> mentionHolder = new AtomicReference<>();
+        AtomicReference<LifeGraphEntityEvidence> evidenceHolder = new AtomicReference<>();
+        LifeGraphEntity userEntity = LifeGraphEntity.builder()
+                .id(1L)
+                .userId("user-1")
+                .type(LifeGraphEntity.EntityType.User)
+                .nameNorm("__user__")
+                .displayName("我")
+                .build();
 
         when(entityRepository.findVisibleByUserId(eq("user-1"), any(), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
@@ -220,11 +248,17 @@ class LifeGraphSourceReplacementTest {
         when(promptManager.getPrompt(any(PromptKey.class))).thenReturn("prompt");
         when(extractor.extract(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString())).thenReturn(""
-                        + "{\"entities\":[{\"type\":\"Event\",\"displayName\":\"Trip\","
-                        + "\"nameNorm\":\"trip\"}],\"relations\":[],\"mentions\":[]}");
+                        + "{\"entities\":[{\"type\":\"User\",\"displayName\":\"我\","
+                        + "\"nameNorm\":\"__user__\"},{\"type\":\"Event\",\"displayName\":\"Trip\","
+                        + "\"nameNorm\":\"trip\"}],\"relations\":[{\"source\":\"__USER__\","
+                        + "\"target\":\"trip\",\"type\":\"PARTICIPATED_IN\",\"confidence\":0.9,"
+                        + "\"evidenceSnippet\":\"我参加了Trip\"}],\"mentions\":[]}");
         when(aliasRepository.findByUserIdAndAliasNorm(anyString(), anyString())).thenReturn(Optional.empty());
         when(entityRepository.findByUserIdAndTypeAndNameNorm(anyString(), any(), anyString()))
                 .thenReturn(Optional.empty());
+        when(entityRepository.findByUserIdAndTypeAndNameNorm(
+                "user-1", LifeGraphEntity.EntityType.User, "__user__"))
+                .thenReturn(Optional.of(userEntity));
         when(entityRepository.save(any(LifeGraphEntity.class))).thenAnswer(invocation -> {
             LifeGraphEntity entity = invocation.getArgument(0);
             if (entity.getId() == null) {
@@ -232,22 +266,39 @@ class LifeGraphSourceReplacementTest {
             }
             return entity;
         });
-        when(mentionRepository.save(any(LifeGraphMention.class))).thenAnswer(invocation -> {
-            LifeGraphMention mention = invocation.getArgument(0);
-            mentionHolder.set(mention);
-            return mention;
+        when(relationRepository.save(any(LifeGraphRelation.class))).thenAnswer(invocation -> {
+            LifeGraphRelation relation = invocation.getArgument(0);
+            relation.setId(21L);
+            return relation;
+        });
+        when(entityEvidenceRepository.findByUserIdAndEntityIdAndSourceTypeAndSourceId(
+                "user-1", 11L, "DIARY", "diary-1"))
+                .thenReturn(Optional.empty());
+        when(entityEvidenceRepository.save(any(LifeGraphEntityEvidence.class))).thenAnswer(invocation -> {
+            LifeGraphEntityEvidence evidence = invocation.getArgument(0);
+            evidenceHolder.set(evidence);
+            return evidence;
         });
 
         service().upsertFromDiary(diary(), "content");
 
-        assertEquals("user-1", mentionHolder.get().getUserId());
-        assertEquals(11L, mentionHolder.get().getEntityId());
-        assertEquals("diary-1", mentionHolder.get().getDiaryId());
+        assertEquals("user-1", evidenceHolder.get().getUserId());
+        assertEquals(11L, evidenceHolder.get().getEntityId());
+        assertEquals("DIARY", evidenceHolder.get().getSourceType());
+        assertEquals("diary-1", evidenceHolder.get().getSourceId());
+        verify(mentionRepository, never()).save(any(LifeGraphMention.class));
     }
 
     @Test
     void explicitMentionDetailsArePreservedWhenEntityWasAlsoExtracted() {
         AtomicReference<LifeGraphMention> mentionHolder = new AtomicReference<>();
+        LifeGraphEntity userEntity = LifeGraphEntity.builder()
+                .id(1L)
+                .userId("user-1")
+                .type(LifeGraphEntity.EntityType.User)
+                .nameNorm("__user__")
+                .displayName("我")
+                .build();
 
         when(entityRepository.findVisibleByUserId(eq("user-1"), any(), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
@@ -258,18 +309,29 @@ class LifeGraphSourceReplacementTest {
         when(promptManager.getPrompt(any(PromptKey.class))).thenReturn("prompt");
         when(extractor.extract(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString())).thenReturn(""
-                        + "{\"entities\":[{\"type\":\"Event\",\"displayName\":\"Trip\","
-                        + "\"nameNorm\":\"trip\"}],\"relations\":[],"
+                        + "{\"entities\":[{\"type\":\"User\",\"displayName\":\"我\","
+                        + "\"nameNorm\":\"__user__\"},{\"type\":\"Event\",\"displayName\":\"Trip\","
+                        + "\"nameNorm\":\"trip\"}],\"relations\":[{\"source\":\"__USER__\","
+                        + "\"target\":\"trip\",\"type\":\"PARTICIPATED_IN\",\"confidence\":0.9,"
+                        + "\"evidenceSnippet\":\"我参加了Trip\"}],"
                         + "\"mentions\":[{\"entity\":\"trip\",\"snippet\":\"Trip happened\"}]}" );
         when(aliasRepository.findByUserIdAndAliasNorm(anyString(), anyString())).thenReturn(Optional.empty());
         when(entityRepository.findByUserIdAndTypeAndNameNorm(anyString(), any(), anyString()))
                 .thenReturn(Optional.empty());
+        when(entityRepository.findByUserIdAndTypeAndNameNorm(
+                "user-1", LifeGraphEntity.EntityType.User, "__user__"))
+                .thenReturn(Optional.of(userEntity));
         when(entityRepository.save(any(LifeGraphEntity.class))).thenAnswer(invocation -> {
             LifeGraphEntity entity = invocation.getArgument(0);
             if (entity.getId() == null) {
                 entity.setId(entity.getType() == LifeGraphEntity.EntityType.User ? 1L : 11L);
             }
             return entity;
+        });
+        when(relationRepository.save(any(LifeGraphRelation.class))).thenAnswer(invocation -> {
+            LifeGraphRelation relation = invocation.getArgument(0);
+            relation.setId(21L);
+            return relation;
         });
         when(mentionRepository.save(any(LifeGraphMention.class))).thenAnswer(invocation -> {
             LifeGraphMention mention = invocation.getArgument(0);
@@ -317,7 +379,8 @@ class LifeGraphSourceReplacementTest {
 
     private LifeGraphBuildServiceImpl service() {
         return new LifeGraphBuildServiceImpl(entityRepository, aliasRepository, relationRepository,
-                evidenceRepository, mentionRepository, promptManager, extractor, new ObjectMapper());
+                evidenceRepository, mentionRepository, entityEvidenceRepository, promptManager, extractor,
+                new ObjectMapper(), new LifeGraphPromotionPolicy(), null);
     }
 
     private Diary diary() {

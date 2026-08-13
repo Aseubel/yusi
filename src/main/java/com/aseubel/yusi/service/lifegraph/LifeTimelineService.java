@@ -143,8 +143,11 @@ public class LifeTimelineService {
     }
 
     private TimelineNode toNode(LifeGraphEntity e) {
-        // 优先使用 AI 分析的 importance，否则使用默认计算
-        double importance = getImportanceFromProps(e);
+        // The first-class field is authoritative; props is a legacy fallback.
+        double importance = e.getImportance() == null ? 0 : e.getImportance();
+        if (importance <= 0) {
+            importance = getImportanceFromProps(e);
+        }
         if (importance <= 0) {
             importance = Math.min(1.0, (e.getMentionCount() * 0.1) + (e.getRelationCount() * 0.05));
         }

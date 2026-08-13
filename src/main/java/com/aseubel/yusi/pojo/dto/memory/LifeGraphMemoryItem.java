@@ -22,6 +22,7 @@ public class LifeGraphMemoryItem {
     private Integer mentionCount;
     private Integer relationCount;
     private Double confidence;
+    private Double importance;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime validUntil;

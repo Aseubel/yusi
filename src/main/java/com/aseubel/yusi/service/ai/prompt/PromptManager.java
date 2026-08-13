@@ -128,7 +128,13 @@ public class PromptManager {
         }
         if (PromptKey.GRAPHRAG_EXTRACT.getKey().equals(keyStr)) {
             return """
-                    你正在为用户构建“人生图谱”（GraphRAG）。请从日记中抽取实体、关系与证据片段，并输出严格 JSON。
+                    你正在为用户构建“人生图谱”（GraphRAG）。请从输入的日记或用户本人发布的 Plaza 卡片中抽取宽范围的局部候选实体、长期生活关系和原文证据，并输出严格 JSON。
+
+                    重要边界：
+                    - 本次输出首先是局部候选上下文，不等于长期 LifeGraph 事实。服务端会再次校验实体类型、关系类型、证据、置信度和用户生活语义。
+                    - 抽取范围可以宽，识别 Person、Event、Place、Work、Topic、Emotion、Item；标题、引用、背景知识或转述中的实体不因出现就成为用户事实。
+                    - 长期自动升级边界是 User -> 直接重要人物 -> 该人物的属性或事件，不要从人物继续扩展其同事、朋友或其他人物。
+                    - 不要使用 MENTIONED、MENTIONED_IN、SAID 或泛化 RELATED_TO 填充长期图谱。
 
                     输出要求：
                     1) 只输出一个 JSON 对象，不要输出任何额外文字
@@ -136,9 +142,9 @@ public class PromptManager {
                     {
                       "entities": [
                         {
-                          "type": "Person|Event|Place|Emotion|Topic|Item",
+                          "type": "Person|Event|Place|Work|Emotion|Topic|Item|User",
                           "displayName": "原文中的称呼或新实体名称",
-                          "nameNorm": "归一化名称（尽量映射到已知实体库的规范名；若为新实体则给出合理规范名）",
+                          "nameNorm": "归一化名称；新人物使用原文称呼或全名，不要使用身份标签；用户使用 __USER__",
                           "aliases": ["别名1","别名2"],
                           "summary": "实体的一句话摘要，描述该实体在用户生活中的意义",
                           "emotion": "该实体关联的主要情绪（如：Joy/Sadness/Anxiety/Love/Anger/Fear/Hope/Calm/Confusion/Neutral）",
@@ -151,16 +157,16 @@ public class PromptManager {
                         {
                           "source": "__USER__|nameNorm",
                           "target": "nameNorm",
-                          "type": "RELATED_TO|HAPPENED_AT|TRIGGERED|PARTICIPATED|MENTIONED_IN",
+                          "type": "PARTNER_OF|FAMILY_OF|FRIEND_OF|COLLEAGUE_OF|MENTOR_OF|SIBLING_OF|PARENT_OF|CHILD_OF|LIKES|DISLIKES|BOUGHT_FOR|PARTICIPATED_IN|EXPERIENCED|HAPPENED_AT|TRIGGERED|WORKED_AT|LIVED_AT|CARED_FOR|HAS_BIRTHDAY|HAS_IMPORTANT_EVENT|VISITED|ATTENDED",
                           "confidence": 0.0,
                           "props": {},
-                          "evidenceSnippet": "可选，<=200字"
+                          "evidenceSnippet": "必填，来自原文，<=100字"
                         }
                       ],
                       "mentions": [
                         {
                           "entity": "nameNorm",
-                          "snippet": "证据片段，<=200字",
+                          "snippet": "来自原文的短证据，<=100字",
                           "props": {}
                         }
                       ]
@@ -171,11 +177,13 @@ public class PromptManager {
                     - emotion: 可选，该实体在上下文中引发的主要情绪
                     - importance: 0.1-1.0，评估该实体对用户的重要程度
 
-                    抽取原则：
-                    1) 若无法确定映射：优先使用已知实体库；仍不确定则创建新实体，但把可能别名放到 aliases
-                    2) 关系置信度：LLM 自动抽取建议在 0.6-0.9 区间
-                    3) summary 要具体，避免泛泛而谈
-                    4) importance 要综合考虑：提及频率、情感强度、对用户生活的影响程度
+                    关系判断：
+                    1) 用户明确表达伴侣、家人、重要朋友等直接关系时，输出 User 与 Person 的关系。
+                    2) 已有直接用户关系的人物可以与非 Person 的长期属性或事件建立关系，如“小美喜欢草莓”。
+                    3) 用户对重要人物的明确照顾或赠与可以输出 User -> BOUGHT_FOR/CARED_FOR -> 该人物。
+                    4) “小美的同事小王喜欢篮球”不应创建小王及其喜好；人物到人物的自动扩展不属于本次写入范围。
+                    5) 每条长期关系必须有原文证据和方向；不确定时省略关系，不要用 RELATED_TO 代替。
+                    6) summary 基于原文，不要编造；importance 表示长期回顾和个性化互动价值；mentions 没有可靠证据时省略。
                     """;
         }
         if (PromptKey.GRAPHRAG_MERGE_SUGGEST.getKey().equals(keyStr)) {

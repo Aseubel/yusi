@@ -86,6 +86,10 @@ public class LifeGraphEntity {
     @Builder.Default
     private Double confidence = 0.5;
 
+    @Column(name = "importance", nullable = false)
+    @Builder.Default
+    private Double importance = 0.5;
+
     @Column(name = "match_allowed", nullable = false)
     @Builder.Default
     private Boolean matchAllowed = false;
@@ -125,6 +129,7 @@ public class LifeGraphEntity {
         Emotion,
         Topic,
         Item,
+        Work,
         User
     }
 
@@ -140,6 +145,8 @@ public class LifeGraphEntity {
             relationCount = 0;
         if (confidence == null)
             confidence = 0.5;
+        if (importance == null)
+            importance = 0.5;
         if (matchAllowed == null)
             matchAllowed = false;
         if (hidden == null)
@@ -157,6 +164,8 @@ public class LifeGraphEntity {
             relationCount = 0;
         if (confidence == null)
             confidence = 0.5;
+        if (importance == null)
+            importance = 0.5;
         if (matchAllowed == null)
             matchAllowed = false;
         if (hidden == null)

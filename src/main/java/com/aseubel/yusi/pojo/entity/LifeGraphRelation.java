@@ -26,7 +26,8 @@ import java.time.LocalDateTime;
 @Entity
 @Builder
 @Table(name = "life_graph_relation", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_life_graph_relation_user_edge", columnNames = { "user_id", "source_id", "target_id", "type" })
+        @UniqueConstraint(name = "uk_life_graph_relation_user_semantic_edge",
+                columnNames = { "user_id", "semantic_source_id", "semantic_target_id", "type" })
 })
 @DynamicInsert
 @DynamicUpdate
@@ -46,6 +47,12 @@ public class LifeGraphRelation {
 
     @Column(name = "target_id", nullable = false)
     private Long targetId;
+
+    @Column(name = "semantic_source_id")
+    private Long semanticSourceId;
+
+    @Column(name = "semantic_target_id")
+    private Long semanticTargetId;
 
     @Column(name = "type", nullable = false, length = 64)
     private String type;
@@ -98,6 +105,10 @@ public class LifeGraphRelation {
             confidence = java.math.BigDecimal.valueOf(0.800);
         if (origin == null)
             origin = Origin.MANUAL;
+        if (semanticSourceId == null)
+            semanticSourceId = sourceId;
+        if (semanticTargetId == null)
+            semanticTargetId = targetId;
         if (manualWeight == null)
             manualWeight = origin == Origin.MANUAL ? weight : 0;
     }
@@ -111,6 +122,10 @@ public class LifeGraphRelation {
             confidence = java.math.BigDecimal.valueOf(0.800);
         if (origin == null)
             origin = Origin.MANUAL;
+        if (semanticSourceId == null)
+            semanticSourceId = sourceId;
+        if (semanticTargetId == null)
+            semanticTargetId = targetId;
         if (manualWeight == null)
             manualWeight = origin == Origin.MANUAL ? weight : 0;
     }

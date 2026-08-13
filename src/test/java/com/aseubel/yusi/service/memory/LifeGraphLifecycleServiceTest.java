@@ -5,10 +5,12 @@ import com.aseubel.yusi.pojo.dto.memory.LifeGraphMemoryItem;
 import com.aseubel.yusi.pojo.dto.memory.LifeGraphMemoryResponse;
 import com.aseubel.yusi.pojo.dto.memory.UpdateLifeGraphMemoryRequest;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
+import com.aseubel.yusi.pojo.entity.LifeGraphEntityEvidence;
 import com.aseubel.yusi.pojo.entity.LifeGraphMention;
 import com.aseubel.yusi.pojo.entity.LifeGraphRelation;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.LifeGraphEntityAliasRepository;
+import com.aseubel.yusi.repository.LifeGraphEntityEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphEntityRepository;
 import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphMergeJudgmentRepository;
@@ -48,6 +50,9 @@ class LifeGraphLifecycleServiceTest {
 
     @Mock
     private LifeGraphEntityRepository entityRepository;
+
+    @Mock
+    private LifeGraphEntityEvidenceRepository entityEvidenceRepository;
 
     @Mock
     private LifeGraphEntityAliasRepository aliasRepository;
@@ -118,6 +123,42 @@ class LifeGraphLifecycleServiceTest {
         assertFalse(Arrays.stream(item.getSources().get(0).getClass().getDeclaredFields())
                 .map(Field::getName)
                 .anyMatch("snippet"::equals));
+    }
+
+    @Test
+    void listUsesEntityEvidenceForDiaryTitleAndPlazaSafeLabel() {
+        LifeGraphEntity entity = entity(11L, "user-1");
+        entity.setImportance(0.9);
+        when(entityRepository.findByUserId(eq("user-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(entity)));
+        when(entityEvidenceRepository.findByUserIdAndEntityId("user-1", 11L))
+                .thenReturn(List.of(
+                        LifeGraphEntityEvidence.builder()
+                                .userId("user-1")
+                                .entityId(11L)
+                                .sourceType("DIARY")
+                                .sourceId("diary-7")
+                                .entryDate(LocalDate.of(2026, 8, 1))
+                                .build(),
+                        LifeGraphEntityEvidence.builder()
+                                .userId("user-1")
+                                .entityId(11L)
+                                .sourceType("PLAZA")
+                                .sourceId("42")
+                                .snippet("private plaza text")
+                                .build()));
+        when(diaryRepository.findByDiaryIdAndUserId("diary-7", "user-1"))
+                .thenReturn(Diary.builder().diaryId("diary-7").userId("user-1").title("京都旅行").build());
+
+        LifeGraphMemoryItem item = service().list("user-1", 50).getEntities().get(0);
+
+        assertEquals(0.9, item.getImportance());
+        assertEquals("京都旅行", item.getSources().get(0).getSourceTitle());
+        assertEquals("广场卡片 #42", item.getSources().get(1).getSourceTitle());
+        assertFalse(Arrays.stream(item.getSources().get(1).getClass().getDeclaredFields())
+                .map(Field::getName)
+                .anyMatch("snippet"::equals));
+        verify(diaryRepository).findByDiaryIdAndUserId("diary-7", "user-1");
     }
 
     @Test
@@ -193,7 +234,7 @@ class LifeGraphLifecycleServiceTest {
     }
 
     private LifeGraphLifecycleService service() {
-        return new LifeGraphLifecycleService(entityRepository, aliasRepository, mentionRepository,
+        return new LifeGraphLifecycleService(entityRepository, entityEvidenceRepository, aliasRepository, mentionRepository,
                 relationRepository, evidenceRepository, mergeJudgmentRepository, matchProfileAssembler,
                 diaryRepository);
     }
@@ -210,6 +251,7 @@ class LifeGraphLifecycleServiceTest {
                 .mentionCount(3)
                 .relationCount(1)
                 .confidence(0.7)
+                .importance(0.5)
                 .matchAllowed(true)
                 .hidden(false)
                 .createdAt(now.minusDays(2))

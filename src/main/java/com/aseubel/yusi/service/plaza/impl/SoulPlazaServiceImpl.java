@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.plaza.impl;
 
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.event.EmotionPlazaCognitionIngestEvent;
+import com.aseubel.yusi.common.event.PlazaCardChangedEvent;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
@@ -56,6 +57,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     @Override
     @UpdateCache(key = "'plaza:feed:*'", evictOnly = true)
     @UpdateCache(key = "'plaza:my:' + #userId + ':*'", evictOnly = true)
+    @Transactional
     public SoulCard submitToPlaza(String userId, String content, String originId, CardType type) {
         // 过滤掉图片和HTML内容
         String filteredContent = stripImagesAndHtml(content);
@@ -80,6 +82,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
 
         SoulCard saved = cardRepository.save(card);
         publishEmotionPlazaEvent(saved);
+        publishLifeGraphEvent(saved, PlazaCardChangedEvent.Type.WRITE);
         return saved;
     }
 
@@ -316,7 +319,9 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
         card.setContent(filteredContent);
         card.setEmotion(emotion);
 
-        return cardRepository.save(card);
+        SoulCard saved = cardRepository.save(card);
+        publishLifeGraphEvent(saved, PlazaCardChangedEvent.Type.MODIFY);
+        return saved;
     }
 
     @Override
@@ -334,5 +339,36 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
         // 同时删除关联的共鸣
         resonanceRepository.deleteByCardId(cardId);
         cardRepository.delete(card);
+        publishLifeGraphDeleteEvent(card);
+    }
+
+    private void publishLifeGraphEvent(SoulCard card, PlazaCardChangedEvent.Type type) {
+        if (card == null || StrUtil.isBlank(card.getContent()) || card.getId() == null) {
+            return;
+        }
+        MaskResult maskResult = sensitiveDataMaskService.mask(card.getContent());
+        String maskedText = maskResult == null ? card.getContent() : maskResult.getMaskedText();
+        if (StrUtil.isBlank(maskedText)) {
+            return;
+        }
+        eventPublisher.publishEvent(new PlazaCardChangedEvent(this, CognitionIngestCommand.builder()
+                .userId(card.getUserId())
+                .sourceType("PLAZA")
+                .sourceId(String.valueOf(card.getId()))
+                .maskedText(maskedText)
+                .timestamp(card.getCreatedAt())
+                .confidenceHint(0.45)
+                .build(), type));
+    }
+
+    private void publishLifeGraphDeleteEvent(SoulCard card) {
+        if (card == null || card.getId() == null || StrUtil.isBlank(card.getUserId())) {
+            return;
+        }
+        eventPublisher.publishEvent(new PlazaCardChangedEvent(this, CognitionIngestCommand.builder()
+                .userId(card.getUserId())
+                .sourceType("PLAZA")
+                .sourceId(String.valueOf(card.getId()))
+                .build(), PlazaCardChangedEvent.Type.DELETE));
     }
 }

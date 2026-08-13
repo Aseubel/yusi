@@ -212,6 +212,7 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
             case Emotion -> 3;
             case Place -> 2;
             case Item -> 1;
+            case Work -> 1;
             case User -> 0;
         };
     }
@@ -227,6 +228,7 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
             case Emotion -> "情绪";
             case Topic -> "主题";
             case Item -> "物品";
+            case Work -> "作品";
             case User -> "用户";
         };
     }

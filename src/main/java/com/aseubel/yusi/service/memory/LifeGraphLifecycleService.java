@@ -7,11 +7,13 @@ import com.aseubel.yusi.pojo.dto.memory.LifeGraphMemoryResponse;
 import com.aseubel.yusi.pojo.dto.memory.LifeGraphSourceItem;
 import com.aseubel.yusi.pojo.dto.memory.UpdateLifeGraphMemoryRequest;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
+import com.aseubel.yusi.pojo.entity.LifeGraphEntityEvidence;
 import com.aseubel.yusi.pojo.entity.LifeGraphMention;
 import com.aseubel.yusi.pojo.entity.LifeGraphRelation;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.LifeGraphEntityAliasRepository;
 import com.aseubel.yusi.repository.LifeGraphEntityRepository;
+import com.aseubel.yusi.repository.LifeGraphEntityEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphMergeJudgmentRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationEvidenceRepository;
@@ -28,9 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** 关系图谱实体的透明度和生命周期操作。 */
 @Slf4j
@@ -42,6 +46,7 @@ public class LifeGraphLifecycleService {
     private static final int MAX_SOURCES_PER_ENTITY = 20;
 
     private final LifeGraphEntityRepository entityRepository;
+    private final LifeGraphEntityEvidenceRepository entityEvidenceRepository;
     private final LifeGraphEntityAliasRepository aliasRepository;
     private final LifeGraphMentionRepository mentionRepository;
     private final LifeGraphRelationRepository relationRepository;
@@ -148,11 +153,19 @@ public class LifeGraphLifecycleService {
             lifecycleStatus = "ACTIVE";
         }
 
-        List<LifeGraphSourceItem> sources = mentionRepository
-                .findTop200ByUserIdAndEntityIdOrderByCreatedAtDesc(userId, entity.getId())
-                .stream()
+        Map<String, LifeGraphSourceItem> sourceMap = new LinkedHashMap<>();
+        for (LifeGraphEntityEvidence evidence : entityEvidenceRepository
+                .findByUserIdAndEntityId(userId, entity.getId())) {
+            sourceMap.put(sourceKey(evidence.getSourceType(), evidence.getSourceId()),
+                    toSource(userId, evidence));
+        }
+        for (LifeGraphMention mention : mentionRepository
+                .findTop200ByUserIdAndEntityIdOrderByCreatedAtDesc(userId, entity.getId())) {
+            String key = sourceKey("DIARY", mention.getDiaryId());
+            sourceMap.putIfAbsent(key, toSource(userId, mention));
+        }
+        List<LifeGraphSourceItem> sources = sourceMap.values().stream()
                 .limit(MAX_SOURCES_PER_ENTITY)
-                .map(mention -> toSource(userId, mention))
                 .toList();
 
         return LifeGraphMemoryItem.builder()
@@ -163,6 +176,7 @@ public class LifeGraphLifecycleService {
                 .mentionCount(entity.getMentionCount())
                 .relationCount(entity.getRelationCount())
                 .confidence(entity.getConfidence() == null ? 0.5 : entity.getConfidence())
+                .importance(entity.getImportance() == null ? 0.5 : entity.getImportance())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .validUntil(entity.getValidUntil())
@@ -186,6 +200,29 @@ public class LifeGraphLifecycleService {
                 .entryDate(mention.getEntryDate())
                 .createdAt(mention.getCreatedAt())
                 .build();
+    }
+
+    private LifeGraphSourceItem toSource(String userId, LifeGraphEntityEvidence evidence) {
+        String sourceType = evidence.getSourceType() == null
+                ? "UNKNOWN" : evidence.getSourceType().toUpperCase();
+        String sourceTitle = null;
+        if ("DIARY".equals(sourceType)) {
+            Diary diary = diaryRepository.findByDiaryIdAndUserId(evidence.getSourceId(), userId);
+            sourceTitle = diary == null ? null : diary.getTitle();
+        } else if ("PLAZA".equals(sourceType)) {
+            sourceTitle = "广场卡片 #" + evidence.getSourceId();
+        }
+        return LifeGraphSourceItem.builder()
+                .sourceId(evidence.getSourceId())
+                .sourceType(sourceType)
+                .sourceTitle(sourceTitle)
+                .entryDate(evidence.getEntryDate())
+                .createdAt(evidence.getCreatedAt())
+                .build();
+    }
+
+    private String sourceKey(String sourceType, String sourceId) {
+        return String.valueOf(sourceType) + ":" + String.valueOf(sourceId);
     }
 
     private void refreshMatchProfile(String userId) {

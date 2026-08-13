@@ -13,6 +13,9 @@ public interface LifeGraphRelationRepository extends JpaRepository<LifeGraphRela
     Optional<LifeGraphRelation> findByUserIdAndSourceIdAndTargetIdAndType(String userId, Long sourceId, Long targetId,
             String type);
 
+    Optional<LifeGraphRelation> findByUserIdAndSemanticSourceIdAndSemanticTargetIdAndType(
+            String userId, Long semanticSourceId, Long semanticTargetId, String type);
+
     Optional<LifeGraphRelation> findByIdAndUserId(Long id, String userId);
 
     List<LifeGraphRelation> findTop200ByUserIdAndSourceIdOrderByUpdatedAtDesc(String userId, Long sourceId);
