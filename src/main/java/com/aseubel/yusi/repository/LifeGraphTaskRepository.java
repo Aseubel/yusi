@@ -66,8 +66,8 @@ public interface LifeGraphTaskRepository extends JpaRepository<LifeGraphTask, Lo
             @Param("nextRetryAt") LocalDateTime nextRetryAt,
             @Param("now") LocalDateTime now);
 
-    @Query("SELECT t FROM LifeGraphTask t WHERE t.diaryId = :diaryId AND t.status = 'PENDING'")
-    List<LifeGraphTask> findPendingByDiaryId(@Param("diaryId") String diaryId);
+    List<LifeGraphTask> findByUserIdAndDiaryIdAndStatusIn(String userId, String diaryId,
+            List<LifeGraphTask.TaskStatus> statuses);
 
     @Modifying
     @Transactional

@@ -20,6 +20,7 @@ public class MemoryCenterItem {
     private Double confidence;
     private String sourceType;
     private String sourceId;
+    private String sourceTitle;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private LocalDateTime validUntil;

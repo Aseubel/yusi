@@ -9,11 +9,14 @@ import com.aseubel.yusi.pojo.dto.memory.UpdateLifeGraphMemoryRequest;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
 import com.aseubel.yusi.pojo.entity.LifeGraphMention;
 import com.aseubel.yusi.pojo.entity.LifeGraphRelation;
+import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.LifeGraphEntityAliasRepository;
 import com.aseubel.yusi.repository.LifeGraphEntityRepository;
 import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphMergeJudgmentRepository;
+import com.aseubel.yusi.repository.LifeGraphRelationEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
+import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,8 +45,10 @@ public class LifeGraphLifecycleService {
     private final LifeGraphEntityAliasRepository aliasRepository;
     private final LifeGraphMentionRepository mentionRepository;
     private final LifeGraphRelationRepository relationRepository;
+    private final LifeGraphRelationEvidenceRepository evidenceRepository;
     private final LifeGraphMergeJudgmentRepository mergeJudgmentRepository;
     private final MatchProfileAssembler matchProfileAssembler;
+    private final DiaryRepository diaryRepository;
 
     @Transactional(readOnly = true)
     public LifeGraphMemoryResponse list(String userId, int limit) {
@@ -118,6 +123,7 @@ public class LifeGraphLifecycleService {
         sourceRelations.forEach(relation -> relations.put(relation.getId(), relation));
         targetRelations.forEach(relation -> relations.put(relation.getId(), relation));
         if (!relations.isEmpty()) {
+            evidenceRepository.deleteByUserIdAndRelationIdIn(userId, new ArrayList<>(relations.keySet()));
             relationRepository.deleteAll(new ArrayList<>(relations.values()));
         }
         aliasRepository.deleteByUserIdAndEntityId(userId, entityId);
@@ -146,7 +152,7 @@ public class LifeGraphLifecycleService {
                 .findTop200ByUserIdAndEntityIdOrderByCreatedAtDesc(userId, entity.getId())
                 .stream()
                 .limit(MAX_SOURCES_PER_ENTITY)
-                .map(this::toSource)
+                .map(mention -> toSource(userId, mention))
                 .toList();
 
         return LifeGraphMemoryItem.builder()
@@ -167,10 +173,16 @@ public class LifeGraphLifecycleService {
                 .build();
     }
 
-    private LifeGraphSourceItem toSource(LifeGraphMention mention) {
+    private LifeGraphSourceItem toSource(String userId, LifeGraphMention mention) {
+        String sourceTitle = null;
+        if (mention.getDiaryId() != null) {
+            Diary diary = diaryRepository.findByDiaryIdAndUserId(mention.getDiaryId(), userId);
+            sourceTitle = diary == null ? null : diary.getTitle();
+        }
         return LifeGraphSourceItem.builder()
                 .sourceId(mention.getDiaryId())
                 .sourceType("DIARY")
+                .sourceTitle(sourceTitle)
                 .entryDate(mention.getEntryDate())
                 .createdAt(mention.getCreatedAt())
                 .build();

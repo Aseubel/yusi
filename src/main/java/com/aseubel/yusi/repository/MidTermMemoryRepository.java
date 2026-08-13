@@ -21,6 +21,8 @@ public interface MidTermMemoryRepository
 
     java.util.Optional<MidTermMemory> findByIdAndUserId(Long id, String userId);
 
+    List<MidTermMemory> findByUserIdAndSourceTypeAndSourceId(String userId, String sourceType, String sourceId);
+
     /**
      * 查找有效的（未过期的）中期记忆，按创建时间倒序。
      * 使用显式 JPQL 避免 Spring Data 方法名解析的 And/Or 优先级陷阱。

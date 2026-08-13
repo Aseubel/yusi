@@ -20,6 +20,9 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -80,5 +83,27 @@ class AsyncTaskCorrelationTest {
         DiaryChangedEvent event = new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.WRITE);
 
         assertFalse(event.getEventId().isBlank());
+    }
+
+    @Test
+    void queuesOnePendingFollowUpWhenTheSameDiaryIsAlreadyProcessing() {
+        Diary diary = Diary.builder()
+                .diaryId("diary-4")
+                .userId("user-4")
+                .plainContent("latest content")
+                .build();
+        LifeGraphTask processing = LifeGraphTask.createUpsertTask("diary-4", "user-4");
+        processing.setStatus(LifeGraphTask.TaskStatus.PROCESSING);
+        when(lifeGraphTaskRepository.findByUserIdAndDiaryIdAndStatusIn(
+                eq("user-4"), eq("diary-4"), anyList()))
+                .thenReturn(List.of(processing));
+
+        new LifeGraphTaskCreator(lifeGraphTaskRepository, lifeGraphTaskBatchService, threadPoolTaskExecutor)
+                .onDiaryChanged(new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.MODIFY));
+
+        ArgumentCaptor<LifeGraphTask> captor = ArgumentCaptor.forClass(LifeGraphTask.class);
+        verify(lifeGraphTaskRepository).save(captor.capture());
+        assertEquals(LifeGraphTask.TaskStatus.PENDING, captor.getValue().getStatus());
+        verify(threadPoolTaskExecutor, never()).execute(org.mockito.ArgumentMatchers.any(Runnable.class));
     }
 }

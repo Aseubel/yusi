@@ -228,6 +228,7 @@ public class AdminServiceImpl implements AdminService {
             "DELETE FROM life_graph_entity_alias WHERE user_id = ?",
             "DELETE FROM life_graph_mention WHERE user_id = ?",
             "DELETE FROM life_graph_merge_judgment WHERE user_id = ?",
+            "DELETE FROM life_graph_relation_evidence WHERE user_id = ?",
             "DELETE FROM life_graph_relation WHERE user_id = ?",
             "DELETE FROM life_graph_task WHERE user_id = ?",
             "DELETE FROM match_feedback WHERE user_id = ?",

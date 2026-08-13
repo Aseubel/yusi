@@ -8,11 +8,13 @@ import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntityAlias;
 import com.aseubel.yusi.pojo.entity.LifeGraphMention;
 import com.aseubel.yusi.pojo.entity.LifeGraphRelation;
+import com.aseubel.yusi.pojo.entity.LifeGraphRelationEvidence;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.LifeGraphEntityAliasRepository;
 import com.aseubel.yusi.repository.LifeGraphEntityRepository;
 
 import com.aseubel.yusi.repository.LifeGraphMentionRepository;
+import com.aseubel.yusi.repository.LifeGraphRelationEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
@@ -33,10 +35,15 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -48,6 +55,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
     private final LifeGraphEntityRepository entityRepository;
     private final LifeGraphEntityAliasRepository aliasRepository;
     private final LifeGraphRelationRepository relationRepository;
+    private final LifeGraphRelationEvidenceRepository evidenceRepository;
     private final LifeGraphMentionRepository mentionRepository;
     private final PromptManager promptManager;
     private final LifeGraphExtractor extractor;
@@ -55,11 +63,16 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
 
     @Override
     public void upsertFromDiary(Diary diary, String plainContent) {
-        if (diary == null || StrUtil.isBlank(plainContent)) {
+        if (diary == null) {
             return;
         }
 
         String userId = diary.getUserId();
+        deleteByDiary(userId, diary.getDiaryId());
+        if (StrUtil.isBlank(plainContent)) {
+            return;
+        }
+
         String prompt = promptManager.getPrompt(PromptKey.GRAPHRAG_EXTRACT);
 
         String knownEntities = buildKnownEntities(userId);
@@ -81,35 +94,53 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         }
         LifeGraphExtractionResult result = parseExtractionResult(raw);
         if (result == null) {
-            return;
+            throw new IllegalStateException("GraphRAG extraction returned invalid JSON");
         }
 
-        // 使用单独的方法进行彻底的关联清理与计数核减
-        deleteByDiary(userId, diary.getDiaryId());
-
         Map<String, Long> resolvedEntityIds = new HashMap<>();
+        Set<Long> entityContributions = new HashSet<>();
+        Set<Long> extractedEntityIds = new LinkedHashSet<>();
+        Set<Long> mentionContributions = new HashSet<>();
 
         ensureUserEntity(userId);
 
         if (result.getEntities() != null) {
             for (LifeGraphExtractionResult.ExtractedEntity e : result.getEntities()) {
-                Long id = resolveAndUpsertEntity(userId, diary, e);
+                Long id = resolveAndUpsertEntity(userId, diary, e, entityContributions);
                 if (id != null && StrUtil.isNotBlank(e.getNameNorm())) {
                     resolvedEntityIds.put(normalizeName(e.getNameNorm()), id);
+                }
+                if (id != null) {
+                    extractedEntityIds.add(id);
                 }
             }
         }
 
         if (result.getRelations() != null) {
+            Map<String, LifeGraphExtractionResult.ExtractedRelation> relationByKey = new LinkedHashMap<>();
+            Map<String, Integer> relationOccurrences = new HashMap<>();
             for (LifeGraphExtractionResult.ExtractedRelation r : result.getRelations()) {
-                upsertRelation(userId, diary, r, resolvedEntityIds);
+                String key = relationKey(userId, r, resolvedEntityIds);
+                if (key == null) {
+                    continue;
+                }
+                relationByKey.putIfAbsent(key, r);
+                relationOccurrences.merge(key, 1, Integer::sum);
+            }
+            for (Map.Entry<String, LifeGraphExtractionResult.ExtractedRelation> entry : relationByKey.entrySet()) {
+                upsertRelation(userId, diary, entry.getValue(), resolvedEntityIds,
+                        relationOccurrences.getOrDefault(entry.getKey(), 1));
             }
         }
 
         if (result.getMentions() != null) {
             for (LifeGraphExtractionResult.ExtractedMention m : result.getMentions()) {
-                upsertMention(userId, diary, m, resolvedEntityIds);
+                upsertMention(userId, diary, m, resolvedEntityIds, mentionContributions);
             }
+        }
+
+        for (Long entityId : extractedEntityIds) {
+            ensureDiaryMention(userId, diary, entityId, mentionContributions);
         }
     }
 
@@ -120,37 +151,98 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             return;
         }
 
-        // 1. 获取这篇日记提到的所有 Mention，提取出相关的 EntityId
         List<LifeGraphMention> mentions = mentionRepository.findByUserIdAndDiaryId(userId, diaryId);
         Set<Long> entityIds = mentions.stream()
                 .map(LifeGraphMention::getEntityId)
                 .collect(java.util.stream.Collectors.toSet());
 
-        // 2. 将这篇日记产生过影响的实体，执行 mentionCount - 1（逆向退回抽卡）
+        mentionRepository.deleteByUserIdAndDiaryId(userId, diaryId);
+
         for (Long entityId : entityIds) {
-            entityRepository.findById(entityId).ifPresent(entity -> {
-                if (entity.getType() != LifeGraphEntity.EntityType.User
-                        && !USER_ENTITY_NORM.equalsIgnoreCase(entity.getNameNorm())) {
-                    int newCount = (entity.getMentionCount() == null ? 0 : entity.getMentionCount()) - 1;
-                    if (newCount <= 0) {
-                        // 如果不再有任何提及，物理删除实体、以及它配套的别名大全，保持图谱干净
+            entityRepository.findByIdAndUserId(entityId, userId).ifPresent(entity -> {
+                List<LifeGraphMention> allMentions = Optional
+                        .ofNullable(mentionRepository.findByUserIdAndEntityId(userId, entityId))
+                        .orElseGet(List::of);
+                int remainingCount = (int) allMentions.stream()
+                        .map(LifeGraphMention::getDiaryId)
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .count();
+                if (entity.getOrigin() == LifeGraphEntity.Origin.AUTO) {
+                    if (entity.getType() != LifeGraphEntity.EntityType.User
+                            && !USER_ENTITY_NORM.equalsIgnoreCase(entity.getNameNorm())
+                            && remainingCount == 0) {
                         entityRepository.delete(entity);
-                        List<com.aseubel.yusi.pojo.entity.LifeGraphEntityAlias> aliases = aliasRepository
-                                .findByUserIdAndEntityId(userId, entity.getId());
+                        List<LifeGraphEntityAlias> aliases = aliasRepository.findByUserIdAndEntityId(userId, entity.getId());
                         if (!aliases.isEmpty()) {
                             aliasRepository.deleteAll(aliases);
                         }
-                    } else {
-                        entity.setMentionCount(newCount);
-                        entityRepository.save(entity);
+                        return;
                     }
+                    entity.setMentionCount(remainingCount);
+                    entityRepository.save(entity);
                 }
             });
         }
 
-        // 3. 删除底层的这篇日记直接证据关联记录
-        mentionRepository.deleteByUserIdAndDiaryId(userId, diaryId);
-        relationRepository.deleteByUserIdAndEvidenceDiaryId(userId, diaryId);
+        List<LifeGraphRelationEvidence> evidences = Optional
+                .ofNullable(evidenceRepository.findByUserIdAndSourceTypeAndSourceId(userId, "DIARY", diaryId))
+                .orElseGet(List::of);
+        Set<Long> relationIds = evidences.stream()
+                .map(LifeGraphRelationEvidence::getRelationId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+
+        for (Long relationId : relationIds) {
+            Optional<LifeGraphRelation> relationOptional = relationRepository.findByIdAndUserId(relationId, userId);
+            if (relationOptional.isEmpty()) {
+                continue;
+            }
+
+            LifeGraphRelation relation = relationOptional.get();
+            List<LifeGraphRelationEvidence> allEvidence = Optional
+                    .ofNullable(evidenceRepository.findByUserIdAndRelationId(userId, relationId))
+                    .orElseGet(List::of);
+            List<LifeGraphRelationEvidence> remainingEvidence = allEvidence.stream()
+                    .filter(evidence -> !Objects.equals(evidence.getSourceType(), "DIARY")
+                            || !Objects.equals(evidence.getSourceId(), diaryId))
+                    .toList();
+            int remainingWeight = remainingEvidence.stream()
+                    .mapToInt(evidence -> safeOccurrenceCount(evidence.getOccurrenceCount()))
+                    .sum();
+            int remainingDiaryWeight = remainingEvidence.stream()
+                    .filter(evidence -> "DIARY".equals(evidence.getSourceType()))
+                    .mapToInt(evidence -> safeOccurrenceCount(evidence.getOccurrenceCount()))
+                    .sum();
+
+            if (relation.getOrigin() == LifeGraphRelation.Origin.AUTO && remainingEvidence.isEmpty()) {
+                evidenceRepository.deleteByUserIdAndRelationId(userId, relationId);
+                relationRepository.delete(relation);
+                continue;
+            }
+
+            if (relation.getOrigin() == LifeGraphRelation.Origin.AUTO) {
+                relation.setWeight(remainingWeight);
+            } else {
+                int manualWeight = relation.getManualWeight() == null
+                        ? Math.max(0, (relation.getWeight() == null ? 0 : relation.getWeight())
+                                - allEvidence.stream()
+                                        .filter(evidence -> "DIARY".equals(evidence.getSourceType()))
+                                        .mapToInt(evidence -> safeOccurrenceCount(evidence.getOccurrenceCount()))
+                                        .sum())
+                        : Math.max(0, relation.getManualWeight());
+                relation.setManualWeight(manualWeight);
+                relation.setWeight(manualWeight + remainingDiaryWeight);
+            }
+            relation.setEvidenceDiaryId(remainingEvidence.stream()
+                    .filter(evidence -> "DIARY".equals(evidence.getSourceType()))
+                    .max((left, right) -> compareEvidenceTime(left, right))
+                    .map(LifeGraphRelationEvidence::getSourceId)
+                    .orElse(null));
+            relationRepository.save(relation);
+        }
+
+        evidenceRepository.deleteByUserIdAndSourceTypeAndSourceId(userId, "DIARY", diaryId);
     }
 
     private void ensureUserEntity(String userId) {
@@ -164,7 +256,8 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                         .build()));
     }
 
-    private Long resolveAndUpsertEntity(String userId, Diary diary, LifeGraphExtractionResult.ExtractedEntity e) {
+    private Long resolveAndUpsertEntity(String userId, Diary diary, LifeGraphExtractionResult.ExtractedEntity e,
+            Set<Long> entityContributions) {
         if (e == null) {
             return null;
         }
@@ -196,11 +289,15 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                     .confidence(0.5)
                     .matchAllowed(false)
                     .hidden(false)
+                    .origin(LifeGraphEntity.Origin.AUTO)
                     .firstMentionDate(diary.getEntryDate())
                     .build();
         }
 
-        entity.setMentionCount((entity.getMentionCount() == null ? 0 : entity.getMentionCount()) + 1);
+        boolean newContribution = entity.getId() == null || entityContributions.add(entity.getId());
+        if (entity.getOrigin() == LifeGraphEntity.Origin.AUTO && newContribution) {
+            entity.setMentionCount((entity.getMentionCount() == null ? 0 : entity.getMentionCount()) + 1);
+        }
         entity.setLastMentionAt(LocalDateTime.now());
         if (entity.getFirstMentionDate() == null) {
             entity.setFirstMentionDate(diary.getEntryDate());
@@ -242,6 +339,9 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         entity.setProps(mergedProps);
 
         LifeGraphEntity saved = entityRepository.save(entity);
+        if (saved.getId() != null && saved.getOrigin() == LifeGraphEntity.Origin.AUTO) {
+            entityContributions.add(saved.getId());
+        }
 
         List<String> aliases = e.getAliases() != null ? e.getAliases() : List.of();
         upsertAlias(userId, saved.getId(), saved.getDisplayName(), e.getConfidence());
@@ -255,7 +355,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
     private LifeGraphEntity resolveEntityByAliasOrNorm(String userId, LifeGraphEntity.EntityType type,
             String nameNorm) {
         LifeGraphEntity byAlias = aliasRepository.findByUserIdAndAliasNorm(userId, nameNorm)
-                .flatMap(a -> entityRepository.findById(a.getEntityId()))
+                .flatMap(a -> entityRepository.findByIdAndUserId(a.getEntityId(), userId))
                 .orElse(null);
         if (byAlias != null) {
             return byAlias;
@@ -294,7 +394,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
     }
 
     private void upsertRelation(String userId, Diary diary, LifeGraphExtractionResult.ExtractedRelation r,
-            Map<String, Long> resolvedEntityIds) {
+            Map<String, Long> resolvedEntityIds, int occurrenceCount) {
         if (r == null || StrUtil.isBlank(r.getType())) {
             return;
         }
@@ -308,6 +408,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         long s = Math.min(sourceId, targetId);
         long t = Math.max(sourceId, targetId);
         String type = r.getType().trim();
+        int normalizedOccurrenceCount = Math.max(1, occurrenceCount);
 
         LifeGraphRelation existing = relationRepository.findByUserIdAndSourceIdAndTargetIdAndType(userId, s, t, type)
                 .orElse(null);
@@ -319,22 +420,24 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         }
 
         if (existing == null) {
-            relationRepository.save(LifeGraphRelation.builder()
+            LifeGraphRelation saved = relationRepository.save(LifeGraphRelation.builder()
                     .userId(userId)
                     .sourceId(s)
                     .targetId(t)
                     .type(type)
                     .confidence(toConfidence(r.getConfidence()))
-                    .weight(1)
+                    .weight(normalizedOccurrenceCount)
                     .firstSeen(LocalDateTime.now())
                     .lastSeen(LocalDateTime.now())
                     .evidenceDiaryId(diary.getDiaryId())
+                    .origin(LifeGraphRelation.Origin.AUTO)
                     .props(mergedProps)
                     .build());
+            saveRelationEvidence(userId, saved, diary, r, normalizedOccurrenceCount);
             return;
         }
 
-        existing.setWeight((existing.getWeight() == null ? 0 : existing.getWeight()) + 1);
+        existing.setWeight((existing.getWeight() == null ? 0 : existing.getWeight()) + normalizedOccurrenceCount);
         existing.setLastSeen(LocalDateTime.now());
         existing.setEvidenceDiaryId(diary.getDiaryId());
         existing.setProps(mergedProps);
@@ -343,11 +446,25 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         if (existing.getConfidence() == null || existing.getConfidence().compareTo(conf) < 0) {
             existing.setConfidence(conf);
         }
-        relationRepository.save(existing);
+        LifeGraphRelation saved = relationRepository.save(existing);
+        saveRelationEvidence(userId, saved, diary, r, normalizedOccurrenceCount);
+    }
+
+    private String relationKey(String userId, LifeGraphExtractionResult.ExtractedRelation relation,
+            Map<String, Long> resolvedEntityIds) {
+        if (relation == null || StrUtil.isBlank(relation.getType())) {
+            return null;
+        }
+        Long sourceId = resolveEntityId(userId, relation.getSource(), resolvedEntityIds);
+        Long targetId = resolveEntityId(userId, relation.getTarget(), resolvedEntityIds);
+        if (sourceId == null || targetId == null || Objects.equals(sourceId, targetId)) {
+            return null;
+        }
+        return Math.min(sourceId, targetId) + "|" + Math.max(sourceId, targetId) + "|" + relation.getType().trim();
     }
 
     private void upsertMention(String userId, Diary diary, LifeGraphExtractionResult.ExtractedMention m,
-            Map<String, Long> resolvedEntityIds) {
+            Map<String, Long> resolvedEntityIds, Set<Long> mentionContributions) {
         if (m == null || StrUtil.isBlank(m.getEntity())) {
             return;
         }
@@ -355,14 +472,65 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         if (entityId == null) {
             return;
         }
+        ensureDiaryMention(userId, diary, entityId, mentionContributions, m);
+    }
+
+    private void ensureDiaryMention(String userId, Diary diary, Long entityId, Set<Long> mentionContributions) {
+        ensureDiaryMention(userId, diary, entityId, mentionContributions, null);
+    }
+
+    private void ensureDiaryMention(String userId, Diary diary, Long entityId, Set<Long> mentionContributions,
+            LifeGraphExtractionResult.ExtractedMention extracted) {
+        if (entityId == null || !mentionContributions.add(entityId)) {
+            return;
+        }
         mentionRepository.save(LifeGraphMention.builder()
                 .userId(userId)
                 .entityId(entityId)
                 .diaryId(diary.getDiaryId())
                 .entryDate(diary.getEntryDate())
-                .snippet(trimSnippet(m.getSnippet(), 1000))
-                .props(toJson(m.getProps()))
+                .snippet(extracted == null ? null : trimSnippet(extracted.getSnippet(), 1000))
+                .props(extracted == null ? null : toJson(extracted.getProps()))
                 .build());
+    }
+
+    private void saveRelationEvidence(String userId, LifeGraphRelation relation, Diary diary,
+            LifeGraphExtractionResult.ExtractedRelation extracted, int occurrenceCount) {
+        if (relation == null || relation.getId() == null) {
+            return;
+        }
+        LifeGraphRelationEvidence evidence = evidenceRepository
+                .findByUserIdAndRelationIdAndSourceTypeAndSourceId(
+                        userId, relation.getId(), "DIARY", diary.getDiaryId())
+                .orElse(null);
+        if (evidence == null) {
+            evidence = LifeGraphRelationEvidence.builder()
+                    .userId(userId)
+                    .relationId(relation.getId())
+                    .sourceType("DIARY")
+                    .sourceId(diary.getDiaryId())
+                    .occurrenceCount(occurrenceCount)
+                    .build();
+        } else {
+            evidence.setOccurrenceCount((evidence.getOccurrenceCount() == null
+                    ? 0
+                    : Math.max(0, evidence.getOccurrenceCount())) + occurrenceCount);
+        }
+        evidence.setEvidenceSnippet(trimSnippet(extracted.getEvidenceSnippet(), 1000));
+        evidence.setConfidence(toConfidence(extracted.getConfidence()));
+        evidenceRepository.save(evidence);
+    }
+
+    private int safeOccurrenceCount(Integer value) {
+        return value == null || value < 1 ? 1 : value;
+    }
+
+    private int compareEvidenceTime(LifeGraphRelationEvidence left, LifeGraphRelationEvidence right) {
+        LocalDateTime leftTime = left.getUpdatedAt() != null ? left.getUpdatedAt() : left.getCreatedAt();
+        LocalDateTime rightTime = right.getUpdatedAt() != null ? right.getUpdatedAt() : right.getCreatedAt();
+        if (leftTime == null) return rightTime == null ? 0 : -1;
+        if (rightTime == null) return 1;
+        return leftTime.compareTo(rightTime);
     }
 
     private Long resolveEntityId(String userId, String key, Map<String, Long> resolvedEntityIds) {

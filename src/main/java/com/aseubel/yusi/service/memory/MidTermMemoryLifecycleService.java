@@ -7,6 +7,8 @@ import com.aseubel.yusi.pojo.dto.memory.MemoryCenterItem;
 import com.aseubel.yusi.pojo.dto.memory.MemoryCenterResponse;
 import com.aseubel.yusi.pojo.dto.memory.UpdateMemoryRequest;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
+import com.aseubel.yusi.pojo.entity.Diary;
+import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,7 @@ public class MidTermMemoryLifecycleService {
     private final MidTermMemoryRepository memoryRepository;
     private final MidTermMemoryVectorService vectorService;
     private final MatchProfileAssembler matchProfileAssembler;
+    private final DiaryRepository diaryRepository;
 
     @Transactional(readOnly = true)
     public MemoryCenterResponse list(String userId, int limit) {
@@ -33,7 +36,7 @@ public class MidTermMemoryLifecycleService {
         List<MidTermMemory> memories = memoryRepository.findByUserIdOrderByCreatedAtDesc(
                 userId, org.springframework.data.domain.PageRequest.of(0, limit));
 
-        List<MemoryCenterItem> items = memories.stream().map(memory -> toItem(memory, now)).toList();
+        List<MemoryCenterItem> items = memories.stream().map(memory -> toItem(userId, memory, now)).toList();
         return MemoryCenterResponse.builder()
                 .memories(items)
                 .activeCount(items.stream().filter(item -> "ACTIVE".equals(item.getLifecycleStatus())).count())
@@ -94,7 +97,7 @@ public class MidTermMemoryLifecycleService {
         if (profileChanged) {
             refreshMatchProfile(userId);
         }
-        return toItem(saved, LocalDateTime.now());
+        return toItem(userId, saved, LocalDateTime.now());
     }
 
     @Transactional
@@ -130,7 +133,7 @@ public class MidTermMemoryLifecycleService {
         }
     }
 
-    private MemoryCenterItem toItem(MidTermMemory memory, LocalDateTime now) {
+    private MemoryCenterItem toItem(String userId, MidTermMemory memory, LocalDateTime now) {
         String lifecycleStatus;
         if (Boolean.TRUE.equals(memory.getHidden())) {
             lifecycleStatus = "HIDDEN";
@@ -142,13 +145,21 @@ public class MidTermMemoryLifecycleService {
             lifecycleStatus = "ACTIVE";
         }
 
+        String sourceType = StrUtil.blankToDefault(memory.getSourceType(), "UNKNOWN");
+        String sourceTitle = null;
+        if ("DIARY".equalsIgnoreCase(sourceType) && StrUtil.isNotBlank(memory.getSourceId())) {
+            Diary diary = diaryRepository.findByDiaryIdAndUserId(memory.getSourceId(), userId);
+            sourceTitle = diary == null ? null : diary.getTitle();
+        }
+
         return MemoryCenterItem.builder()
                 .id(memory.getId())
                 .summary(memory.getSummary())
                 .importance(memory.getImportance())
                 .confidence(memory.getConfidence())
-                .sourceType(StrUtil.blankToDefault(memory.getSourceType(), "UNKNOWN"))
+                .sourceType(sourceType)
                 .sourceId(memory.getSourceId())
+                .sourceTitle(sourceTitle)
                 .createdAt(memory.getCreatedAt())
                 .updatedAt(memory.getUpdatedAt())
                 .validUntil(memory.getValidUntil())

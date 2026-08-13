@@ -6,6 +6,7 @@ import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.repository.LifeGraphEntityAliasRepository;
 import com.aseubel.yusi.repository.LifeGraphEntityRepository;
 import com.aseubel.yusi.repository.LifeGraphMentionRepository;
+import com.aseubel.yusi.repository.LifeGraphRelationEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphExtractor;
@@ -43,6 +44,9 @@ class LifeGraphBuildServiceTest {
 
     @Mock
     private LifeGraphMentionRepository mentionRepository;
+
+    @Mock
+    private LifeGraphRelationEvidenceRepository evidenceRepository;
 
     @Mock
     private PromptManager promptManager;
@@ -87,6 +91,6 @@ class LifeGraphBuildServiceTest {
 
     private LifeGraphBuildServiceImpl service() {
         return new LifeGraphBuildServiceImpl(entityRepository, aliasRepository, relationRepository,
-                mentionRepository, promptManager, extractor, new ObjectMapper());
+                evidenceRepository, mentionRepository, promptManager, extractor, new ObjectMapper());
     }
 }

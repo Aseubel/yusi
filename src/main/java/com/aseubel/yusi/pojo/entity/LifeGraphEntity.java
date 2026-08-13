@@ -94,6 +94,11 @@ public class LifeGraphEntity {
     @Builder.Default
     private Boolean hidden = false;
 
+    @Column(name = "origin", nullable = false, length = 16)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private Origin origin = Origin.MANUAL;
+
     @Column(name = "valid_until")
     private LocalDateTime validUntil;
 
@@ -139,6 +144,8 @@ public class LifeGraphEntity {
             matchAllowed = false;
         if (hidden == null)
             hidden = false;
+        if (origin == null)
+            origin = Origin.MANUAL;
     }
 
     @PreUpdate
@@ -154,5 +161,12 @@ public class LifeGraphEntity {
             matchAllowed = false;
         if (hidden == null)
             hidden = false;
+        if (origin == null)
+            origin = Origin.MANUAL;
+    }
+
+    public enum Origin {
+        AUTO,
+        MANUAL
     }
 }

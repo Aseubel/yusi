@@ -528,16 +528,10 @@ public class DiaryServiceImpl implements DiaryService {
                 log.warn("日记图片字段不是有效 JSON，跳过图片认知: diaryId={}", diary.getDiaryId());
             }
         }
-        if (StrUtil.isBlank(plainContent) && imageObjectKeys.isEmpty()) {
-            return;
-        }
         MaskResult maskResult = sensitiveDataMaskService.mask(StrUtil.blankToDefault(plainContent, ""));
         String maskedText = maskResult != null ? maskResult.getMaskedText() : null;
         if (StrUtil.isBlank(maskedText) && !imageObjectKeys.isEmpty()) {
             maskedText = "日记包含图片，请结合图片理解。";
-        }
-        if (StrUtil.isBlank(maskedText)) {
-            return;
         }
         eventPublisher.publishEvent(new DiaryCognitionIngestEvent(this, CognitionIngestCommand.builder()
                 .userId(diary.getUserId())

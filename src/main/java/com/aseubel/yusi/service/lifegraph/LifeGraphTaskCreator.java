@@ -44,13 +44,17 @@ public class LifeGraphTaskCreator {
     }
 
     private void createUpsertTask(Diary diary, String triggerEventId) {
-        List<LifeGraphTask> pending = taskRepository.findPendingByDiaryId(diary.getDiaryId());
-        if (!pending.isEmpty()) {
+        List<LifeGraphTask> activeTasks = taskRepository.findByUserIdAndDiaryIdAndStatusIn(
+                diary.getUserId(), diary.getDiaryId(),
+                List.of(LifeGraphTask.TaskStatus.PENDING, LifeGraphTask.TaskStatus.PROCESSING));
+        if (activeTasks.stream().anyMatch(task -> task.getStatus() == LifeGraphTask.TaskStatus.PENDING)) {
             return;
         }
+        boolean processing = activeTasks.stream()
+                .anyMatch(task -> task.getStatus() == LifeGraphTask.TaskStatus.PROCESSING);
 
         String plainContent = diary.getPlainContent();
-        boolean canProcessImmediately = plainContent != null && !plainContent.isBlank();
+        boolean canProcessImmediately = !processing && plainContent != null && !plainContent.isBlank();
 
         LifeGraphTask task = LifeGraphTask.createUpsertTask(diary.getDiaryId(), diary.getUserId(), triggerEventId);
         if (canProcessImmediately) {

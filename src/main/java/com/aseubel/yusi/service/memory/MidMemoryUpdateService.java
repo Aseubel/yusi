@@ -2,6 +2,8 @@ package com.aseubel.yusi.service.memory;
 
 public interface MidMemoryUpdateService {
 
+    void removeBySource(String userId, String sourceType, String sourceId);
+
     void appendSnapshot(String userId, String summary, Double importance);
 
     void appendSnapshot(String userId, String summary, Double importance, String category);

@@ -3,6 +3,8 @@ package com.aseubel.yusi.pojo.entity;
 import java.math.BigDecimal;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -54,6 +56,9 @@ public class LifeGraphRelation {
     @Column(name = "weight", nullable = false)
     private Integer weight;
 
+    @Column(name = "manual_weight", nullable = false)
+    private Integer manualWeight;
+
     @Column(name = "first_seen")
     private LocalDateTime firstSeen;
 
@@ -62,6 +67,11 @@ public class LifeGraphRelation {
 
     @Column(name = "evidence_diary_id", length = 255)
     private String evidenceDiaryId;
+
+    @Column(name = "origin", nullable = false, length = 16)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private Origin origin = Origin.MANUAL;
 
     @Column(name = "props", columnDefinition = "JSON")
     private String props;
@@ -86,6 +96,10 @@ public class LifeGraphRelation {
             weight = 1;
         if (confidence == null)
             confidence = java.math.BigDecimal.valueOf(0.800);
+        if (origin == null)
+            origin = Origin.MANUAL;
+        if (manualWeight == null)
+            manualWeight = origin == Origin.MANUAL ? weight : 0;
     }
 
     @PreUpdate
@@ -95,6 +109,14 @@ public class LifeGraphRelation {
             weight = 1;
         if (confidence == null)
             confidence = java.math.BigDecimal.valueOf(0.800);
+        if (origin == null)
+            origin = Origin.MANUAL;
+        if (manualWeight == null)
+            manualWeight = origin == Origin.MANUAL ? weight : 0;
+    }
+
+    public enum Origin {
+        AUTO,
+        MANUAL
     }
 }
-

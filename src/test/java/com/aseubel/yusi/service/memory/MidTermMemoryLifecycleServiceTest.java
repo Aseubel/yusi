@@ -3,6 +3,8 @@ package com.aseubel.yusi.service.memory;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.pojo.dto.memory.UpdateMemoryRequest;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
+import com.aseubel.yusi.pojo.entity.Diary;
+import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
 import org.junit.jupiter.api.Test;
@@ -35,6 +37,25 @@ class MidTermMemoryLifecycleServiceTest {
 
     @Mock
     private MatchProfileAssembler matchProfileAssembler;
+
+    @Mock
+    private DiaryRepository diaryRepository;
+
+    @Test
+    void listResolvesDiarySourceTitleForTheCurrentUser() {
+        MidTermMemory memory = memory(10L, "user-1");
+        memory.setSourceType("DIARY");
+        memory.setSourceId("diary-10");
+        when(memoryRepository.findByUserIdOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(java.util.List.of(memory));
+        when(diaryRepository.findByDiaryIdAndUserId("diary-10", "user-1"))
+                .thenReturn(Diary.builder().diaryId("diary-10").userId("user-1").title("一次重要的旅行").build());
+
+        var result = service().list("user-1", 50);
+
+        assertEquals("一次重要的旅行", result.getMemories().get(0).getSourceTitle());
+        verify(diaryRepository).findByDiaryIdAndUserId("diary-10", "user-1");
+    }
 
     @Test
     void updateOnlyOperatesOnTheCurrentUsersMemory() {
@@ -103,7 +124,8 @@ class MidTermMemoryLifecycleServiceTest {
     }
 
     private MidTermMemoryLifecycleService service() {
-        return new MidTermMemoryLifecycleService(memoryRepository, vectorService, matchProfileAssembler);
+        return new MidTermMemoryLifecycleService(memoryRepository, vectorService, matchProfileAssembler,
+                diaryRepository);
     }
 
     private MidTermMemory memory(Long id, String userId) {

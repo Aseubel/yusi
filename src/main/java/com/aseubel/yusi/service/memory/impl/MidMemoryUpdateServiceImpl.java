@@ -5,21 +5,45 @@ import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
 import com.aseubel.yusi.service.memory.MidMemoryUpdateService;
+import com.aseubel.yusi.service.memory.MidTermMemoryVectorService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class MidMemoryUpdateServiceImpl implements MidMemoryUpdateService {
 
     private final MidTermMemoryRepository midTermMemoryRepository;
     private final CognitiveConflictDetector conflictDetector;
     private final ThreadPoolTaskExecutor threadPoolExecutor;
+    private final MidTermMemoryVectorService vectorService;
+
+    @Override
+    @Transactional
+    public void removeBySource(String userId, String sourceType, String sourceId) {
+        if (StrUtil.isBlank(userId) || StrUtil.isBlank(sourceType) || StrUtil.isBlank(sourceId)) {
+            return;
+        }
+        List<MidTermMemory> memories = midTermMemoryRepository
+                .findByUserIdAndSourceTypeAndSourceId(userId, sourceType, sourceId);
+        for (MidTermMemory memory : memories) {
+            midTermMemoryRepository.delete(memory);
+            try {
+                vectorService.delete(memory.getId());
+            } catch (Exception exception) {
+                log.warn("删除来源记忆向量失败: userId={}, sourceType={}, sourceId={}, memoryId={}",
+                        userId, sourceType, sourceId, memory.getId(), exception);
+            }
+        }
+    }
 
     @Override
     @Transactional

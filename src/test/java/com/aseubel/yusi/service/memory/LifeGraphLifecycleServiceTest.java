@@ -7,11 +7,14 @@ import com.aseubel.yusi.pojo.dto.memory.UpdateLifeGraphMemoryRequest;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
 import com.aseubel.yusi.pojo.entity.LifeGraphMention;
 import com.aseubel.yusi.pojo.entity.LifeGraphRelation;
+import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.LifeGraphEntityAliasRepository;
 import com.aseubel.yusi.repository.LifeGraphEntityRepository;
 import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphMergeJudgmentRepository;
+import com.aseubel.yusi.repository.LifeGraphRelationEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
+import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,10 +59,39 @@ class LifeGraphLifecycleServiceTest {
     private LifeGraphRelationRepository relationRepository;
 
     @Mock
+    private LifeGraphRelationEvidenceRepository evidenceRepository;
+
+    @Mock
+    private DiaryRepository diaryRepository;
+
+    @Mock
     private LifeGraphMergeJudgmentRepository mergeJudgmentRepository;
 
     @Mock
     private MatchProfileAssembler matchProfileAssembler;
+
+    @Test
+    void listResolvesDiarySourceTitleForLifeGraphSources() {
+        LifeGraphEntity entity = entity(11L, "user-1");
+        LifeGraphMention mention = LifeGraphMention.builder()
+                .userId("user-1")
+                .entityId(11L)
+                .diaryId("diary-7")
+                .entryDate(LocalDate.of(2026, 8, 1))
+                .createdAt(LocalDateTime.now())
+                .build();
+        when(entityRepository.findByUserId(eq("user-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(entity)));
+        when(mentionRepository.findTop200ByUserIdAndEntityIdOrderByCreatedAtDesc("user-1", 11L))
+                .thenReturn(List.of(mention));
+        when(diaryRepository.findByDiaryIdAndUserId("diary-7", "user-1"))
+                .thenReturn(Diary.builder().diaryId("diary-7").userId("user-1").title("一次重要的旅行").build());
+
+        LifeGraphMemoryResponse result = service().list("user-1", 50);
+
+        assertEquals("一次重要的旅行", result.getEntities().get(0).getSources().get(0).getSourceTitle());
+        verify(diaryRepository).findByDiaryIdAndUserId("diary-7", "user-1");
+    }
 
     @Test
     void listReturnsDiaryReferencesWithoutMentionSnippets() {
@@ -149,8 +181,9 @@ class LifeGraphLifecycleServiceTest {
 
         service().delete("user-1", 11L);
 
-        InOrder order = inOrder(relationRepository, aliasRepository, mentionRepository,
+        InOrder order = inOrder(evidenceRepository, relationRepository, aliasRepository, mentionRepository,
                 mergeJudgmentRepository, entityRepository);
+        order.verify(evidenceRepository).deleteByUserIdAndRelationIdIn("user-1", List.of(21L));
         order.verify(relationRepository).deleteAll(any(List.class));
         order.verify(aliasRepository).deleteByUserIdAndEntityId("user-1", 11L);
         order.verify(mentionRepository).deleteByUserIdAndEntityId("user-1", 11L);
@@ -161,7 +194,8 @@ class LifeGraphLifecycleServiceTest {
 
     private LifeGraphLifecycleService service() {
         return new LifeGraphLifecycleService(entityRepository, aliasRepository, mentionRepository,
-                relationRepository, mergeJudgmentRepository, matchProfileAssembler);
+                relationRepository, evidenceRepository, mergeJudgmentRepository, matchProfileAssembler,
+                diaryRepository);
     }
 
     private LifeGraphEntity entity(Long id, String userId) {

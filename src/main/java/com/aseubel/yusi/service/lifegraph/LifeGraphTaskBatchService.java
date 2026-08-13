@@ -47,14 +47,16 @@ public class LifeGraphTaskBatchService {
                     continue;
                 }
 
-                Diary diary = diaryRepository.findByDiaryId(task.getDiaryId());
+                Diary diary = diaryRepository.findByDiaryIdAndUserId(task.getDiaryId(), task.getUserId());
                 if (diary == null) {
+                    lifeGraphBuildService.deleteByDiary(task.getUserId(), task.getDiaryId());
                     taskRepository.markAsCompleted(task.getId(), now);
                     continue;
                 }
 
                 String plain = decryptDiaryContent(diary);
                 if (StrUtil.isBlank(plain)) {
+                    lifeGraphBuildService.deleteByDiary(task.getUserId(), task.getDiaryId());
                     taskRepository.markAsCompleted(task.getId(), now);
                     continue;
                 }
@@ -100,6 +102,7 @@ public class LifeGraphTaskBatchService {
             }
             String plain = StrUtil.isNotBlank(plainContent) ? plainContent : decryptDiaryContent(diary);
             if (StrUtil.isBlank(plain)) {
+                lifeGraphBuildService.deleteByDiary(diary.getUserId(), diary.getDiaryId());
                 taskRepository.markAsCompleted(taskId, now);
                 return;
             }

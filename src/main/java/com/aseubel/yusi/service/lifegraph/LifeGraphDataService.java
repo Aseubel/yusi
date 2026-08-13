@@ -3,7 +3,11 @@ package com.aseubel.yusi.service.lifegraph;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
 import com.aseubel.yusi.pojo.entity.LifeGraphRelation;
+import com.aseubel.yusi.pojo.entity.LifeGraphMention;
+import com.aseubel.yusi.repository.LifeGraphEntityAliasRepository;
 import com.aseubel.yusi.repository.LifeGraphEntityRepository;
+import com.aseubel.yusi.repository.LifeGraphMentionRepository;
+import com.aseubel.yusi.repository.LifeGraphRelationEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.service.lifegraph.dto.GraphSnapshotDTO;
 import jakarta.persistence.EntityNotFoundException;
@@ -31,6 +35,9 @@ public class LifeGraphDataService {
 
     private final LifeGraphEntityRepository entityRepository;
     private final LifeGraphRelationRepository relationRepository;
+    private final LifeGraphRelationEvidenceRepository evidenceRepository;
+    private final LifeGraphEntityAliasRepository aliasRepository;
+    private final LifeGraphMentionRepository mentionRepository;
 
     // ======================== 查询 ========================
 
@@ -216,6 +223,25 @@ public class LifeGraphDataService {
             target.setSummary(target.getSummary() + "\n" + source.getSummary());
         }
 
+        // Redirect source-owned provenance rows before deleting the source entity.
+        List<LifeGraphMention> mentions = mentionRepository
+                .findByUserIdAndEntityId(source.getUserId(), source.getId());
+        for (LifeGraphMention mention : mentions) {
+            mention.setEntityId(target.getId());
+        }
+        if (!mentions.isEmpty()) {
+            mentionRepository.saveAll(mentions);
+        }
+
+        List<com.aseubel.yusi.pojo.entity.LifeGraphEntityAlias> aliases = aliasRepository
+                .findByUserIdAndEntityId(source.getUserId(), source.getId());
+        for (com.aseubel.yusi.pojo.entity.LifeGraphEntityAlias alias : aliases) {
+            alias.setEntityId(target.getId());
+        }
+        if (!aliases.isEmpty()) {
+            aliasRepository.saveAll(aliases);
+        }
+
         // Redirect relations
         List<LifeGraphRelation> outRels = relationRepository.findByUserIdAndSourceIdIn(source.getUserId(), List.of(source.getId()));
         for (LifeGraphRelation r : outRels) {
@@ -247,6 +273,12 @@ public class LifeGraphDataService {
         // 删除关联的关系
         List<LifeGraphRelation> srcRels = relationRepository.findByUserIdAndSourceIdIn(userId, List.of(entityId));
         List<LifeGraphRelation> tgtRels = relationRepository.findByUserIdAndTargetIdIn(userId, List.of(entityId));
+        Set<Long> relationIds = new LinkedHashSet<>();
+        srcRels.forEach(relation -> relationIds.add(relation.getId()));
+        tgtRels.forEach(relation -> relationIds.add(relation.getId()));
+        if (!relationIds.isEmpty()) {
+            evidenceRepository.deleteByUserIdAndRelationIdIn(userId, new ArrayList<>(relationIds));
+        }
         relationRepository.deleteAll(srcRels);
         relationRepository.deleteAll(tgtRels);
 
@@ -266,13 +298,15 @@ public class LifeGraphDataService {
                 .filter(e -> e.getUserId().equals(userId))
                 .orElseThrow(() -> new EntityNotFoundException("Target entity not found: " + targetId));
 
+        int resolvedWeight = weight != null ? weight : 1;
         LifeGraphRelation relation = LifeGraphRelation.builder()
                 .userId(userId)
                 .sourceId(sourceId)
                 .targetId(targetId)
                 .type(type)
                 .confidence(confidence != null ? confidence : BigDecimal.valueOf(0.8))
-                .weight(weight != null ? weight : 1)
+                .weight(resolvedWeight)
+                .manualWeight(resolvedWeight)
                 .build();
 
         return relationRepository.save(relation);
@@ -292,6 +326,15 @@ public class LifeGraphDataService {
             throw new ObjectOptimisticLockingFailureException(LifeGraphRelation.class, relationId);
         }
 
+        if (relation.getOrigin() == null) {
+            relation.setOrigin(LifeGraphRelation.Origin.MANUAL);
+        }
+        if (relation.getManualWeight() == null) {
+            relation.setManualWeight(relation.getOrigin() == LifeGraphRelation.Origin.MANUAL
+                    ? (relation.getWeight() == null ? 1 : relation.getWeight())
+                    : 0);
+        }
+
         if (StrUtil.isNotBlank(type)) {
             relation.setType(type);
         }
@@ -300,6 +343,9 @@ public class LifeGraphDataService {
         }
         if (weight != null) {
             relation.setWeight(weight);
+            if (relation.getOrigin() == LifeGraphRelation.Origin.MANUAL) {
+                relation.setManualWeight(weight);
+            }
         }
 
         return relationRepository.save(relation);
@@ -314,6 +360,7 @@ public class LifeGraphDataService {
             throw new SecurityException("Cannot delete relation owned by another user");
         }
 
+        evidenceRepository.deleteByUserIdAndRelationId(userId, relationId);
         relationRepository.delete(relation);
     }
 

@@ -34,7 +34,13 @@ public class AgentCognitionOrchestratorImpl implements AgentCognitionOrchestrato
 
     @Override
     public void ingest(CognitionIngestCommand command) {
-        if (command == null || StrUtil.isBlank(command.getUserId()) || StrUtil.isBlank(command.getMaskedText())) {
+        if (command == null || StrUtil.isBlank(command.getUserId())) {
+            return;
+        }
+        if ("DIARY".equalsIgnoreCase(command.getSourceType())) {
+            midMemoryUpdateService.removeBySource(command.getUserId(), command.getSourceType(), command.getSourceId());
+        }
+        if (StrUtil.isBlank(command.getMaskedText())) {
             return;
         }
         if (command.getImageObjectKeys() != null && !command.getImageObjectKeys().isEmpty()) {

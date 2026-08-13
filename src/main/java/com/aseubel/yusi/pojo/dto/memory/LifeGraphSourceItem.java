@@ -17,6 +17,7 @@ public class LifeGraphSourceItem {
 
     private String sourceId;
     private String sourceType;
+    private String sourceTitle;
     private LocalDate entryDate;
     private LocalDateTime createdAt;
 }

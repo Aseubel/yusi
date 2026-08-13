@@ -27,6 +27,10 @@ public class LifeGraphCognitionBridgeServiceImpl implements LifeGraphCognitionBr
             return;
         }
 
+        if ("DIARY".equalsIgnoreCase(command.getSourceType())) {
+            return;
+        }
+
         ensureUserEntity(command.getUserId());
 
         if (StrUtil.isNotBlank(command.getPlaceName())) {
@@ -57,13 +61,6 @@ public class LifeGraphCognitionBridgeServiceImpl implements LifeGraphCognitionBr
                             "用户相对稳定的兴趣或话题偏好"));
         }
 
-        if ("DIARY".equalsIgnoreCase(command.getSourceType()) && StrUtil.isNotBlank(command.getTitle())) {
-            upsertEntity(command.getUserId(),
-                    LifeGraphEntity.EntityType.Topic,
-                    normalize(command.getTitle()),
-                    command.getTitle().trim(),
-                    "用户在日记中反复形成的人生主题线索");
-        }
     }
 
     private void ensureUserEntity(String userId) {
