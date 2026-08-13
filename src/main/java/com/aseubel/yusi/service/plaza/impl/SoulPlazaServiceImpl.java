@@ -1,6 +1,8 @@
 package com.aseubel.yusi.service.plaza.impl;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.constant.EmotionType;
+import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.common.event.EmotionPlazaCognitionIngestEvent;
 import com.aseubel.yusi.common.event.PlazaCardChangedEvent;
 import com.aseubel.yusi.common.exception.BusinessException;
@@ -48,11 +50,6 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     private final IRedisService redissonService;
     private final SensitiveDataMaskService sensitiveDataMaskService;
     private final ApplicationEventPublisher eventPublisher;
-
-    // 有效的情感类别列表
-    private static final Set<String> VALID_EMOTIONS = Set.of(
-            "Joy", "Sadness", "Anxiety", "Love", "Anger",
-            "Fear", "Hope", "Calm", "Confusion", "Neutral");
 
     @Override
     @UpdateCache(key = "'plaza:feed:*'", evictOnly = true)
@@ -116,23 +113,11 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
             String cleanedResult = result.trim().replaceAll("[\\n\\r]", "");
 
             // 验证返回的情感类别是否有效
-            if (VALID_EMOTIONS.contains(cleanedResult)) {
-                return cleanedResult;
-            }
-
-            // 如果返回的不是标准类别，尝试部分匹配
-            for (String validEmotion : VALID_EMOTIONS) {
-                if (cleanedResult.toLowerCase().contains(validEmotion.toLowerCase())) {
-                    return validEmotion;
-                }
-            }
-
-            log.warn("AI返回了非标准情感类别: '{}', 使用默认值Neutral", cleanedResult);
-            return "Neutral";
+            return EmotionType.fromModelValue(cleanedResult).code();
 
         } catch (Exception e) {
             log.error("情感分析失败，使用默认值Neutral: {}", e.getMessage());
-            return "Neutral";
+            return EmotionType.NEUTRAL.code();
         }
     }
 
@@ -147,7 +132,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
         }
         eventPublisher.publishEvent(new EmotionPlazaCognitionIngestEvent(this, CognitionIngestCommand.builder()
                 .userId(card.getUserId())
-                .sourceType("EMOTION_PLAZA")
+                .sourceType(SourceType.EMOTION_PLAZA.code())
                 .sourceId(String.valueOf(card.getId()))
                 .maskedText(maskedText)
                 .topic(card.getEmotion())
@@ -353,7 +338,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
         }
         eventPublisher.publishEvent(new PlazaCardChangedEvent(this, CognitionIngestCommand.builder()
                 .userId(card.getUserId())
-                .sourceType("PLAZA")
+                .sourceType(SourceType.PLAZA.code())
                 .sourceId(String.valueOf(card.getId()))
                 .maskedText(maskedText)
                 .timestamp(card.getCreatedAt())
@@ -367,7 +352,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
         }
         eventPublisher.publishEvent(new PlazaCardChangedEvent(this, CognitionIngestCommand.builder()
                 .userId(card.getUserId())
-                .sourceType("PLAZA")
+                .sourceType(SourceType.PLAZA.code())
                 .sourceId(String.valueOf(card.getId()))
                 .build(), PlazaCardChangedEvent.Type.DELETE));
     }

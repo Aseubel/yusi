@@ -35,6 +35,7 @@ import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
 import com.aseubel.yusi.service.cognition.MidMemoryFusionService;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.oss.OssService;
+import com.aseubel.yusi.service.report.constant.SoulReportType;
 import com.aseubel.yusi.pojo.entity.UserNotification;
 import com.aseubel.yusi.repository.UserNotificationRepository;
 import com.aseubel.yusi.redis.service.IRedisService;
@@ -524,7 +525,7 @@ public class AiController {
     public Response<SoulReport> getLatestReport() {
         String userId = UserContext.getUserId();
         return Response.success(soulReportRepository
-                .findTopByUserIdAndReportTypeOrderByCreatedAtDesc(userId, "WEEKLY")
+                .findTopByUserIdAndReportTypeOrderByCreatedAtDesc(userId, SoulReportType.WEEKLY.code())
                 .orElse(null));
     }
 

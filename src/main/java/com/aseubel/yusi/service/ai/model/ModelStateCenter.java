@@ -1,6 +1,8 @@
 package com.aseubel.yusi.service.ai.model;
 
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
+import com.aseubel.yusi.service.ai.model.constant.ModelHealthPhase;
+import com.aseubel.yusi.service.ai.model.constant.ModelStateAction;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,10 +23,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @RequiredArgsConstructor
 public class ModelStateCenter {
 
-    private enum Phase {
-        UP, HALF_OPEN, DOWN
-    }
-
     private static class LocalWindow {
         private volatile long firstRequestAt = System.currentTimeMillis();
         private volatile long totalRequests;
@@ -35,8 +33,8 @@ public class ModelStateCenter {
         private volatile int consecutiveSuccesses;
         private volatile long nextProbeAt;
         private volatile String lastError;
-        private volatile Phase phase = Phase.UP;
-        private volatile Phase previousPhase = Phase.UP;
+        private volatile ModelHealthPhase phase = ModelHealthPhase.UP;
+        private volatile ModelHealthPhase previousPhase = ModelHealthPhase.UP;
         private final AtomicBoolean probing = new AtomicBoolean(false);
     }
 
@@ -66,7 +64,7 @@ public class ModelStateCenter {
                 window.avgLatencyMs = state.getAvgLatencyMs();
                 window.consecutiveFailures = state.getConsecutiveFailures();
                 window.consecutiveSuccesses = state.getConsecutiveSuccesses();
-                window.phase = Phase.valueOf(state.getPhase());
+                window.phase = phaseOrDefault(state.getPhase());
                 window.previousPhase = window.phase;
                 window.nextProbeAt = state.getNextProbeAt();
                 window.lastError = state.getLastError();
@@ -79,19 +77,19 @@ public class ModelStateCenter {
     public boolean allowRequest(String instanceId) {
         LocalWindow window = localWindows.computeIfAbsent(instanceId, id -> new LocalWindow());
         long now = System.currentTimeMillis();
-        if (window.phase == Phase.UP) {
+        if (window.phase == ModelHealthPhase.UP) {
             return true;
         }
-        if (window.phase == Phase.DOWN && now >= window.nextProbeAt) {
+        if (window.phase == ModelHealthPhase.DOWN && now >= window.nextProbeAt) {
             if (window.probing.compareAndSet(false, true)) {
                 window.previousPhase = window.phase;
-                window.phase = Phase.HALF_OPEN;
-                publishState(instanceId, "", window, "PHASE_CHANGE");
+                window.phase = ModelHealthPhase.HALF_OPEN;
+                publishState(instanceId, "", window, ModelStateAction.PHASE_CHANGE.code());
                 return true;
             }
             return false;
         }
-        if (window.phase == Phase.HALF_OPEN) {
+        if (window.phase == ModelHealthPhase.HALF_OPEN) {
             return window.probing.compareAndSet(false, true);
         }
         return false;
@@ -105,12 +103,12 @@ public class ModelStateCenter {
             window.consecutiveFailures = 0;
             window.consecutiveSuccesses++;
             window.avgLatencyMs = window.avgLatencyMs == 0 ? latencyMs : (window.avgLatencyMs * 0.8 + latencyMs * 0.2);
-            if (window.phase == Phase.HALF_OPEN
+            if (window.phase == ModelHealthPhase.HALF_OPEN
                     && window.consecutiveSuccesses >= modelConfigCenter.getEffectiveConfig().getRecoverySuccessThreshold()) {
                 window.previousPhase = window.phase;
-                window.phase = Phase.UP;
+                window.phase = ModelHealthPhase.UP;
                 window.nextProbeAt = 0L;
-                publishState(instanceId, modelName, window, "PHASE_CHANGE");
+                publishState(instanceId, modelName, window, ModelStateAction.PHASE_CHANGE.code());
             }
         }
         window.probing.set(false);
@@ -125,13 +123,13 @@ public class ModelStateCenter {
             window.consecutiveSuccesses = 0;
             window.avgLatencyMs = window.avgLatencyMs == 0 ? latencyMs : (window.avgLatencyMs * 0.8 + latencyMs * 0.2);
             window.lastError = throwable == null ? "" : throwable.getMessage();
-            if (window.phase == Phase.HALF_OPEN
+            if (window.phase == ModelHealthPhase.HALF_OPEN
                     || window.consecutiveFailures >= modelConfigCenter.getEffectiveConfig().getFailureThreshold()) {
                 window.previousPhase = window.phase;
-                window.phase = Phase.DOWN;
+                window.phase = ModelHealthPhase.DOWN;
                 window.nextProbeAt = System.currentTimeMillis()
                         + modelConfigCenter.getEffectiveConfig().getRecoveryProbeIntervalMs();
-                publishState(instanceId, modelName, window, "PHASE_CHANGE");
+                publishState(instanceId, modelName, window, ModelStateAction.PHASE_CHANGE.code());
             }
         }
         window.probing.set(false);
@@ -195,13 +193,13 @@ public class ModelStateCenter {
         double qps = window.totalRequests == 0 ? 0
                 : (window.totalRequests * 1000D) / Math.max(1L, System.currentTimeMillis() - window.firstRequestAt);
         double healthScore = Math.max(0D, 1D - errorRate);
-        if (window.phase == Phase.DOWN) {
+        if (window.phase == ModelHealthPhase.DOWN) {
             healthScore = Math.min(healthScore, 0.2D);
         }
         return ModelRuntimeState.builder()
                 .instanceId(instanceId)
                 .modelName(modelName)
-                .available(window.phase != Phase.DOWN)
+                .available(window.phase != ModelHealthPhase.DOWN)
                 .healthScore(healthScore)
                 .qps(qps)
                 .avgLatencyMs(window.avgLatencyMs)
@@ -213,8 +211,13 @@ public class ModelStateCenter {
                 .consecutiveSuccesses(window.consecutiveSuccesses)
                 .lastUpdatedAt(System.currentTimeMillis())
                 .nextProbeAt(window.nextProbeAt)
-                .phase(window.phase.name())
+                .phase(window.phase.code())
                 .lastError(window.lastError)
                 .build();
+    }
+
+    private ModelHealthPhase phaseOrDefault(String value) {
+        ModelHealthPhase phase = ModelHealthPhase.fromCode(value);
+        return phase == null ? ModelHealthPhase.UP : phase;
     }
 }

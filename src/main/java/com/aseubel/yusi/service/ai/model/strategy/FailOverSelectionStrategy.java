@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.ai.model.strategy;
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
 import com.aseubel.yusi.service.ai.model.ModelInstance;
 import com.aseubel.yusi.service.ai.model.ModelRuntimeState;
+import com.aseubel.yusi.service.ai.model.constant.ModelHealthPhase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -27,6 +28,7 @@ public class FailOverSelectionStrategy implements ModelSelectionStrategy {
     }
 
     private boolean isAvailable(ModelRuntimeState state) {
-        return state == null || state.isAvailable() || "HALF_OPEN".equalsIgnoreCase(state.getPhase());
+        return state == null || state.isAvailable()
+                || ModelHealthPhase.HALF_OPEN.code().equalsIgnoreCase(state.getPhase());
     }
 }

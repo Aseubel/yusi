@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai.model;
 
 import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.constant.ModelCallStatus;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
 import com.aseubel.yusi.config.ai.properties.ModelTierDefinition;
@@ -13,6 +14,8 @@ import com.aseubel.yusi.pojo.dto.model.ModelRoutePreviewRequest;
 import com.aseubel.yusi.pojo.dto.model.ModelRoutePreviewResponse;
 import com.aseubel.yusi.pojo.entity.ModelCallTrace;
 import com.aseubel.yusi.repository.ModelCallTraceRepository;
+import com.aseubel.yusi.service.ai.model.constant.ModelHealthPhase;
+import com.aseubel.yusi.service.ai.model.constant.ModelRouteExclusionReason;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -120,7 +123,7 @@ public class ModelManagementService {
         Set<String> warnings = new LinkedHashSet<>();
         decision.candidates().stream()
                 .filter(candidate -> candidate.excludedReason() != null
-                        && !"fallback-tier".equals(candidate.excludedReason()))
+                        && !ModelRouteExclusionReason.FALLBACK_TIER.code().equals(candidate.excludedReason()))
                 .forEach(candidate -> warnings.add("excluded:" + candidate.modelId()
                         + ":" + candidate.excludedReason()));
         decision.candidates().stream()
@@ -270,7 +273,8 @@ public class ModelManagementService {
         if (tier != null && tier.getMembers() != null) {
             for (String member : tier.getMembers()) {
                 ModelRuntimeState state = stateById.get(member);
-                if (state == null || (state.isAvailable() && !"HALF_OPEN".equalsIgnoreCase(state.getPhase()))) {
+                if (state == null || (state.isAvailable()
+                        && !ModelHealthPhase.HALF_OPEN.code().equalsIgnoreCase(state.getPhase()))) {
                     healthy++;
                 } else if (state.isAvailable()) {
                     degraded++;
@@ -326,8 +330,7 @@ public class ModelManagementService {
 
     private boolean isSuccess(ModelCallTrace trace) {
         String status = trace.getStatus();
-        return status != null && Set.of("SUCCESS", "SUCCEEDED", "COMPLETED", "OK")
-                .contains(status.toUpperCase(Locale.ROOT));
+        return ModelCallStatus.isSuccess(status);
     }
 
     private boolean isRateLimited(ModelCallTrace trace) {

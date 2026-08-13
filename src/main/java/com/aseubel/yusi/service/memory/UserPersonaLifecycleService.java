@@ -1,6 +1,8 @@
 package com.aseubel.yusi.service.memory;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.constant.LifecycleStatus;
+import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.memory.PersonaMemoryItem;
@@ -75,7 +77,7 @@ public class UserPersonaLifecycleService {
         }
 
         if (contentChanged) {
-            persona.setSourceType("USER_EDIT");
+            persona.setSourceType(SourceType.USER_EDIT.code());
             persona.setSourceId(null);
             persona.setConfidence(1.0);
         }
@@ -142,22 +144,22 @@ public class UserPersonaLifecycleService {
 
     private PersonaMemoryItem emptyItem() {
         return PersonaMemoryItem.builder()
-                .sourceType("UNKNOWN")
+                .sourceType(SourceType.UNKNOWN.code())
                 .confidence(0.5)
                 .matchAllowed(false)
                 .hidden(false)
-                .lifecycleStatus("EMPTY")
+                .lifecycleStatus(LifecycleStatus.EMPTY.code())
                 .build();
     }
 
     private PersonaMemoryItem toItem(UserPersona persona, LocalDateTime now) {
         String lifecycleStatus;
         if (Boolean.TRUE.equals(persona.getHidden())) {
-            lifecycleStatus = "HIDDEN";
+            lifecycleStatus = LifecycleStatus.HIDDEN.code();
         } else if (persona.getValidUntil() != null && !persona.getValidUntil().isAfter(now)) {
-            lifecycleStatus = "EXPIRED";
+            lifecycleStatus = LifecycleStatus.EXPIRED.code();
         } else {
-            lifecycleStatus = "ACTIVE";
+            lifecycleStatus = LifecycleStatus.ACTIVE.code();
         }
 
         return PersonaMemoryItem.builder()
@@ -167,7 +169,7 @@ public class UserPersonaLifecycleService {
                 .interests(persona.getInterests())
                 .tone(persona.getTone())
                 .customInstructions(persona.getCustomInstructions())
-                .sourceType(StrUtil.blankToDefault(persona.getSourceType(), "UNKNOWN"))
+                .sourceType(StrUtil.blankToDefault(persona.getSourceType(), SourceType.UNKNOWN.code()))
                 .sourceId(persona.getSourceId())
                 .confidence(persona.getConfidence() == null ? 0.5 : persona.getConfidence())
                 .createdAt(persona.getCreatedAt())

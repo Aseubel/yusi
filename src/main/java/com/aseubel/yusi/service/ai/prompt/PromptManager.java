@@ -4,6 +4,8 @@ import com.aseubel.yusi.pojo.entity.PromptTemplate;
 import cn.hutool.core.io.IoUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.common.constant.PromptDefaults;
+import com.aseubel.yusi.common.constant.PromptScope;
 import com.aseubel.yusi.common.event.PromptUpdatedEvent;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -40,22 +42,25 @@ public class PromptManager {
     }
 
     private String determineScope(String keyStr) {
-        if ("chat".equals(keyStr) || "agent-persona".equals(keyStr) || "agent-proactive-greeting".equals(keyStr)) {
-            return "global";
+        if (PromptKey.CHAT.getKey().equals(keyStr)
+                || PromptKey.AGENT_PERSONA.getKey().equals(keyStr)
+                || PromptKey.AGENT_PROACTIVE_GREETING.getKey().equals(keyStr)) {
+            return PromptScope.GLOBAL.code();
         }
-        if ("logic".equals(keyStr)) {
-            return "room";
+        if (PromptKey.LOGIC.getKey().equals(keyStr)) {
+            return PromptScope.ROOM.code();
         }
-        if ("soul-match".equals(keyStr) || "soul-match-letter".equals(keyStr)) {
-            return "match";
+        if (PromptKey.SOUL_MATCH.getKey().equals(keyStr)
+                || PromptKey.SOUL_MATCH_LETTER.getKey().equals(keyStr)) {
+            return PromptScope.MATCH.code();
         }
-        return "diary"; // Default scope
+        return PromptScope.DIARY.code();
     }
 
     public void loadPrompt(String keyStr) {
         String dbPrompt = null;
         try {
-            dbPrompt = promptService.getPrompt(keyStr, "zh-CN");
+            dbPrompt = promptService.getPrompt(keyStr, PromptDefaults.LOCALE);
         } catch (Exception e) {
             log.warn("从数据库加载 Prompt [{}] 失败: {}", keyStr, e.getMessage());
         }
@@ -97,15 +102,15 @@ public class PromptManager {
             PromptTemplate template = PromptTemplate.builder()
                     .name(keyStr)
                     .template(contentToUse)
-                    .version("v1")
+                    .version(PromptDefaults.VERSION)
                     .active(true)
                     .scope(determineScope(keyStr))
-                    .locale("zh-CN")
-                    .description("System auto-initialized default prompt")
+                    .locale(PromptDefaults.LOCALE)
+                    .description(PromptDefaults.AUTO_INITIALIZED_DESCRIPTION)
                     .isDefault(true)
                     .priority(0)
                     .build();
-            promptService.savePrompt(template, "SYSTEM");
+            promptService.savePrompt(template, PromptDefaults.SYSTEM_UPDATER);
             log.info("自动初始化 Prompt [{}] 至数据库", keyStr);
         } catch (Exception e) {
             // Already exists or saving failed, we can ignore this safely

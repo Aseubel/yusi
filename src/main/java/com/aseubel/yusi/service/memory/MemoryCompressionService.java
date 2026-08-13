@@ -2,6 +2,8 @@ package com.aseubel.yusi.service.memory;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.date.DateUtil;
+import com.aseubel.yusi.common.constant.SourceType;
+import com.aseubel.yusi.common.constant.ChatMessageRole;
 import com.aseubel.yusi.common.event.ChatCognitionIngestEvent;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.common.event.MessageSavedEvent;
@@ -191,7 +193,7 @@ public class MemoryCompressionService {
 
         // 过滤 SYSTEM 消息，拼装对话历史
         String conversationHistory = unsummarizedMessages.stream()
-                .filter(m -> !"SYSTEM".equals(m.getRole()))
+                .filter(m -> !ChatMessageRole.SYSTEM.code().equals(m.getRole()))
                 .map(m -> m.getRole() + ": " + m.getContent())
                 .collect(Collectors.joining("\n"));
 
@@ -250,7 +252,7 @@ public class MemoryCompressionService {
         LocalDateTime now = LocalDateTime.now();
         MidTermMemory activeMemory = MidTermMemory.builder()
                 .userId(memoryId)
-                .sourceType("CHAT_SUMMARY")
+                .sourceType(SourceType.CHAT_SUMMARY.code())
                 .summary(summaryText)
                 .importance(1.0)
                 .confidence(1.0)
@@ -309,7 +311,7 @@ public class MemoryCompressionService {
         }
         eventPublisher.publishEvent(new ChatCognitionIngestEvent(this, CognitionIngestCommand.builder()
                 .userId(userId)
-                .sourceType("CHAT_SUMMARY")
+                .sourceType(SourceType.CHAT_SUMMARY.code())
                 .sourceId(String.valueOf(memory.getId()))
                 .maskedText(maskedText)
                 .timestamp(memory.getUpdatedAt())

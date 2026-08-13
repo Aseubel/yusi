@@ -1,6 +1,7 @@
 package com.aseubel.yusi.pojo.entity;
 
 import com.aseubel.yusi.common.utils.UuidUtils;
+import com.aseubel.yusi.pojo.constant.KeyMode;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -57,7 +58,7 @@ public class User {
      * 密钥模式: DEFAULT(默认服务端密钥) / CUSTOM(用户自定义密钥)
      */
     @Column(name = "key_mode")
-    private String keyMode = "DEFAULT";
+    private String keyMode = KeyMode.DEFAULT.code();
 
     /**
      * 是否开启云端密钥备份（仅CUSTOM模式有效）

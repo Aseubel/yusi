@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.suggestion.impl;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.entity.Suggestion;
+import com.aseubel.yusi.pojo.constant.SuggestionStatus;
 import com.aseubel.yusi.repository.SuggestionRepository;
 import com.aseubel.yusi.service.suggestion.SuggestionService;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +28,7 @@ public class SuggestionServiceImpl implements SuggestionService {
         Suggestion suggestion = Suggestion.builder()
                 .content(content)
                 .contactEmail(contactEmail)
-                .status("PENDING")
+                .status(SuggestionStatus.PENDING.code())
                 .build();
         return suggestionRepository.save(suggestion);
     }
@@ -56,7 +57,7 @@ public class SuggestionServiceImpl implements SuggestionService {
         suggestion.setReply(reply);
         suggestion.setRepliedBy(repliedBy);
         suggestion.setRepliedAt(LocalDateTime.now());
-        suggestion.setStatus("REPLIED");
+        suggestion.setStatus(SuggestionStatus.REPLIED.code());
         suggestionRepository.save(suggestion);
     }
 
@@ -76,6 +77,6 @@ public class SuggestionServiceImpl implements SuggestionService {
 
     @Override
     public long getPendingCount() {
-        return suggestionRepository.countByStatus("PENDING");
+        return suggestionRepository.countByStatus(SuggestionStatus.PENDING.code());
     }
 }

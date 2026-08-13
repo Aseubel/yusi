@@ -3,6 +3,8 @@ package com.aseubel.yusi.service.ai.model;
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
 import com.aseubel.yusi.config.ai.properties.ModelTierDefinition;
 import com.aseubel.yusi.config.ai.properties.RoutePolicyDefinition;
+import com.aseubel.yusi.service.ai.model.constant.ModelHealthPhase;
+import com.aseubel.yusi.service.ai.model.constant.ModelRouteExclusionReason;
 import com.aseubel.yusi.service.ai.model.strategy.ModelSelectionStrategy;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -73,7 +75,7 @@ public class ModelRouterService {
             tierCandidates.stream()
                     .map(ModelRouteCandidate::excludedReason)
                     .filter(Objects::nonNull)
-                    .filter(reason -> !"fallback-tier".equals(reason))
+                    .filter(reason -> !ModelRouteExclusionReason.FALLBACK_TIER.code().equals(reason))
                     .forEach(healthReasons::add);
         }
 
@@ -113,7 +115,7 @@ public class ModelRouterService {
             String excludedReason = exclusionReason(policy, tier, instance, context, states.get(instance.getId()));
             boolean available = excludedReason == null;
             if (fallback && available) {
-                excludedReason = "fallback-tier";
+                excludedReason = ModelRouteExclusionReason.FALLBACK_TIER.code();
             }
             result.add(new ModelRouteCandidate(tierId, instance, available, excludedReason));
         }
@@ -123,29 +125,29 @@ public class ModelRouterService {
     private String exclusionReason(RoutePolicyDefinition policy, ModelTierDefinition tier, ModelInstance instance,
             ModelRouteContext context, ModelRuntimeState state) {
         if (tier != null && !tier.isEnabled()) {
-            return "TIER_DISABLED";
+            return ModelRouteExclusionReason.TIER_DISABLED.code();
         }
         if (!ModelCapabilityPolicy.supportsScene(instance, context.getScene())) {
-            return "UNSUPPORTED_CAPABILITY";
+            return ModelRouteExclusionReason.UNSUPPORTED_CAPABILITY.code();
         }
         if (!supportsValue(instance.getScenes(), context.getScene())) {
-            return "SCENE_MISMATCH";
+            return ModelRouteExclusionReason.SCENE_MISMATCH.code();
         }
         Integer estimatedInputTokens = context.getEstimatedInputTokens();
         if (estimatedInputTokens != null && policy.getMaxInputTokens() != null
                 && estimatedInputTokens > policy.getMaxInputTokens()) {
-            return "INPUT_TOKEN_LIMIT_EXCEEDED";
+            return ModelRouteExclusionReason.INPUT_TOKEN_LIMIT_EXCEEDED.code();
         }
         if (estimatedInputTokens != null && instance.getContextWindowTokens() != null) {
             long reservedOutputTokens = context.getReservedOutputTokens() == null
                     ? 0L : Math.max(0L, context.getReservedOutputTokens());
             long requestedTokens = (long) estimatedInputTokens + reservedOutputTokens;
             if (requestedTokens > instance.getContextWindowTokens()) {
-                return "CONTEXT_WINDOW_EXCEEDED";
+                return ModelRouteExclusionReason.CONTEXT_WINDOW_EXCEEDED.code();
             }
         }
         if (state != null && !state.isAvailable()
-                && !"HALF_OPEN".equalsIgnoreCase(state.getPhase())) {
+                && !ModelHealthPhase.HALF_OPEN.code().equalsIgnoreCase(state.getPhase())) {
             return state.getPhase() == null || state.getPhase().isBlank()
                     ? "DOWN" : state.getPhase().toUpperCase(Locale.ROOT);
         }

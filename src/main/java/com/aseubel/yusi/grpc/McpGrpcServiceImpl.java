@@ -1,6 +1,9 @@
 package com.aseubel.yusi.grpc;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.constant.ChatMessageRole;
+import com.aseubel.yusi.common.constant.DeveloperScope;
+import com.aseubel.yusi.grpc.constant.McpMemoryResultType;
 import com.aseubel.yusi.grpc.mcp.DiaryResult;
 import com.aseubel.yusi.grpc.mcp.McpExtensionServiceGrpc;
 import com.aseubel.yusi.grpc.mcp.QueryLifeGraphRequest;
@@ -55,7 +58,7 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
     public void searchDiary(SearchDiaryRequest request, StreamObserver<SearchDiaryResponse> responseObserver) {
         try {
             String apiKey = request.getApiKey();
-            String userId = developerConfigService.authorize(apiKey, "MEMORY_READ");
+            String userId = developerConfigService.authorize(apiKey, DeveloperScope.MEMORY_READ.code());
             if (userId == null) {
                 throw new IllegalArgumentException("Invalid API Key");
             }
@@ -133,7 +136,7 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
     public void searchMemory(SearchMemoryRequest request, StreamObserver<SearchMemoryResponse> responseObserver) {
         try {
             String apiKey = request.getApiKey();
-            String userId = developerConfigService.authorize(apiKey, "MEMORY_READ");
+            String userId = developerConfigService.authorize(apiKey, DeveloperScope.MEMORY_READ.code());
             if (userId == null) {
                 throw new IllegalArgumentException("Invalid API Key");
             }
@@ -150,7 +153,7 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
             String longTermMemory = memorySearchTool.searchMemories(userId, query, null, null);
             if (StrUtil.isNotBlank(longTermMemory)) {
                 results.add(MemoryResult.newBuilder()
-                        .setType("LONG_TERM_MEMORY")
+                        .setType(McpMemoryResultType.LONG_TERM_MEMORY.code())
                         .setContent(longTermMemory)
                         .setScore(1.0)
                         .build());
@@ -171,9 +174,9 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
 
                 for (int i = 0; i < recentMessages.size(); i++) {
                     com.aseubel.yusi.pojo.entity.ChatMemoryMessage msg = recentMessages.get(i);
-                    if (!"SYSTEM".equals(msg.getRole())) {
+                    if (!ChatMessageRole.SYSTEM.code().equals(msg.getRole())) {
                         results.add(MemoryResult.newBuilder()
-                                .setType("SHORT_TERM_CONTEXT")
+                                .setType(McpMemoryResultType.SHORT_TERM_CONTEXT.code())
                                 .setContent(msg.getRole() + ": " + msg.getContent())
                                 .setSourceId(msg.getId() != null ? String.valueOf(msg.getId()) : "")
                                 .setScore(0.8 - i * 0.03)

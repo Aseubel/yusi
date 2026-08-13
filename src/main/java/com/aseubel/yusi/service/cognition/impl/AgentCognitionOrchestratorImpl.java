@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.cognition.impl;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.common.event.ChatCognitionIngestEvent;
 import com.aseubel.yusi.common.event.DiaryCognitionIngestEvent;
 import com.aseubel.yusi.common.event.EmotionPlazaCognitionIngestEvent;
@@ -37,7 +38,7 @@ public class AgentCognitionOrchestratorImpl implements AgentCognitionOrchestrato
         if (command == null || StrUtil.isBlank(command.getUserId())) {
             return;
         }
-        if ("DIARY".equalsIgnoreCase(command.getSourceType())) {
+        if (SourceType.DIARY.code().equalsIgnoreCase(command.getSourceType())) {
             midMemoryUpdateService.removeBySource(command.getUserId(), command.getSourceType(), command.getSourceId());
         }
         if (StrUtil.isBlank(command.getMaskedText())) {
@@ -54,7 +55,7 @@ public class AgentCognitionOrchestratorImpl implements AgentCognitionOrchestrato
                 command.getUserId(), routingResult, command.getSourceType(), command.getSourceId());
         if (routingResult != null
                 && StrUtil.isNotBlank(routingResult.getMidMemorySummary())
-                && !"CHAT_SUMMARY".equalsIgnoreCase(command.getSourceType())) {
+                && !SourceType.CHAT_SUMMARY.code().equalsIgnoreCase(command.getSourceType())) {
             midMemoryUpdateService.appendSnapshot(
                     command.getUserId(),
                     routingResult.getMidMemorySummary(),

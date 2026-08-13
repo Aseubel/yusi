@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.plaza.impl;
 
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.common.constant.EmotionType;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
@@ -12,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.Set;
 
 /**
  * 情感分析服务实现类
@@ -29,15 +29,10 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
     private final ChatModel chatModel;
     private final PromptManager promptManager;
 
-    // 有效的情感类别列表
-    private static final Set<String> VALID_EMOTIONS = Set.of(
-            "Joy", "Sadness", "Anxiety", "Love", "Anger",
-            "Fear", "Hope", "Calm", "Confusion", "Neutral");
-
     @Override
     public String analyzeEmotion(String content) {
         if (content == null || content.trim().isEmpty()) {
-            return "Neutral";
+            return EmotionType.NEUTRAL.code();
         }
 
         try {
@@ -61,25 +56,13 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
             String cleanedResult = result.trim().replaceAll("[\\n\\r]", "");
 
             // 验证返回的情感类别是否有效
-            if (VALID_EMOTIONS.contains(cleanedResult)) {
-                log.debug("情感分析成功: {}", cleanedResult);
-                return cleanedResult;
-            }
-
-            // 如果返回的不是标准类别，尝试部分匹配
-            for (String validEmotion : VALID_EMOTIONS) {
-                if (cleanedResult.toLowerCase().contains(validEmotion.toLowerCase())) {
-                    log.debug("情感分析部分匹配: {} -> {}", cleanedResult, validEmotion);
-                    return validEmotion;
-                }
-            }
-
-            log.warn("AI返回了非标准情感类别: '{}', 使用默认值Neutral", cleanedResult);
-            return "Neutral";
+            EmotionType emotion = EmotionType.fromModelValue(cleanedResult);
+            log.debug("情感分析结果: {} -> {}", cleanedResult, emotion.code());
+            return emotion.code();
 
         } catch (Exception e) {
             log.error("情感分析失败，使用默认值Neutral: {}", e.getMessage());
-            return "Neutral";
+            return EmotionType.NEUTRAL.code();
         }
     }
 

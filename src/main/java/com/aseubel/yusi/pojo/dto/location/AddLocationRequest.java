@@ -1,6 +1,7 @@
 package com.aseubel.yusi.pojo.dto.location;
 
 import com.aseubel.yusi.pojo.entity.UserLocation;
+import com.aseubel.yusi.pojo.constant.UserLocationType;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -29,7 +30,7 @@ public class AddLocationRequest implements Serializable {
     /**
      * 地点类型：FREQUENT / IMPORTANT
      */
-    private String locationType = "FREQUENT";
+    private String locationType = UserLocationType.FREQUENT.code();
 
     /**
      * 图标：home, work, heart, star, etc.

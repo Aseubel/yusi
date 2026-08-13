@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.lifegraph;
 
+import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.common.event.PlazaCardChangedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,7 +28,7 @@ public class PlazaLifeGraphListener {
         try {
             if (event.getType() == PlazaCardChangedEvent.Type.DELETE) {
                 lifeGraphBuildService.deleteBySource(
-                        event.getCommand().getUserId(), "PLAZA", event.getCommand().getSourceId());
+                        event.getCommand().getUserId(), SourceType.PLAZA.code(), event.getCommand().getSourceId());
             } else {
                 lifeGraphBuildService.upsertFromPlaza(event.getCommand());
             }

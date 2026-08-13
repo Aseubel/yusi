@@ -3,6 +3,7 @@ package com.aseubel.yusi.config.ai;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.aseubel.yusi.common.event.MessageSavedEvent;
+import com.aseubel.yusi.common.constant.ChatMessageRole;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.service.ai.chat.ContextBuilderService;
@@ -187,11 +188,14 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             log.warn("Failed to deserialize message, falling back to simple text: {}", e.getMessage());
         }
 
-        String role = entity.getRole();
+        ChatMessageRole role = ChatMessageRole.fromCode(entity.getRole());
+        if (role == null) {
+            return UserMessage.from(content);
+        }
         switch (role) {
-            case "AI":
+            case AI:
                 return AiMessage.from(content);
-            case "USER":
+            case USER:
                 UserMessage userMsg = UserMessage.from(content);
                 if (StrUtil.isNotBlank(entity.getImages())) {
                     List<Content> imageContents = parseImageContents(entity.getImages());
@@ -200,7 +204,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
                     }
                 }
                 return userMsg;
-            case "SYSTEM":
+            case SYSTEM:
                 return SystemMessage.from(content);
             default:
                 return UserMessage.from(content);

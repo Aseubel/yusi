@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.ai.tool;
 
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.pojo.constant.KeyMode;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.ai.rag.DiaryRetrievalAssembler;
 
@@ -68,7 +69,7 @@ public class DiarySearchTool {
         }
 
         String keyMode = user.getKeyMode();
-        if (keyMode == null || "DEFAULT".equals(keyMode)) {
+        if (keyMode == null || KeyMode.DEFAULT.code().equals(keyMode)) {
             return true;
         }
 

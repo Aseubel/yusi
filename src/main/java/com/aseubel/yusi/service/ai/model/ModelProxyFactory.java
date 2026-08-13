@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.ai.model;
 import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.ai.runtime.ModelCallAttemptEvent;
+import com.aseubel.yusi.common.constant.ModelCallStatus;
 import dev.langchain4j.data.message.*;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -247,7 +248,7 @@ public class ModelProxyFactory {
                         tokenBudget(context, decision.routeParameters()));
                 if (!permit.granted()) {
                     publishAttempt(decision, context, candidate, null, 0L, null,
-                            attemptIndex, "REJECTED", permit.reservationKey());
+                            attemptIndex, ModelCallStatus.REJECTED.code(), permit.reservationKey());
                     lastError = new ModelAdmissionDeniedException(candidate.provider(), candidate.modelId(),
                             permit.reservationKey());
                     attemptIndex++;
@@ -264,7 +265,7 @@ public class ModelProxyFactory {
                     long latency = System.currentTimeMillis() - start;
                     modelStateCenter.recordSuccess(selected.getId(), selected.getModelName(), latency);
                     publishAttempt(decision, context, candidate, usage, latency, null,
-                            attemptIndex, "SUCCESS", null);
+                            attemptIndex, ModelCallStatus.SUCCESS.code(), null);
                     return result;
                 } catch (Throwable throwable) {
                     ModelInvocationException normalized = normalize(throwable, selected);
@@ -273,7 +274,7 @@ public class ModelProxyFactory {
                     modelStateCenter.recordFailure(selected.getId(), selected.getModelName(), latency, normalized);
                     publishAttempt(decision, context, candidate,
                             ModelUsageSnapshot.unavailable(selected.getPriceVersion()), latency, null,
-                            attemptIndex, "FAILED", normalized.kind().name());
+                            attemptIndex, ModelCallStatus.FAILED.code(), normalized.kind().name());
                     lastError = normalized;
                     log.warn("AI model invocation failed, attempt {}, model: {}, kind: {}, error: {}",
                             attemptIndex + 1, selected.getModelName(), normalized.kind(), normalized.getMessage());
@@ -307,7 +308,7 @@ public class ModelProxyFactory {
                     tokenBudget(context, decision.routeParameters()));
             if (!permit.granted()) {
                 publishAttempt(decision, context, candidate, null, 0L, null,
-                        attemptIndex, "REJECTED", permit.reservationKey());
+                            attemptIndex, ModelCallStatus.REJECTED.code(), permit.reservationKey());
                 if (candidateIndex + 1 < candidates.size()) {
                     invokeStreamingAttempt(decision, context, method, args, candidates,
                             candidateIndex + 1, attemptIndex + 1);
@@ -379,7 +380,7 @@ public class ModelProxyFactory {
             modelStateCenter.recordFailure(candidate.modelId(), candidate.modelName(), latency, normalized);
             publishAttempt(decision, context, candidate,
                     ModelUsageSnapshot.unavailable(candidate.instance().getPriceVersion()), latency,
-                    firstOutputAt < 0 ? null : firstOutputAt - start, attemptIndex, "FAILED",
+                    firstOutputAt < 0 ? null : firstOutputAt - start, attemptIndex, ModelCallStatus.FAILED.code(),
                     normalized.kind().name());
             if (!emitted && normalized.isFallbackEligible(false) && candidateIndex + 1 < candidates.size()) {
                 try {
@@ -538,7 +539,7 @@ public class ModelProxyFactory {
                     modelStateCenter.recordSuccess(candidate.modelId(), candidate.modelName(), latency);
                     publishAttempt(decision, context, candidate, usage, latency,
                             firstOutputAt.get() < 0 ? null : firstOutputAt.get() - start,
-                            attemptIndex, "SUCCESS", null);
+                            attemptIndex, ModelCallStatus.SUCCESS.code(), null);
                 }
                 downstream.onCompleteResponse(completeResponse);
             }

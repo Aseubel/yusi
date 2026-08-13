@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.ai.model;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
+import com.aseubel.yusi.service.ai.model.constant.ModelProviderType;
 import com.aseubel.yusi.config.ai.properties.ModelTierDefinition;
 import com.aseubel.yusi.config.ai.properties.RoutePolicyDefinition;
 import com.aseubel.yusi.pojo.entity.ModelConfigChangeLog;
@@ -366,11 +367,10 @@ public class ModelConfigCenter {
                     "model[" + model.getId() + "] 的 protocol 不能为空");
         }
         String provider = model.getProvider().trim().toLowerCase(Locale.ROOT);
-        boolean openAiProvider = Set.of("openai", "openai-compatible", "deepseek", "dashscope")
-                .contains(provider);
+        boolean openAiProvider = ModelProviderType.OPENAI_COMPATIBLE.aliases().contains(provider);
         boolean openAiProtocol = model.getProtocol() == ModelProtocol.CHAT_COMPLETIONS
                 || model.getProtocol() == ModelProtocol.RESPONSES;
-        boolean anthropicProvider = "anthropic".equals(provider);
+        boolean anthropicProvider = ModelProviderType.ANTHROPIC.aliases().contains(provider);
         if (!((openAiProvider && openAiProtocol)
                 || (anthropicProvider && model.getProtocol() == ModelProtocol.ANTHROPIC_MESSAGES))) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,

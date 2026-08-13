@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.developer.impl;
 
+import com.aseubel.yusi.common.constant.DeveloperScope;
 import com.aseubel.yusi.pojo.dto.developer.DeveloperConfigVO;
 import com.aseubel.yusi.pojo.entity.DeveloperConfig;
 import com.aseubel.yusi.repository.DeveloperConfigRepository;
@@ -20,7 +21,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DeveloperConfigServiceImpl implements DeveloperConfigService {
 
-    private static final Set<String> ALLOWED_SCOPES = Set.of("MEMORY_READ", "DIARY_WRITE", "MATCH_READ");
+    private static final Set<String> ALLOWED_SCOPES = Arrays.stream(DeveloperScope.values())
+            .map(DeveloperScope::code)
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
 
     private final DeveloperConfigRepository developerConfigRepository;
 
@@ -49,7 +52,7 @@ public class DeveloperConfigServiceImpl implements DeveloperConfigService {
         String newApiKey = "sk-ys-" + UUID.randomUUID().toString().replace("-", "");
         config.setApiKey(newApiKey);
         if (config.getScopes() == null || config.getScopes().isBlank()) {
-            config.setScopes("MEMORY_READ");
+            config.setScopes(DeveloperScope.MEMORY_READ.code());
         }
         config.setRevokedAt(null);
 
@@ -106,7 +109,7 @@ public class DeveloperConfigServiceImpl implements DeveloperConfigService {
 
     private List<String> normalizeScopes(List<String> scopes) {
         if (scopes == null || scopes.isEmpty()) {
-            return List.of("MEMORY_READ");
+            return List.of(DeveloperScope.MEMORY_READ.code());
         }
         List<String> normalized = scopes.stream()
                 .filter(scope -> scope != null && !scope.isBlank())
@@ -122,7 +125,7 @@ public class DeveloperConfigServiceImpl implements DeveloperConfigService {
 
     private List<String> parseScopes(String scopes) {
         if (scopes == null || scopes.isBlank()) {
-            return List.of("MEMORY_READ");
+            return List.of(DeveloperScope.MEMORY_READ.code());
         }
         return Arrays.stream(scopes.split(","))
                 .map(String::trim)

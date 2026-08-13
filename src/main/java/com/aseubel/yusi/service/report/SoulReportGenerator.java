@@ -8,6 +8,7 @@ import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.notification.NotificationService;
+import com.aseubel.yusi.service.report.constant.SoulReportType;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.aseubel.yusi.service.user.UserService;
 import dev.langchain4j.data.message.AiMessage;
@@ -71,7 +72,7 @@ public class SoulReportGenerator {
                     continue;
                 }
                 if (reportRepository.existsByUserIdAndReportTypeAndPeriodStart(
-                        userId, "WEEKLY", periodStart)) {
+                        userId, SoulReportType.WEEKLY.code(), periodStart)) {
                     continue;
                 }
 
@@ -125,7 +126,7 @@ public class SoulReportGenerator {
 
         return SoulReport.builder()
                 .userId(userId)
-                .reportType("WEEKLY")
+                .reportType(SoulReportType.WEEKLY.code())
                 .title(title)
                 .content(markdown)
                 .periodStart(periodStart)

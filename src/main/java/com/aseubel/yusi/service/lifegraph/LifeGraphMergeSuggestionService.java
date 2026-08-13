@@ -13,6 +13,8 @@ import com.aseubel.yusi.repository.LifeGraphMergeJudgmentRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphAssistant;
+import com.aseubel.yusi.service.lifegraph.constant.LifeGraphMergeStatus;
+import com.aseubel.yusi.service.lifegraph.constant.LifeGraphMergeDecision;
 import com.aseubel.yusi.service.lifegraph.dto.LifeGraphMergeSuggestion;
 import com.aseubel.yusi.service.notification.NotificationService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -146,12 +148,12 @@ public class LifeGraphMergeSuggestionService {
                     .mergeDecision(llmJudgment.getMerge())
                     .reason(llmJudgment.getReason())
                     .recommendedMasterName(llmJudgment.getRecommendedMasterName())
-                    .status("PENDING")
+                    .status(LifeGraphMergeStatus.PENDING.code())
                     .build();
             toSave.add(record);
 
             // 只返回建议合并的
-            if ("YES".equalsIgnoreCase(llmJudgment.getMerge())) {
+            if (LifeGraphMergeDecision.isYes(llmJudgment.getMerge())) {
                 results.add(LifeGraphMergeSuggestion.builder()
                         .entityIdA(pair.getIdA())
                         .entityIdB(pair.getIdB())
@@ -172,7 +174,7 @@ public class LifeGraphMergeSuggestionService {
 
             // 8. 为建议合并的候选对创建通知
             for (LifeGraphMergeJudgment judgment : toSave) {
-                if ("YES".equalsIgnoreCase(judgment.getMergeDecision())) {
+                if (LifeGraphMergeDecision.isYes(judgment.getMergeDecision())) {
                     notificationService.createMergeSuggestionNotification(
                             userId,
                             judgment.getId(),
@@ -192,10 +194,10 @@ public class LifeGraphMergeSuggestionService {
     public List<LifeGraphMergeSuggestion> getPendingSuggestions(String userId, int limit) {
         LocalDateTime now = LocalDateTime.now();
         List<LifeGraphMergeJudgment> pending = judgmentRepository
-                .findByUserIdAndStatusOrderByCreatedAtDesc(userId, "PENDING");
+                .findByUserIdAndStatusOrderByCreatedAtDesc(userId, LifeGraphMergeStatus.PENDING.code());
 
         return pending.stream()
-                .filter(j -> "YES".equalsIgnoreCase(j.getMergeDecision()))
+                .filter(j -> LifeGraphMergeDecision.isYes(j.getMergeDecision()))
                 .filter(j -> isVisible(userId, j.getEntityIdA(), now)
                         && isVisible(userId, j.getEntityIdB(), now))
                 .limit(limit)
@@ -219,7 +221,7 @@ public class LifeGraphMergeSuggestionService {
     @Transactional
     public void acceptMerge(String userId, Long judgmentId) {
         LifeGraphMergeJudgment judgment = getPendingJudgment(userId, judgmentId);
-        judgment.setStatus("ACCEPTED");
+        judgment.setStatus(LifeGraphMergeStatus.ACCEPTED.code());
         judgmentRepository.save(judgment);
 
         // 执行实际的合并逻辑
@@ -338,7 +340,7 @@ public class LifeGraphMergeSuggestionService {
     @Transactional
     public void rejectMerge(String userId, Long judgmentId) {
         LifeGraphMergeJudgment judgment = getPendingJudgment(userId, judgmentId);
-        judgment.setStatus("REJECTED");
+        judgment.setStatus(LifeGraphMergeStatus.REJECTED.code());
         judgmentRepository.save(judgment);
     }
 
@@ -348,8 +350,8 @@ public class LifeGraphMergeSuggestionService {
         }
         LifeGraphMergeJudgment judgment = judgmentRepository.findByIdAndUserId(judgmentId, userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "合并建议不存在"));
-        if (!"PENDING".equals(judgment.getStatus())
-                || !"YES".equalsIgnoreCase(judgment.getMergeDecision())) {
+        if (!LifeGraphMergeStatus.PENDING.code().equals(judgment.getStatus())
+                || !LifeGraphMergeDecision.isYes(judgment.getMergeDecision())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "合并建议已处理或不可操作");
         }
         return judgment;

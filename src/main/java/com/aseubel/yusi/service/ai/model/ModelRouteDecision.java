@@ -1,5 +1,7 @@
 package com.aseubel.yusi.service.ai.model;
 
+import com.aseubel.yusi.service.ai.model.constant.ModelRouteExclusionReason;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +37,7 @@ public record ModelRouteDecision(
                 .toList();
         List<ModelRouteCandidate> fallback = candidates.stream()
                 .filter(candidate -> candidate.available()
-                        && "fallback-tier".equals(candidate.excludedReason()))
+                        && ModelRouteExclusionReason.FALLBACK_TIER.code().equals(candidate.excludedReason()))
                 .toList();
         if (!primary.isEmpty()) {
             return concat(primary, fallback);

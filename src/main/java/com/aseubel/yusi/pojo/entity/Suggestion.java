@@ -1,6 +1,7 @@
 package com.aseubel.yusi.pojo.entity;
 
 import com.aseubel.yusi.common.utils.UuidUtils;
+import com.aseubel.yusi.pojo.constant.SuggestionStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -39,7 +40,7 @@ public class Suggestion {
     private String contactEmail;
 
     @Column(name = "status")
-    private String status = "PENDING";
+    private String status = SuggestionStatus.PENDING.code();
 
     @Column(name = "reply", columnDefinition = "TEXT")
     private String reply;

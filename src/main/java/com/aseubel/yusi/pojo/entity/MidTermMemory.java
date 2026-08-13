@@ -1,6 +1,7 @@
 package com.aseubel.yusi.pojo.entity;
 
 import jakarta.persistence.*;
+import com.aseubel.yusi.common.constant.SourceType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,7 +26,7 @@ public class MidTermMemory {
     /** 记忆来源，例如 CHAT_SUMMARY、DIARY 或 PLAZA。 */
     @Column(name = "source_type", nullable = false, length = 32)
     @Builder.Default
-    private String sourceType = "UNKNOWN";
+    private String sourceType = SourceType.UNKNOWN.code();
 
     /** 来源记录 ID，用于回到产生这条记忆的原始记录。 */
     @Column(name = "source_id", length = 128)

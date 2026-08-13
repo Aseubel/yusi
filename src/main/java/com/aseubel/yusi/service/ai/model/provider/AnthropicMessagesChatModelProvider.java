@@ -6,29 +6,27 @@ import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
 import com.aseubel.yusi.service.ai.model.ModelInvocationErrorClassifier;
 import com.aseubel.yusi.service.ai.model.ModelInvocationException;
 import com.aseubel.yusi.service.ai.model.ModelProtocol;
+import com.aseubel.yusi.service.ai.model.constant.ModelProviderType;
 import dev.langchain4j.model.anthropic.AnthropicChatModel;
 import dev.langchain4j.model.anthropic.AnthropicStreamingChatModel;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.Locale;
-import java.util.Set;
 
 @Component
 public class AnthropicMessagesChatModelProvider implements ChatModelProviderAdapter {
 
-    private static final Set<String> SUPPORTED_ALIASES = Set.of("anthropic");
-
     @Override
     public String providerId() {
-        return "anthropic";
+        return ModelProviderType.ANTHROPIC.canonicalCode();
     }
 
     @Override
     public boolean supports(ModelRoutingProperties.ModelDefinition definition) {
         String provider = definition.getProvider() == null
                 ? "" : definition.getProvider().trim().toLowerCase(Locale.ROOT);
-        return SUPPORTED_ALIASES.contains(provider)
+        return ModelProviderType.ANTHROPIC.aliases().contains(provider)
                 && ModelProtocol.normalize(definition.getProtocol()) == ModelProtocol.ANTHROPIC_MESSAGES;
     }
 

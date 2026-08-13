@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.ai.embedding;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.EmbeddingTask;
 import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.pojo.constant.KeyMode;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.EmbeddingTaskRepository;
 import com.aseubel.yusi.repository.UserRepository;
@@ -284,7 +285,7 @@ public class EmbeddingBatchService {
         }
 
         String keyMode = user.getKeyMode();
-        if (keyMode == null || "DEFAULT".equals(keyMode)) {
+        if (keyMode == null || KeyMode.DEFAULT.code().equals(keyMode)) {
             return true;
         }
 

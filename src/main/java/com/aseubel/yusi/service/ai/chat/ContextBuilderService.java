@@ -4,6 +4,7 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
+import com.aseubel.yusi.pojo.constant.ProactiveFrequency;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.pojo.entity.UserPersona;
@@ -198,7 +199,7 @@ public class ContextBuilderService {
         String personaInstruction = resolvePersonaInstruction(style);
         sb.append("        ").append("<style>").append(personaInstruction).append("</style>").append("\n");
 
-        if (!"off".equalsIgnoreCase(config.getProactiveFrequency())) {
+        if (ProactiveFrequency.fromCode(config.getProactiveFrequency()) != ProactiveFrequency.OFF) {
             sb.append("        ").append("<proactive>").append("你在合适的时机关心对方的状态，但始终保持舒适的距离感。")
                     .append("</proactive>").append("\n");
         }

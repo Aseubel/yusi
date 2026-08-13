@@ -7,6 +7,7 @@ import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.pojo.dto.key.DiaryReEncryptRequest;
 import com.aseubel.yusi.pojo.dto.key.KeyModeUpdateRequest;
 import com.aseubel.yusi.pojo.dto.key.KeySettingsResponse;
+import com.aseubel.yusi.pojo.constant.KeyMode;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.DiaryRepository;
@@ -37,9 +38,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class KeyManagementServiceImpl implements KeyManagementService {
 
-    private static final String KEY_MODE_DEFAULT = "DEFAULT";
-    private static final String KEY_MODE_CUSTOM = "CUSTOM";
-
     private final UserRepository userRepository;
     private final DiaryRepository diaryRepository;
     private final CryptoService cryptoService;
@@ -57,11 +55,11 @@ public class KeyManagementServiceImpl implements KeyManagementService {
         }
 
         KeySettingsResponse.KeySettingsResponseBuilder builder = KeySettingsResponse.builder()
-                .keyMode(user.getKeyMode() != null ? user.getKeyMode() : KEY_MODE_DEFAULT)
+                .keyMode(user.getKeyMode() != null ? user.getKeyMode() : KeyMode.DEFAULT.code())
                 .hasCloudBackup(user.getHasCloudBackup() != null ? user.getHasCloudBackup() : false)
                 .backupPublicKey(cryptoService.backupPublicKeySpkiBase64());
 
-        if (KEY_MODE_CUSTOM.equals(user.getKeyMode())) {
+        if (KeyMode.CUSTOM.code().equals(user.getKeyMode())) {
             builder.keySalt(user.getKeySalt());
         }
 
@@ -77,13 +75,13 @@ public class KeyManagementServiceImpl implements KeyManagementService {
         }
 
         String newMode = request.getKeyMode();
-        if (!KEY_MODE_DEFAULT.equals(newMode) && !KEY_MODE_CUSTOM.equals(newMode)) {
+        if (!KeyMode.DEFAULT.code().equals(newMode) && !KeyMode.CUSTOM.code().equals(newMode)) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "无效的密钥模式");
         }
 
         user.setKeyMode(newMode);
 
-        if (KEY_MODE_CUSTOM.equals(newMode)) {
+        if (KeyMode.CUSTOM.code().equals(newMode)) {
             // 自定义密钥模式
             user.setKeySalt(request.getKeySalt());
             user.setHasCloudBackup(request.getEnableCloudBackup() != null ? request.getEnableCloudBackup() : false);
@@ -116,7 +114,7 @@ public class KeyManagementServiceImpl implements KeyManagementService {
 
         List<Diary> diaries = diaryRepository.findAllByUserId(userId);
         String keyMode = user.getKeyMode();
-        if (keyMode == null || KEY_MODE_DEFAULT.equals(keyMode)) {
+        if (keyMode == null || KeyMode.DEFAULT.code().equals(keyMode)) {
             byte[] serverKey = cryptoService.serverAesKeyBytes();
             diaries.forEach(d -> {
                 if (d != null && d.getContent() != null && !Boolean.TRUE.equals(d.getClientEncrypted())) {
@@ -148,7 +146,7 @@ public class KeyManagementServiceImpl implements KeyManagementService {
                 continue;
             }
 
-            if (KEY_MODE_DEFAULT.equals(request.getNewKeyMode())) {
+            if (KeyMode.DEFAULT.code().equals(request.getNewKeyMode())) {
                 diary.setClientEncrypted(false);
                 String plain = reEncrypted.getEncryptedContent();
                 diary.setContent(

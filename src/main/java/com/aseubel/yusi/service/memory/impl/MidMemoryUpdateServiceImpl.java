@@ -1,6 +1,8 @@
 package com.aseubel.yusi.service.memory.impl;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.constant.SourceType;
+import com.aseubel.yusi.pojo.constant.MidMemoryCategory;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
@@ -48,13 +50,13 @@ public class MidMemoryUpdateServiceImpl implements MidMemoryUpdateService {
     @Override
     @Transactional
     public void appendSnapshot(String userId, String summary, Double importance) {
-        appendSnapshot(userId, summary, importance, "EVENT_OR_PLAN");
+        appendSnapshot(userId, summary, importance, MidMemoryCategory.EVENT_OR_PLAN.code());
     }
 
     @Override
     @Transactional
     public void appendSnapshot(String userId, String summary, Double importance, String category) {
-        appendSnapshot(userId, summary, importance, category, "UNKNOWN", null);
+        appendSnapshot(userId, summary, importance, category, SourceType.UNKNOWN.code(), null);
     }
 
     @Override
@@ -66,9 +68,9 @@ public class MidMemoryUpdateServiceImpl implements MidMemoryUpdateService {
         }
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime validUntil;
-        if ("EMOTION_OR_STATE".equalsIgnoreCase(category)) {
+        if (MidMemoryCategory.EMOTION_OR_STATE.code().equalsIgnoreCase(category)) {
             validUntil = now.plusDays(14);
-        } else if ("PREFERENCE_OR_HABIT".equalsIgnoreCase(category)) {
+        } else if (MidMemoryCategory.PREFERENCE_OR_HABIT.code().equalsIgnoreCase(category)) {
             validUntil = now.plusDays(180);
         } else {
             validUntil = now.plusDays(30); // Default for EVENT_OR_PLAN and others
@@ -76,7 +78,7 @@ public class MidMemoryUpdateServiceImpl implements MidMemoryUpdateService {
 
         midTermMemoryRepository.save(MidTermMemory.builder()
                 .userId(userId)
-                .sourceType(StrUtil.blankToDefault(sourceType, "UNKNOWN"))
+                .sourceType(StrUtil.blankToDefault(sourceType, SourceType.UNKNOWN.code()))
                 .sourceId(StrUtil.isBlank(sourceId) ? null : sourceId.trim())
                 .summary(summary)
                 .importance(importance != null ? importance : 0.5)

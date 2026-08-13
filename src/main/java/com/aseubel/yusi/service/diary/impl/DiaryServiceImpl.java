@@ -5,11 +5,15 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.aseubel.yusi.common.event.DiaryChangedEvent;
 import com.aseubel.yusi.common.event.DiaryCognitionIngestEvent;
+import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
 import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
+import com.aseubel.yusi.pojo.constant.KeyMode;
+import com.aseubel.yusi.pojo.constant.DiaryAttachmentAnchorKind;
+import com.aseubel.yusi.pojo.constant.DiaryAttachmentType;
 import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentAnchor;
 import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentBinding;
 import com.aseubel.yusi.pojo.entity.Diary;
@@ -109,11 +113,11 @@ public class DiaryServiceImpl implements DiaryService {
         }
 
         String keyMode = user.getKeyMode();
-        if (keyMode == null || "DEFAULT".equals(keyMode)) {
+        if (keyMode == null || KeyMode.DEFAULT.code().equals(keyMode)) {
             return AesGcmCryptoUtils.decryptText(diary.getContent(), cryptoService.serverAesKeyBytes());
         }
 
-        if ("CUSTOM".equals(keyMode)) {
+        if (KeyMode.CUSTOM.code().equals(keyMode)) {
             if (!Boolean.TRUE.equals(user.getHasCloudBackup())) {
                 return null;
             }
@@ -277,7 +281,7 @@ public class DiaryServiceImpl implements DiaryService {
         if (diary == null) {
             return;
         }
-        if (user == null || user.getKeyMode() == null || "DEFAULT".equals(user.getKeyMode())) {
+        if (user == null || user.getKeyMode() == null || KeyMode.DEFAULT.code().equals(user.getKeyMode())) {
             diary.setClientEncrypted(false);
             String plain = diary.getContent();
             diary.setPlainContent(plain);
@@ -286,7 +290,7 @@ public class DiaryServiceImpl implements DiaryService {
             }
             return;
         }
-        if ("CUSTOM".equals(user.getKeyMode())) {
+            if (KeyMode.CUSTOM.code().equals(user.getKeyMode())) {
             diary.setClientEncrypted(true);
         }
     }
@@ -379,11 +383,11 @@ public class DiaryServiceImpl implements DiaryService {
         List<DiaryAttachmentBinding> bindings = parseAttachmentBindingsForWrite(diary.getAttachmentBindingsJson());
         Set<String> imageKeySet = new HashSet<>(imageObjectKeys);
         for (DiaryAttachmentBinding binding : bindings) {
-            if ("IMAGE".equals(binding.getType())) {
+            if (DiaryAttachmentType.IMAGE.code().equals(binding.getType())) {
                 if (!imageKeySet.contains(binding.getObjectKey())) {
                     throw new BusinessException(ErrorCode.PARAM_ERROR, "图片绑定必须引用当前日记附件");
                 }
-            } else if ("AUDIO".equals(binding.getType())) {
+            } else if (DiaryAttachmentType.AUDIO.code().equals(binding.getType())) {
                 ossService.validateOwnedAudioObjectKey(binding.getObjectKey(), diary.getUserId());
             }
         }
@@ -434,7 +438,7 @@ public class DiaryServiceImpl implements DiaryService {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "日记附件绑定数据不完整");
             }
             String type = binding.getType().trim().toUpperCase(Locale.ROOT);
-            if (!"IMAGE".equals(type) && !"AUDIO".equals(type)) {
+            if (DiaryAttachmentType.fromCode(type) == null) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "暂不支持的日记附件类型");
             }
             int sortOrder = binding.getSortOrder() == null ? index : binding.getSortOrder();
@@ -477,14 +481,15 @@ public class DiaryServiceImpl implements DiaryService {
         if (anchor == null) {
             return null;
         }
-        if (StrUtil.isBlank(anchor.getKind()) || !"TEXT_RANGE".equalsIgnoreCase(anchor.getKind())
+        if (StrUtil.isBlank(anchor.getKind())
+                || !DiaryAttachmentAnchorKind.TEXT_RANGE.code().equalsIgnoreCase(anchor.getKind())
                 || anchor.getStart() == null || anchor.getEnd() == null
                 || anchor.getStart() < 0 || anchor.getEnd() <= anchor.getStart()
                 || StrUtil.isBlank(anchor.getQuote())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "日记附件文字定位数据不合法");
         }
         return DiaryAttachmentAnchor.builder()
-                .kind("TEXT_RANGE")
+                .kind(DiaryAttachmentAnchorKind.TEXT_RANGE.code())
                 .start(anchor.getStart())
                 .end(anchor.getEnd())
                 .quote(anchor.getQuote())
@@ -508,7 +513,7 @@ public class DiaryServiceImpl implements DiaryService {
     }
 
     private String generateAttachmentUrl(DiaryAttachmentBinding binding, String userId) {
-        if ("IMAGE".equals(binding.getType())) {
+        if (DiaryAttachmentType.IMAGE.code().equals(binding.getType())) {
             return ossService.generateOwnedUrl(binding.getObjectKey(), userId);
         }
         return ossService.generateOwnedAudioUrl(binding.getObjectKey(), userId);
@@ -535,7 +540,7 @@ public class DiaryServiceImpl implements DiaryService {
         }
         eventPublisher.publishEvent(new DiaryCognitionIngestEvent(this, CognitionIngestCommand.builder()
                 .userId(diary.getUserId())
-                .sourceType("DIARY")
+                .sourceType(SourceType.DIARY.code())
                 .sourceId(diary.getDiaryId())
                 .maskedText(maskedText)
                 .title(diary.getTitle())

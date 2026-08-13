@@ -6,6 +6,7 @@ import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
 import com.aseubel.yusi.service.ai.model.ModelInvocationErrorClassifier;
 import com.aseubel.yusi.service.ai.model.ModelInvocationException;
 import com.aseubel.yusi.service.ai.model.ModelProtocol;
+import com.aseubel.yusi.service.ai.model.constant.ModelProviderType;
 import dev.langchain4j.http.client.HttpClientBuilderLoader;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
@@ -20,12 +21,9 @@ import java.util.Set;
 @Component
 public class OpenAiCompatibleChatModelProvider implements ChatModelProviderAdapter {
 
-    private static final Set<String> SUPPORTED_ALIASES = Set.of(
-            "openai", "openai-compatible", "deepseek", "dashscope");
-
     @Override
     public String providerId() {
-        return "openai-compatible";
+        return ModelProviderType.OPENAI_COMPATIBLE.canonicalCode();
     }
 
     @Override
@@ -33,7 +31,7 @@ public class OpenAiCompatibleChatModelProvider implements ChatModelProviderAdapt
         String provider = definition.getProvider() == null
                 ? "" : definition.getProvider().trim().toLowerCase(Locale.ROOT);
         ModelProtocol protocol = ModelProtocol.normalize(definition.getProtocol());
-        return SUPPORTED_ALIASES.contains(provider)
+        return ModelProviderType.OPENAI_COMPATIBLE.aliases().contains(provider)
                 && (protocol == ModelProtocol.CHAT_COMPLETIONS || protocol == ModelProtocol.RESPONSES);
     }
 

@@ -6,6 +6,7 @@ import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.LifeGraphTask;
 import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.pojo.constant.KeyMode;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.LifeGraphTaskRepository;
 import com.aseubel.yusi.repository.UserRepository;
@@ -136,11 +137,11 @@ public class LifeGraphTaskBatchService {
         }
 
         String keyMode = user.getKeyMode();
-        if (keyMode == null || "DEFAULT".equals(keyMode)) {
+        if (keyMode == null || KeyMode.DEFAULT.code().equals(keyMode)) {
             return AesGcmCryptoUtils.decryptText(diary.getContent(), cryptoService.serverAesKeyBytes());
         }
 
-        if ("CUSTOM".equals(keyMode)) {
+        if (KeyMode.CUSTOM.code().equals(keyMode)) {
             if (!Boolean.TRUE.equals(user.getHasCloudBackup())) {
                 return null;
             }

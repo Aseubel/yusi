@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.lifegraph;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntityAlias;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntityEvidence;
@@ -16,6 +17,7 @@ import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.aseubel.yusi.service.lifegraph.constant.LifeGraphRelationType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -46,8 +48,10 @@ import java.util.stream.Collectors;
 public class LifeGraphQueryService {
 
     private static final Set<String> LANGUAGE_ONLY_RELATIONS = Set.of(
-            "MENTIONED", "MENTIONED_IN", "SAID", "RELATED_TO");
-    private static final Set<String> AUTOMATIC_SOURCE_TYPES = Set.of("DIARY", "PLAZA");
+            LifeGraphRelationType.MENTIONED.code(), LifeGraphRelationType.MENTIONED_IN.code(),
+            LifeGraphRelationType.SAID.code(), LifeGraphRelationType.RELATED_TO.code());
+    private static final Set<String> AUTOMATIC_SOURCE_TYPES = Set.of(
+            SourceType.DIARY.code(), SourceType.PLAZA.code());
     private static final double MIN_EVIDENCE_CONFIDENCE = 0.6;
 
     private final LifeGraphEntityRepository entityRepository;
@@ -319,8 +323,8 @@ public class LifeGraphQueryService {
                 if (StrUtil.isBlank(mention.getDiaryId())) {
                     continue;
                 }
-                sources.putIfAbsent(sourceKey(entityId, "DIARY", mention.getDiaryId()),
-                        new EntitySource(entityId, "DIARY", mention.getDiaryId(), mention.getEntryDate()));
+                sources.putIfAbsent(sourceKey(entityId, SourceType.DIARY.code(), mention.getDiaryId()),
+                        new EntitySource(entityId, SourceType.DIARY.code(), mention.getDiaryId(), mention.getEntryDate()));
                 if (sources.size() >= maxSources) {
                     return new ArrayList<>(sources.values());
                 }

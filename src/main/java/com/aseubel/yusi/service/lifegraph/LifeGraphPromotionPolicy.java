@@ -1,6 +1,9 @@
 package com.aseubel.yusi.service.lifegraph;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
+import com.aseubel.yusi.service.lifegraph.constant.LifeGraphConstants;
+import com.aseubel.yusi.service.lifegraph.constant.LifeGraphRelationType;
 import com.aseubel.yusi.service.lifegraph.dto.LifeGraphExtractionResult;
 import org.springframework.stereotype.Component;
 
@@ -24,25 +27,14 @@ import java.util.Set;
 @Component
 public class LifeGraphPromotionPolicy {
 
-    public static final String USER_KEY = "__user__";
     public static final double MIN_RELATION_CONFIDENCE = 0.6;
 
-    private static final Set<String> SUPPORTED_TYPES = Set.of(
-            "PERSON", "EVENT", "PLACE", "EMOTION", "TOPIC", "ITEM", "WORK", "USER");
-
-    private static final Set<String> PERSON_RELATIONS = Set.of(
-            "PARTNER_OF", "FAMILY_OF", "FRIEND_OF", "COLLEAGUE_OF",
-            "MENTOR_OF", "SIBLING_OF", "PARENT_OF", "CHILD_OF");
-
-    private static final Set<String> VALUE_RELATIONS = Set.of(
-            "LIKES", "DISLIKES", "BOUGHT_FOR", "PARTICIPATED_IN", "EXPERIENCED",
-            "HAPPENED_AT", "TRIGGERED", "WORKED_AT", "LIVED_AT", "CARED_FOR",
-            "HAS_BIRTHDAY", "HAS_IMPORTANT_EVENT", "VISITED", "ATTENDED");
-
-    private static final Set<String> USER_TO_PERSON_ACTIONS = Set.of("BOUGHT_FOR", "CARED_FOR");
-
-    private static final Set<String> REJECTED_RELATIONS = Set.of(
-            "MENTIONED", "MENTIONED_IN", "SAID", "RELATED_TO");
+    private static final Set<String> SUPPORTED_TYPES = supportedEntityTypes();
+    private static final Set<String> PERSON_RELATIONS = relationCodes(RelationGroup.PERSON);
+    private static final Set<String> VALUE_RELATIONS = relationCodes(RelationGroup.VALUE);
+    private static final Set<String> USER_TO_PERSON_ACTIONS = Set.of(
+            LifeGraphRelationType.BOUGHT_FOR.code(), LifeGraphRelationType.CARED_FOR.code());
+    private static final Set<String> REJECTED_RELATIONS = relationCodes(RelationGroup.REJECTED);
 
     public PromotionResult promote(LifeGraphExtractionResult extraction,
                                    Set<String> confirmedImportantPersonKeys) {
@@ -81,9 +73,10 @@ public class LifeGraphPromotionPolicy {
         // a new important person.
         for (LifeGraphExtractionResult.ExtractedRelation relation : safeRelations(extraction)) {
             String type = normalizeRelationType(relation.getType());
+            LifeGraphRelationType relationType = LifeGraphRelationType.fromCode(type);
             String source = normalizeKey(relation.getSource(), null);
             String target = normalizeKey(relation.getTarget(), null);
-            if (!PERSON_RELATIONS.contains(type)
+            if (relationType == null || !relationType.isPersonRelation()
                     || !hasEvidence(relation)
                     || !hasSufficientConfidence(relation)
                     || source == null
@@ -108,10 +101,11 @@ public class LifeGraphPromotionPolicy {
         // automatically introduce another Person node.
         for (LifeGraphExtractionResult.ExtractedRelation relation : safeRelations(extraction)) {
             String type = normalizeRelationType(relation.getType());
+            LifeGraphRelationType relationType = LifeGraphRelationType.fromCode(type);
             String source = normalizeKey(relation.getSource(), null);
             String target = normalizeKey(relation.getTarget(), null);
-            if (!VALUE_RELATIONS.contains(type)
-                    || REJECTED_RELATIONS.contains(type)
+            if (relationType == null || !relationType.isValueRelation()
+                    || relationType.isRejectedForAutomaticGraph()
                     || !hasEvidence(relation)
                     || !hasSufficientConfidence(relation)
                     || source == null
@@ -127,7 +121,7 @@ public class LifeGraphPromotionPolicy {
             String otherKey = sourceIsPerson || sourceIsUser ? target : source;
             LifeGraphExtractionResult.ExtractedEntity other = entities.get(otherKey);
 
-            boolean otherIsPerson = other != null && "PERSON".equalsIgnoreCase(other.getType());
+            boolean otherIsPerson = isPerson(other);
             boolean allowedUserPersonAction = USER_TO_PERSON_ACTIONS.contains(type)
                     && sourceIsUser
                     && importantPersons.contains(target)
@@ -162,7 +156,15 @@ public class LifeGraphPromotionPolicy {
     }
 
     public boolean isSupportedType(String type) {
-        return type != null && SUPPORTED_TYPES.contains(type.trim().toUpperCase(Locale.ROOT));
+        if (type == null) {
+            return false;
+        }
+        for (LifeGraphEntity.EntityType entityType : LifeGraphEntity.EntityType.values()) {
+            if (entityType.name().equalsIgnoreCase(type.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public Set<String> supportedTypes() {
@@ -188,7 +190,7 @@ public class LifeGraphPromotionPolicy {
         }
         String normalized = candidate.trim().replaceAll("\\s+", "").toLowerCase(Locale.ROOT);
         if ("我".equals(normalized) || "用户".equals(normalized) || "__user__".equals(normalized)) {
-            return USER_KEY;
+            return LifeGraphConstants.USER_ENTITY_NORM;
         }
         return normalized;
     }
@@ -203,11 +205,12 @@ public class LifeGraphPromotionPolicy {
     }
 
     private boolean isPerson(LifeGraphExtractionResult.ExtractedEntity entity) {
-        return isSupportedEntity(entity) && "PERSON".equalsIgnoreCase(entity.getType());
+        return isSupportedEntity(entity)
+                && LifeGraphEntity.EntityType.Person.name().equalsIgnoreCase(entity.getType());
     }
 
     private boolean isUserKey(String key) {
-        return USER_KEY.equals(normalizeKey(key, null));
+        return LifeGraphConstants.USER_ENTITY_NORM.equals(normalizeKey(key, null));
     }
 
     private boolean hasEvidence(LifeGraphExtractionResult.ExtractedRelation relation) {
@@ -235,6 +238,32 @@ public class LifeGraphPromotionPolicy {
 
     private String normalizeRelationType(String type) {
         return type == null ? "" : type.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private static Set<String> supportedEntityTypes() {
+        Set<String> types = new LinkedHashSet<>();
+        for (LifeGraphEntity.EntityType type : LifeGraphEntity.EntityType.values()) {
+            types.add(type.name().toUpperCase(Locale.ROOT));
+        }
+        return Collections.unmodifiableSet(types);
+    }
+
+    private static Set<String> relationCodes(RelationGroup group) {
+        Set<String> codes = new LinkedHashSet<>();
+        for (LifeGraphRelationType relationType : LifeGraphRelationType.values()) {
+            if ((group == RelationGroup.PERSON && relationType.isPersonRelation())
+                    || (group == RelationGroup.VALUE && relationType.isValueRelation())
+                    || (group == RelationGroup.REJECTED && relationType.isRejectedForAutomaticGraph())) {
+                codes.add(relationType.code());
+            }
+        }
+        return Collections.unmodifiableSet(codes);
+    }
+
+    private enum RelationGroup {
+        PERSON,
+        VALUE,
+        REJECTED
     }
 
     public record PromotionResult(

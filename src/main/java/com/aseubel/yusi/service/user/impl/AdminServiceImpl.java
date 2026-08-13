@@ -8,6 +8,7 @@ import com.aseubel.yusi.pojo.dto.admin.ScenarioAuditRequest;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
 import com.aseubel.yusi.pojo.entity.User;
+import com.aseubel.yusi.pojo.constant.SuggestionStatus;
 import com.aseubel.yusi.pojo.dto.admin.AdminUserResponse;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.SituationRoomRepository;
@@ -55,7 +56,7 @@ public class AdminServiceImpl implements AdminService {
                 .totalDiaries(diaryRepository.count())
                 .totalRooms(situationRoomRepository.count())
                 .pendingScenarios(situationScenarioRepository.findByStatus(0).size())
-                .pendingSuggestions(suggestionRepository.countByStatus("PENDING"))
+                .pendingSuggestions(suggestionRepository.countByStatus(SuggestionStatus.PENDING.code()))
                 .activeUsersToday(interfaceDailyUsageRepository.countDistinctUsersByUsageDateBetween(today, today))
                 .activeUsers7d(interfaceDailyUsageRepository.countDistinctUsersByUsageDateBetween(today.minusDays(6), today))
                 .activeUsers30d(interfaceDailyUsageRepository.countDistinctUsersByUsageDateBetween(today.minusDays(29), today))

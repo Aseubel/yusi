@@ -1,6 +1,8 @@
 package com.aseubel.yusi.service.agent.impl;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.pojo.constant.AgentPersonaStyle;
+import com.aseubel.yusi.pojo.constant.ProactiveFrequency;
 import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.pojo.entity.User;
@@ -112,11 +114,12 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
     }
 
     private boolean shouldConsiderGreeting(AgentPersonaConfig config) {
-        return config != null && !"off".equalsIgnoreCase(config.getProactiveFrequency());
+        return config != null
+                && ProactiveFrequency.fromCode(config.getProactiveFrequency()) != ProactiveFrequency.OFF;
     }
 
     private boolean recentlyGreeted(String userId, AgentPersonaConfig config) {
-        int days = "normal".equalsIgnoreCase(config.getProactiveFrequency()) ? 3 : 7;
+        int days = ProactiveFrequency.fromCode(config.getProactiveFrequency()) == ProactiveFrequency.NORMAL ? 3 : 7;
         LocalDateTime since = LocalDateTime.now().minusDays(days);
         List<UserNotification> recentGreetings = notificationRepository
                 .findByUserIdAndTypeAndCreatedAtAfterOrderByCreatedAtDescIdDesc(
@@ -206,10 +209,10 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
 
     private String buildGreetingMessage(User user, AgentPersonaConfig config) {
         String userName = StrUtil.blankToDefault(user.getUserName(), "朋友");
-        return switch (config.getPersonalityStyle()) {
-            case "lively" -> "嘿 " + userName + "，好久不见！最近过得怎么样？有空来聊聊吧~";
-            case "calm" -> userName + "，有一阵子没见了。任何时候你想说话，我都在。";
-            case "rational" -> "最近有些新的想法可能对你有帮助，" + userName + "。有空时我们聊聊。";
+        return switch (AgentPersonaStyle.fromCode(config.getPersonalityStyle())) {
+            case LIVELY -> "嘿 " + userName + "，好久不见！最近过得怎么样？有空来聊聊吧~";
+            case CALM -> userName + "，有一阵子没见了。任何时候你想说话，我都在。";
+            case RATIONAL -> "最近有些新的想法可能对你有帮助，" + userName + "。有空时我们聊聊。";
             default -> userName + "，最近还好吗？有些话想和你说，不急，等你准备好了。";
         };
     }

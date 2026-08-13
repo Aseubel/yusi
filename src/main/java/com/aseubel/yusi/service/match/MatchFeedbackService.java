@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.match;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.pojo.constant.MatchFeedbackAction;
 import com.aseubel.yusi.pojo.entity.MatchFeedback;
 import com.aseubel.yusi.pojo.entity.SoulConnection;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
@@ -40,13 +41,13 @@ public class MatchFeedbackService {
         if (interactionDepth < 0) {
             return;
         }
-        recordFeedback(matchId, userId, "INTERACT", interactionDepth);
+        recordFeedback(matchId, userId, MatchFeedbackAction.INTERACT.code(), interactionDepth);
     }
 
     /** 记录举报信号，供后续精排排除高风险匹配。 */
     @Transactional
     public void recordReport(Long matchId, String userId) {
-        recordFeedback(matchId, userId, "REPORT");
+        recordFeedback(matchId, userId, MatchFeedbackAction.REPORT.code());
     }
 
     /**
@@ -92,11 +93,11 @@ public class MatchFeedbackService {
             return null;
         }
 
-        long acceptCount = recentFeedback.stream().filter(f -> "ACCEPT".equals(f.getAction())).count();
-        long skipCount = recentFeedback.stream().filter(f -> "SKIP".equals(f.getAction())).count();
-        long reportCount = recentFeedback.stream().filter(f -> "REPORT".equals(f.getAction())).count();
+        long acceptCount = recentFeedback.stream().filter(f -> MatchFeedbackAction.ACCEPT.code().equals(f.getAction())).count();
+        long skipCount = recentFeedback.stream().filter(f -> MatchFeedbackAction.SKIP.code().equals(f.getAction())).count();
+        long reportCount = recentFeedback.stream().filter(f -> MatchFeedbackAction.REPORT.code().equals(f.getAction())).count();
         int interactionDepth = recentFeedback.stream()
-                .filter(f -> "INTERACT".equals(f.getAction()))
+                .filter(f -> MatchFeedbackAction.INTERACT.code().equals(f.getAction()))
                 .map(MatchFeedback::getInteractionDepth)
                 .filter(java.util.Objects::nonNull)
                 .mapToInt(Integer::intValue)
@@ -128,13 +129,14 @@ public class MatchFeedbackService {
      * 检查用户是否有强负面信号（如举报），精排时应排除类似候选人。
      */
     public boolean hasStrongNegativeSignal(String userId) {
-        return feedbackRepository.countByUserIdAndAction(userId, "REPORT") > 0;
+        return feedbackRepository.countByUserIdAndAction(userId, MatchFeedbackAction.REPORT.code()) > 0;
     }
 
     /** 举报、拉黑或明确不继续时，后续不得重新推荐同一对象。 */
     public boolean hasStrongNegativeSignal(Long matchId) {
         return matchId != null && feedbackRepository.countByMatchIdAndActionIn(matchId,
-                List.of("REPORT", "UNSAFE", "BLOCK", "DO_NOT_CONTINUE")) > 0;
+                List.of(MatchFeedbackAction.REPORT.code(), MatchFeedbackAction.UNSAFE.code(),
+                        MatchFeedbackAction.BLOCK.code(), MatchFeedbackAction.DO_NOT_CONTINUE.code())) > 0;
     }
 
     /** 只有双方都明确反馈互动很深，才进入双向共鸣状态。 */
@@ -142,7 +144,7 @@ public class MatchFeedbackService {
         if (connection == null || connection.getId() == null || match == null) {
             return false;
         }
-        List<String> deepInteraction = List.of("DEEP_INTERACTION");
+        List<String> deepInteraction = List.of(MatchFeedbackAction.DEEP_INTERACTION.code());
         return feedbackRepository.existsByConnectionIdAndUserIdAndActionIn(
                         connection.getId(), match.getUserAId(), deepInteraction)
                 && feedbackRepository.existsByConnectionIdAndUserIdAndActionIn(

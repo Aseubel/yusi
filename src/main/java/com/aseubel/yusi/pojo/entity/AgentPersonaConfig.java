@@ -1,6 +1,8 @@
 package com.aseubel.yusi.pojo.entity;
 
 import jakarta.persistence.*;
+import com.aseubel.yusi.pojo.constant.AgentPersonaStyle;
+import com.aseubel.yusi.pojo.constant.ProactiveFrequency;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -42,12 +44,12 @@ public class AgentPersonaConfig {
     /** 人格风格：gentle（温柔知己，默认）/ lively（活泼陪伴）/ calm（沉静倾听）/ rational（理性分析） */
     @Column(name = "personality_style", length = 32)
     @Builder.Default
-    private String personalityStyle = "gentle";
+    private String personalityStyle = AgentPersonaStyle.GENTLE.code();
 
     /** 主动问候频率：off / low（每周最多1次）/ normal（每周最多2次） */
     @Column(name = "proactive_frequency", length = 16)
     @Builder.Default
-    private String proactiveFrequency = "low";
+    private String proactiveFrequency = ProactiveFrequency.LOW.code();
 
     /** 静默时段开始（HH:mm），此期间不发送主动通知，null 表示不限 */
     @Column(name = "quiet_hours_start", length = 8)

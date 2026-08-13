@@ -1,6 +1,7 @@
 package com.aseubel.yusi.pojo.entity;
 
 import java.math.BigDecimal;
+import com.aseubel.yusi.service.lifegraph.constant.LifeGraphMergeStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -84,7 +85,7 @@ public class LifeGraphMergeJudgment {
      */
     @Column(name = "status", nullable = false, length = 16)
     @Builder.Default
-    private String status = "PENDING";
+    private String status = LifeGraphMergeStatus.PENDING.code();
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -101,7 +102,7 @@ public class LifeGraphMergeJudgment {
             updatedAt = LocalDateTime.now();
         }
         if (status == null) {
-            status = "PENDING";
+            status = LifeGraphMergeStatus.PENDING.code();
         }
     }
 }

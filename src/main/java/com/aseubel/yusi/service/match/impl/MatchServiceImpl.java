@@ -3,6 +3,9 @@ package com.aseubel.yusi.service.match.impl;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.pojo.constant.MatchAction;
+import com.aseubel.yusi.pojo.constant.MatchFeedbackAction;
+import com.aseubel.yusi.pojo.constant.SoulConnectionReason;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.match.MatchRecommendationResponse;
@@ -79,7 +82,8 @@ public class MatchServiceImpl implements MatchService {
     private static final int SKIP_COOLDOWN_DAYS = 30;
     private static final int MAX_HISTORY_PENALTY = 18;
     private static final Set<String> CONNECTION_FEEDBACK_CATEGORIES = Set.of(
-            "LIKE", "DEEP_INTERACTION", "DO_NOT_CONTINUE");
+            MatchFeedbackAction.LIKE.code(), MatchFeedbackAction.DEEP_INTERACTION.code(),
+            MatchFeedbackAction.DO_NOT_CONTINUE.code());
 
     private final UserService userService;
     private final SoulMatchRepository soulMatchRepository;
@@ -684,16 +688,19 @@ public class MatchServiceImpl implements MatchService {
     @UpdateCache(key = "'match:status:' + #userId", evictOnly = true)
     @Transactional
     public MatchRecommendationResponse handleMatchAction(String userId, Long matchId, Integer action) {
-        if (!Integer.valueOf(1).equals(action) && !Integer.valueOf(2).equals(action)) {
+        MatchAction matchAction = MatchAction.fromApiCode(action);
+        if (matchAction == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "匹配动作不合法");
         }
         SoulMatch match = requireMatch(matchId, userId);
         boolean isUserA = userId.equals(match.getUserAId());
         Integer currentStatus = isUserA ? match.getStatusA() : match.getStatusB();
-        if (Integer.valueOf(2).equals(currentStatus) && Integer.valueOf(1).equals(action)) {
+        if (Integer.valueOf(MatchAction.SKIPPED.apiCode()).equals(currentStatus)
+                && matchAction == MatchAction.INTERESTED) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "已拒绝的推荐不能恢复");
         }
-        if (Integer.valueOf(2).equals(currentStatus) && Integer.valueOf(2).equals(action)) {
+        if (Integer.valueOf(MatchAction.SKIPPED.apiCode()).equals(currentStatus)
+                && matchAction == MatchAction.SKIPPED) {
             return toRecommendationResponse(userId, match);
         }
 
@@ -704,17 +711,18 @@ public class MatchServiceImpl implements MatchService {
         }
 
         // Check for match
-        if (Integer.valueOf(1).equals(match.getStatusA()) && Integer.valueOf(1).equals(match.getStatusB())) {
+        if (Integer.valueOf(MatchAction.INTERESTED.apiCode()).equals(match.getStatusA())
+                && Integer.valueOf(MatchAction.INTERESTED.apiCode()).equals(match.getStatusB())) {
             match.setIsMatched(true);
         }
 
         match.setUpdateTime(LocalDateTime.now());
         SoulMatch saved = soulMatchRepository.save(match);
-        SoulConnection connection = Integer.valueOf(1).equals(action)
+        SoulConnection connection = matchAction == MatchAction.INTERESTED
                 ? connectionLifecycleService.accept(saved, userId)
-                : connectionLifecycleService.decline(saved, userId, "USER_DECLINED");
+                : connectionLifecycleService.decline(saved, userId, SoulConnectionReason.USER_DECLINED.code());
 
-        String feedbackAction = Integer.valueOf(1).equals(action) ? "ACCEPT" : "SKIP";
+        String feedbackAction = matchAction.feedbackCode();
         matchFeedbackService.recordConnectionFeedback(connection != null ? connection.getId() : null,
                 saved.getId(), userId, feedbackAction);
 
@@ -734,11 +742,11 @@ public class MatchServiceImpl implements MatchService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "当前连接已结束，无法提交反馈");
         }
 
-        if ("DO_NOT_CONTINUE".equals(normalizedCategory)) {
+        if (MatchFeedbackAction.DO_NOT_CONTINUE.code().equals(normalizedCategory)) {
             connection = connectionLifecycleService.end(match, userId, normalizedCategory);
         }
         matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId, normalizedCategory);
-        if ("DEEP_INTERACTION".equals(normalizedCategory)
+        if (MatchFeedbackAction.DEEP_INTERACTION.code().equals(normalizedCategory)
                 && matchFeedbackService.hasMutualDeepInteraction(connection, match)) {
             connection = connectionLifecycleService.markMutualResonance(match, userId);
         }
@@ -752,8 +760,9 @@ public class MatchServiceImpl implements MatchService {
     public MatchRecommendationResponse endConnection(String userId, Long matchId, String reasonCategory) {
         SoulMatch match = requireMatch(matchId, userId);
         SoulConnection connection = connectionLifecycleService.end(match, userId,
-                StrUtil.blankToDefault(reasonCategory, "USER_ENDED"));
-        matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId, "DO_NOT_CONTINUE");
+                StrUtil.blankToDefault(reasonCategory, SoulConnectionReason.USER_ENDED.code()));
+        matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId,
+                MatchFeedbackAction.DO_NOT_CONTINUE.code());
         return toRecommendationResponse(userId, match);
     }
 
@@ -764,8 +773,9 @@ public class MatchServiceImpl implements MatchService {
     public MatchRecommendationResponse reportConnection(String userId, Long matchId, String reasonCategory) {
         SoulMatch match = requireMatch(matchId, userId);
         SoulConnection connection = connectionLifecycleService.report(match, userId,
-                StrUtil.blankToDefault(reasonCategory, "UNSAFE"));
-        matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId, "REPORT");
+                StrUtil.blankToDefault(reasonCategory, SoulConnectionReason.UNSAFE.code()));
+        matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId,
+                MatchFeedbackAction.REPORT.code());
         return toRecommendationResponse(userId, match);
     }
 
@@ -776,8 +786,9 @@ public class MatchServiceImpl implements MatchService {
     public MatchRecommendationResponse blockConnection(String userId, Long matchId, String reasonCategory) {
         SoulMatch match = requireMatch(matchId, userId);
         SoulConnection connection = connectionLifecycleService.block(match, userId,
-                StrUtil.blankToDefault(reasonCategory, "USER_BLOCKED"));
-        matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId, "BLOCK");
+                StrUtil.blankToDefault(reasonCategory, SoulConnectionReason.USER_BLOCKED.code()));
+        matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId,
+                MatchFeedbackAction.BLOCK.code());
         return toRecommendationResponse(userId, match);
     }
 

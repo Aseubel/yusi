@@ -1,6 +1,7 @@
 package com.aseubel.yusi.pojo.entity;
 
 import jakarta.persistence.*;
+import com.aseubel.yusi.common.constant.SourceType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -76,7 +77,7 @@ public class UserPersona {
      */
     @Column(name = "source_type", nullable = false, length = 32)
     @Builder.Default
-    private String sourceType = "UNKNOWN";
+    private String sourceType = SourceType.UNKNOWN.code();
 
     /**
      * 来源记录 ID。

@@ -1,6 +1,8 @@
 package com.aseubel.yusi.service.memory;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.constant.LifecycleStatus;
+import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.memory.MemoryCenterItem;
@@ -39,11 +41,11 @@ public class MidTermMemoryLifecycleService {
         List<MemoryCenterItem> items = memories.stream().map(memory -> toItem(userId, memory, now)).toList();
         return MemoryCenterResponse.builder()
                 .memories(items)
-                .activeCount(items.stream().filter(item -> "ACTIVE".equals(item.getLifecycleStatus())).count())
-                .hiddenCount(items.stream().filter(item -> "HIDDEN".equals(item.getLifecycleStatus())).count())
-                .expiredCount(items.stream().filter(item -> "EXPIRED".equals(item.getLifecycleStatus())).count())
+                .activeCount(items.stream().filter(item -> LifecycleStatus.ACTIVE.code().equals(item.getLifecycleStatus())).count())
+                .hiddenCount(items.stream().filter(item -> LifecycleStatus.HIDDEN.code().equals(item.getLifecycleStatus())).count())
+                .expiredCount(items.stream().filter(item -> LifecycleStatus.EXPIRED.code().equals(item.getLifecycleStatus())).count())
                 .matchableCount(items.stream()
-                        .filter(item -> "ACTIVE".equals(item.getLifecycleStatus())
+                        .filter(item -> LifecycleStatus.ACTIVE.code().equals(item.getLifecycleStatus())
                                 && Boolean.TRUE.equals(item.getMatchAllowed()))
                         .count())
                 .build();
@@ -136,18 +138,18 @@ public class MidTermMemoryLifecycleService {
     private MemoryCenterItem toItem(String userId, MidTermMemory memory, LocalDateTime now) {
         String lifecycleStatus;
         if (Boolean.TRUE.equals(memory.getHidden())) {
-            lifecycleStatus = "HIDDEN";
+            lifecycleStatus = LifecycleStatus.HIDDEN.code();
         } else if (memory.getValidUntil() != null && !memory.getValidUntil().isAfter(now)) {
-            lifecycleStatus = "EXPIRED";
+            lifecycleStatus = LifecycleStatus.EXPIRED.code();
         } else if (memory.getMergedIntoId() != null) {
-            lifecycleStatus = "MERGED";
+            lifecycleStatus = LifecycleStatus.MERGED.code();
         } else {
-            lifecycleStatus = "ACTIVE";
+            lifecycleStatus = LifecycleStatus.ACTIVE.code();
         }
 
-        String sourceType = StrUtil.blankToDefault(memory.getSourceType(), "UNKNOWN");
+        String sourceType = StrUtil.blankToDefault(memory.getSourceType(), SourceType.UNKNOWN.code());
         String sourceTitle = null;
-        if ("DIARY".equalsIgnoreCase(sourceType) && StrUtil.isNotBlank(memory.getSourceId())) {
+        if (SourceType.DIARY.code().equalsIgnoreCase(sourceType) && StrUtil.isNotBlank(memory.getSourceId())) {
             Diary diary = diaryRepository.findByDiaryIdAndUserId(memory.getSourceId(), userId);
             sourceTitle = diary == null ? null : diary.getTitle();
         }

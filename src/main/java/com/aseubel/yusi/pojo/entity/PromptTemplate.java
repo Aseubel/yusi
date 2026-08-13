@@ -1,5 +1,7 @@
 package com.aseubel.yusi.pojo.entity;
 
+import com.aseubel.yusi.common.constant.PromptDefaults;
+import com.aseubel.yusi.common.constant.PromptScope;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -80,13 +82,13 @@ public class PromptTemplate {
             updatedAt = LocalDateTime.now();
         }
         if (version == null) {
-            version = "v1";
+            version = PromptDefaults.VERSION;
         }
         if (scope == null) {
-            scope = "global";
+            scope = PromptScope.GLOBAL.code();
         }
         if (locale == null) {
-            locale = "zh-CN";
+            locale = PromptDefaults.LOCALE;
         }
         if (active == null) {
             active = true;
@@ -103,13 +105,13 @@ public class PromptTemplate {
     public void preUpdate() {
         updatedAt = LocalDateTime.now();
         if (version == null) {
-            version = "v1";
+            version = PromptDefaults.VERSION;
         }
         if (scope == null) {
-            scope = "global";
+            scope = PromptScope.GLOBAL.code();
         }
         if (locale == null) {
-            locale = "zh-CN";
+            locale = PromptDefaults.LOCALE;
         }
         if (active == null) {
             active = true;

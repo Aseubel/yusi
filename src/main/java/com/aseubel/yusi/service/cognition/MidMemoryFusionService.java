@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.cognition;
 
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.service.cognition.constant.MidMemoryConflictAction;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
@@ -151,8 +152,9 @@ public class MidMemoryFusionService {
 
             // Case 2: Conflict Overwrite
             if (result.has("isConflict") && result.get("isConflict").asBoolean()) {
-                String conflictAction = result.has("conflictAction") ? result.get("conflictAction").asText() : "NONE";
-                if ("OVERWRITE_B".equalsIgnoreCase(conflictAction)) {
+                String conflictAction = result.has("conflictAction")
+                        ? result.get("conflictAction").asText() : MidMemoryConflictAction.NONE.code();
+                if (MidMemoryConflictAction.OVERWRITE_B.code().equalsIgnoreCase(conflictAction)) {
                     // Make the older memory b expire immediately
                     b.setValidUntil(LocalDateTime.now());
                     b.setMergedIntoId(a.getId());

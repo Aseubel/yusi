@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.ai.prompt.impl;
 
+import com.aseubel.yusi.common.constant.PromptDefaults;
 import com.aseubel.yusi.common.event.PromptUpdatedEvent;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
@@ -30,7 +31,7 @@ public class PromptServiceImpl implements PromptService {
 
     @Override
     public String getPrompt(String name) {
-        return getPrompt(name, "zh-CN");
+        return getPrompt(name, PromptDefaults.LOCALE);
     }
 
     @Override
@@ -54,7 +55,7 @@ public class PromptServiceImpl implements PromptService {
     @Override
     public PromptTemplate savePrompt(PromptTemplate prompt, String updatedBy) {
         String name = prompt.getName();
-        String locale = prompt.getLocale() != null ? prompt.getLocale() : "zh-CN";
+        String locale = prompt.getLocale() != null ? prompt.getLocale() : PromptDefaults.LOCALE;
         if (name != null) {
             promptRepository.findByNameAndLocale(name, locale)
                     .ifPresent(existing -> {

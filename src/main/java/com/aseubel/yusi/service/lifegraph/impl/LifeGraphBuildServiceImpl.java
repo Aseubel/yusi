@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.lifegraph.impl;
 
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
@@ -22,6 +23,8 @@ import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.lifegraph.LifeGraphBuildService;
 import com.aseubel.yusi.service.lifegraph.LifeGraphPromotionPolicy;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphExtractor;
+import com.aseubel.yusi.service.lifegraph.constant.LifeGraphConstants;
+import com.aseubel.yusi.service.lifegraph.constant.LifeGraphEvidenceKind;
 import com.aseubel.yusi.service.lifegraph.dto.LifeGraphExtractionResult;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,10 +56,6 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
-
-    private static final String USER_ENTITY_NORM = "__user__";
-    private static final String DIARY_SOURCE = "DIARY";
-    private static final String PLAZA_SOURCE = "PLAZA";
 
     private final LifeGraphEntityRepository entityRepository;
     private final LifeGraphEntityAliasRepository aliasRepository;
@@ -118,7 +117,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             return;
         }
         if (StrUtil.isBlank(plainContent)) {
-            deleteBySource(diary.getUserId(), DIARY_SOURCE, diary.getDiaryId());
+            deleteBySource(diary.getUserId(), SourceType.DIARY.code(), diary.getDiaryId());
             return;
         }
 
@@ -139,7 +138,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             return;
         }
         if (StrUtil.isBlank(command.getMaskedText())) {
-            deleteBySource(command.getUserId(), PLAZA_SOURCE, command.getSourceId());
+            deleteBySource(command.getUserId(), SourceType.PLAZA.code(), command.getSourceId());
             return;
         }
 
@@ -157,7 +156,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
 
     @Override
     public void deleteByDiary(String userId, String diaryId) {
-        deleteBySource(userId, DIARY_SOURCE, diaryId);
+        deleteBySource(userId, SourceType.DIARY.code(), diaryId);
     }
 
     @Override
@@ -218,7 +217,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                 resolvedEntityIds.put(key, entityId);
             }
         }
-        resolvedEntityIds.put(LifeGraphPromotionPolicy.USER_KEY,
+        resolvedEntityIds.put(LifeGraphConstants.USER_ENTITY_NORM,
                 findUserEntityId(source.userId()));
 
         Map<String, LifeGraphExtractionResult.ExtractedMention> mentionByEntity = new HashMap<>();
@@ -245,7 +244,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             saveEntityEvidence(source, entityId, extracted, mention,
                     evidenceKind(source.sourceType(), key, promotion));
             contributedEntityIds.add(entityId);
-            if (DIARY_SOURCE.equals(source.sourceType()) && mention != null) {
+            if (SourceType.DIARY.code().equals(source.sourceType()) && mention != null) {
                 ensureDiaryMention(source, entityId, mention);
             }
         }
@@ -272,7 +271,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
 
     private void deleteSourceInternal(String userId, String sourceType, String sourceId) {
         Set<Long> affectedEntityIds = new LinkedHashSet<>();
-        if (DIARY_SOURCE.equals(sourceType)) {
+        if (SourceType.DIARY.code().equals(sourceType)) {
             List<LifeGraphMention> mentions = safeList(mentionRepository.findByUserIdAndDiaryId(userId, sourceId));
             affectedEntityIds.addAll(mentions.stream()
                     .map(LifeGraphMention::getEntityId)
@@ -341,7 +340,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             relation.setWeight(manualWeight + automaticWeight);
         }
         relation.setEvidenceDiaryId(remaining.stream()
-                .filter(evidence -> DIARY_SOURCE.equals(evidence.getSourceType()))
+                .filter(evidence -> SourceType.DIARY.code().equals(evidence.getSourceType()))
                 .max(Comparator.comparing(this::evidenceTime))
                 .map(LifeGraphRelationEvidence::getSourceId)
                 .orElse(null));
@@ -363,12 +362,12 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         }
         for (LifeGraphMention mention : safeList(mentionRepository.findByUserIdAndEntityId(userId, entityId))) {
             if (mention.getDiaryId() != null) {
-                sourceKeys.add(DIARY_SOURCE + ":" + mention.getDiaryId());
+                sourceKeys.add(SourceType.DIARY.code() + ":" + mention.getDiaryId());
             }
         }
         if (entity.getOrigin() == LifeGraphEntity.Origin.AUTO
                 && entity.getType() != LifeGraphEntity.EntityType.User
-                && !USER_ENTITY_NORM.equalsIgnoreCase(entity.getNameNorm())
+                && !LifeGraphConstants.USER_ENTITY_NORM.equalsIgnoreCase(entity.getNameNorm())
                 && sourceKeys.isEmpty()) {
             aliasRepository.deleteByUserIdAndEntityId(userId, entityId);
             entityRepository.delete(entity);
@@ -385,7 +384,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                                         LifeGraphExtractionResult.ExtractedEntity extracted) {
         String displayName = StrUtil.blankToDefault(extracted.getDisplayName(), "");
         String nameNorm = promotionPolicy.normalizeKey(extracted.getNameNorm(), displayName);
-        if (StrUtil.isBlank(nameNorm) || LifeGraphPromotionPolicy.USER_KEY.equals(nameNorm)) {
+        if (StrUtil.isBlank(nameNorm) || LifeGraphConstants.USER_ENTITY_NORM.equals(nameNorm)) {
             return null;
         }
         LifeGraphEntity.EntityType type = parseType(extracted.getType());
@@ -478,7 +477,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                     .manualWeight(0)
                     .firstSeen(source.sourceTime() == null ? LocalDateTime.now() : source.sourceTime())
                     .lastSeen(source.sourceTime() == null ? LocalDateTime.now() : source.sourceTime())
-                    .evidenceDiaryId(DIARY_SOURCE.equals(source.sourceType()) ? source.sourceId() : null)
+                    .evidenceDiaryId(SourceType.DIARY.code().equals(source.sourceType()) ? source.sourceId() : null)
                     .origin(LifeGraphRelation.Origin.AUTO)
                     .props(toJson(extracted.getProps()))
                     .build();
@@ -487,7 +486,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             relation.setSemanticTargetId(semanticTargetId);
             relation.setWeight((relation.getWeight() == null ? 0 : relation.getWeight()) + normalizedCount);
             relation.setLastSeen(source.sourceTime() == null ? LocalDateTime.now() : source.sourceTime());
-            relation.setEvidenceDiaryId(DIARY_SOURCE.equals(source.sourceType()) ? source.sourceId()
+            relation.setEvidenceDiaryId(SourceType.DIARY.code().equals(source.sourceType()) ? source.sourceId()
                     : relation.getEvidenceDiaryId());
             BigDecimal confidence = toConfidence(extracted.getConfidence());
             if (relation.getConfidence() == null || relation.getConfidence().compareTo(confidence) < 0) {
@@ -588,7 +587,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
 
     private Long findUserEntityId(String userId) {
         return entityRepository.findByUserIdAndTypeAndNameNorm(
-                        userId, LifeGraphEntity.EntityType.User, USER_ENTITY_NORM)
+                        userId, LifeGraphEntity.EntityType.User, LifeGraphConstants.USER_ENTITY_NORM)
                 .map(LifeGraphEntity::getId)
                 .orElse(null);
     }
@@ -600,7 +599,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         entityRepository.save(LifeGraphEntity.builder()
                 .userId(userId)
                 .type(LifeGraphEntity.EntityType.User)
-                .nameNorm(USER_ENTITY_NORM)
+                .nameNorm(LifeGraphConstants.USER_ENTITY_NORM)
                 .displayName("我")
                 .summary("用户自身")
                 .mentionCount(0)
@@ -630,7 +629,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             return;
         }
         String normalized = promotionPolicy.normalizeKey(display, null);
-        if (StrUtil.isBlank(normalized) || LifeGraphPromotionPolicy.USER_KEY.equals(normalized)) {
+        if (StrUtil.isBlank(normalized) || LifeGraphConstants.USER_ENTITY_NORM.equals(normalized)) {
             return;
         }
         aliasRepository.findByUserIdAndAliasNorm(userId, normalized).ifPresentOrElse(existing -> {
@@ -664,7 +663,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
     }
 
     private SourceContext sourceFromDiary(Diary diary, String content) {
-        return new SourceContext(DIARY_SOURCE, diary.getDiaryId(), diary.getUserId(), content,
+        return new SourceContext(SourceType.DIARY.code(), diary.getDiaryId(), diary.getUserId(), content,
                 diary.getEntryDate(), diary.getUpdateTime() == null ? LocalDateTime.now() : diary.getUpdateTime(),
                 diary.getTitle(), diary.getPlaceName(), diary.getAddress(),
                 coordinates(diary.getLatitude(), diary.getLongitude()), diary);
@@ -672,7 +671,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
 
     private SourceContext sourceFromPlaza(CognitionIngestCommand command) {
         LocalDate entryDate = command.getTimestamp() == null ? null : command.getTimestamp().toLocalDate();
-        return new SourceContext(PLAZA_SOURCE, command.getSourceId(), command.getUserId(),
+        return new SourceContext(SourceType.PLAZA.code(), command.getSourceId(), command.getUserId(),
                 command.getMaskedText(), entryDate,
                 command.getTimestamp() == null ? LocalDateTime.now() : command.getTimestamp(),
                 command.getTitle(), command.getPlaceName(), null, null, null);
@@ -680,8 +679,8 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
 
     private String evidenceKind(String sourceType, String key,
                                 LifeGraphPromotionPolicy.PromotionResult promotion) {
-        if (LifeGraphPromotionPolicy.USER_KEY.equals(key)) {
-            return "USER";
+        if (LifeGraphConstants.USER_ENTITY_NORM.equals(key)) {
+            return LifeGraphEvidenceKind.USER.code();
         }
         boolean directPerson = promotion.relations().stream().anyMatch(relation -> {
             String type = relation.getType() == null ? "" : relation.getType().toUpperCase(Locale.ROOT);
@@ -690,7 +689,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             return promotionPolicy.personRelations().contains(type)
                     && (key.equals(source) || key.equals(target));
         });
-        return directPerson ? "USER_RELATION" : "LIFE_ATTRIBUTE";
+        return directPerson ? LifeGraphEvidenceKind.USER_RELATION.code() : LifeGraphEvidenceKind.LIFE_ATTRIBUTE.code();
     }
 
     private void runInTransaction(Runnable action) {

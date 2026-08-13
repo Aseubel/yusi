@@ -5,6 +5,7 @@ import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.entity.CognitiveConflict;
 import com.aseubel.yusi.pojo.entity.UserPersona;
 import com.aseubel.yusi.repository.CognitiveConflictRepository;
+import com.aseubel.yusi.service.cognition.constant.CognitiveConflictSource;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
@@ -100,7 +101,7 @@ public class CognitiveConflictDetector {
                         .description(description)
                         .existingBelief(existingBelief)
                         .newObservation(newInsight)
-                        .source("PERSONA")
+                        .source(CognitiveConflictSource.PERSONA.code())
                         .resolved(false)
                         .build());
 

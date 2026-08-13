@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.user.impl;
 
+import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.pojo.entity.UserPersona;
 import com.aseubel.yusi.repository.UserPersonaRepository;
 import com.aseubel.yusi.service.user.UserPersonaService;
@@ -51,7 +52,8 @@ public class UserPersonaServiceImpl implements UserPersonaService {
             if (persona.getCustomInstructions() != null) {
                 existing.setCustomInstructions(persona.getCustomInstructions());
             }
-            if (persona.getSourceType() != null && !"UNKNOWN".equalsIgnoreCase(persona.getSourceType())) {
+            if (persona.getSourceType() != null
+                    && !SourceType.UNKNOWN.code().equalsIgnoreCase(persona.getSourceType())) {
                 existing.setSourceType(persona.getSourceType());
                 existing.setSourceId(persona.getSourceId());
                 if (persona.getConfidence() != null) {

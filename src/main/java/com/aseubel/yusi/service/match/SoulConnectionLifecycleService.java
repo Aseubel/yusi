@@ -5,6 +5,8 @@ import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.entity.SoulConnection;
 import com.aseubel.yusi.pojo.entity.SoulConnectionStatus;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
+import com.aseubel.yusi.pojo.constant.SoulConnectionAction;
+import com.aseubel.yusi.pojo.constant.MatchFeedbackAction;
 import com.aseubel.yusi.repository.SoulConnectionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -37,7 +39,7 @@ public class SoulConnectionLifecycleService {
         if (connection.getStatus() == SoulConnectionStatus.STARTED && connection.getStartedAt() == null) {
             connection.setStartedAt(now);
         }
-        audit(connection, "ACCEPT", actorUserId, null, now);
+        audit(connection, SoulConnectionAction.ACCEPT.code(), actorUserId, null, now);
         return connectionRepository.save(connection);
     }
 
@@ -57,7 +59,7 @@ public class SoulConnectionLifecycleService {
         LocalDateTime now = LocalDateTime.now();
         connection.setStatus(SoulConnectionStatus.DECLINED);
         connection.setEndedAt(now);
-        audit(connection, "DECLINE", actorUserId, reasonCategory, now);
+        audit(connection, SoulConnectionAction.DECLINE.code(), actorUserId, reasonCategory, now);
         return connectionRepository.save(connection);
     }
 
@@ -74,7 +76,8 @@ public class SoulConnectionLifecycleService {
 
         LocalDateTime now = LocalDateTime.now();
         connection.setStatus(SoulConnectionStatus.MUTUAL_RESONANCE);
-        audit(connection, "MUTUAL_RESONANCE", actorUserId, "DEEP_INTERACTION", now);
+        audit(connection, SoulConnectionAction.MUTUAL_RESONANCE.code(), actorUserId,
+                MatchFeedbackAction.DEEP_INTERACTION.code(), now);
         return connectionRepository.save(connection);
     }
 
@@ -93,7 +96,7 @@ public class SoulConnectionLifecycleService {
         LocalDateTime now = LocalDateTime.now();
         connection.setStatus(SoulConnectionStatus.ENDED);
         connection.setEndedAt(now);
-        audit(connection, "END", actorUserId, reasonCategory, now);
+        audit(connection, SoulConnectionAction.END.code(), actorUserId, reasonCategory, now);
         return connectionRepository.save(connection);
     }
 
@@ -114,7 +117,7 @@ public class SoulConnectionLifecycleService {
 
         LocalDateTime now = LocalDateTime.now();
         connection.setStatus(SoulConnectionStatus.REPORTED);
-        audit(connection, "REPORT", actorUserId, reasonCategory, now);
+        audit(connection, SoulConnectionAction.REPORT.code(), actorUserId, reasonCategory, now);
         return connectionRepository.save(connection);
     }
 
@@ -135,7 +138,7 @@ public class SoulConnectionLifecycleService {
         LocalDateTime now = LocalDateTime.now();
         connection.setStatus(SoulConnectionStatus.BLOCKED);
         connection.setEndedAt(now);
-        audit(connection, "BLOCK", actorUserId, reasonCategory, now);
+        audit(connection, SoulConnectionAction.BLOCK.code(), actorUserId, reasonCategory, now);
         return connectionRepository.save(connection);
     }
 

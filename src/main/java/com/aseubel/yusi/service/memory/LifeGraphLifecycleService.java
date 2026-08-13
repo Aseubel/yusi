@@ -1,5 +1,7 @@
 package com.aseubel.yusi.service.memory;
 
+import com.aseubel.yusi.common.constant.LifecycleStatus;
+import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.memory.LifeGraphMemoryItem;
@@ -67,11 +69,11 @@ public class LifeGraphLifecycleService {
 
         return LifeGraphMemoryResponse.builder()
                 .entities(items)
-                .activeCount(items.stream().filter(item -> "ACTIVE".equals(item.getLifecycleStatus())).count())
-                .hiddenCount(items.stream().filter(item -> "HIDDEN".equals(item.getLifecycleStatus())).count())
-                .expiredCount(items.stream().filter(item -> "EXPIRED".equals(item.getLifecycleStatus())).count())
+                .activeCount(items.stream().filter(item -> LifecycleStatus.ACTIVE.code().equals(item.getLifecycleStatus())).count())
+                .hiddenCount(items.stream().filter(item -> LifecycleStatus.HIDDEN.code().equals(item.getLifecycleStatus())).count())
+                .expiredCount(items.stream().filter(item -> LifecycleStatus.EXPIRED.code().equals(item.getLifecycleStatus())).count())
                 .matchableCount(items.stream()
-                        .filter(item -> "ACTIVE".equals(item.getLifecycleStatus())
+                        .filter(item -> LifecycleStatus.ACTIVE.code().equals(item.getLifecycleStatus())
                                 && Boolean.TRUE.equals(item.getMatchAllowed()))
                         .count())
                 .build();
@@ -146,11 +148,11 @@ public class LifeGraphLifecycleService {
     private LifeGraphMemoryItem toItem(String userId, LifeGraphEntity entity, LocalDateTime now) {
         String lifecycleStatus;
         if (Boolean.TRUE.equals(entity.getHidden())) {
-            lifecycleStatus = "HIDDEN";
+            lifecycleStatus = LifecycleStatus.HIDDEN.code();
         } else if (entity.getValidUntil() != null && !entity.getValidUntil().isAfter(now)) {
-            lifecycleStatus = "EXPIRED";
+            lifecycleStatus = LifecycleStatus.EXPIRED.code();
         } else {
-            lifecycleStatus = "ACTIVE";
+            lifecycleStatus = LifecycleStatus.ACTIVE.code();
         }
 
         Map<String, LifeGraphSourceItem> sourceMap = new LinkedHashMap<>();
@@ -161,7 +163,7 @@ public class LifeGraphLifecycleService {
         }
         for (LifeGraphMention mention : mentionRepository
                 .findTop200ByUserIdAndEntityIdOrderByCreatedAtDesc(userId, entity.getId())) {
-            String key = sourceKey("DIARY", mention.getDiaryId());
+            String key = sourceKey(SourceType.DIARY.code(), mention.getDiaryId());
             sourceMap.putIfAbsent(key, toSource(userId, mention));
         }
         List<LifeGraphSourceItem> sources = sourceMap.values().stream()
@@ -195,7 +197,7 @@ public class LifeGraphLifecycleService {
         }
         return LifeGraphSourceItem.builder()
                 .sourceId(mention.getDiaryId())
-                .sourceType("DIARY")
+                .sourceType(SourceType.DIARY.code())
                 .sourceTitle(sourceTitle)
                 .entryDate(mention.getEntryDate())
                 .createdAt(mention.getCreatedAt())
@@ -204,12 +206,12 @@ public class LifeGraphLifecycleService {
 
     private LifeGraphSourceItem toSource(String userId, LifeGraphEntityEvidence evidence) {
         String sourceType = evidence.getSourceType() == null
-                ? "UNKNOWN" : evidence.getSourceType().toUpperCase();
+                ? SourceType.UNKNOWN.code() : evidence.getSourceType().toUpperCase();
         String sourceTitle = null;
-        if ("DIARY".equals(sourceType)) {
+        if (SourceType.DIARY.code().equals(sourceType)) {
             Diary diary = diaryRepository.findByDiaryIdAndUserId(evidence.getSourceId(), userId);
             sourceTitle = diary == null ? null : diary.getTitle();
-        } else if ("PLAZA".equals(sourceType)) {
+        } else if (SourceType.PLAZA.code().equals(sourceType)) {
             sourceTitle = "广场卡片 #" + evidence.getSourceId();
         }
         return LifeGraphSourceItem.builder()
