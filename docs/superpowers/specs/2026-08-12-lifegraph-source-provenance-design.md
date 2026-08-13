@@ -3,7 +3,7 @@
 ## 状态
 
 - 设计范围：Diary / 用户本人发布的 Plaza 卡片 / LifeGraph 来源追踪
-- 状态：已确认，待拆分实现计划
+- 状态：已实现（设计与当前后端实现已对齐）
 - 日期：2026-08-13
 
 ## 背景
@@ -330,17 +330,25 @@ Agent 的 LifeGraph 工具应优先返回“用户—重要人物—生活属性
 
 ## 迁移与实现边界
 
-建议新增迁移，具体版本号在实现计划中确定：
+本设计已完成当前范围内的后端落地，实际迁移如下：
 
-1. 增加 `LifeGraphEntity.EntityType.Work`；
-2. 为实体增加 `importance` 一等字段，并保留读取旧 `props.importance` 的兼容逻辑；
-3. 新增 `life_graph_entity_evidence`，支持 Diary、Plaza、Manual、Legacy 来源；
-4. 为关系增加语义方向字段和对应索引，兼容历史物理无向端点；
-5. 扩展关系证据来源注释、索引和来源查询；
-6. 统一 Memory Center、GraphRAG、Timeline 的来源和可见性读取路径；
-7. 停止 `LifeGraphCognitionBridgeService` 将 `cognition-routing.interests`、Plaza `topic` 或地点字段直接写入长期实体；
-8. Diary 与 Plaza 统一使用宽抽取、严格升级和来源替换流程；
-9. 保留旧 `life_graph_mention`、`evidence_diary_id` 等字段用于过渡，不把旧数据清理作为本次实现目标。
+1. `V20260817__add_life_graph_entity_provenance_and_semantic_direction.sql`
+   - 为实体增加一等 `importance` 字段；
+   - 为关系增加 `semantic_source_id` / `semantic_target_id` 及索引，兼容历史物理端点；
+   - 新增 `life_graph_entity_evidence`，支持 `DIARY`、`PLAZA`、`MANUAL`、`LEGACY` 来源。
+2. `V20260818__align_graphrag_extract_prompt_with_lifegraph_boundary.sql`
+   - 将数据库中的 `graphrag-extract` 提示词更新为“宽抽取、严格升级”；
+   - 明确重要人物及其一跳属性/事件边界、关系方向、证据要求和多跳查询不受自动升级边界限制。
+
+对应实现职责：
+
+- `LifeGraphPromotionPolicy` 在服务端再次校验实体类型、关系类型、证据片段、关系置信度和自动升级拓扑；模型返回的候选实体不会直接成为长期事实。
+- `LifeGraphBuildServiceImpl` 对 Diary / Plaza 使用来源替换写入；实体证据、关系证据、聚合计数和来源撤销按用户与来源键隔离，并保持幂等。
+- `PlazaLifeGraphListener` 只处理用户本人发布的 Plaza 来源；Plaza 的展示标签不会绕过升级策略直接创建长期实体。
+- `LifeGraphQueryService` 支持超过一跳的 GraphRAG 查询，并按关系类型、来源证据、置信度、可见性和运行预算控制路径质量；“最多一跳”仅属于自动升级边界。
+- `LifeGraphLifecycleService` 和来源读取逻辑返回安全的来源元数据：Diary 显示标题并支持详情跳转，Plaza 只显示安全卡片标识，不返回原始正文。
+
+本次实现不包含历史旧实体、旧关系和无法还原来源数据的清理。旧数据通过现有兼容字段或 `LEGACY` 语义保留，后续新增或重建来源必须遵守本设计的证据与升级规则。
 
 ## 验证标准
 
