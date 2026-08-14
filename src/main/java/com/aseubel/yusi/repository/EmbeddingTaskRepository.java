@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Milvus Embedding 任务仓库
@@ -85,6 +86,8 @@ public interface EmbeddingTaskRepository extends JpaRepository<EmbeddingTask, Lo
      */
     @Query("SELECT t FROM EmbeddingTask t WHERE t.diaryId = :diaryId AND t.status = 'PENDING'")
     List<EmbeddingTask> findPendingByDiaryId(@Param("diaryId") String diaryId);
+
+    Optional<EmbeddingTask> findByTaskExecutionId(String taskExecutionId);
 
     /**
      * 删除已完成的任务（定期清理）

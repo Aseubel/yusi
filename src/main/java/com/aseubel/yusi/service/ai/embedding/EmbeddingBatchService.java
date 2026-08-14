@@ -4,11 +4,13 @@ import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.EmbeddingTask;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.pojo.constant.KeyMode;
+import com.aseubel.yusi.pojo.constant.TaskFailureCategory;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.EmbeddingTaskRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.diary.DiaryService;
 import com.aseubel.yusi.service.ai.rag.DiaryChunker;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -51,12 +53,14 @@ public class EmbeddingBatchService {
     private final EmbeddingGateway embeddingGateway;
     private final DiaryChunker diaryChunker;
     private final DiaryService diaryService;
+    private final TaskExecutionService taskExecutionService;
 
     /**
      * 每批处理的最大任务数
      */
     private static final int BATCH_SIZE = 50;
     private static final long PROCESSING_TIMEOUT_MINUTES = 30;
+    private static final String WORKER_ID = "embedding-batch";
 
     /**
      * 定时扫描并处理待处理任务
@@ -69,6 +73,10 @@ public class EmbeddingBatchService {
         List<EmbeddingTask> tasks = taskClaimService.claimPendingTasks(now, BATCH_SIZE);
         if (tasks.isEmpty()) {
             return;
+        }
+
+        for (EmbeddingTask task : tasks) {
+            claimExecution(task, now);
         }
 
         log.info("开始处理 {} 个 Embedding 任务", tasks.size());
@@ -131,14 +139,14 @@ public class EmbeddingBatchService {
             Diary diary = diaryMap.get(task.getDiaryId());
             if (diary == null) {
                 log.warn("日记 {} 不存在，跳过任务 {}", task.getDiaryId(), task.getId());
-                taskRepository.markAsCompleted(task.getId(), now);
+                markCompleted(task, now);
                 continue;
             }
 
             // 检查用户隐私设置
             if (!isRagAllowed(task.getUserId())) {
                 log.info("用户 {} 不允许 RAG，标记任务 {} 为完成", task.getUserId(), task.getId());
-                taskRepository.markAsCompleted(task.getId(), now);
+                markCompleted(task, now);
                 continue;
             }
 
@@ -149,7 +157,7 @@ public class EmbeddingBatchService {
             }
             if (text == null || text.isEmpty()) {
                 log.warn("日记 {} 内容为空，跳过", task.getDiaryId());
-                taskRepository.markAsCompleted(task.getId(), now);
+                markCompleted(task, now);
                 continue;
             }
 
@@ -222,7 +230,7 @@ public class EmbeddingBatchService {
 
             // 标记所有成功的任务
             for (EmbeddingTask task : successTasks) {
-                taskRepository.markAsCompleted(task.getId(), now);
+                markCompleted(task, now);
             }
 
             log.info("批量写入 {} 个 Embedding 完成，涉及 {} 个任务，模型={}，维度={}，输入Token={}，耗时={}ms",
@@ -233,9 +241,7 @@ public class EmbeddingBatchService {
             log.error("批量处理 UPSERT 任务失败", e);
             // 增加重试次数
             for (EmbeddingTask task : successTasks) {
-                LocalDateTime nextRetry = calculateNextRetry(task.getRetryCount() + 1);
-                taskRepository.incrementRetryAndSetNextAttempt(
-                        task.getId(), e.getMessage(), nextRetry, now);
+                markRetry(task, e, now);
             }
         }
     }
@@ -253,13 +259,32 @@ public class EmbeddingBatchService {
                     .collectionName("yusi_embedding_collection")
                     .filter("id like '" + task.getDiaryId() + "_%'")
                     .build());
-            taskRepository.markAsCompleted(task.getId(), now);
+            markCompleted(task, now);
             log.info("删除日记 {} 的 Embedding 成功", task.getDiaryId());
         } catch (Exception e) {
             log.error("删除 Embedding 失败: {}", task.getDiaryId(), e);
-            LocalDateTime nextRetry = calculateNextRetry(task.getRetryCount() + 1);
-            taskRepository.incrementRetryAndSetNextAttempt(
-                    task.getId(), e.getMessage(), nextRetry, now);
+            markRetry(task, e, now);
+        }
+    }
+
+    private void claimExecution(EmbeddingTask task, LocalDateTime now) {
+        if (task.getTaskExecutionId() != null) {
+            taskExecutionService.claim(task.getTaskExecutionId(), WORKER_ID, now);
+        }
+    }
+
+    private void markCompleted(EmbeddingTask task, LocalDateTime now) {
+        taskRepository.markAsCompleted(task.getId(), now);
+        if (task.getTaskExecutionId() != null) {
+            taskExecutionService.succeed(task.getTaskExecutionId(), null, now);
+        }
+    }
+
+    private void markRetry(EmbeddingTask task, Exception exception, LocalDateTime now) {
+        LocalDateTime nextRetry = calculateNextRetry(task.getRetryCount() + 1);
+        taskRepository.incrementRetryAndSetNextAttempt(task.getId(), exception.getMessage(), nextRetry, now);
+        if (task.getTaskExecutionId() != null) {
+            taskExecutionService.retry(task.getTaskExecutionId(), TaskFailureCategory.DEPENDENCY, null, now);
         }
     }
 

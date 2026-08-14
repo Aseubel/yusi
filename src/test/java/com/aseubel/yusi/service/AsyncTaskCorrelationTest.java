@@ -4,11 +4,14 @@ import com.aseubel.yusi.common.event.DiaryChangedEvent;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.EmbeddingTask;
 import com.aseubel.yusi.pojo.entity.LifeGraphTask;
+import com.aseubel.yusi.pojo.entity.TaskExecution;
 import com.aseubel.yusi.repository.EmbeddingTaskRepository;
 import com.aseubel.yusi.repository.LifeGraphTaskRepository;
 import com.aseubel.yusi.service.ai.embedding.EmbeddingService;
 import com.aseubel.yusi.service.lifegraph.LifeGraphTaskBatchService;
 import com.aseubel.yusi.service.lifegraph.LifeGraphTaskCreator;
+import com.aseubel.yusi.service.task.TaskExecutionCommand;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -41,9 +44,14 @@ class AsyncTaskCorrelationTest {
     @Mock
     private ThreadPoolTaskExecutor threadPoolTaskExecutor;
 
+    @Mock
+    private TaskExecutionService taskExecutionService;
+
     @Test
     void embeddingTaskKeepsDiaryChangeEventId() {
         when(embeddingTaskRepository.findPendingByDiaryId("diary-1")).thenReturn(List.of());
+        when(taskExecutionService.createOrGet(org.mockito.ArgumentMatchers.any(TaskExecutionCommand.class)))
+                .thenReturn(TaskExecution.builder().taskId("execution-1").build());
 
         Diary diary = Diary.builder()
                 .diaryId("diary-1")
@@ -52,11 +60,12 @@ class AsyncTaskCorrelationTest {
         DiaryChangedEvent event = new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.MODIFY,
                 "diary-change-1");
 
-        new EmbeddingService(embeddingTaskRepository).onDiaryChanged(event);
+        new EmbeddingService(embeddingTaskRepository, taskExecutionService).onDiaryChanged(event);
 
         ArgumentCaptor<EmbeddingTask> captor = ArgumentCaptor.forClass(EmbeddingTask.class);
         verify(embeddingTaskRepository).save(captor.capture());
         assertEquals("diary-change-1", captor.getValue().getTriggerEventId());
+        assertEquals("execution-1", captor.getValue().getTaskExecutionId());
     }
 
     @Test
@@ -68,12 +77,17 @@ class AsyncTaskCorrelationTest {
         DiaryChangedEvent event = new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.DELETE,
                 "diary-change-2");
 
-        new LifeGraphTaskCreator(lifeGraphTaskRepository, lifeGraphTaskBatchService, threadPoolTaskExecutor)
+        when(taskExecutionService.createOrGet(org.mockito.ArgumentMatchers.any(TaskExecutionCommand.class)))
+                .thenReturn(TaskExecution.builder().taskId("execution-2").build());
+
+        new LifeGraphTaskCreator(lifeGraphTaskRepository, lifeGraphTaskBatchService, threadPoolTaskExecutor,
+                taskExecutionService)
                 .onDiaryChanged(event);
 
         ArgumentCaptor<LifeGraphTask> captor = ArgumentCaptor.forClass(LifeGraphTask.class);
         verify(lifeGraphTaskRepository).save(captor.capture());
         assertEquals("diary-change-2", captor.getValue().getTriggerEventId());
+        assertEquals("execution-2", captor.getValue().getTaskExecutionId());
     }
 
     @Test
@@ -98,7 +112,11 @@ class AsyncTaskCorrelationTest {
                 eq("user-4"), eq("diary-4"), anyList()))
                 .thenReturn(List.of(processing));
 
-        new LifeGraphTaskCreator(lifeGraphTaskRepository, lifeGraphTaskBatchService, threadPoolTaskExecutor)
+        when(taskExecutionService.createOrGet(org.mockito.ArgumentMatchers.any(TaskExecutionCommand.class)))
+                .thenReturn(TaskExecution.builder().taskId("execution-3").build());
+
+        new LifeGraphTaskCreator(lifeGraphTaskRepository, lifeGraphTaskBatchService, threadPoolTaskExecutor,
+                taskExecutionService)
                 .onDiaryChanged(new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.MODIFY));
 
         ArgumentCaptor<LifeGraphTask> captor = ArgumentCaptor.forClass(LifeGraphTask.class);

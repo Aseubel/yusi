@@ -1,9 +1,14 @@
 package com.aseubel.yusi.service.ai.embedding;
 
 import com.aseubel.yusi.common.event.DiaryChangedEvent;
+import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
+import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
+import com.aseubel.yusi.pojo.constant.TaskExecutionType;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.EmbeddingTask;
 import com.aseubel.yusi.repository.EmbeddingTaskRepository;
+import com.aseubel.yusi.service.task.TaskExecutionCommand;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -34,6 +39,7 @@ import java.util.List;
 public class EmbeddingService {
 
     private final EmbeddingTaskRepository taskRepository;
+    private final TaskExecutionService taskExecutionService;
 
     /**
      * 异步监听日记变更事件，创建相应的 Embedding 任务
@@ -68,7 +74,22 @@ public class EmbeddingService {
             return;
         }
 
+        var execution = taskExecutionService.createOrGet(TaskExecutionCommand.builder()
+                .taskType(TaskExecutionType.EMBEDDING)
+                .ownerUserId(diary.getUserId())
+                .sourceType(TaskExecutionSourceType.DIARY.code())
+                .sourceId(diary.getDiaryId())
+                .sourceVersion(triggerEventId)
+                .triggerEventId(triggerEventId)
+                .idempotencyKey(TaskExecutionKeys.fromEvent(TaskExecutionType.EMBEDDING,
+                        TaskExecutionSourceType.DIARY.code(), diary.getDiaryId(), triggerEventId))
+                .build());
+        if (taskRepository.findByTaskExecutionId(execution.getTaskId()).isPresent()) {
+            return;
+        }
+
         EmbeddingTask task = EmbeddingTask.createUpsertTask(diary.getDiaryId(), diary.getUserId(), triggerEventId);
+        task.setTaskExecutionId(execution.getTaskId());
         taskRepository.save(task);
         log.debug("创建 Embedding UPSERT 任务: diaryId={}, userId={}, triggerEventId={}",
                 diary.getDiaryId(), diary.getUserId(), triggerEventId);
@@ -78,7 +99,22 @@ public class EmbeddingService {
      * 创建 DELETE 任务
      */
     private void createDeleteTask(Diary diary, String triggerEventId) {
+        var execution = taskExecutionService.createOrGet(TaskExecutionCommand.builder()
+                .taskType(TaskExecutionType.EMBEDDING)
+                .ownerUserId(diary.getUserId())
+                .sourceType(TaskExecutionSourceType.DIARY.code())
+                .sourceId(diary.getDiaryId())
+                .sourceVersion(triggerEventId)
+                .triggerEventId(triggerEventId)
+                .idempotencyKey(TaskExecutionKeys.fromEvent(TaskExecutionType.EMBEDDING,
+                        TaskExecutionSourceType.DIARY.code(), diary.getDiaryId(), triggerEventId))
+                .build());
+        if (taskRepository.findByTaskExecutionId(execution.getTaskId()).isPresent()) {
+            return;
+        }
+
         EmbeddingTask task = EmbeddingTask.createDeleteTask(diary.getDiaryId(), diary.getUserId(), triggerEventId);
+        task.setTaskExecutionId(execution.getTaskId());
         taskRepository.save(task);
         log.debug("创建 Embedding DELETE 任务: diaryId={}, triggerEventId={}", diary.getDiaryId(), triggerEventId);
     }

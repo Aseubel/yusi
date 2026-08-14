@@ -12,6 +12,7 @@ import com.google.gson.JsonObject;
 import dev.langchain4j.data.segment.TextSegment;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.vector.request.InsertReq;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -49,12 +50,14 @@ class EmbeddingBatchServiceTest {
     private DiaryChunker diaryChunker;
     @Mock
     private DiaryService diaryService;
+    @Mock
+    private TaskExecutionService taskExecutionService;
 
     @Test
     void processPendingTasks_writesDiaryChunkMetadataAndContextualText() {
         EmbeddingBatchService service = new EmbeddingBatchService(taskRepository, taskClaimService,
                 taskMaintenanceService, diaryRepository, userRepository, milvusClientV2, embeddingGateway,
-                diaryChunker, diaryService);
+                diaryChunker, diaryService, taskExecutionService);
         EmbeddingTask task = EmbeddingTask.createUpsertTask("diary-1", "user-1");
         task.setId(1L);
         Diary diary = Diary.builder().diaryId("diary-1").userId("user-1")

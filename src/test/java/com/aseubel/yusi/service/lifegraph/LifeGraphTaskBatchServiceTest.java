@@ -7,6 +7,7 @@ import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.LifeGraphTaskRepository;
 import com.aseubel.yusi.repository.UserRepository;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -41,6 +42,9 @@ class LifeGraphTaskBatchServiceTest {
 
     @Mock
     private LifeGraphBuildService lifeGraphBuildService;
+
+    @Mock
+    private TaskExecutionService taskExecutionService;
 
     @Test
     void loadsDiaryWithTheTaskUserAndRetriesWhenExtractionFails() {
@@ -88,6 +92,6 @@ class LifeGraphTaskBatchServiceTest {
 
     private LifeGraphTaskBatchService service() {
         return new LifeGraphTaskBatchService(taskRepository, taskClaimService, diaryRepository,
-                userRepository, cryptoService, lifeGraphBuildService);
+                userRepository, cryptoService, lifeGraphBuildService, taskExecutionService);
     }
 }

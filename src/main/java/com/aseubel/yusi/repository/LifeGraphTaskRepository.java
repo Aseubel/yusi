@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface LifeGraphTaskRepository extends JpaRepository<LifeGraphTask, Long> {
@@ -68,6 +69,8 @@ public interface LifeGraphTaskRepository extends JpaRepository<LifeGraphTask, Lo
 
     List<LifeGraphTask> findByUserIdAndDiaryIdAndStatusIn(String userId, String diaryId,
             List<LifeGraphTask.TaskStatus> statuses);
+
+    Optional<LifeGraphTask> findByTaskExecutionId(String taskExecutionId);
 
     @Modifying
     @Transactional

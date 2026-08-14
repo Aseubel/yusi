@@ -7,9 +7,11 @@ import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.LifeGraphTask;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.pojo.constant.KeyMode;
+import com.aseubel.yusi.pojo.constant.TaskFailureCategory;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.LifeGraphTaskRepository;
 import com.aseubel.yusi.repository.UserRepository;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,9 +31,11 @@ public class LifeGraphTaskBatchService {
     private final UserRepository userRepository;
     private final CryptoService cryptoService;
     private final LifeGraphBuildService lifeGraphBuildService;
+    private final TaskExecutionService taskExecutionService;
 
     private static final int BATCH_SIZE = 10;
     private static final long PROCESSING_TIMEOUT_MINUTES = 30;
+    private static final String WORKER_ID = "life-graph-batch";
 
     public void processPendingTasks() {
         LocalDateTime now = LocalDateTime.now();
@@ -42,31 +46,31 @@ public class LifeGraphTaskBatchService {
 
         for (LifeGraphTask task : tasks) {
             try {
+                claimExecution(task, now);
                 if (task.getTaskType() == LifeGraphTask.TaskType.DELETE) {
                     lifeGraphBuildService.deleteByDiary(task.getUserId(), task.getDiaryId());
-                    taskRepository.markAsCompleted(task.getId(), now);
+                    markCompleted(task, now);
                     continue;
                 }
 
                 Diary diary = diaryRepository.findByDiaryIdAndUserId(task.getDiaryId(), task.getUserId());
                 if (diary == null) {
                     lifeGraphBuildService.deleteByDiary(task.getUserId(), task.getDiaryId());
-                    taskRepository.markAsCompleted(task.getId(), now);
+                    markCompleted(task, now);
                     continue;
                 }
 
                 String plain = decryptDiaryContent(diary);
                 if (StrUtil.isBlank(plain)) {
                     lifeGraphBuildService.deleteByDiary(task.getUserId(), task.getDiaryId());
-                    taskRepository.markAsCompleted(task.getId(), now);
+                    markCompleted(task, now);
                     continue;
                 }
 
                 lifeGraphBuildService.upsertFromDiary(diary, plain);
-                taskRepository.markAsCompleted(task.getId(), now);
+                markCompleted(task, now);
             } catch (Exception e) {
-                LocalDateTime nextRetry = calculateNextRetry(task.getRetryCount() + 1);
-                taskRepository.incrementRetryAndSetNextAttempt(task.getId(), e.getMessage(), nextRetry, now);
+                markRetry(task, e, now);
             }
         }
     }
@@ -98,21 +102,58 @@ public class LifeGraphTaskBatchService {
         LocalDateTime now = LocalDateTime.now();
         try {
             if (diary == null) {
-                taskRepository.markAsCompleted(taskId, now);
+                markCompleted(taskId, now);
                 return;
             }
             String plain = StrUtil.isNotBlank(plainContent) ? plainContent : decryptDiaryContent(diary);
             if (StrUtil.isBlank(plain)) {
                 lifeGraphBuildService.deleteByDiary(diary.getUserId(), diary.getDiaryId());
-                taskRepository.markAsCompleted(taskId, now);
+                markCompleted(taskId, now);
                 return;
             }
             lifeGraphBuildService.upsertFromDiary(diary, plain);
-            taskRepository.markAsCompleted(taskId, now);
+            markCompleted(taskId, now);
         } catch (Exception e) {
             LocalDateTime nextRetry = calculateNextRetry(1);
             taskRepository.incrementRetryAndSetNextAttempt(taskId, e.getMessage(), nextRetry, now);
+            String executionId = findTaskExecutionId(taskId);
+            if (executionId != null) {
+                taskExecutionService.retry(executionId, TaskFailureCategory.DEPENDENCY, null, now);
+            }
         }
+    }
+
+    private void claimExecution(LifeGraphTask task, LocalDateTime now) {
+        if (task.getTaskExecutionId() != null) {
+            taskExecutionService.claim(task.getTaskExecutionId(), WORKER_ID, now);
+        }
+    }
+
+    private void markCompleted(LifeGraphTask task, LocalDateTime now) {
+        taskRepository.markAsCompleted(task.getId(), now);
+        if (task.getTaskExecutionId() != null) {
+            taskExecutionService.succeed(task.getTaskExecutionId(), null, now);
+        }
+    }
+
+    private void markCompleted(Long taskId, LocalDateTime now) {
+        taskRepository.markAsCompleted(taskId, now);
+        String executionId = findTaskExecutionId(taskId);
+        if (executionId != null) {
+            taskExecutionService.succeed(executionId, null, now);
+        }
+    }
+
+    private void markRetry(LifeGraphTask task, Exception exception, LocalDateTime now) {
+        LocalDateTime nextRetry = calculateNextRetry(task.getRetryCount() + 1);
+        taskRepository.incrementRetryAndSetNextAttempt(task.getId(), exception.getMessage(), nextRetry, now);
+        if (task.getTaskExecutionId() != null) {
+            taskExecutionService.retry(task.getTaskExecutionId(), TaskFailureCategory.DEPENDENCY, null, now);
+        }
+    }
+
+    private String findTaskExecutionId(Long taskId) {
+        return taskRepository.findById(taskId).map(LifeGraphTask::getTaskExecutionId).orElse(null);
     }
 
     LocalDateTime calculateNextRetry(int retryCount) {

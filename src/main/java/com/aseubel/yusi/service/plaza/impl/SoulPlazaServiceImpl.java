@@ -10,6 +10,9 @@ import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
 import com.aseubel.yusi.pojo.constant.CardType;
 import com.aseubel.yusi.pojo.constant.ResonanceType;
+import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
+import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
+import com.aseubel.yusi.pojo.constant.TaskExecutionType;
 import com.aseubel.yusi.pojo.entity.SoulCard;
 import com.aseubel.yusi.pojo.entity.SoulResonance;
 import com.aseubel.yusi.repository.SoulCardRepository;
@@ -21,6 +24,8 @@ import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.plaza.SoulPlazaService;
+import com.aseubel.yusi.service.task.TaskExecutionCommand;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +55,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
     private final IRedisService redissonService;
     private final SensitiveDataMaskService sensitiveDataMaskService;
     private final ApplicationEventPublisher eventPublisher;
+    private final TaskExecutionService taskExecutionService;
 
     @Override
     @UpdateCache(key = "'plaza:feed:*'", evictOnly = true)
@@ -336,24 +342,41 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
         if (StrUtil.isBlank(maskedText)) {
             return;
         }
-        eventPublisher.publishEvent(new PlazaCardChangedEvent(this, CognitionIngestCommand.builder()
+        PlazaCardChangedEvent event = new PlazaCardChangedEvent(this, CognitionIngestCommand.builder()
                 .userId(card.getUserId())
                 .sourceType(SourceType.PLAZA.code())
                 .sourceId(String.valueOf(card.getId()))
                 .maskedText(maskedText)
                 .timestamp(card.getCreatedAt())
                 .confidenceHint(0.45)
-                .build(), type));
+                .build(), type);
+        recordPlazaEvent(card, event);
+        eventPublisher.publishEvent(event);
     }
 
     private void publishLifeGraphDeleteEvent(SoulCard card) {
         if (card == null || card.getId() == null || StrUtil.isBlank(card.getUserId())) {
             return;
         }
-        eventPublisher.publishEvent(new PlazaCardChangedEvent(this, CognitionIngestCommand.builder()
+        PlazaCardChangedEvent event = new PlazaCardChangedEvent(this, CognitionIngestCommand.builder()
                 .userId(card.getUserId())
                 .sourceType(SourceType.PLAZA.code())
                 .sourceId(String.valueOf(card.getId()))
-                .build(), PlazaCardChangedEvent.Type.DELETE));
+                .build(), PlazaCardChangedEvent.Type.DELETE);
+        recordPlazaEvent(card, event);
+        eventPublisher.publishEvent(event);
+    }
+
+    private void recordPlazaEvent(SoulCard card, PlazaCardChangedEvent event) {
+        taskExecutionService.recordCompleted(TaskExecutionCommand.builder()
+                .taskType(TaskExecutionType.PLAZA)
+                .ownerUserId(card.getUserId())
+                .sourceType(TaskExecutionSourceType.PLAZA.code())
+                .sourceId(String.valueOf(card.getId()))
+                .sourceVersion(event.getEventId())
+                .triggerEventId(event.getEventId())
+                .idempotencyKey(TaskExecutionKeys.fromEvent(TaskExecutionType.PLAZA,
+                        TaskExecutionSourceType.PLAZA.code(), String.valueOf(card.getId()), event.getEventId()))
+                .build(), card.getCreatedAt() == null ? LocalDateTime.now() : card.getCreatedAt());
     }
 }

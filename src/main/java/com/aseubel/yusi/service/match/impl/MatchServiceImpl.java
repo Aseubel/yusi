@@ -10,6 +10,9 @@ import com.aseubel.yusi.pojo.constant.ProductEventName;
 import com.aseubel.yusi.pojo.constant.ProductEventSensitivity;
 import com.aseubel.yusi.pojo.constant.ProductEventSource;
 import com.aseubel.yusi.pojo.constant.SoulConnectionReason;
+import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
+import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
+import com.aseubel.yusi.pojo.constant.TaskExecutionType;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.match.MatchRecommendationResponse;
@@ -19,6 +22,7 @@ import com.aseubel.yusi.pojo.entity.MatchProfile;
 import com.aseubel.yusi.pojo.entity.SoulConnection;
 import com.aseubel.yusi.pojo.entity.SoulConnectionStatus;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
+import com.aseubel.yusi.pojo.entity.TaskExecution;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.redis.annotation.QueryCache;
 import com.aseubel.yusi.redis.annotation.UpdateCache;
@@ -33,6 +37,8 @@ import com.aseubel.yusi.service.match.MatchService;
 import com.aseubel.yusi.service.match.SoulConnectionLifecycleService;
 import com.aseubel.yusi.service.event.ProductEventCommand;
 import com.aseubel.yusi.service.event.ProductEventService;
+import com.aseubel.yusi.service.task.TaskExecutionCommand;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -105,11 +111,21 @@ public class MatchServiceImpl implements MatchService {
     private final PromptManager promptManager;
     private final ObjectMapper objectMapper;
     private final ThreadPoolTaskExecutor threadPoolExecutor;
+    private final TaskExecutionService taskExecutionService;
 
     @Override
     public void runWeeklyMatching() {
         log.info("Starting weekly matching process...");
         String generationRunId = IdUtil.fastSimpleUUID();
+        TaskExecution execution = taskExecutionService.createOrGet(TaskExecutionCommand.builder()
+                .taskType(TaskExecutionType.MATCHING)
+                .sourceType(TaskExecutionSourceType.MATCHING.code())
+                .sourceId(generationRunId)
+                .sourceVersion(LocalDateTime.now().toLocalDate().toString())
+                .runId(generationRunId)
+                .idempotencyKey(TaskExecutionKeys.scheduled(TaskExecutionType.MATCHING,
+                        generationRunId, generationRunId))
+                .build());
         ModelRouteContextHolder.set(ModelRouteContext.builder()
                 .scene(PromptKey.SOUL_MATCH.getKey())
                 .build());
@@ -117,6 +133,7 @@ public class MatchServiceImpl implements MatchService {
             List<User> candidates = userService.getMatchEnabledUsers();
             if (CollUtil.isEmpty(candidates) || candidates.size() < 2) {
                 log.info("Not enough candidates for matching.");
+                taskExecutionService.succeed(execution.getTaskId(), null, LocalDateTime.now());
                 return;
             }
 
@@ -199,6 +216,10 @@ public class MatchServiceImpl implements MatchService {
                             getOrLoadProfile(profileCache, partner.getUserId()), bestResult, generationRunId);
                 }
             }
+            taskExecutionService.succeed(execution.getTaskId(), null, LocalDateTime.now());
+        } catch (RuntimeException exception) {
+            taskExecutionService.fail(execution.getTaskId(), null, null, LocalDateTime.now());
+            throw exception;
         } finally {
             ModelRouteContextHolder.clear();
         }

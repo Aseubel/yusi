@@ -14,6 +14,9 @@ import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
 import com.aseubel.yusi.pojo.constant.KeyMode;
 import com.aseubel.yusi.pojo.constant.DiaryAttachmentAnchorKind;
 import com.aseubel.yusi.pojo.constant.DiaryAttachmentType;
+import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
+import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
+import com.aseubel.yusi.pojo.constant.TaskExecutionType;
 import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentAnchor;
 import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentBinding;
 import com.aseubel.yusi.pojo.entity.Diary;
@@ -26,6 +29,8 @@ import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.diary.DiaryService;
 import com.aseubel.yusi.service.oss.OssService;
+import com.aseubel.yusi.service.task.TaskExecutionCommand;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -67,6 +72,9 @@ public class DiaryServiceImpl implements DiaryService {
 
     @Autowired
     private ApplicationEventPublisher eventPublisher;
+
+    @Autowired
+    private TaskExecutionService taskExecutionService;
 
     @Autowired
     @Lazy
@@ -523,7 +531,18 @@ public class DiaryServiceImpl implements DiaryService {
         if (diary == null) {
             return;
         }
-        eventPublisher.publishEvent(new DiaryChangedEvent(this, diary, type));
+        DiaryChangedEvent diaryEvent = new DiaryChangedEvent(this, diary, type);
+        taskExecutionService.recordCompleted(TaskExecutionCommand.builder()
+                .taskType(TaskExecutionType.DIARY)
+                .ownerUserId(diary.getUserId())
+                .sourceType(TaskExecutionSourceType.DIARY.code())
+                .sourceId(diary.getDiaryId())
+                .sourceVersion(diaryEvent.getEventId())
+                .triggerEventId(diaryEvent.getEventId())
+                .idempotencyKey(TaskExecutionKeys.fromEvent(TaskExecutionType.DIARY,
+                        TaskExecutionSourceType.DIARY.code(), diary.getDiaryId(), diaryEvent.getEventId()))
+                .build(), diary.getUpdateTime());
+        eventPublisher.publishEvent(diaryEvent);
 
         List<String> imageObjectKeys = Collections.emptyList();
         if (StrUtil.isNotBlank(diary.getImages())) {

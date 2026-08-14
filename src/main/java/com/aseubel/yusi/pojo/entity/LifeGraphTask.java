@@ -50,6 +50,10 @@ public class LifeGraphTask {
     @Column(name = "trigger_event_id", length = 64)
     private String triggerEventId;
 
+    /** Stable ID in the cross-domain task execution ledger. */
+    @Column(name = "task_execution_id", length = 64)
+    private String taskExecutionId;
+
     @Column(name = "task_type", nullable = false)
     @Enumerated(EnumType.STRING)
     private TaskType taskType;

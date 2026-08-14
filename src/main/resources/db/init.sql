@@ -373,6 +373,41 @@ CREATE TABLE `user_location` (
     KEY `idx_user_location_create_time` (`create_time`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '用户保存的地点表';
 
+DROP TABLE IF EXISTS `task_execution`;
+
+CREATE TABLE `task_execution` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `task_id` VARCHAR(64) NOT NULL COMMENT '服务端生成的稳定任务ID',
+    `task_type` VARCHAR(32) NOT NULL COMMENT '任务类型',
+    `owner_user_id` VARCHAR(64) DEFAULT NULL COMMENT '任务归属用户，批处理可为空',
+    `source_type` VARCHAR(32) NOT NULL COMMENT '来源命名空间',
+    `source_id` VARCHAR(255) NOT NULL COMMENT '来源业务ID',
+    `source_version` VARCHAR(128) DEFAULT NULL COMMENT '来源版本或事件版本',
+    `trigger_event_id` VARCHAR(64) DEFAULT NULL COMMENT '触发事件ID',
+    `run_id` VARCHAR(64) DEFAULT NULL COMMENT '批次或模型运行ID',
+    `idempotency_key` VARCHAR(191) NOT NULL COMMENT '全局幂等键',
+    `status` VARCHAR(24) NOT NULL COMMENT 'PENDING/RUNNING/RETRY_WAIT/SUCCEEDED/FAILED/CANCELLED',
+    `retry_count` INT NOT NULL DEFAULT 0 COMMENT '已使用重试次数',
+    `max_retries` INT NOT NULL DEFAULT 5 COMMENT '最大重试次数',
+    `failure_category` VARCHAR(24) DEFAULT NULL COMMENT '安全失败分类',
+    `checkpoint_json` VARCHAR(2048) DEFAULT NULL COMMENT '受限恢复检查点，不得包含正文或密钥',
+    `claimed_by` VARCHAR(128) DEFAULT NULL COMMENT '认领 worker 标识',
+    `claimed_at` DATETIME DEFAULT NULL COMMENT '认领时间',
+    `next_attempt_at` DATETIME DEFAULT NULL COMMENT '下次可尝试时间',
+    `completed_at` DATETIME DEFAULT NULL COMMENT '完成或终止时间',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `version` BIGINT NOT NULL DEFAULT 0 COMMENT '乐观锁版本号',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_task_execution_task_id` (`task_id`),
+    UNIQUE KEY `uk_task_execution_idempotency` (`idempotency_key`),
+    KEY `idx_task_execution_owner_status` (`owner_user_id`, `status`),
+    KEY `idx_task_execution_source` (`source_type`, `source_id`),
+    KEY `idx_task_execution_status_attempt` (`status`, `next_attempt_at`),
+    KEY `idx_task_execution_trigger` (`trigger_event_id`),
+    KEY `idx_task_execution_run` (`run_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '跨领域任务执行账本';
+
 DROP TABLE IF EXISTS `embedding_task`;
 -- Milvus Embedding 任务表
 -- 用于可靠的异步批量处理日记向量化
@@ -382,6 +417,7 @@ CREATE TABLE `embedding_task` (
     `diary_id` VARCHAR(255) NOT NULL COMMENT '关联的日记业务ID',
     `user_id` VARCHAR(255) NOT NULL COMMENT '关联的用户ID',
     `trigger_event_id` VARCHAR(64) DEFAULT NULL COMMENT '触发任务的日记变更事件ID',
+    `task_execution_id` VARCHAR(64) DEFAULT NULL COMMENT '跨领域任务执行账本ID',
     `task_type` VARCHAR(32) NOT NULL COMMENT '任务类型: UPSERT(新增/修改) / DELETE(删除)',
     `status` VARCHAR(32) NOT NULL COMMENT '任务状态: PENDING/PROCESSING/COMPLETED/FAILED',
     `retry_count` INT DEFAULT 0 COMMENT '重试次数',
@@ -394,6 +430,7 @@ CREATE TABLE `embedding_task` (
     KEY `idx_embedding_task_status` (`status`),
     KEY `idx_embedding_task_diary_id` (`diary_id`),
     KEY `idx_embedding_task_trigger_event` (`trigger_event_id`),
+    KEY `idx_embedding_task_execution` (`task_execution_id`),
     KEY `idx_embedding_task_next_retry` (`next_retry_at`),
     KEY `idx_embedding_task_created` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'Milvus Embedding 任务表';
@@ -552,6 +589,7 @@ CREATE TABLE `life_graph_task` (
     `diary_id` VARCHAR(255) NOT NULL COMMENT '关联的日记业务ID',
     `user_id` VARCHAR(64) NOT NULL COMMENT '关联的用户ID',
     `trigger_event_id` VARCHAR(64) DEFAULT NULL COMMENT '触发任务的日记变更事件ID',
+    `task_execution_id` VARCHAR(64) DEFAULT NULL COMMENT '跨领域任务执行账本ID',
     `task_type` VARCHAR(32) NOT NULL COMMENT '任务类型: UPSERT/DELETE',
     `status` VARCHAR(32) NOT NULL COMMENT '任务状态: PENDING/PROCESSING/COMPLETED/FAILED',
     `retry_count` INT DEFAULT 0 COMMENT '重试次数',
@@ -564,6 +602,7 @@ CREATE TABLE `life_graph_task` (
     KEY `idx_life_graph_task_status` (`status`),
     KEY `idx_life_graph_task_diary_id` (`diary_id`),
     KEY `idx_life_graph_task_trigger_event` (`trigger_event_id`),
+    KEY `idx_life_graph_task_execution` (`task_execution_id`),
     KEY `idx_life_graph_task_next_retry` (`next_retry_at`),
     KEY `idx_life_graph_task_created` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '人生图谱抽取任务表';

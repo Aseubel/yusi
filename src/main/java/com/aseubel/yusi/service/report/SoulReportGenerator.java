@@ -1,7 +1,11 @@
 package com.aseubel.yusi.service.report;
 
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
+import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
+import com.aseubel.yusi.pojo.constant.TaskExecutionType;
 import com.aseubel.yusi.pojo.entity.*;
 import com.aseubel.yusi.repository.*;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
@@ -9,6 +13,8 @@ import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.report.constant.SoulReportType;
+import com.aseubel.yusi.service.task.TaskExecutionCommand;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.aseubel.yusi.service.user.UserService;
 import dev.langchain4j.data.message.AiMessage;
@@ -48,6 +54,7 @@ public class SoulReportGenerator {
     private final ChatMemoryMessageRepository chatMemoryMessageRepository;
     private final AgentPersonaConfigRepository personaConfigRepository;
     private final NotificationService notificationService;
+    private final TaskExecutionService taskExecutionService;
 
     /** 单次扫描最大处理用户数 */
     private static final int MAX_BATCH_SIZE = 50;
@@ -60,6 +67,7 @@ public class SoulReportGenerator {
         try {
             LocalDate periodStart = LocalDate.now().minusDays(7);
             LocalDate periodEnd = LocalDate.now();
+            String generationRunId = IdUtil.fastSimpleUUID();
             List<User> matchEnabledUsers = userService.getMatchEnabledUsers();
             int processed = 0;
 
@@ -76,7 +84,19 @@ public class SoulReportGenerator {
                     continue;
                 }
 
+                TaskExecution execution = null;
                 try {
+                    String sourceId = userId + ":" + periodStart;
+                    execution = taskExecutionService.createOrGet(TaskExecutionCommand.builder()
+                            .taskType(TaskExecutionType.WEEKLY_REPORT)
+                            .ownerUserId(userId)
+                            .sourceType(TaskExecutionSourceType.WEEKLY_REPORT.code())
+                            .sourceId(sourceId)
+                            .sourceVersion(periodEnd.toString())
+                            .runId(generationRunId)
+                            .idempotencyKey(TaskExecutionKeys.scheduled(TaskExecutionType.WEEKLY_REPORT,
+                                    sourceId, generationRunId))
+                            .build());
                     // Check if there is any activity this week (diaries or chats)
                     LocalDateTime start = periodStart.atStartOfDay();
                     LocalDateTime end = periodEnd.plusDays(1).atStartOfDay();
@@ -87,11 +107,16 @@ public class SoulReportGenerator {
                         continue;
                     }
 
-                    SoulReport report = generateReport(user, periodStart, periodEnd);
+                    SoulReport report = generateReport(user, periodStart, periodEnd,
+                            generationRunId, execution.getTaskId());
                     reportRepository.save(report);
                     notifyUser(userId, report);
+                    taskExecutionService.succeed(execution.getTaskId(), null, LocalDateTime.now());
                     processed++;
                 } catch (Exception e) {
+                    if (execution != null) {
+                        taskExecutionService.fail(execution.getTaskId(), null, null, LocalDateTime.now());
+                    }
                     log.warn("为用户 {} 生成周报失败", userId, e);
                 }
             }
@@ -102,7 +127,8 @@ public class SoulReportGenerator {
         }
     }
 
-    private SoulReport generateReport(User user, LocalDate periodStart, LocalDate periodEnd) {
+    private SoulReport generateReport(User user, LocalDate periodStart, LocalDate periodEnd,
+            String generationRunId, String taskExecutionId) {
         String userId = user.getUserId();
         String context = buildReportContext(userId, periodStart, periodEnd);
         
@@ -112,6 +138,7 @@ public class SoulReportGenerator {
         ModelRouteContextHolder.set(ModelRouteContext.builder()
                 .scene(PromptKey.SOUL_WEEKLY_REPORT.getKey())
                 .userId(userId)
+                .runId(generationRunId)
                 .build());
         AiMessage aiMessage;
         try {
@@ -131,6 +158,8 @@ public class SoulReportGenerator {
                 .content(markdown)
                 .periodStart(periodStart)
                 .periodEnd(periodEnd)
+                .generationRunId(generationRunId)
+                .taskExecutionId(taskExecutionId)
                 .notified(false)
                 .build();
     }

@@ -12,10 +12,13 @@ import com.aseubel.yusi.service.lifegraph.LifeGraphTaskBatchService;
 import com.aseubel.yusi.service.match.MatchService;
 import com.aseubel.yusi.service.report.SoulReportGenerator;
 import com.aseubel.yusi.service.room.RoomScheduler;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.context.annotation.Profile;
+
+import java.time.LocalDateTime;
 
 /**
  * Central registry for application-level scheduled entry points.
@@ -39,6 +42,7 @@ public class YusiScheduledTasks {
     private final LifeGraphMergeSuggestionService lifeGraphMergeSuggestionService;
     private final SoulReportGenerator soulReportGenerator;
     private final MatchService matchService;
+    private final TaskExecutionService taskExecutionService;
     private static final long MODEL_STATE_SYNC_INTERVAL_MS = 30_000L;
 
     @Scheduled(cron = "0 0/30 * * * ?")
@@ -99,6 +103,12 @@ public class YusiScheduledTasks {
     @Scheduled(fixedDelay = 3600000)
     public void cleanupLifeGraphTasks() {
         jobRunner.runIfLeader("lifegraph-cleanup", lifeGraphTaskBatchService::cleanupCompletedTasks);
+    }
+
+    @Scheduled(fixedDelay = 60000)
+    public void recoverTaskExecutions() {
+        jobRunner.runIfLeader("task-execution-recovery",
+                () -> taskExecutionService.recoverStaleTasks(LocalDateTime.now()));
     }
 
     @Scheduled(cron = "0 0 3 * * ?")

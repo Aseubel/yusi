@@ -5,6 +5,8 @@ import com.aseubel.yusi.pojo.entity.UserPersona;
 import com.aseubel.yusi.repository.UserPersonaRepository;
 import com.aseubel.yusi.service.persona.impl.UserPersonaUpdateServiceImpl;
 import com.aseubel.yusi.service.user.impl.UserPersonaServiceImpl;
+import com.aseubel.yusi.service.task.TaskExecutionService;
+import com.aseubel.yusi.pojo.entity.TaskExecution;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -24,6 +26,9 @@ class UserPersonaUpdateServiceTest {
     @Mock
     private UserPersonaRepository repository;
 
+    @Mock
+    private TaskExecutionService taskExecutionService;
+
     @Test
     void cognitionSourceUpdatesContentWithoutResettingUserLifecycleControls() {
         LocalDateTime validUntil = LocalDateTime.now().plusDays(30);
@@ -38,12 +43,13 @@ class UserPersonaUpdateServiceTest {
                 .build();
         when(repository.findByUserId("user-1")).thenReturn(Optional.of(existing));
         when(repository.save(any(UserPersona.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(taskExecutionService.createOrGet(any())).thenReturn(TaskExecution.builder().taskId("task-1").build());
 
         CognitionRoutingResult routing = CognitionRoutingResult.builder()
                 .interests("胶片摄影")
                 .build();
 
-        new UserPersonaUpdateServiceImpl(new UserPersonaServiceImpl(repository))
+        new UserPersonaUpdateServiceImpl(new UserPersonaServiceImpl(repository), taskExecutionService)
                 .mergeFromRouting("user-1", routing, "DIARY", "diary-7");
 
         assertEquals("胶片摄影", existing.getInterests());

@@ -52,6 +52,10 @@ public class EmbeddingTask {
     @Column(name = "trigger_event_id", length = 64)
     private String triggerEventId;
 
+    /** Stable ID in the cross-domain task execution ledger. */
+    @Column(name = "task_execution_id", length = 64)
+    private String taskExecutionId;
+
     /**
      * 任务类型: UPSERT(新增/修改) / DELETE(删除)
      */
