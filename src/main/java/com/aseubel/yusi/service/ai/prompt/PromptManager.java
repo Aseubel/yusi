@@ -29,8 +29,7 @@ public class PromptManager {
 
     private final PromptService promptService;
 
-    // Cache structure: Key -> Prompt template
-    private final Map<String, String> promptCache = new ConcurrentHashMap<>();
+    private final Map<String, PromptSnapshot> promptCache = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() {
@@ -58,16 +57,22 @@ public class PromptManager {
     }
 
     public void loadPrompt(String keyStr) {
-        String dbPrompt = null;
+        PromptTemplate dbTemplate = null;
         try {
-            dbPrompt = promptService.getPrompt(keyStr, PromptDefaults.LOCALE);
+            dbTemplate = promptService.getPromptTemplate(keyStr, PromptDefaults.LOCALE);
         } catch (Exception e) {
             log.warn("从数据库加载 Prompt [{}] 失败: {}", keyStr, e.getMessage());
         }
 
-        if (dbPrompt != null && StrUtil.isNotBlank(dbPrompt) && dbPrompt.length() > 5) {
-            promptCache.put(keyStr, dbPrompt);
-            log.info("成功挂载提示词 [{}] - 来源: [Database], 长度: {} 字符", keyStr, dbPrompt.length());
+        if (dbTemplate != null && StrUtil.isNotBlank(dbTemplate.getTemplate())
+                && dbTemplate.getTemplate().length() > 5) {
+            promptCache.put(keyStr, new PromptSnapshot(
+                    keyStr,
+                    blankToNull(dbTemplate.getVersion()),
+                    StrUtil.blankToDefault(dbTemplate.getLocale(), PromptDefaults.LOCALE),
+                    dbTemplate.getTemplate()));
+            log.info("成功挂载提示词 [{}] - 来源: [Database], 长度: {} 字符",
+                    keyStr, dbTemplate.getTemplate().length());
             return;
         }
 
@@ -94,7 +99,8 @@ public class PromptManager {
             source = "Hardcoded Fallback";
         }
 
-        promptCache.put(keyStr, contentToUse);
+        promptCache.put(keyStr, new PromptSnapshot(
+                keyStr, PromptDefaults.VERSION, PromptDefaults.LOCALE, contentToUse));
         log.info("成功挂载提示词 [{}] - 来源: [{}], 长度: {} 字符", keyStr, source, contentToUse.length());
 
         // Auto-initialize to Database so that it is visible in the admin dashboard!
@@ -351,11 +357,24 @@ public class PromptManager {
     }
 
     public String getPrompt(String keyStr) {
-        return promptCache.getOrDefault(keyStr, "");
+        PromptSnapshot snapshot = getSnapshot(keyStr);
+        return snapshot == null || snapshot.template() == null ? "" : snapshot.template();
     }
 
     public String getPrompt(PromptKey key) {
         return getPrompt(key.getKey());
+    }
+
+    public PromptSnapshot getSnapshot(String keyStr) {
+        return promptCache.get(keyStr);
+    }
+
+    public PromptSnapshot getSnapshot(PromptKey key) {
+        return key == null ? null : getSnapshot(key.getKey());
+    }
+
+    private String blankToNull(String value) {
+        return StrUtil.isBlank(value) ? null : value;
     }
 
     @EventListener

@@ -49,14 +49,15 @@ public class PromptServiceImpl implements PromptService {
 
     @Override
     public String getPrompt(String name, String locale) {
-        Optional<PromptTemplate> promptOpt = promptRepository
-                .findTopByNameAndLocaleAndActiveTrueOrderByIsDefaultDescPriorityDescUpdatedAtDesc(name, locale);
+        PromptTemplate prompt = getPromptTemplate(name, locale);
+        return prompt == null ? null : prompt.getTemplate();
+    }
 
-        if (promptOpt.isEmpty()) {
-            return null;
-        }
-
-        return promptOpt.map(PromptTemplate::getTemplate).orElse(null);
+    @Override
+    public PromptTemplate getPromptTemplate(String name, String locale) {
+        return promptRepository
+                .findTopByNameAndLocaleAndActiveTrueOrderByIsDefaultDescPriorityDescUpdatedAtDesc(name, locale)
+                .orElse(null);
     }
 
     @Override
