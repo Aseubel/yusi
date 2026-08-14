@@ -4,10 +4,12 @@ import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.pojo.dto.notification.AnnouncementResponse;
 import com.aseubel.yusi.pojo.dto.notification.PublishAnnouncementRequest;
 import com.aseubel.yusi.pojo.entity.NotificationAnnouncement;
+import com.aseubel.yusi.pojo.entity.ProductEvent;
 import com.aseubel.yusi.pojo.entity.UserNotification;
 import com.aseubel.yusi.repository.NotificationAnnouncementRepository;
 import com.aseubel.yusi.repository.UserNotificationRepository;
 import com.aseubel.yusi.repository.UserRepository;
+import com.aseubel.yusi.service.event.ProductEventService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -23,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,8 +41,18 @@ class NotificationServiceTest {
     @Mock
     private UserRepository userRepository;
 
+    @Mock
+    private ProductEventService productEventService;
+
     @InjectMocks
     private NotificationService notificationService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubProductEvents() {
+        lenient().when(productEventService.record(any())).thenReturn(ProductEvent.builder()
+                .eventId("event-notification-1")
+                .build());
+    }
 
     @Test
     void notificationTypeContractAcceptsCanonicalCaseInsensitiveValues() {

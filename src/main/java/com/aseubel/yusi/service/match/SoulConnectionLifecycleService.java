@@ -1,9 +1,10 @@
 package com.aseubel.yusi.service.match;
 
-import cn.hutool.core.util.IdUtil;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.constant.MatchFeedbackAction;
+import com.aseubel.yusi.pojo.constant.ProductEventSensitivity;
+import com.aseubel.yusi.pojo.constant.ProductEventSource;
 import com.aseubel.yusi.pojo.constant.SoulConnectionAction;
 import com.aseubel.yusi.pojo.entity.SoulConnection;
 import com.aseubel.yusi.pojo.entity.SoulConnectionEvent;
@@ -11,12 +12,17 @@ import com.aseubel.yusi.pojo.entity.SoulConnectionStatus;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.repository.SoulConnectionRepository;
 import com.aseubel.yusi.repository.SoulConnectionEventRepository;
+import com.aseubel.yusi.service.event.ProductEventCommand;
+import com.aseubel.yusi.service.event.ProductEventService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +30,7 @@ public class SoulConnectionLifecycleService {
 
     private final SoulConnectionRepository connectionRepository;
     private final SoulConnectionEventRepository eventRepository;
+    private final ProductEventService productEventService;
 
     public Optional<SoulConnection> findByMatchId(Long matchId) {
         return connectionRepository.findByMatchId(matchId);
@@ -244,8 +251,29 @@ public class SoulConnectionLifecycleService {
         if (saved.getId() == null) {
             throw new IllegalStateException("Connection ID is required before recording a lifecycle event");
         }
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("fromStatus", fromStatus != null ? fromStatus.name() : null);
+        payload.put("toStatus", saved.getStatus() != null ? saved.getStatus().name() : null);
+        payload.put("action", action.code());
+        if (reasonCategory != null) {
+            payload.put("reasonCategory", reasonCategory);
+        }
+        com.aseubel.yusi.pojo.entity.ProductEvent productEvent = productEventService.record(ProductEventCommand.builder()
+                .eventName(action.eventName())
+                .source(ProductEventSource.CONNECTION.code())
+                .sensitivity(ProductEventSensitivity.RESTRICTED.name())
+                .userId(actorUserId)
+                .actorUserId(actorUserId)
+                .matchId(match.getId())
+                .connectionId(saved.getId())
+                .idempotencyKey("connection:" + saved.getId() + ":" + fromStatus + ":"
+                        + saved.getStatus() + ":" + action.code())
+                .scopeUserIds(Set.of(match.getUserAId(), match.getUserBId()))
+                .payload(payload)
+                .occurredAt(now)
+                .build());
         eventRepository.save(SoulConnectionEvent.builder()
-                .eventId(IdUtil.fastSimpleUUID())
+                .eventId(productEvent.getEventId())
                 .eventName(action.eventName())
                 .schemaVersion(1)
                 .connectionId(saved.getId())

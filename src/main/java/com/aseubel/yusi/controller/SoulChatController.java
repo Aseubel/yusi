@@ -8,12 +8,18 @@ import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.chat.SendMessageRequest;
+import com.aseubel.yusi.pojo.constant.ProductEventName;
+import com.aseubel.yusi.pojo.constant.ProductEventSensitivity;
+import com.aseubel.yusi.pojo.constant.ProductEventSource;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.SoulMessage;
 import com.aseubel.yusi.pojo.entity.SoulConnection;
+import com.aseubel.yusi.pojo.entity.ProductEvent;
 import com.aseubel.yusi.repository.SoulMatchRepository;
 import com.aseubel.yusi.repository.SoulMessageRepository;
 import com.aseubel.yusi.service.match.SoulConnectionLifecycleService;
+import com.aseubel.yusi.service.event.ProductEventCommand;
+import com.aseubel.yusi.service.event.ProductEventService;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +28,11 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.springframework.transaction.annotation.Transactional;
 
 @Auth
 @Slf4j
@@ -46,7 +56,11 @@ public class SoulChatController {
     @Autowired
     private WebSocketController webSocketController;
 
+    @Autowired
+    private ProductEventService productEventService;
+
     @PostMapping("/send")
+    @Transactional
     @RateLimiter(key = "soul-chat-send", time = 60, count = 60, limitType = LimitType.USER)
     public Response<SoulMessage> sendMessage(@RequestBody SendMessageRequest request) {
         String senderId = UserContext.getUserId();
@@ -78,6 +92,26 @@ public class SoulChatController {
                 .build();
 
         SoulMessage saved = messageRepository.save(message);
+        Map<String, Object> eventPayload = new HashMap<>();
+        eventPayload.put("messageId", saved.getId());
+        eventPayload.put("matchId", saved.getMatchId());
+        if (saved.getConnectionId() != null) {
+            eventPayload.put("connectionId", saved.getConnectionId());
+        }
+        ProductEvent event = productEventService.record(ProductEventCommand.builder()
+                .eventName(ProductEventName.CHAT_MESSAGE_CREATED.value())
+                .source(ProductEventSource.CHAT.code())
+                .sensitivity(ProductEventSensitivity.RESTRICTED.name())
+                .userId(senderId)
+                .actorUserId(senderId)
+                .matchId(saved.getMatchId())
+                .connectionId(saved.getConnectionId())
+                .idempotencyKey("soul-message:" + saved.getId())
+                .scopeUserIds(Set.of(match.getUserAId(), match.getUserBId()))
+                .payload(eventPayload)
+                .build());
+        saved.setSourceEventId(event.getEventId());
+        saved = messageRepository.save(saved);
 
         // 更新发送者在线状态
         webSocketController.updateUserStatus(senderId, request.getMatchId(), true);

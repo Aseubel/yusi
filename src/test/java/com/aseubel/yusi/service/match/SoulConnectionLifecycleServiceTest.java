@@ -5,8 +5,10 @@ import com.aseubel.yusi.pojo.entity.SoulConnection;
 import com.aseubel.yusi.pojo.entity.SoulConnectionEvent;
 import com.aseubel.yusi.pojo.entity.SoulConnectionStatus;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
+import com.aseubel.yusi.pojo.entity.ProductEvent;
 import com.aseubel.yusi.repository.SoulConnectionRepository;
 import com.aseubel.yusi.repository.SoulConnectionEventRepository;
+import com.aseubel.yusi.service.event.ProductEventService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -27,11 +29,15 @@ class SoulConnectionLifecycleServiceTest {
 
     private final SoulConnectionRepository connectionRepository = mock(SoulConnectionRepository.class);
     private final SoulConnectionEventRepository eventRepository = mock(SoulConnectionEventRepository.class);
+    private final ProductEventService productEventService = mock(ProductEventService.class);
     private final SoulConnectionLifecycleService service =
-            new SoulConnectionLifecycleService(connectionRepository, eventRepository);
+            new SoulConnectionLifecycleService(connectionRepository, eventRepository, productEventService);
 
     @BeforeEach
     void assignConnectionIdWhenSaved() {
+        when(productEventService.record(any())).thenReturn(ProductEvent.builder()
+                .eventId("event-connection-1")
+                .build());
         when(connectionRepository.save(any(SoulConnection.class))).thenAnswer(invocation -> {
             SoulConnection connection = invocation.getArgument(0);
             if (connection.getId() == null) {
@@ -124,6 +130,7 @@ class SoulConnectionLifecycleServiceTest {
         assertEquals(99L, event.getConnectionId());
         assertEquals(7L, event.getMatchId());
         assertEquals("user-a", event.getActorUserId());
+        assertEquals("event-connection-1", event.getEventId());
         assertEquals(SoulConnectionStatus.RECOMMENDED, event.getFromStatus());
         assertEquals(SoulConnectionStatus.WAITING_REPLY, event.getToStatus());
     }

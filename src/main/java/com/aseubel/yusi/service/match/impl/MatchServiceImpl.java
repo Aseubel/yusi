@@ -6,6 +6,9 @@ import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.constant.MatchAction;
 import com.aseubel.yusi.pojo.constant.MatchFeedbackAction;
+import com.aseubel.yusi.pojo.constant.ProductEventName;
+import com.aseubel.yusi.pojo.constant.ProductEventSensitivity;
+import com.aseubel.yusi.pojo.constant.ProductEventSource;
 import com.aseubel.yusi.pojo.constant.SoulConnectionReason;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
@@ -28,6 +31,8 @@ import com.aseubel.yusi.service.match.MatchFeedbackService;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
 import com.aseubel.yusi.service.match.MatchService;
 import com.aseubel.yusi.service.match.SoulConnectionLifecycleService;
+import com.aseubel.yusi.service.event.ProductEventCommand;
+import com.aseubel.yusi.service.event.ProductEventService;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -93,6 +98,7 @@ public class MatchServiceImpl implements MatchService {
     private final ConnectionGuideService connectionGuideService;
     private final SoulConnectionLifecycleService connectionLifecycleService;
     private final MatchFeedbackService matchFeedbackService;
+    private final ProductEventService productEventService;
     private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
     private final ChatModel chatModel;
@@ -231,10 +237,45 @@ public class MatchServiceImpl implements MatchService {
                     .updateTime(LocalDateTime.now())
                     .build();
 
-            soulMatchRepository.save(match);
+            SoulMatch saved = soulMatchRepository.save(match);
+            Map<String, Object> eventPayload = new HashMap<>();
+            eventPayload.put("reasonCount", countRecommendationReasons(rerankResult));
+            if (profileA != null && profileA.getVersion() != null) {
+                eventPayload.put("profileVersion", profileA.getVersion());
+            }
+            com.aseubel.yusi.pojo.entity.ProductEvent event = productEventService.record(ProductEventCommand.builder()
+                    .eventName("match.recommended")
+                    .source(ProductEventSource.MATCH.code())
+                    .sensitivity(ProductEventSensitivity.LOW.name())
+                    .userId(userA.getUserId())
+                    .runId(generationRunId)
+                    .matchId(saved.getId())
+                    .idempotencyKey("match:recommended:" + saved.getId())
+                    .scopeUserIds(Set.of(userA.getUserId(), userB.getUserId()))
+                    .payload(eventPayload)
+                    .build());
+            saved.setRecommendationEventId(event.getEventId());
+            soulMatchRepository.save(saved);
         } catch (Exception e) {
             log.error("Failed to create match", e);
         }
+    }
+
+    private int countRecommendationReasons(MatchRerankResult rerankResult) {
+        if (rerankResult == null) {
+            return 0;
+        }
+        int count = 0;
+        if (StrUtil.isNotBlank(rerankResult.getReason())) {
+            count++;
+        }
+        if (StrUtil.isNotBlank(rerankResult.getTimingReason())) {
+            count++;
+        }
+        if (StrUtil.isNotBlank(rerankResult.getIceBreaker())) {
+            count++;
+        }
+        return count;
     }
 
     private CompletableFuture<String> generateLetter(String userId, String myProfile, String partnerProfile,
@@ -726,8 +767,11 @@ public class MatchServiceImpl implements MatchService {
                 : connectionLifecycleService.decline(saved, userId, SoulConnectionReason.USER_DECLINED.code());
 
         String feedbackAction = matchAction.feedbackCode();
+        com.aseubel.yusi.pojo.entity.ProductEvent feedbackEvent = recordFeedbackEvent(
+                saved, connection, userId, feedbackAction);
         matchFeedbackService.recordConnectionFeedback(connection != null ? connection.getId() : null,
-                saved.getId(), userId, feedbackAction);
+                saved.getId(), userId, feedbackAction, null, feedbackEvent.getEventId(),
+                feedbackIdempotencyKey(connection, userId, feedbackAction));
 
         return toRecommendationResponse(userId, saved);
     }
@@ -748,7 +792,10 @@ public class MatchServiceImpl implements MatchService {
         if (MatchFeedbackAction.DO_NOT_CONTINUE.code().equals(normalizedCategory)) {
             connection = connectionLifecycleService.end(match, userId, normalizedCategory);
         }
-        matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId, normalizedCategory);
+        com.aseubel.yusi.pojo.entity.ProductEvent feedbackEvent = recordFeedbackEvent(
+                match, connection, userId, normalizedCategory);
+        matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId, normalizedCategory,
+                null, feedbackEvent.getEventId(), feedbackIdempotencyKey(connection, userId, normalizedCategory));
         if (MatchFeedbackAction.DEEP_INTERACTION.code().equals(normalizedCategory)
                 && matchFeedbackService.hasMutualDeepInteraction(connection, match)) {
             connection = connectionLifecycleService.markMutualResonance(match, userId);
@@ -764,8 +811,11 @@ public class MatchServiceImpl implements MatchService {
         SoulMatch match = requireMatch(matchId, userId);
         SoulConnection connection = connectionLifecycleService.end(match, userId,
                 StrUtil.blankToDefault(reasonCategory, SoulConnectionReason.USER_ENDED.code()));
+        String feedbackAction = MatchFeedbackAction.DO_NOT_CONTINUE.code();
+        com.aseubel.yusi.pojo.entity.ProductEvent feedbackEvent = recordFeedbackEvent(
+                match, connection, userId, feedbackAction);
         matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId,
-                MatchFeedbackAction.DO_NOT_CONTINUE.code());
+                feedbackAction, null, feedbackEvent.getEventId(), feedbackIdempotencyKey(connection, userId, feedbackAction));
         return toRecommendationResponse(userId, match);
     }
 
@@ -777,8 +827,11 @@ public class MatchServiceImpl implements MatchService {
         SoulMatch match = requireMatch(matchId, userId);
         SoulConnection connection = connectionLifecycleService.report(match, userId,
                 StrUtil.blankToDefault(reasonCategory, SoulConnectionReason.UNSAFE.code()));
+        String feedbackAction = MatchFeedbackAction.REPORT.code();
+        com.aseubel.yusi.pojo.entity.ProductEvent feedbackEvent = recordFeedbackEvent(
+                match, connection, userId, feedbackAction);
         matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId,
-                MatchFeedbackAction.REPORT.code());
+                feedbackAction, null, feedbackEvent.getEventId(), feedbackIdempotencyKey(connection, userId, feedbackAction));
         return toRecommendationResponse(userId, match);
     }
 
@@ -790,8 +843,11 @@ public class MatchServiceImpl implements MatchService {
         SoulMatch match = requireMatch(matchId, userId);
         SoulConnection connection = connectionLifecycleService.block(match, userId,
                 StrUtil.blankToDefault(reasonCategory, SoulConnectionReason.USER_BLOCKED.code()));
+        String feedbackAction = MatchFeedbackAction.BLOCK.code();
+        com.aseubel.yusi.pojo.entity.ProductEvent feedbackEvent = recordFeedbackEvent(
+                match, connection, userId, feedbackAction);
         matchFeedbackService.recordConnectionFeedback(connection.getId(), matchId, userId,
-                MatchFeedbackAction.BLOCK.code());
+                feedbackAction, null, feedbackEvent.getEventId(), feedbackIdempotencyKey(connection, userId, feedbackAction));
         return toRecommendationResponse(userId, match);
     }
 
@@ -802,6 +858,29 @@ public class MatchServiceImpl implements MatchService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权操作该匹配");
         }
         return match;
+    }
+
+    private com.aseubel.yusi.pojo.entity.ProductEvent recordFeedbackEvent(SoulMatch match,
+            SoulConnection connection, String userId, String category) {
+        if (connection == null || connection.getId() == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "连接不存在，无法记录反馈事件");
+        }
+        return productEventService.record(ProductEventCommand.builder()
+                .eventName(ProductEventName.CONNECTION_FEEDBACK_SUBMITTED.value())
+                .source(ProductEventSource.CONNECTION.code())
+                .sensitivity(ProductEventSensitivity.RESTRICTED.name())
+                .userId(userId)
+                .actorUserId(userId)
+                .matchId(match.getId())
+                .connectionId(connection.getId())
+                .idempotencyKey(feedbackIdempotencyKey(connection, userId, category))
+                .scopeUserIds(Set.of(match.getUserAId(), match.getUserBId()))
+                .payload(Map.of("feedbackCategory", category))
+                .build());
+    }
+
+    private String feedbackIdempotencyKey(SoulConnection connection, String userId, String category) {
+        return "connection-feedback:" + connection.getId() + ":" + userId + ":" + category;
     }
 
     private String normalizeConnectionCategory(String category) {

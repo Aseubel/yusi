@@ -5,13 +5,19 @@ import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.notification.AnnouncementResponse;
 import com.aseubel.yusi.pojo.dto.notification.PublishAnnouncementRequest;
+import com.aseubel.yusi.pojo.constant.ProductEventName;
+import com.aseubel.yusi.pojo.constant.ProductEventSensitivity;
+import com.aseubel.yusi.pojo.constant.ProductEventSource;
 import com.aseubel.yusi.pojo.entity.NotificationAnnouncement;
+import com.aseubel.yusi.pojo.entity.ProductEvent;
 import com.aseubel.yusi.pojo.entity.UserNotification;
 import com.aseubel.yusi.redis.annotation.QueryCache;
 import com.aseubel.yusi.redis.annotation.UpdateCache;
 import com.aseubel.yusi.repository.NotificationAnnouncementRepository;
 import com.aseubel.yusi.repository.UserNotificationRepository;
 import com.aseubel.yusi.repository.UserRepository;
+import com.aseubel.yusi.service.event.ProductEventCommand;
+import com.aseubel.yusi.service.event.ProductEventService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -22,8 +28,12 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 @Slf4j
 @Service
@@ -33,6 +43,7 @@ public class NotificationService {
     private final UserNotificationRepository notificationRepository;
     private final NotificationAnnouncementRepository announcementRepository;
     private final UserRepository userRepository;
+    private final ProductEventService productEventService;
 
     /**
      * Creates a typed notification. Runtime producers should use this overload
@@ -58,8 +69,27 @@ public class NotificationService {
     private UserNotification createNotificationInternal(String userId, UserNotification.NotificationType type,
                                                 String title, String content, String refType, String refId,
                                                 String extraData, String sourceEventId, String announcementId) {
+        String notificationId = IdUtil.fastSimpleUUID();
+        Map<String, Object> eventPayload = new HashMap<>();
+        eventPayload.put("notificationId", notificationId);
+        eventPayload.put("notificationType", type.name());
+        if (refType != null) {
+            eventPayload.put("refType", refType);
+        }
+        if (refId != null) {
+            eventPayload.put("refId", refId);
+        }
+        ProductEvent event = productEventService.record(ProductEventCommand.builder()
+                .eventName(ProductEventName.NOTIFICATION_CREATED.value())
+                .source(ProductEventSource.NOTIFICATION.code())
+                .sensitivity(ProductEventSensitivity.LOW.name())
+                .userId(userId)
+                .idempotencyKey("notification:" + notificationId)
+                .scopeUserIds(Set.of(userId))
+                .payload(eventPayload)
+                .build());
         UserNotification notification = UserNotification.builder()
-                .notificationId(IdUtil.fastSimpleUUID())
+                .notificationId(notificationId)
                 .userId(userId)
                 .type(type.name())
                 .title(title)
@@ -67,7 +97,7 @@ public class NotificationService {
                 .refType(refType)
                 .refId(refId)
                 .announcementId(announcementId)
-                .sourceEventId(sourceEventId)
+                .sourceEventId(sourceEventId != null ? sourceEventId : event.getEventId())
                 .extraData(extraData)
                 .isRead(false)
                 .build();
@@ -151,6 +181,20 @@ public class NotificationService {
                 .createdAt(publishedAt)
                 .build());
 
+        Set<String> eventScope = new LinkedHashSet<>(userIds);
+        eventScope.add(publisherId);
+        ProductEvent publicationEvent = productEventService.record(ProductEventCommand.builder()
+                .eventName(ProductEventName.NOTIFICATION_ANNOUNCEMENT_PUBLISHED.value())
+                .source(ProductEventSource.NOTIFICATION.code())
+                .sensitivity(ProductEventSensitivity.LOW.name())
+                .userId(publisherId)
+                .actorUserId(publisherId)
+                .idempotencyKey("announcement:" + announcement.getAnnouncementId())
+                .scopeUserIds(eventScope)
+                .payload(Map.of("announcementId", announcement.getAnnouncementId(),
+                        "recipientCount", userIds.size()))
+                .build());
+
         List<UserNotification> inboxItems = new ArrayList<>(userIds.size());
         for (String userId : userIds) {
             inboxItems.add(UserNotification.builder()
@@ -162,6 +206,7 @@ public class NotificationService {
                     .refType(UserNotification.RefType.ANNOUNCEMENT.name())
                     .refId(announcement.getAnnouncementId())
                     .announcementId(announcement.getAnnouncementId())
+                    .sourceEventId(publicationEvent.getEventId())
                     .isRead(false)
                     .createdAt(publishedAt)
                     .build());
