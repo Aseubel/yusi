@@ -2,10 +2,14 @@ package com.aseubel.yusi.service.match;
 
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.pojo.entity.SoulConnection;
+import com.aseubel.yusi.pojo.entity.SoulConnectionEvent;
 import com.aseubel.yusi.pojo.entity.SoulConnectionStatus;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.repository.SoulConnectionRepository;
+import com.aseubel.yusi.repository.SoulConnectionEventRepository;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.Optional;
 
@@ -15,20 +19,32 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class SoulConnectionLifecycleServiceTest {
 
     private final SoulConnectionRepository connectionRepository = mock(SoulConnectionRepository.class);
-    private final SoulConnectionLifecycleService service = new SoulConnectionLifecycleService(connectionRepository);
+    private final SoulConnectionEventRepository eventRepository = mock(SoulConnectionEventRepository.class);
+    private final SoulConnectionLifecycleService service =
+            new SoulConnectionLifecycleService(connectionRepository, eventRepository);
+
+    @BeforeEach
+    void assignConnectionIdWhenSaved() {
+        when(connectionRepository.save(any(SoulConnection.class))).thenAnswer(invocation -> {
+            SoulConnection connection = invocation.getArgument(0);
+            if (connection.getId() == null) {
+                connection.setId(99L);
+            }
+            return connection;
+        });
+    }
 
     @Test
     void firstAcceptanceCreatesWaitingConnection() {
         SoulMatch match = match(7L, 1, 0, false);
         when(connectionRepository.findByMatchId(7L)).thenReturn(Optional.empty());
-        when(connectionRepository.save(any(SoulConnection.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
         SoulConnection connection = service.accept(match, "user-a");
 
         assertEquals(SoulConnectionStatus.WAITING_REPLY, connection.getStatus());
@@ -49,9 +65,6 @@ class SoulConnectionLifecycleServiceTest {
                 .status(SoulConnectionStatus.WAITING_REPLY)
                 .build();
         when(connectionRepository.findByMatchId(7L)).thenReturn(Optional.of(waiting));
-        when(connectionRepository.save(any(SoulConnection.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
         SoulConnection connection = service.accept(match(7L, 1, 1, true), "user-b");
 
         assertEquals(SoulConnectionStatus.STARTED, connection.getStatus());
@@ -68,9 +81,6 @@ class SoulConnectionLifecycleServiceTest {
                 .status(SoulConnectionStatus.STARTED)
                 .build();
         when(connectionRepository.findByMatchId(7L)).thenReturn(Optional.of(started));
-        when(connectionRepository.save(any(SoulConnection.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
         SoulConnection reported = service.report(match(7L, 1, 1, true), "user-a", "UNSAFE");
 
         assertEquals(SoulConnectionStatus.REPORTED, reported.getStatus());
@@ -92,14 +102,50 @@ class SoulConnectionLifecycleServiceTest {
                 .status(SoulConnectionStatus.REPORTED)
                 .build();
         when(connectionRepository.findByMatchId(7L)).thenReturn(Optional.of(reported));
-        when(connectionRepository.save(any(SoulConnection.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
         SoulConnection blocked = service.block(match(7L, 1, 1, true), "user-b", "SAFETY");
 
         assertEquals(SoulConnectionStatus.BLOCKED, blocked.getStatus());
         assertThrows(BusinessException.class,
                 () -> service.end(match(7L), "user-a", "NO_LONGER_CONTINUE"));
+    }
+
+    @Test
+    void acceptancePersistsEvidenceBackedConnectionEvent() {
+        when(connectionRepository.findByMatchId(7L)).thenReturn(Optional.empty());
+
+        service.accept(match(7L, 1, 0, false), "user-a");
+
+        ArgumentCaptor<SoulConnectionEvent> captor = ArgumentCaptor.forClass(SoulConnectionEvent.class);
+        verify(eventRepository).save(captor.capture());
+        SoulConnectionEvent event = captor.getValue();
+        assertNotNull(event.getEventId());
+        assertEquals("connection.accepted", event.getEventName());
+        assertEquals(1, event.getSchemaVersion());
+        assertEquals(99L, event.getConnectionId());
+        assertEquals(7L, event.getMatchId());
+        assertEquals("user-a", event.getActorUserId());
+        assertEquals(SoulConnectionStatus.RECOMMENDED, event.getFromStatus());
+        assertEquals(SoulConnectionStatus.WAITING_REPLY, event.getToStatus());
+    }
+
+    @Test
+    void retryingSameAcceptanceDoesNotCreateDuplicateEvent() {
+        SoulConnection waiting = SoulConnection.builder()
+                .id(99L)
+                .matchId(7L)
+                .userAId("user-a")
+                .userBId("user-b")
+                .status(SoulConnectionStatus.WAITING_REPLY)
+                .lastAction("ACCEPT")
+                .lastActionBy("user-a")
+                .build();
+        when(connectionRepository.findByMatchId(7L)).thenReturn(Optional.of(waiting));
+
+        SoulConnection connection = service.accept(match(7L, 1, 0, false), "user-a");
+
+        assertEquals(SoulConnectionStatus.WAITING_REPLY, connection.getStatus());
+        verify(eventRepository, never()).save(any(SoulConnectionEvent.class));
+        verify(connectionRepository, never()).save(any(SoulConnection.class));
     }
 
     private SoulMatch match(Long id, int statusA, int statusB, boolean matched) {

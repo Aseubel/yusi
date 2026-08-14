@@ -1,13 +1,16 @@
 package com.aseubel.yusi.service.match;
 
+import cn.hutool.core.util.IdUtil;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.pojo.constant.MatchFeedbackAction;
+import com.aseubel.yusi.pojo.constant.SoulConnectionAction;
 import com.aseubel.yusi.pojo.entity.SoulConnection;
+import com.aseubel.yusi.pojo.entity.SoulConnectionEvent;
 import com.aseubel.yusi.pojo.entity.SoulConnectionStatus;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
-import com.aseubel.yusi.pojo.constant.SoulConnectionAction;
-import com.aseubel.yusi.pojo.constant.MatchFeedbackAction;
 import com.aseubel.yusi.repository.SoulConnectionRepository;
+import com.aseubel.yusi.repository.SoulConnectionEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +23,7 @@ import java.util.Optional;
 public class SoulConnectionLifecycleService {
 
     private final SoulConnectionRepository connectionRepository;
+    private final SoulConnectionEventRepository eventRepository;
 
     public Optional<SoulConnection> findByMatchId(Long matchId) {
         return connectionRepository.findByMatchId(matchId);
@@ -33,14 +37,19 @@ public class SoulConnectionLifecycleService {
         assertCanReactivate(connection);
 
         LocalDateTime now = LocalDateTime.now();
-        connection.setStatus(bothInterested(match)
+        SoulConnectionStatus fromStatus = normalizeStatus(connection);
+        SoulConnectionStatus targetStatus = bothInterested(match)
                 ? SoulConnectionStatus.STARTED
-                : SoulConnectionStatus.WAITING_REPLY);
+                : SoulConnectionStatus.WAITING_REPLY;
+        if (targetStatus == fromStatus) {
+            return connection;
+        }
+        connection.setStatus(targetStatus);
         if (connection.getStatus() == SoulConnectionStatus.STARTED && connection.getStartedAt() == null) {
             connection.setStartedAt(now);
         }
-        audit(connection, SoulConnectionAction.ACCEPT.code(), actorUserId, null, now);
-        return connectionRepository.save(connection);
+        return saveAndRecord(connection, match, fromStatus, SoulConnectionAction.ACCEPT,
+                actorUserId, null, now);
     }
 
     @Transactional
@@ -57,10 +66,11 @@ public class SoulConnectionLifecycleService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        SoulConnectionStatus fromStatus = connection.getStatus();
         connection.setStatus(SoulConnectionStatus.DECLINED);
         connection.setEndedAt(now);
-        audit(connection, SoulConnectionAction.DECLINE.code(), actorUserId, reasonCategory, now);
-        return connectionRepository.save(connection);
+        return saveAndRecord(connection, match, fromStatus, SoulConnectionAction.DECLINE,
+                actorUserId, reasonCategory, now);
     }
 
     @Transactional
@@ -75,10 +85,10 @@ public class SoulConnectionLifecycleService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        SoulConnectionStatus fromStatus = connection.getStatus();
         connection.setStatus(SoulConnectionStatus.MUTUAL_RESONANCE);
-        audit(connection, SoulConnectionAction.MUTUAL_RESONANCE.code(), actorUserId,
-                MatchFeedbackAction.DEEP_INTERACTION.code(), now);
-        return connectionRepository.save(connection);
+        return saveAndRecord(connection, match, fromStatus, SoulConnectionAction.MUTUAL_RESONANCE,
+                actorUserId, MatchFeedbackAction.DEEP_INTERACTION.code(), now);
     }
 
     @Transactional
@@ -94,10 +104,11 @@ public class SoulConnectionLifecycleService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        SoulConnectionStatus fromStatus = connection.getStatus();
         connection.setStatus(SoulConnectionStatus.ENDED);
         connection.setEndedAt(now);
-        audit(connection, SoulConnectionAction.END.code(), actorUserId, reasonCategory, now);
-        return connectionRepository.save(connection);
+        return saveAndRecord(connection, match, fromStatus, SoulConnectionAction.END,
+                actorUserId, reasonCategory, now);
     }
 
     @Transactional
@@ -116,9 +127,10 @@ public class SoulConnectionLifecycleService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        SoulConnectionStatus fromStatus = connection.getStatus();
         connection.setStatus(SoulConnectionStatus.REPORTED);
-        audit(connection, SoulConnectionAction.REPORT.code(), actorUserId, reasonCategory, now);
-        return connectionRepository.save(connection);
+        return saveAndRecord(connection, match, fromStatus, SoulConnectionAction.REPORT,
+                actorUserId, reasonCategory, now);
     }
 
     @Transactional
@@ -136,10 +148,11 @@ public class SoulConnectionLifecycleService {
         }
 
         LocalDateTime now = LocalDateTime.now();
+        SoulConnectionStatus fromStatus = connection.getStatus();
         connection.setStatus(SoulConnectionStatus.BLOCKED);
         connection.setEndedAt(now);
-        audit(connection, SoulConnectionAction.BLOCK.code(), actorUserId, reasonCategory, now);
-        return connectionRepository.save(connection);
+        return saveAndRecord(connection, match, fromStatus, SoulConnectionAction.BLOCK,
+                actorUserId, reasonCategory, now);
     }
 
     public SoulConnectionStatus resolveStatus(SoulMatch match, String currentUserId) {
@@ -214,5 +227,36 @@ public class SoulConnectionLifecycleService {
         connection.setLastActionBy(actorUserId);
         connection.setReasonCategory(reasonCategory);
         connection.setUpdatedAt(now);
+    }
+
+    private SoulConnectionStatus normalizeStatus(SoulConnection connection) {
+        if (connection.getStatus() == null) {
+            connection.setStatus(SoulConnectionStatus.RECOMMENDED);
+        }
+        return connection.getStatus();
+    }
+
+    private SoulConnection saveAndRecord(SoulConnection connection, SoulMatch match,
+            SoulConnectionStatus fromStatus, SoulConnectionAction action, String actorUserId,
+            String reasonCategory, LocalDateTime now) {
+        audit(connection, action.code(), actorUserId, reasonCategory, now);
+        SoulConnection saved = connectionRepository.save(connection);
+        if (saved.getId() == null) {
+            throw new IllegalStateException("Connection ID is required before recording a lifecycle event");
+        }
+        eventRepository.save(SoulConnectionEvent.builder()
+                .eventId(IdUtil.fastSimpleUUID())
+                .eventName(action.eventName())
+                .schemaVersion(1)
+                .connectionId(saved.getId())
+                .matchId(match.getId())
+                .actorUserId(actorUserId)
+                .fromStatus(fromStatus)
+                .toStatus(saved.getStatus())
+                .action(action.code())
+                .reasonCategory(reasonCategory)
+                .occurredAt(now)
+                .build());
+        return saved;
     }
 }
