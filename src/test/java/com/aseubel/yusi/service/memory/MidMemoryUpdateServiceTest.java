@@ -4,6 +4,7 @@ import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
 import com.aseubel.yusi.service.memory.impl.MidMemoryUpdateServiceImpl;
+import com.aseubel.yusi.service.security.SecurityAuditService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -13,6 +14,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,6 +33,9 @@ class MidMemoryUpdateServiceTest {
     @Mock
     private MidTermMemoryVectorService vectorService;
 
+    @Mock
+    private SecurityAuditService securityAuditService;
+
     @Test
     void removesOnlyTheCurrentUsersMemoriesAndTheirVectors() {
         MidTermMemory first = memory(1L, "user-1", "old-1");
@@ -45,11 +50,12 @@ class MidMemoryUpdateServiceTest {
         verify(memoryRepository).delete(second);
         verify(vectorService).delete(1L);
         verify(vectorService).delete(2L);
+        verify(securityAuditService, org.mockito.Mockito.times(2)).record(any());
     }
 
     private MidMemoryUpdateServiceImpl service() {
         return new MidMemoryUpdateServiceImpl(memoryRepository, conflictDetector, threadPoolExecutor,
-                vectorService);
+                vectorService, securityAuditService);
     }
 
     private MidTermMemory memory(Long id, String userId, String summary) {

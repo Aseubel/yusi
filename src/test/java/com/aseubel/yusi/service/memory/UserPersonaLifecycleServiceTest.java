@@ -6,6 +6,7 @@ import com.aseubel.yusi.pojo.dto.memory.UpdatePersonaMemoryRequest;
 import com.aseubel.yusi.pojo.entity.UserPersona;
 import com.aseubel.yusi.repository.UserPersonaRepository;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
+import com.aseubel.yusi.service.security.SecurityAuditService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -32,6 +33,9 @@ class UserPersonaLifecycleServiceTest {
     @Mock
     private MatchProfileAssembler matchProfileAssembler;
 
+    @Mock
+    private SecurityAuditService securityAuditService;
+
     @Test
     void updateChangesLifecycleAndRefreshesMatchProfile() {
         UserPersona persona = persona("user-1");
@@ -51,6 +55,7 @@ class UserPersonaLifecycleServiceTest {
         assertEquals(1.0, result.getConfidence());
         assertEquals("USER_EDIT", result.getSourceType());
         verify(matchProfileAssembler).refreshProfile("user-1");
+        verify(securityAuditService).record(any());
     }
 
     @Test
@@ -104,7 +109,7 @@ class UserPersonaLifecycleServiceTest {
     }
 
     private UserPersonaLifecycleService lifecycle() {
-        return new UserPersonaLifecycleService(repository, matchProfileAssembler);
+        return new UserPersonaLifecycleService(repository, matchProfileAssembler, securityAuditService);
     }
 
     private UserPersona persona(String userId) {

@@ -4,6 +4,12 @@ import com.aseubel.yusi.common.constant.LifecycleStatus;
 import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
+import com.aseubel.yusi.pojo.constant.SecurityAuditActorType;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
+import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
+import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
 import com.aseubel.yusi.pojo.dto.memory.LifeGraphMemoryItem;
 import com.aseubel.yusi.pojo.dto.memory.LifeGraphMemoryResponse;
 import com.aseubel.yusi.pojo.dto.memory.LifeGraphSourceItem;
@@ -22,7 +28,9 @@ import com.aseubel.yusi.repository.LifeGraphRelationEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
-import lombok.RequiredArgsConstructor;
+import com.aseubel.yusi.service.security.SecurityAuditCommand;
+import com.aseubel.yusi.service.security.SecurityAuditService;
+import org.springframework.beans.factory.annotation.Autowired;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -41,7 +49,6 @@ import java.util.Set;
 /** 关系图谱实体的透明度和生命周期操作。 */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class LifeGraphLifecycleService {
 
     private static final int MAX_LIMIT = 100;
@@ -56,6 +63,36 @@ public class LifeGraphLifecycleService {
     private final LifeGraphMergeJudgmentRepository mergeJudgmentRepository;
     private final MatchProfileAssembler matchProfileAssembler;
     private final DiaryRepository diaryRepository;
+    private final SecurityAuditService securityAuditService;
+
+    public LifeGraphLifecycleService(LifeGraphEntityRepository entityRepository,
+            LifeGraphEntityEvidenceRepository entityEvidenceRepository,
+            LifeGraphEntityAliasRepository aliasRepository, LifeGraphMentionRepository mentionRepository,
+            LifeGraphRelationRepository relationRepository, LifeGraphRelationEvidenceRepository evidenceRepository,
+            LifeGraphMergeJudgmentRepository mergeJudgmentRepository, MatchProfileAssembler matchProfileAssembler,
+            DiaryRepository diaryRepository) {
+        this(entityRepository, entityEvidenceRepository, aliasRepository, mentionRepository, relationRepository,
+                evidenceRepository, mergeJudgmentRepository, matchProfileAssembler, diaryRepository, null);
+    }
+
+    @Autowired
+    public LifeGraphLifecycleService(LifeGraphEntityRepository entityRepository,
+            LifeGraphEntityEvidenceRepository entityEvidenceRepository,
+            LifeGraphEntityAliasRepository aliasRepository, LifeGraphMentionRepository mentionRepository,
+            LifeGraphRelationRepository relationRepository, LifeGraphRelationEvidenceRepository evidenceRepository,
+            LifeGraphMergeJudgmentRepository mergeJudgmentRepository, MatchProfileAssembler matchProfileAssembler,
+            DiaryRepository diaryRepository, SecurityAuditService securityAuditService) {
+        this.entityRepository = entityRepository;
+        this.entityEvidenceRepository = entityEvidenceRepository;
+        this.aliasRepository = aliasRepository;
+        this.mentionRepository = mentionRepository;
+        this.relationRepository = relationRepository;
+        this.evidenceRepository = evidenceRepository;
+        this.mergeJudgmentRepository = mergeJudgmentRepository;
+        this.matchProfileAssembler = matchProfileAssembler;
+        this.diaryRepository = diaryRepository;
+        this.securityAuditService = securityAuditService;
+    }
 
     @Transactional(readOnly = true)
     public LifeGraphMemoryResponse list(String userId, int limit) {
@@ -84,7 +121,7 @@ public class LifeGraphLifecycleService {
         if (request == null) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "关系图谱实体修改内容不能为空");
         }
-        LifeGraphEntity entity = findOwned(userId, entityId);
+        LifeGraphEntity entity = findOwned(userId, entityId, SecurityAuditOperation.UPDATE);
         boolean scopeChanged = false;
 
         if (request.getConfidence() != null) {
@@ -112,6 +149,8 @@ public class LifeGraphLifecycleService {
         }
 
         LifeGraphEntity saved = entityRepository.save(entity);
+        recordAudit(SecurityAuditAction.LIFE_GRAPH_UPDATED, userId, saved.getId(),
+                SecurityAuditOutcome.SUCCESS, SecurityAuditOperation.UPDATE);
         if (scopeChanged) {
             refreshMatchProfile(userId);
         }
@@ -120,7 +159,7 @@ public class LifeGraphLifecycleService {
 
     @Transactional
     public void delete(String userId, Long entityId) {
-        LifeGraphEntity entity = findOwned(userId, entityId);
+        LifeGraphEntity entity = findOwned(userId, entityId, SecurityAuditOperation.DELETE);
         List<LifeGraphRelation> sourceRelations = relationRepository
                 .findByUserIdAndSourceIdIn(userId, List.of(entityId));
         List<LifeGraphRelation> targetRelations = relationRepository
@@ -137,12 +176,39 @@ public class LifeGraphLifecycleService {
         mentionRepository.deleteByUserIdAndEntityId(userId, entityId);
         mergeJudgmentRepository.deleteByUserIdAndEntityId(userId, entityId);
         entityRepository.delete(entity);
+        recordAudit(SecurityAuditAction.LIFE_GRAPH_DELETED, userId, entityId,
+                SecurityAuditOutcome.SUCCESS, SecurityAuditOperation.DELETE);
         refreshMatchProfile(userId);
     }
 
-    private LifeGraphEntity findOwned(String userId, Long entityId) {
+    private LifeGraphEntity findOwned(String userId, Long entityId, SecurityAuditOperation operation) {
         return entityRepository.findByIdAndUserId(entityId, userId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "关系图谱实体不存在"));
+                .orElseThrow(() -> {
+                    recordAudit(SecurityAuditAction.ACCESS_DENIED, userId, entityId,
+                            SecurityAuditOutcome.DENIED, operation);
+                    return new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "关系图谱实体不存在");
+                });
+    }
+
+    private void recordAudit(SecurityAuditAction action, String userId, Long entityId,
+            SecurityAuditOutcome outcome, SecurityAuditOperation operation) {
+        if (securityAuditService == null) {
+            return;
+        }
+        java.util.Map<String, String> details = operation == null
+                ? java.util.Map.of()
+                : java.util.Map.of(SecurityAuditDetailKeys.OPERATION, operation.name());
+        securityAuditService.record(SecurityAuditCommand.builder()
+                .action(action)
+                .actorType(SecurityAuditActorType.USER)
+                .actorUserId(userId)
+                .subjectUserId(userId)
+                .resourceType(SecurityAuditResourceType.LIFE_GRAPH_ENTITY)
+                .resourceId(entityId == null ? null : String.valueOf(entityId))
+                .outcome(outcome)
+                .details(details)
+                .scopeUserIds(java.util.Set.of(userId))
+                .build());
     }
 
     private LifeGraphMemoryItem toItem(String userId, LifeGraphEntity entity, LocalDateTime now) {

@@ -12,6 +12,7 @@ import com.aseubel.yusi.service.lifegraph.LifeGraphTaskBatchService;
 import com.aseubel.yusi.service.match.MatchService;
 import com.aseubel.yusi.service.report.SoulReportGenerator;
 import com.aseubel.yusi.service.room.RoomScheduler;
+import com.aseubel.yusi.service.security.SecurityAuditService;
 import com.aseubel.yusi.service.task.TaskExecutionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -43,6 +44,7 @@ public class YusiScheduledTasks {
     private final SoulReportGenerator soulReportGenerator;
     private final MatchService matchService;
     private final TaskExecutionService taskExecutionService;
+    private final SecurityAuditService securityAuditService;
     private static final long MODEL_STATE_SYNC_INTERVAL_MS = 30_000L;
 
     @Scheduled(cron = "0 0/30 * * * ?")
@@ -109,6 +111,12 @@ public class YusiScheduledTasks {
     public void recoverTaskExecutions() {
         jobRunner.runIfLeader("task-execution-recovery",
                 () -> taskExecutionService.recoverStaleTasks(LocalDateTime.now()));
+    }
+
+    @Scheduled(cron = "0 30 3 * * ?", zone = "Asia/Shanghai")
+    public void cleanupSecurityAuditEvents() {
+        jobRunner.runIfLeader("security-audit-cleanup",
+                () -> securityAuditService.cleanupExpired(LocalDateTime.now()));
     }
 
     @Scheduled(cron = "0 0 3 * * ?")

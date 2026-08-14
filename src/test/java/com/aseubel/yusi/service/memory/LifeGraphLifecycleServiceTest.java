@@ -18,6 +18,7 @@ import com.aseubel.yusi.repository.LifeGraphRelationEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
+import com.aseubel.yusi.service.security.SecurityAuditService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
@@ -74,6 +75,9 @@ class LifeGraphLifecycleServiceTest {
 
     @Mock
     private MatchProfileAssembler matchProfileAssembler;
+
+    @Mock
+    private SecurityAuditService securityAuditService;
 
     @Test
     void listResolvesDiarySourceTitleForLifeGraphSources() {
@@ -188,6 +192,7 @@ class LifeGraphLifecycleServiceTest {
 
         verify(entityRepository, never()).save(any(LifeGraphEntity.class));
         verifyNoInteractions(matchProfileAssembler);
+        verify(securityAuditService).record(any());
     }
 
     @Test
@@ -236,7 +241,7 @@ class LifeGraphLifecycleServiceTest {
     private LifeGraphLifecycleService service() {
         return new LifeGraphLifecycleService(entityRepository, entityEvidenceRepository, aliasRepository, mentionRepository,
                 relationRepository, evidenceRepository, mergeJudgmentRepository, matchProfileAssembler,
-                diaryRepository);
+                diaryRepository, securityAuditService);
     }
 
     private LifeGraphEntity entity(Long id, String userId) {

@@ -5,6 +5,11 @@ import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.constant.MatchFeedbackAction;
 import com.aseubel.yusi.pojo.constant.ProductEventSensitivity;
 import com.aseubel.yusi.pojo.constant.ProductEventSource;
+import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
+import com.aseubel.yusi.pojo.constant.SecurityAuditActorType;
+import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
+import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.constant.SoulConnectionAction;
 import com.aseubel.yusi.pojo.entity.SoulConnection;
 import com.aseubel.yusi.pojo.entity.SoulConnectionEvent;
@@ -14,7 +19,9 @@ import com.aseubel.yusi.repository.SoulConnectionRepository;
 import com.aseubel.yusi.repository.SoulConnectionEventRepository;
 import com.aseubel.yusi.service.event.ProductEventCommand;
 import com.aseubel.yusi.service.event.ProductEventService;
-import lombok.RequiredArgsConstructor;
+import com.aseubel.yusi.service.security.SecurityAuditCommand;
+import com.aseubel.yusi.service.security.SecurityAuditService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,12 +32,27 @@ import java.util.Optional;
 import java.util.Set;
 
 @Service
-@RequiredArgsConstructor
 public class SoulConnectionLifecycleService {
 
     private final SoulConnectionRepository connectionRepository;
     private final SoulConnectionEventRepository eventRepository;
     private final ProductEventService productEventService;
+    private final SecurityAuditService securityAuditService;
+
+    public SoulConnectionLifecycleService(SoulConnectionRepository connectionRepository,
+            SoulConnectionEventRepository eventRepository, ProductEventService productEventService) {
+        this(connectionRepository, eventRepository, productEventService, null);
+    }
+
+    @Autowired
+    public SoulConnectionLifecycleService(SoulConnectionRepository connectionRepository,
+            SoulConnectionEventRepository eventRepository, ProductEventService productEventService,
+            SecurityAuditService securityAuditService) {
+        this.connectionRepository = connectionRepository;
+        this.eventRepository = eventRepository;
+        this.productEventService = productEventService;
+        this.securityAuditService = securityAuditService;
+    }
 
     public Optional<SoulConnection> findByMatchId(Long matchId) {
         return connectionRepository.findByMatchId(matchId);
@@ -136,8 +158,11 @@ public class SoulConnectionLifecycleService {
         LocalDateTime now = LocalDateTime.now();
         SoulConnectionStatus fromStatus = connection.getStatus();
         connection.setStatus(SoulConnectionStatus.REPORTED);
-        return saveAndRecord(connection, match, fromStatus, SoulConnectionAction.REPORT,
+        SoulConnection saved = saveAndRecord(connection, match, fromStatus, SoulConnectionAction.REPORT,
                 actorUserId, reasonCategory, now);
+        recordSecurityAudit(saved, match, SecurityAuditAction.CONNECTION_REPORTED,
+                actorUserId, reasonCategory, fromStatus, now);
+        return saved;
     }
 
     @Transactional
@@ -158,8 +183,11 @@ public class SoulConnectionLifecycleService {
         SoulConnectionStatus fromStatus = connection.getStatus();
         connection.setStatus(SoulConnectionStatus.BLOCKED);
         connection.setEndedAt(now);
-        return saveAndRecord(connection, match, fromStatus, SoulConnectionAction.BLOCK,
+        SoulConnection saved = saveAndRecord(connection, match, fromStatus, SoulConnectionAction.BLOCK,
                 actorUserId, reasonCategory, now);
+        recordSecurityAudit(saved, match, SecurityAuditAction.CONNECTION_BLOCKED,
+                actorUserId, reasonCategory, fromStatus, now);
+        return saved;
     }
 
     public SoulConnectionStatus resolveStatus(SoulMatch match, String currentUserId) {
@@ -220,8 +248,91 @@ public class SoulConnectionLifecycleService {
     private void assertParticipant(SoulMatch match, String actorUserId) {
         if (match == null || actorUserId == null
                 || (!actorUserId.equals(match.getUserAId()) && !actorUserId.equals(match.getUserBId()))) {
+            recordAccessDenied(match, actorUserId);
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权操作该连接");
         }
+    }
+
+    private void recordAccessDenied(SoulMatch match, String actorUserId) {
+        if (securityAuditService == null) {
+            return;
+        }
+        Set<String> scopeUserIds = new java.util.LinkedHashSet<>();
+        if (match != null) {
+            if (match.getUserAId() != null && !match.getUserAId().isBlank()) {
+                scopeUserIds.add(match.getUserAId());
+            }
+            if (match.getUserBId() != null && !match.getUserBId().isBlank()) {
+                scopeUserIds.add(match.getUserBId());
+            }
+        }
+        securityAuditService.record(SecurityAuditCommand.builder()
+                .action(SecurityAuditAction.ACCESS_DENIED)
+                .actorType(actorUserId == null || actorUserId.isBlank()
+                        ? SecurityAuditActorType.SYSTEM : SecurityAuditActorType.USER)
+                .actorUserId(actorUserId)
+                .resourceType(SecurityAuditResourceType.CONNECTION)
+                .resourceId(match == null || match.getId() == null ? null : String.valueOf(match.getId()))
+                .outcome(SecurityAuditOutcome.DENIED)
+                .reasonCode("NOT_PARTICIPANT")
+                .details(Map.of(SecurityAuditDetailKeys.OPERATION, "PARTICIPANT_CHECK"))
+                .scopeUserIds(scopeUserIds)
+                .build());
+    }
+
+    private void recordSecurityAudit(SoulConnection connection, SoulMatch match,
+            SecurityAuditAction action, String actorUserId, String reasonCategory,
+            SoulConnectionStatus fromStatus, LocalDateTime occurredAt) {
+        if (securityAuditService == null) {
+            return;
+        }
+        Map<String, String> details = new LinkedHashMap<>();
+        if (fromStatus != null) {
+            details.put(SecurityAuditDetailKeys.FROM_STATUS, fromStatus.name());
+        }
+        if (connection.getStatus() != null) {
+            details.put(SecurityAuditDetailKeys.TO_STATUS, connection.getStatus().name());
+        }
+        details.put(SecurityAuditDetailKeys.ACTION, action.code());
+        if (reasonCategory != null) {
+            details.put(SecurityAuditDetailKeys.REASON_CATEGORY, reasonCategory);
+        }
+        recordSecurityAudit(SecurityAuditCommand.builder()
+                .action(action)
+                .actorType(SecurityAuditActorType.USER)
+                .actorUserId(actorUserId)
+                .subjectUserId(otherParticipant(match, actorUserId))
+                .resourceType(SecurityAuditResourceType.CONNECTION)
+                .resourceId(connection.getId() == null ? null : String.valueOf(connection.getId()))
+                .outcome(SecurityAuditOutcome.SUCCESS)
+                .details(details)
+                .scopeUserIds(participantIds(match))
+                .occurredAt(occurredAt)
+                .build());
+    }
+
+    private void recordSecurityAudit(SecurityAuditCommand command) {
+        securityAuditService.record(command);
+    }
+
+    private String otherParticipant(SoulMatch match, String actorUserId) {
+        if (match == null || actorUserId == null) {
+            return null;
+        }
+        return actorUserId.equals(match.getUserAId()) ? match.getUserBId() : match.getUserAId();
+    }
+
+    private Set<String> participantIds(SoulMatch match) {
+        Set<String> participantIds = new java.util.LinkedHashSet<>();
+        if (match != null) {
+            if (match.getUserAId() != null && !match.getUserAId().isBlank()) {
+                participantIds.add(match.getUserAId());
+            }
+            if (match.getUserBId() != null && !match.getUserBId().isBlank()) {
+                participantIds.add(match.getUserBId());
+            }
+        }
+        return participantIds;
     }
 
     private boolean bothInterested(SoulMatch match) {

@@ -6,6 +6,7 @@ import com.aseubel.yusi.pojo.constant.TaskExecutionType;
 import com.aseubel.yusi.pojo.constant.TaskFailureCategory;
 import com.aseubel.yusi.pojo.entity.TaskExecution;
 import com.aseubel.yusi.repository.TaskExecutionRepository;
+import com.aseubel.yusi.service.security.SecurityAuditService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -27,6 +28,9 @@ class TaskExecutionServiceTest {
 
     @Mock
     private TaskExecutionRepository repository;
+
+    @Mock
+    private SecurityAuditService securityAuditService;
 
     @Test
     void duplicateIdempotencyKeyReturnsExistingExecutionWithoutSecondInsert() {
@@ -83,6 +87,7 @@ class TaskExecutionServiceTest {
         assertEquals(TaskFailureCategory.DEPENDENCY, result.getFailureCategory());
         assertEquals("{\"cursor\":12}", result.getCheckpointJson());
         assertEquals(now, result.getCompletedAt());
+        verify(securityAuditService).record(any());
     }
 
     @Test
@@ -134,7 +139,7 @@ class TaskExecutionServiceTest {
     }
 
     private TaskExecutionService service() {
-        return new TaskExecutionService(repository);
+        return new TaskExecutionService(repository, securityAuditService);
     }
 
     private TaskExecutionCommand command(String idempotencyKey) {

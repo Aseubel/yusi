@@ -5,12 +5,20 @@ import com.aseubel.yusi.common.constant.LifecycleStatus;
 import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
+import com.aseubel.yusi.pojo.constant.SecurityAuditActorType;
+import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
+import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.dto.memory.PersonaMemoryItem;
 import com.aseubel.yusi.pojo.dto.memory.UpdatePersonaMemoryRequest;
 import com.aseubel.yusi.pojo.entity.UserPersona;
 import com.aseubel.yusi.repository.UserPersonaRepository;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
-import lombok.RequiredArgsConstructor;
+import com.aseubel.yusi.service.security.SecurityAuditCommand;
+import com.aseubel.yusi.service.security.SecurityAuditService;
+import org.springframework.beans.factory.annotation.Autowired;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,7 +31,6 @@ import java.util.Set;
 /** 稳定 Persona 的透明度和生命周期操作。 */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class UserPersonaLifecycleService {
 
     private static final Set<String> CLEARABLE_FIELDS = Set.of(
@@ -31,6 +38,20 @@ public class UserPersonaLifecycleService {
 
     private final UserPersonaRepository personaRepository;
     private final MatchProfileAssembler matchProfileAssembler;
+    private final SecurityAuditService securityAuditService;
+
+    public UserPersonaLifecycleService(UserPersonaRepository personaRepository,
+            MatchProfileAssembler matchProfileAssembler) {
+        this(personaRepository, matchProfileAssembler, null);
+    }
+
+    @Autowired
+    public UserPersonaLifecycleService(UserPersonaRepository personaRepository,
+            MatchProfileAssembler matchProfileAssembler, SecurityAuditService securityAuditService) {
+        this.personaRepository = personaRepository;
+        this.matchProfileAssembler = matchProfileAssembler;
+        this.securityAuditService = securityAuditService;
+    }
 
     @Transactional(readOnly = true)
     public PersonaMemoryItem get(String userId) {
@@ -84,6 +105,7 @@ public class UserPersonaLifecycleService {
         persona.setUserId(userId);
         persona.setUpdatedAt(LocalDateTime.now());
         UserPersona saved = personaRepository.save(persona);
+        recordAudit(SecurityAuditAction.PERSONA_UPDATED, userId, saved.getId());
 
         if (contentChanged || lifecycleChanged) {
             refreshMatchProfile(userId);
@@ -95,8 +117,28 @@ public class UserPersonaLifecycleService {
     public void delete(String userId) {
         personaRepository.findByUserId(userId).ifPresent(persona -> {
             personaRepository.delete(persona);
+            recordAudit(SecurityAuditAction.PERSONA_DELETED, userId, persona.getId());
             refreshMatchProfile(userId);
         });
+    }
+
+    private void recordAudit(SecurityAuditAction action, String userId, Long personaId) {
+        if (securityAuditService == null) {
+            return;
+        }
+        securityAuditService.record(SecurityAuditCommand.builder()
+                .action(action)
+                .actorType(SecurityAuditActorType.USER)
+                .actorUserId(userId)
+                .subjectUserId(userId)
+                .resourceType(SecurityAuditResourceType.PERSONA)
+                .resourceId(personaId == null ? null : String.valueOf(personaId))
+                .outcome(SecurityAuditOutcome.SUCCESS)
+                .details(java.util.Map.of(SecurityAuditDetailKeys.OPERATION,
+                        action == SecurityAuditAction.PERSONA_UPDATED
+                                ? SecurityAuditOperation.UPDATE.name() : SecurityAuditOperation.DELETE.name()))
+                .scopeUserIds(java.util.Set.of(userId))
+                .build());
     }
 
     private Set<String> validateClearFields(List<String> fields) {

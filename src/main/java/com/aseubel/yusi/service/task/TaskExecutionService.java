@@ -1,20 +1,28 @@
 package com.aseubel.yusi.service.task;
 
 import cn.hutool.core.util.IdUtil;
+import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
+import com.aseubel.yusi.pojo.constant.SecurityAuditActorType;
+import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
+import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.constant.TaskExecutionStatus;
 import com.aseubel.yusi.pojo.constant.TaskFailureCategory;
 import com.aseubel.yusi.pojo.entity.TaskExecution;
 import com.aseubel.yusi.repository.TaskExecutionRepository;
-import lombok.RequiredArgsConstructor;
+import com.aseubel.yusi.service.security.SecurityAuditCommand;
+import com.aseubel.yusi.service.security.SecurityAuditService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 
 /** Coordinates durable task state without storing task input or model output. */
 @Service
-@RequiredArgsConstructor
 public class TaskExecutionService {
 
     private static final int DEFAULT_MAX_RETRIES = 5;
@@ -25,6 +33,17 @@ public class TaskExecutionService {
     private static final long STALE_TIMEOUT_MINUTES = 30L;
 
     private final TaskExecutionRepository repository;
+    private final SecurityAuditService securityAuditService;
+
+    public TaskExecutionService(TaskExecutionRepository repository) {
+        this(repository, null);
+    }
+
+    @Autowired
+    public TaskExecutionService(TaskExecutionRepository repository, SecurityAuditService securityAuditService) {
+        this.repository = repository;
+        this.securityAuditService = securityAuditService;
+    }
 
     @Transactional
     public TaskExecution createOrGet(TaskExecutionCommand command) {
@@ -128,7 +147,14 @@ public class TaskExecutionService {
             execution.setStatus(TaskExecutionStatus.RETRY_WAIT);
             execution.setNextAttemptAt(effectiveNow.plusSeconds(retryDelaySeconds(retryCount)));
         }
-        return repository.save(execution);
+        TaskExecution saved = repository.save(execution);
+        if (saved == null) {
+            saved = execution;
+        }
+        if (saved.getStatus() == TaskExecutionStatus.FAILED) {
+            recordFailure(saved, effectiveNow);
+        }
+        return saved;
     }
 
     @Transactional
@@ -148,7 +174,12 @@ public class TaskExecutionService {
         execution.setClaimedBy(null);
         execution.setCompletedAt(effectiveTime);
         execution.setUpdatedAt(effectiveTime);
-        return repository.save(execution);
+        TaskExecution saved = repository.save(execution);
+        if (saved == null) {
+            saved = execution;
+        }
+        recordFailure(saved, effectiveTime);
+        return saved;
     }
 
     @Transactional
@@ -224,5 +255,37 @@ public class TaskExecutionService {
         return status == TaskExecutionStatus.SUCCEEDED
                 || status == TaskExecutionStatus.FAILED
                 || status == TaskExecutionStatus.CANCELLED;
+    }
+
+    private void recordFailure(TaskExecution execution, LocalDateTime occurredAt) {
+        if (securityAuditService == null || execution == null) {
+            return;
+        }
+        Map<String, String> details = new LinkedHashMap<>();
+        putDetail(details, SecurityAuditDetailKeys.TASK_TYPE,
+                execution.getTaskType() == null ? null : execution.getTaskType().code());
+        putDetail(details, SecurityAuditDetailKeys.FAILURE_CATEGORY,
+                execution.getFailureCategory() == null ? null : execution.getFailureCategory().name());
+        putDetail(details, SecurityAuditDetailKeys.RETRY_COUNT,
+                execution.getRetryCount() == null ? null : String.valueOf(execution.getRetryCount()));
+        putDetail(details, SecurityAuditDetailKeys.SOURCE_TYPE, execution.getSourceType());
+        securityAuditService.record(SecurityAuditCommand.builder()
+                .action(SecurityAuditAction.TASK_FAILED)
+                .actorType(SecurityAuditActorType.SYSTEM)
+                .subjectUserId(execution.getOwnerUserId())
+                .resourceType(SecurityAuditResourceType.TASK_EXECUTION)
+                .resourceId(execution.getTaskId())
+                .outcome(SecurityAuditOutcome.FAILURE)
+                .details(details)
+                .scopeUserIds(execution.getOwnerUserId() == null
+                        ? java.util.Set.of() : java.util.Set.of(execution.getOwnerUserId()))
+                .occurredAt(occurredAt)
+                .build());
+    }
+
+    private void putDetail(Map<String, String> details, String key, String value) {
+        if (value != null) {
+            details.put(key, value);
+        }
     }
 }

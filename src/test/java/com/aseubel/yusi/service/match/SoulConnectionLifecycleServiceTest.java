@@ -9,6 +9,7 @@ import com.aseubel.yusi.pojo.entity.ProductEvent;
 import com.aseubel.yusi.repository.SoulConnectionRepository;
 import com.aseubel.yusi.repository.SoulConnectionEventRepository;
 import com.aseubel.yusi.service.event.ProductEventService;
+import com.aseubel.yusi.service.security.SecurityAuditService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -30,8 +31,10 @@ class SoulConnectionLifecycleServiceTest {
     private final SoulConnectionRepository connectionRepository = mock(SoulConnectionRepository.class);
     private final SoulConnectionEventRepository eventRepository = mock(SoulConnectionEventRepository.class);
     private final ProductEventService productEventService = mock(ProductEventService.class);
+    private final SecurityAuditService securityAuditService = mock(SecurityAuditService.class);
     private final SoulConnectionLifecycleService service =
-            new SoulConnectionLifecycleService(connectionRepository, eventRepository, productEventService);
+            new SoulConnectionLifecycleService(connectionRepository, eventRepository, productEventService,
+                    securityAuditService);
 
     @BeforeEach
     void assignConnectionIdWhenSaved() {
@@ -92,10 +95,19 @@ class SoulConnectionLifecycleServiceTest {
         assertEquals(SoulConnectionStatus.REPORTED, reported.getStatus());
         assertEquals("UNSAFE", reported.getReasonCategory());
         assertTrue(reported.getEndedAt() == null);
+        verify(securityAuditService).record(any());
         assertThrows(BusinessException.class,
                 () -> service.accept(match(7L, 1, 1, true), "user-b"));
         assertThrows(BusinessException.class,
                 () -> service.assertChatAllowed(match(7L), "user-a"));
+    }
+
+    @Test
+    void nonParticipantAccessIsRecordedAsDenied() {
+        assertThrows(BusinessException.class,
+                () -> service.assertChatAllowed(match(7L), "outsider"));
+
+        verify(securityAuditService).record(any());
     }
 
     @Test

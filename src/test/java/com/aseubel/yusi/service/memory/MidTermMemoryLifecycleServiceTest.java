@@ -7,6 +7,7 @@ import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
+import com.aseubel.yusi.service.security.SecurityAuditService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -40,6 +41,9 @@ class MidTermMemoryLifecycleServiceTest {
 
     @Mock
     private DiaryRepository diaryRepository;
+
+    @Mock
+    private SecurityAuditService securityAuditService;
 
     @Test
     void listResolvesDiarySourceTitleForTheCurrentUser() {
@@ -121,11 +125,12 @@ class MidTermMemoryLifecycleServiceTest {
         verify(memoryRepository).delete(memory);
         verify(vectorService).delete(9L);
         verify(matchProfileAssembler).refreshProfile("user-1");
+        verify(securityAuditService).record(any());
     }
 
     private MidTermMemoryLifecycleService service() {
         return new MidTermMemoryLifecycleService(memoryRepository, vectorService, matchProfileAssembler,
-                diaryRepository);
+                diaryRepository, securityAuditService);
     }
 
     private MidTermMemory memory(Long id, String userId) {

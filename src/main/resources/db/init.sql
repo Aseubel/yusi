@@ -410,6 +410,41 @@ CREATE TABLE `task_execution` (
     KEY `idx_task_execution_run` (`run_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '跨领域任务执行账本';
 
+DROP TABLE IF EXISTS `security_audit_event_scope`;
+
+DROP TABLE IF EXISTS `security_audit_event`;
+
+CREATE TABLE `security_audit_event` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `event_id` VARCHAR(64) NOT NULL COMMENT '服务端生成的审计事件ID',
+    `action` VARCHAR(64) NOT NULL COMMENT '审计动作',
+    `actor_type` VARCHAR(16) NOT NULL COMMENT 'USER/ADMIN/SYSTEM',
+    `actor_user_id` VARCHAR(64) DEFAULT NULL COMMENT '发起者用户ID',
+    `subject_user_id` VARCHAR(64) DEFAULT NULL COMMENT '被操作用户ID',
+    `resource_type` VARCHAR(32) NOT NULL COMMENT '资源类型',
+    `resource_id` VARCHAR(255) DEFAULT NULL COMMENT '资源业务ID',
+    `outcome` VARCHAR(16) NOT NULL COMMENT 'SUCCESS/DENIED/FAILURE',
+    `reason_code` VARCHAR(64) DEFAULT NULL COMMENT '分类化原因码',
+    `details_json` VARCHAR(1024) NOT NULL COMMENT '仅允许低敏感度分类 metadata',
+    `occurred_at` DATETIME NOT NULL COMMENT '事件发生时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_security_audit_event_id` (`event_id`),
+    KEY `idx_security_audit_actor_time` (`actor_user_id`, `occurred_at`),
+    KEY `idx_security_audit_subject_time` (`subject_user_id`, `occurred_at`),
+    KEY `idx_security_audit_resource_time` (`resource_type`, `resource_id`, `occurred_at`),
+    KEY `idx_security_audit_occurred_at` (`occurred_at`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '低敏感度安全审计事件';
+
+CREATE TABLE `security_audit_event_scope` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `audit_event_id` BIGINT NOT NULL COMMENT '审计事件主键',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '可见用户ID',
+    `scope_role` VARCHAR(32) NOT NULL COMMENT 'ACTOR/SUBJECT/PARTICIPANT',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_security_audit_scope_event_user` (`audit_event_id`, `user_id`),
+    KEY `idx_security_audit_scope_user_event` (`user_id`, `audit_event_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '安全审计用户可见范围';
+
 DROP TABLE IF EXISTS `embedding_task`;
 -- Milvus Embedding 任务表
 -- 用于可靠的异步批量处理日记向量化
