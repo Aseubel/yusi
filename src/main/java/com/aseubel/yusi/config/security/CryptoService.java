@@ -5,10 +5,12 @@ import cn.hutool.core.util.StrUtil;
 import javax.crypto.Cipher;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
+import java.security.PublicKey;
 import javax.crypto.spec.OAEPParameterSpec;
 import javax.crypto.spec.PSource;
 import java.security.spec.MGF1ParameterSpec;
 import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.Base64;
 
 public class CryptoService {
@@ -49,16 +51,28 @@ public class CryptoService {
 
         try {
             Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPPadding");
-            OAEPParameterSpec oaepParams = new OAEPParameterSpec(
-                    "SHA-256",
-                    "MGF1",
-                    MGF1ParameterSpec.SHA256,
-                    PSource.PSpecified.DEFAULT
-            );
-            cipher.init(Cipher.DECRYPT_MODE, backupPrivateKey, oaepParams);
+            cipher.init(Cipher.DECRYPT_MODE, backupPrivateKey, oaepSha256());
             return cipher.doFinal(encrypted);
         } catch (Exception e) {
             throw new IllegalStateException("RSA-OAEP decryption failed", e);
+        }
+    }
+
+    /**
+     * Encrypts a short-lived recovery payload for the browser-provided public key.
+     * The corresponding private key never leaves the browser.
+     */
+    public String encryptForRecovery(byte[] plaintext, String recoveryPublicKeySpkiBase64) {
+        if (plaintext == null || plaintext.length == 0) {
+            throw new IllegalArgumentException("Recovery payload must not be empty");
+        }
+        PublicKey recoveryPublicKey = loadPublicKey(recoveryPublicKeySpkiBase64);
+        try {
+            Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, recoveryPublicKey, oaepSha256());
+            return Base64.getEncoder().encodeToString(cipher.doFinal(plaintext));
+        } catch (Exception e) {
+            throw new IllegalStateException("RSA-OAEP recovery encryption failed", e);
         }
     }
 
@@ -93,6 +107,32 @@ public class CryptoService {
         }
     }
 
+    private static PublicKey loadPublicKey(String spkiBase64) {
+        String v = requireNonBlank(spkiBase64, "recovery public key");
+        byte[] spki;
+        try {
+            spki = Base64.getDecoder().decode(v);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Recovery public key is not valid Base64", e);
+        }
+
+        try {
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            return keyFactory.generatePublic(new X509EncodedKeySpec(spki));
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Recovery public key is invalid", e);
+        }
+    }
+
+    private static OAEPParameterSpec oaepSha256() {
+        return new OAEPParameterSpec(
+                "SHA-256",
+                "MGF1",
+                MGF1ParameterSpec.SHA256,
+                PSource.PSpecified.DEFAULT
+        );
+    }
+
     private static String requireNonBlank(String value, String name) {
         if (StrUtil.isBlank(value)) {
             throw new IllegalStateException(name + " must be set");
@@ -100,4 +140,3 @@ public class CryptoService {
         return value;
     }
 }
-

@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.key;
 
 import com.aseubel.yusi.pojo.dto.key.DiaryReEncryptRequest;
 import com.aseubel.yusi.pojo.dto.key.KeyModeUpdateRequest;
+import com.aseubel.yusi.pojo.dto.key.KeyRecoveryResponse;
 import com.aseubel.yusi.pojo.dto.key.KeySettingsResponse;
 import com.aseubel.yusi.pojo.entity.Diary;
 
@@ -43,5 +44,23 @@ public interface KeyManagementService {
      * @param request 重新加密请求
      */
     void batchUpdateReEncryptedDiaries(String userId, DiaryReEncryptRequest request);
+
+    /**
+     * Sends a recovery code to the current user's bound email.
+     *
+     * @param userId current authenticated user
+     * @return masked bound email
+     */
+    String sendRecoveryCode(String userId);
+
+    /**
+     * Verifies the code and encrypts the stored client key for a browser key.
+     *
+     * @param userId current authenticated user
+     * @param code email verification code
+     * @param recoveryPublicKey browser-generated RSA-OAEP public key
+     * @return encrypted old key and its current salt
+     */
+    KeyRecoveryResponse recoverKey(String userId, String code, String recoveryPublicKey);
 
 }

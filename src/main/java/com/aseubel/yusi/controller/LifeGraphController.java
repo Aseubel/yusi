@@ -57,12 +57,6 @@ public class LifeGraphController {
         return Response.success(communityInsightService.detectCommunities(userId));
     }
 
-    @GetMapping("/communities/{communityId}")
-    public Response<CommunityInsight> getCommunityDetail(@PathVariable String communityId) {
-        String userId = UserContext.getUserId();
-        return Response.success(communityInsightService.getCommunityDetail(userId, communityId));
-    }
-
     /**
      * @deprecated 此接口已废弃，调用AI分析消耗token过高三方原因
      * 获取情绪时间线数据

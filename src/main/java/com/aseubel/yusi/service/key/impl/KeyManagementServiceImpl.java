@@ -1,11 +1,13 @@
 package com.aseubel.yusi.service.key.impl;
 
+import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
 import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.pojo.dto.key.DiaryReEncryptRequest;
 import com.aseubel.yusi.pojo.dto.key.KeyModeUpdateRequest;
+import com.aseubel.yusi.pojo.dto.key.KeyRecoveryResponse;
 import com.aseubel.yusi.pojo.dto.key.KeySettingsResponse;
 import com.aseubel.yusi.pojo.constant.KeyMode;
 import com.aseubel.yusi.pojo.entity.Diary;
@@ -14,6 +16,7 @@ import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.key.KeyManagementService;
 import com.aseubel.yusi.service.diary.DiaryService;
+import com.aseubel.yusi.service.user.VerificationCodeService;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -40,6 +43,7 @@ public class KeyManagementServiceImpl implements KeyManagementService {
     private final UserRepository userRepository;
     private final DiaryRepository diaryRepository;
     private final CryptoService cryptoService;
+    private final VerificationCodeService verificationCodeService;
 
     @Autowired
     @Lazy
@@ -183,6 +187,55 @@ public class KeyManagementServiceImpl implements KeyManagementService {
         }
 
         userRepository.save(user);
+    }
+
+    @Override
+    public String sendRecoveryCode(String userId) {
+        User user = requireRecoverableUser(userId);
+        verificationCodeService.sendCode(user.getEmail(), "找回日记密钥");
+        return maskEmail(user.getEmail());
+    }
+
+    @Override
+    public KeyRecoveryResponse recoverKey(String userId, String code, String recoveryPublicKey) {
+        User user = requireRecoverableUser(userId);
+        if (!verificationCodeService.verifyCode(user.getEmail(), code)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "验证码错误或已过期");
+        }
+
+        byte[] oldKey = cryptoService.decryptBackupKeyBase64(user.getEncryptedBackupKey());
+        String encryptedKey = cryptoService.encryptForRecovery(oldKey, recoveryPublicKey);
+        return KeyRecoveryResponse.builder()
+                .encryptedKey(encryptedKey)
+                .keySalt(user.getKeySalt())
+                .build();
+    }
+
+    private User requireRecoverableUser(String userId) {
+        User user = userRepository.findByUserId(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "用户不存在");
+        }
+        if (!KeyMode.CUSTOM.code().equals(user.getKeyMode())
+                || !Boolean.TRUE.equals(user.getHasCloudBackup())
+                || StrUtil.isBlank(user.getEncryptedBackupKey())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "当前未开启云端备份，无法通过验证码找回日记密钥");
+        }
+        if (StrUtil.isBlank(user.getEmail())) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "未设置绑定邮箱，无法找回日记密钥");
+        }
+        return user;
+    }
+
+    private String maskEmail(String email) {
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 1) {
+            return email;
+        }
+        String localPart = email.substring(0, atIndex);
+        String domain = email.substring(atIndex);
+        int keepChars = Math.min(3, localPart.length());
+        return localPart.substring(0, keepChars) + "***" + domain;
     }
 
 }

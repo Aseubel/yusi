@@ -77,15 +77,6 @@ public class CommunityInsightServiceImpl implements CommunityInsightService {
         return communities;
     }
 
-    @Override
-    public CommunityInsight getCommunityDetail(String userId, String communityId) {
-        List<CommunityInsight> communities = detectCommunities(userId);
-        return communities.stream()
-                .filter(c -> c.getCommunityId().equals(communityId))
-                .findFirst()
-                .orElse(null);
-    }
-
     private Map<Long, Set<Long>> buildAdjacencyList(List<LifeGraphRelation> relations, Set<Long> entityIds) {
         Map<Long, Set<Long>> adjacencyList = new HashMap<>();
         

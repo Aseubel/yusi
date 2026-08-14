@@ -3,13 +3,18 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.dto.key.DiaryReEncryptRequest;
 import com.aseubel.yusi.pojo.dto.key.KeyModeUpdateRequest;
+import com.aseubel.yusi.pojo.dto.key.KeyRecoveryRequest;
+import com.aseubel.yusi.pojo.dto.key.KeyRecoveryResponse;
 import com.aseubel.yusi.pojo.dto.key.KeySettingsResponse;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.service.key.KeyManagementService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -68,6 +73,26 @@ public class KeyManagementController {
         String userId = UserContext.getUserId();
         keyManagementService.batchUpdateReEncryptedDiaries(userId, request);
         return Response.success();
+    }
+
+    /**
+     * Sends a second-factor code to the authenticated user's bound email.
+     */
+    @RateLimiter(key = "key-recovery-code", time = 60, count = 3, limitType = LimitType.IP)
+    @PostMapping("/recovery/send-code")
+    public Response<String> sendRecoveryCode() {
+        return Response.success(keyManagementService.sendRecoveryCode(UserContext.getUserId()));
+    }
+
+    /**
+     * Exchanges a verified code for an old key encrypted to a one-time browser key.
+     */
+    @RateLimiter(key = "key-recovery", time = 60, count = 10, limitType = LimitType.IP)
+    @PostMapping("/recovery")
+    public Response<KeyRecoveryResponse> recoverKey(@Valid @RequestBody KeyRecoveryRequest request) {
+        KeyRecoveryResponse response = keyManagementService.recoverKey(
+                UserContext.getUserId(), request.getCode(), request.getRecoveryPublicKey());
+        return Response.success(response);
     }
 
 }
