@@ -166,6 +166,47 @@ class ModelProxyFactoryTest {
     }
 
     @Test
+    void modelCallEventPreservesPromptIdentityFromRouteContext() {
+        ModelRouterService router = mock(ModelRouterService.class);
+        ModelStateCenter stateCenter = mock(ModelStateCenter.class);
+        SensitiveDataMaskService maskService = mock(SensitiveDataMaskService.class);
+        ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+        ChatModel delegate = mock(ChatModel.class);
+        ModelInstance selected = instance("prompt-model", delegate, mock(StreamingChatModel.class));
+        when(router.plan(any(ModelRouteContext.class))).thenReturn(new ModelRouteDecision(
+                "request-prompt", "chat", 1L, "chat", List.of(),
+                List.of(new ModelRouteCandidate("chat", selected, true, null)),
+                "policy=chat;primary-tier=chat"));
+        when(stateCenter.allowRequest("prompt-model")).thenReturn(true);
+        when(maskService.mask(anyString())).thenReturn(new MaskResult("plain", Map.of(), false));
+        when(delegate.chat(any(ChatRequest.class))).thenReturn(ChatResponse.builder()
+                .aiMessage(AiMessage.from("ok"))
+                .build());
+
+        ModelRouteContextHolder.set(ModelRouteContext.builder()
+                .requestId("request-prompt")
+                .runId("run-prompt")
+                .userId("user-prompt")
+                .scene("chat")
+                .promptKey("chat")
+                .promptVersion("v7")
+                .promptLocale("zh-CN")
+                .build());
+
+        ModelProxyFactory factory = new ModelProxyFactory(router, stateCenter, maskService, publisher,
+                new ModelUsageExtractor());
+        factory.createChatProxy("chat")
+                .chat(ChatRequest.builder().messages(List.of(UserMessage.from("hello"))).build());
+
+        var eventCaptor = org.mockito.ArgumentCaptor.forClass(ModelCallAttemptEvent.class);
+        verify(publisher).publishEvent(eventCaptor.capture());
+        ModelCallAttemptEvent event = eventCaptor.getValue();
+        assertEquals("chat", event.promptKey());
+        assertEquals("v7", event.promptVersion());
+        assertEquals("zh-CN", event.promptLocale());
+    }
+
+    @Test
     void streamDoesNotSwitchAfterFirstPartialResponse() {
         ModelRouterService router = mock(ModelRouterService.class);
         ModelStateCenter stateCenter = mock(ModelStateCenter.class);

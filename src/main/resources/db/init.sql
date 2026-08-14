@@ -853,6 +853,9 @@ CREATE TABLE `model_call_trace` (
     `run_id` VARCHAR(64) DEFAULT NULL COMMENT '可选 AgentRun ID',
     `user_id` VARCHAR(64) DEFAULT NULL COMMENT '可选用户ID',
     `scene` VARCHAR(64) NOT NULL COMMENT '路由场景',
+    `prompt_key` VARCHAR(64) DEFAULT NULL COMMENT 'Prompt稳定标识',
+    `prompt_version` VARCHAR(64) DEFAULT NULL COMMENT 'Prompt版本',
+    `prompt_locale` VARCHAR(16) DEFAULT NULL COMMENT 'Prompt语言',
     `policy_id` VARCHAR(128) DEFAULT NULL COMMENT '命中的路由策略',
     `policy_version` BIGINT DEFAULT NULL COMMENT '策略版本',
     `route_reason` VARCHAR(1024) DEFAULT NULL COMMENT '可解释路由原因',
@@ -881,7 +884,8 @@ CREATE TABLE `model_call_trace` (
     KEY `idx_model_call_trace_tier_created` (`selected_tier`, `created_at`),
     KEY `idx_model_call_trace_provider_created` (`provider`, `created_at`),
     KEY `idx_model_call_trace_status_created` (`status`, `created_at`),
-    KEY `idx_model_call_trace_fallback_created` (`fallback_used`, `created_at`)
+    KEY `idx_model_call_trace_fallback_created` (`fallback_used`, `created_at`),
+    KEY `idx_model_call_trace_prompt_version` (`prompt_key`, `prompt_version`, `created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '低敏 LLM 调用轨迹';
 -- Mid-Term Memory - AI 中期记忆压缩存储
 -- 存储对话的压缩摘要，用于给 AI 提供长期上下文

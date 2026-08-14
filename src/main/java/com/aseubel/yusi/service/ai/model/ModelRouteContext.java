@@ -10,6 +10,9 @@ public class ModelRouteContext {
     String runId;
     String userId;
     String scene;
+    String promptKey;
+    String promptVersion;
+    String promptLocale;
     String riskLevel;
     Integer estimatedInputTokens;
     Integer reservedOutputTokens;

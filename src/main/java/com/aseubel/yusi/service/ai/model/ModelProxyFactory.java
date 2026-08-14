@@ -412,6 +412,9 @@ public class ModelProxyFactory {
                     context.getRunId(),
                     context.getUserId(),
                     context.getScene(),
+                    context.getPromptKey(),
+                    context.getPromptVersion(),
+                    context.getPromptLocale(),
                     decision.policyId(),
                     decision.policyVersion(),
                     decision.routeReason(),
@@ -854,6 +857,9 @@ public class ModelProxyFactory {
                     .runId(context == null ? null : context.getRunId())
                     .userId(context == null ? null : context.getUserId())
                     .scene(resolvedScene)
+                    .promptKey(context == null ? null : context.getPromptKey())
+                    .promptVersion(context == null ? null : context.getPromptVersion())
+                    .promptLocale(context == null ? null : context.getPromptLocale())
                     .riskLevel(context == null ? null : context.getRiskLevel())
                     .estimatedInputTokens(estimatedInputTokens)
                     .reservedOutputTokens(reservedOutputTokens)

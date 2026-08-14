@@ -16,6 +16,8 @@ public class ModelCallTraceQuery {
     private LocalDateTime to;
     private String scene;
     private String userId;
+    private String promptKey;
+    private String promptVersion;
     private String modelTier;
     private String provider;
     private String model;

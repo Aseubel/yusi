@@ -29,7 +29,8 @@ import java.time.LocalDateTime;
         @Index(name = "idx_model_call_trace_tier_created", columnList = "selected_tier, created_at"),
         @Index(name = "idx_model_call_trace_provider_created", columnList = "provider, created_at"),
         @Index(name = "idx_model_call_trace_status_created", columnList = "status, created_at"),
-        @Index(name = "idx_model_call_trace_fallback_created", columnList = "fallback_used, created_at")
+        @Index(name = "idx_model_call_trace_fallback_created", columnList = "fallback_used, created_at"),
+        @Index(name = "idx_model_call_trace_prompt_version", columnList = "prompt_key, prompt_version, created_at")
 })
 @NoArgsConstructor
 @AllArgsConstructor
@@ -53,6 +54,15 @@ public class ModelCallTrace {
 
     @Column(name = "scene", nullable = false, length = 64)
     private String scene;
+
+    @Column(name = "prompt_key", length = 64)
+    private String promptKey;
+
+    @Column(name = "prompt_version", length = 64)
+    private String promptVersion;
+
+    @Column(name = "prompt_locale", length = 16)
+    private String promptLocale;
 
     @Column(name = "policy_id", length = 128)
     private String policyId;
