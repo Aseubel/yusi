@@ -45,6 +45,9 @@ public class LifeGraphMention {
     @Column(name = "diary_id", nullable = false, length = 255)
     private String diaryId;
 
+    @Column(name = "source_revision")
+    private Long sourceRevision;
+
     @Column(name = "entry_date")
     @JsonFormat(pattern = "yyyy-MM-dd")
     @JsonSerialize(using = LocalDateSerializer.class)
@@ -66,4 +69,3 @@ public class LifeGraphMention {
             createdAt = LocalDateTime.now();
     }
 }
-

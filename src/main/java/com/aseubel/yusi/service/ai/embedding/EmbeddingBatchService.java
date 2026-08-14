@@ -124,7 +124,12 @@ public class EmbeddingBatchService {
         // 批量查询日记
         Map<String, Diary> diaryMap = new HashMap<>();
         for (String diaryId : diaryIds) {
-            Diary diary = diaryRepository.findByDiaryId(diaryId);
+            String userId = tasks.stream()
+                    .filter(task -> diaryId.equals(task.getDiaryId()))
+                    .map(EmbeddingTask::getUserId)
+                    .findFirst()
+                    .orElse(null);
+            Diary diary = userId == null ? null : diaryRepository.findByDiaryIdAndUserId(diaryId, userId);
             if (diary != null) {
                 diaryMap.put(diaryId, diary);
             }
@@ -133,12 +138,23 @@ public class EmbeddingBatchService {
         // 准备批量 Embedding 数据
         List<DiaryChunker.DiaryChunk> allChunks = new ArrayList<>();
         List<EmbeddingTask> successTasks = new ArrayList<>();
+        Map<String, EmbeddingTask> taskByDiaryId = new HashMap<>();
         List<String> toRemoveIds = new ArrayList<>();
 
         for (EmbeddingTask task : tasks) {
             Diary diary = diaryMap.get(task.getDiaryId());
             if (diary == null) {
                 log.warn("日记 {} 不存在，跳过任务 {}", task.getDiaryId(), task.getId());
+                try {
+                    deleteEmbeddings(task.getDiaryId());
+                    markCompleted(task, now);
+                } catch (Exception exception) {
+                    markRetry(task, exception, now);
+                }
+                continue;
+            }
+
+            if (isSuperseded(task.getSourceRevision(), diary.getSourceRevision())) {
                 markCompleted(task, now);
                 continue;
             }
@@ -157,7 +173,12 @@ public class EmbeddingBatchService {
             }
             if (text == null || text.isEmpty()) {
                 log.warn("日记 {} 内容为空，跳过", task.getDiaryId());
-                markCompleted(task, now);
+                try {
+                    deleteEmbeddings(task.getDiaryId());
+                    markCompleted(task, now);
+                } catch (Exception exception) {
+                    markRetry(task, exception, now);
+                }
                 continue;
             }
 
@@ -169,6 +190,7 @@ public class EmbeddingBatchService {
             allChunks.addAll(chunks);
 
             successTasks.add(task);
+            taskByDiaryId.put(task.getDiaryId(), task);
         }
 
         if (allChunks.isEmpty()) {
@@ -214,6 +236,10 @@ public class EmbeddingBatchService {
                 metadata.addProperty("diaryId", chunk.diaryId());
                 metadata.addProperty("chunkIndex", chunk.index());
                 metadata.addProperty("chunkCount", chunk.count());
+                EmbeddingTask task = taskByDiaryId.get(diary.getDiaryId());
+                if (task != null && task.getSourceRevision() != null) {
+                    metadata.addProperty("sourceRevision", task.getSourceRevision());
+                }
                 if (diary.getEntryDate() != null) {
                     metadata.addProperty("entryDate", diary.getEntryDate().toString());
                 }
@@ -255,10 +281,12 @@ public class EmbeddingBatchService {
      */
     private void processDeleteTask(EmbeddingTask task, LocalDateTime now) {
         try {
-            milvusClientV2.delete(DeleteReq.builder()
-                    .collectionName("yusi_embedding_collection")
-                    .filter("id like '" + task.getDiaryId() + "_%'")
-                    .build());
+            Diary currentDiary = diaryRepository.findByDiaryIdAndUserId(task.getDiaryId(), task.getUserId());
+            if (currentDiary != null && isSuperseded(task.getSourceRevision(), currentDiary.getSourceRevision())) {
+                markCompleted(task, now);
+                return;
+            }
+            deleteEmbeddings(task.getDiaryId());
             markCompleted(task, now);
             log.info("删除日记 {} 的 Embedding 成功", task.getDiaryId());
         } catch (Exception e) {
@@ -286,6 +314,17 @@ public class EmbeddingBatchService {
         if (task.getTaskExecutionId() != null) {
             taskExecutionService.retry(task.getTaskExecutionId(), TaskFailureCategory.DEPENDENCY, null, now);
         }
+    }
+
+    private void deleteEmbeddings(String diaryId) {
+        milvusClientV2.delete(DeleteReq.builder()
+                .collectionName("yusi_embedding_collection")
+                .filter("id like '" + diaryId + "_%'")
+                .build());
+    }
+
+    private boolean isSuperseded(Long taskRevision, Long currentRevision) {
+        return currentRevision != null && (taskRevision == null || taskRevision < currentRevision);
     }
 
     /**

@@ -90,6 +90,28 @@ class LifeGraphTaskBatchServiceTest {
         verify(taskRepository).markAsCompleted(any(Long.class), any(LocalDateTime.class));
     }
 
+    @Test
+    void skipsOlderDiaryRevisionWithoutReplacingCurrentLifeGraph() {
+        LifeGraphTask task = LifeGraphTask.createUpsertTask("diary-1", "user-a", "event-old");
+        task.setId(9L);
+        task.setSourceRevision(1L);
+        when(taskClaimService.claimPendingTasks(any(LocalDateTime.class), any(Integer.class)))
+                .thenReturn(List.of(task));
+        Diary currentDiary = Diary.builder()
+                .diaryId("diary-1")
+                .userId("user-a")
+                .sourceRevision(2L)
+                .plainContent("new content")
+                .build();
+        when(diaryRepository.findByDiaryIdAndUserId("diary-1", "user-a")).thenReturn(currentDiary);
+
+        service().processPendingTasks();
+
+        verify(lifeGraphBuildService, never()).upsertFromDiary(any(Diary.class), anyString());
+        verify(lifeGraphBuildService, never()).deleteByDiary(anyString(), anyString());
+        verify(taskRepository).markAsCompleted(any(Long.class), any(LocalDateTime.class));
+    }
+
     private LifeGraphTaskBatchService service() {
         return new LifeGraphTaskBatchService(taskRepository, taskClaimService, diaryRepository,
                 userRepository, cryptoService, lifeGraphBuildService, taskExecutionService);

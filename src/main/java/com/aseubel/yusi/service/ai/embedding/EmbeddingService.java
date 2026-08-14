@@ -4,6 +4,7 @@ import com.aseubel.yusi.common.event.DiaryChangedEvent;
 import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
 import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
 import com.aseubel.yusi.pojo.constant.TaskExecutionType;
+import com.aseubel.yusi.pojo.constant.SourceRevision;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.EmbeddingTask;
 import com.aseubel.yusi.repository.EmbeddingTaskRepository;
@@ -15,8 +16,6 @@ import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 /**
  * Embedding 任务创建服务
@@ -67,28 +66,24 @@ public class EmbeddingService {
      * 如果已有相同日记的待处理任务，则跳过（去重）
      */
     private void createUpsertTask(Diary diary, String triggerEventId) {
-        // 去重检查：如果已有相同日记的待处理任务，跳过
-        List<EmbeddingTask> pending = taskRepository.findPendingByDiaryId(diary.getDiaryId());
-        if (!pending.isEmpty()) {
-            log.debug("日记 {} 已有待处理的 Embedding 任务，跳过重复创建", diary.getDiaryId());
-            return;
-        }
+        long sourceRevision = SourceRevision.initialOrCurrent(diary.getSourceRevision());
 
         var execution = taskExecutionService.createOrGet(TaskExecutionCommand.builder()
                 .taskType(TaskExecutionType.EMBEDDING)
                 .ownerUserId(diary.getUserId())
                 .sourceType(TaskExecutionSourceType.DIARY.code())
                 .sourceId(diary.getDiaryId())
-                .sourceVersion(triggerEventId)
+                .sourceVersion(String.valueOf(sourceRevision))
                 .triggerEventId(triggerEventId)
-                .idempotencyKey(TaskExecutionKeys.fromEvent(TaskExecutionType.EMBEDDING,
-                        TaskExecutionSourceType.DIARY.code(), diary.getDiaryId(), triggerEventId))
+                .idempotencyKey(TaskExecutionKeys.fromSourceRevision(TaskExecutionType.EMBEDDING,
+                        diary.getUserId(), TaskExecutionSourceType.DIARY.code(), diary.getDiaryId(), sourceRevision))
                 .build());
         if (taskRepository.findByTaskExecutionId(execution.getTaskId()).isPresent()) {
             return;
         }
 
-        EmbeddingTask task = EmbeddingTask.createUpsertTask(diary.getDiaryId(), diary.getUserId(), triggerEventId);
+        EmbeddingTask task = EmbeddingTask.createUpsertTask(diary.getDiaryId(), diary.getUserId(),
+                sourceRevision, triggerEventId);
         task.setTaskExecutionId(execution.getTaskId());
         taskRepository.save(task);
         log.debug("创建 Embedding UPSERT 任务: diaryId={}, userId={}, triggerEventId={}",
@@ -99,21 +94,23 @@ public class EmbeddingService {
      * 创建 DELETE 任务
      */
     private void createDeleteTask(Diary diary, String triggerEventId) {
+        long sourceRevision = SourceRevision.initialOrCurrent(diary.getSourceRevision());
         var execution = taskExecutionService.createOrGet(TaskExecutionCommand.builder()
                 .taskType(TaskExecutionType.EMBEDDING)
                 .ownerUserId(diary.getUserId())
                 .sourceType(TaskExecutionSourceType.DIARY.code())
                 .sourceId(diary.getDiaryId())
-                .sourceVersion(triggerEventId)
+                .sourceVersion(String.valueOf(sourceRevision))
                 .triggerEventId(triggerEventId)
-                .idempotencyKey(TaskExecutionKeys.fromEvent(TaskExecutionType.EMBEDDING,
-                        TaskExecutionSourceType.DIARY.code(), diary.getDiaryId(), triggerEventId))
+                .idempotencyKey(TaskExecutionKeys.fromSourceRevision(TaskExecutionType.EMBEDDING,
+                        diary.getUserId(), TaskExecutionSourceType.DIARY.code(), diary.getDiaryId(), sourceRevision))
                 .build());
         if (taskRepository.findByTaskExecutionId(execution.getTaskId()).isPresent()) {
             return;
         }
 
-        EmbeddingTask task = EmbeddingTask.createDeleteTask(diary.getDiaryId(), diary.getUserId(), triggerEventId);
+        EmbeddingTask task = EmbeddingTask.createDeleteTask(diary.getDiaryId(), diary.getUserId(),
+                sourceRevision, triggerEventId);
         task.setTaskExecutionId(execution.getTaskId());
         taskRepository.save(task);
         log.debug("创建 Embedding DELETE 任务: diaryId={}, triggerEventId={}", diary.getDiaryId(), triggerEventId);

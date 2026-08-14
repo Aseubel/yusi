@@ -122,8 +122,10 @@ public interface EmbeddingTaskRepository extends JpaRepository<EmbeddingTask, Lo
      */
     @Modifying
     @Transactional
-    @Query(value = "INSERT INTO embedding_task (diary_id, user_id, task_type, status, retry_count, max_retries, created_at, updated_at, next_retry_at) " +
-            "SELECT diary_id, user_id, 'UPSERT', 'PENDING', 0, 5, :now, :now, :now FROM diary " +
-            "WHERE NOT EXISTS (SELECT 1 FROM embedding_task WHERE diary_id = diary.diary_id)", nativeQuery = true)
+    @Query(value = "INSERT INTO embedding_task (diary_id, user_id, source_revision, task_type, status, retry_count, max_retries, created_at, updated_at, next_retry_at) " +
+            "SELECT d.diary_id, d.user_id, d.source_revision, 'UPSERT', 'PENDING', 0, 5, :now, :now, :now FROM diary d " +
+            "WHERE NOT EXISTS (SELECT 1 FROM embedding_task t WHERE t.diary_id = d.diary_id " +
+            "AND t.user_id = d.user_id AND (t.source_revision = d.source_revision " +
+            "OR (t.source_revision IS NULL AND d.source_revision IS NULL)))", nativeQuery = true)
     int insertMissingTasks(@Param("now") LocalDateTime now);
 }

@@ -6,6 +6,7 @@ import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.diary.impl.DiaryServiceImpl;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEvent;
 import org.springframework.context.ApplicationEventPublisher;
@@ -30,6 +31,7 @@ class DiaryServiceImplTest {
         DiaryServiceImpl service = new DiaryServiceImpl();
         ReflectionTestUtils.setField(service, "eventPublisher", eventPublisher);
         ReflectionTestUtils.setField(service, "sensitiveDataMaskService", maskService);
+        ReflectionTestUtils.setField(service, "taskExecutionService", mock(TaskExecutionService.class));
 
         Diary diary = Diary.builder()
                 .userId("user-1")

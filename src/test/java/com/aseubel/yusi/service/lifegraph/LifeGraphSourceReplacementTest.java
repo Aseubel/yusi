@@ -286,6 +286,7 @@ class LifeGraphSourceReplacementTest {
         assertEquals(11L, evidenceHolder.get().getEntityId());
         assertEquals("DIARY", evidenceHolder.get().getSourceType());
         assertEquals("diary-1", evidenceHolder.get().getSourceId());
+        assertEquals(1L, evidenceHolder.get().getSourceRevision());
         verify(mentionRepository, never()).save(any(LifeGraphMention.class));
     }
 

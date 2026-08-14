@@ -50,6 +50,10 @@ public class LifeGraphTask {
     @Column(name = "trigger_event_id", length = 64)
     private String triggerEventId;
 
+    /** Revision of the source snapshot consumed by this task. */
+    @Column(name = "source_revision")
+    private Long sourceRevision;
+
     /** Stable ID in the cross-domain task execution ledger. */
     @Column(name = "task_execution_id", length = 64)
     private String taskExecutionId;
@@ -106,9 +110,15 @@ public class LifeGraphTask {
     }
 
     public static LifeGraphTask createUpsertTask(String diaryId, String userId, String triggerEventId) {
+        return createUpsertTask(diaryId, userId, null, triggerEventId);
+    }
+
+    public static LifeGraphTask createUpsertTask(String diaryId, String userId,
+            Long sourceRevision, String triggerEventId) {
         return LifeGraphTask.builder()
                 .diaryId(diaryId)
                 .userId(userId)
+                .sourceRevision(sourceRevision)
                 .triggerEventId(triggerEventId)
                 .taskType(TaskType.UPSERT)
                 .status(TaskStatus.PENDING)
@@ -125,9 +135,15 @@ public class LifeGraphTask {
     }
 
     public static LifeGraphTask createDeleteTask(String diaryId, String userId, String triggerEventId) {
+        return createDeleteTask(diaryId, userId, null, triggerEventId);
+    }
+
+    public static LifeGraphTask createDeleteTask(String diaryId, String userId,
+            Long sourceRevision, String triggerEventId) {
         return LifeGraphTask.builder()
                 .diaryId(diaryId)
                 .userId(userId)
+                .sourceRevision(sourceRevision)
                 .triggerEventId(triggerEventId)
                 .taskType(TaskType.DELETE)
                 .status(TaskStatus.PENDING)

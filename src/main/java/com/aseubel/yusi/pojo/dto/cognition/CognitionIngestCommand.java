@@ -17,6 +17,7 @@ public class CognitionIngestCommand {
     private String userId;
     private String sourceType;
     private String sourceId;
+    private Long sourceRevision;
     private String maskedText;
     private String title;
     private String topic;

@@ -60,6 +60,11 @@ public class LifeGraphTaskBatchService {
                     continue;
                 }
 
+                if (isSuperseded(task.getSourceRevision(), diary.getSourceRevision())) {
+                    markCompleted(task, now);
+                    continue;
+                }
+
                 String plain = decryptDiaryContent(diary);
                 if (StrUtil.isBlank(plain)) {
                     lifeGraphBuildService.deleteByDiary(task.getUserId(), task.getDiaryId());
@@ -102,6 +107,13 @@ public class LifeGraphTaskBatchService {
         LocalDateTime now = LocalDateTime.now();
         try {
             if (diary == null) {
+                markCompleted(taskId, now);
+                return;
+            }
+            LifeGraphTask task = taskRepository.findById(taskId).orElse(null);
+            Diary currentDiary = diaryRepository.findByDiaryIdAndUserId(diary.getDiaryId(), diary.getUserId());
+            if (task != null && currentDiary != null
+                    && isSuperseded(task.getSourceRevision(), currentDiary.getSourceRevision())) {
                 markCompleted(taskId, now);
                 return;
             }
@@ -159,6 +171,10 @@ public class LifeGraphTaskBatchService {
     LocalDateTime calculateNextRetry(int retryCount) {
         long delaySeconds = (long) Math.pow(5, retryCount);
         return LocalDateTime.now().plusSeconds(Math.min(delaySeconds, 3600));
+    }
+
+    private boolean isSuperseded(Long taskRevision, Long currentRevision) {
+        return currentRevision != null && (taskRevision == null || taskRevision < currentRevision);
     }
 
     private String decryptDiaryContent(Diary diary) {

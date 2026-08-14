@@ -49,6 +49,9 @@ public class LifeGraphRelationEvidence {
     @Column(name = "source_id", nullable = false, length = 255)
     private String sourceId;
 
+    @Column(name = "source_revision")
+    private Long sourceRevision;
+
     @Column(name = "occurrence_count", nullable = false)
     private Integer occurrenceCount;
 

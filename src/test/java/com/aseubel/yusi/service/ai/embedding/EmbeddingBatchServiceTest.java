@@ -27,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -69,7 +70,7 @@ class EmbeddingBatchServiceTest {
                 new DiaryChunker.DiaryChunk("diary-1", 1, 2, "日期：2026-07-13\n标题：测试日记", "第二段。"));
 
         when(taskClaimService.claimPendingTasks(any(), anyInt())).thenReturn(List.of(task));
-        when(diaryRepository.findByDiaryId("diary-1")).thenReturn(diary);
+        when(diaryRepository.findByDiaryIdAndUserId("diary-1", "user-1")).thenReturn(diary);
         when(userRepository.findByUserId("user-1")).thenReturn(User.builder().keyMode("DEFAULT").build());
         when(diaryChunker.split(diary, diary.getPlainContent())).thenReturn(chunks);
         when(embeddingGateway.embedAll(any())).thenReturn(new EmbeddingGateway.EmbeddingBatchResult(
@@ -87,5 +88,26 @@ class EmbeddingBatchServiceTest {
         assertEquals(0, rows.get(0).getAsJsonObject("metadata").get("chunkIndex").getAsInt());
         assertEquals(2, rows.get(1).getAsJsonObject("metadata").get("chunkCount").getAsInt());
         assertTrue(rows.get(0).get("text").getAsString().contains("标题：测试日记"));
+    }
+
+    @Test
+    void processPendingTasks_skipsOlderDiaryRevision() {
+        EmbeddingBatchService service = new EmbeddingBatchService(taskRepository, taskClaimService,
+                taskMaintenanceService, diaryRepository, userRepository, milvusClientV2, embeddingGateway,
+                diaryChunker, diaryService, taskExecutionService);
+        EmbeddingTask task = EmbeddingTask.createUpsertTask("diary-2", "user-1", "event-old");
+        task.setId(2L);
+        task.setSourceRevision(1L);
+        Diary currentDiary = Diary.builder().diaryId("diary-2").userId("user-1")
+                .sourceRevision(2L).plainContent("new content").build();
+
+        when(taskClaimService.claimPendingTasks(any(), anyInt())).thenReturn(List.of(task));
+        when(diaryRepository.findByDiaryIdAndUserId("diary-2", "user-1")).thenReturn(currentDiary);
+
+        service.processPendingTasks();
+
+        verify(milvusClientV2, never()).insert(any(InsertReq.class));
+        verify(milvusClientV2, never()).delete(any());
+        verify(taskRepository).markAsCompleted(any(Long.class), any());
     }
 }

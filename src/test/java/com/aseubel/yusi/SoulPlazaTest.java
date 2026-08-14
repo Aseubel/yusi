@@ -11,6 +11,7 @@ import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.plaza.impl.SoulPlazaServiceImpl;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
@@ -57,6 +58,9 @@ class SoulPlazaTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private TaskExecutionService taskExecutionService;
 
     @InjectMocks
     private SoulPlazaServiceImpl soulPlazaService;

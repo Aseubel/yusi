@@ -13,6 +13,7 @@ import com.aseubel.yusi.pojo.constant.ResonanceType;
 import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
 import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
 import com.aseubel.yusi.pojo.constant.TaskExecutionType;
+import com.aseubel.yusi.pojo.constant.SourceRevision;
 import com.aseubel.yusi.pojo.entity.SoulCard;
 import com.aseubel.yusi.pojo.entity.SoulResonance;
 import com.aseubel.yusi.repository.SoulCardRepository;
@@ -80,6 +81,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
                 .type(type)
                 .emotion(emotion)
                 .resonanceCount(0)
+                .sourceRevision(SourceRevision.INITIAL)
                 .createdAt(LocalDateTime.now())
                 .build();
 
@@ -140,6 +142,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
                 .userId(card.getUserId())
                 .sourceType(SourceType.EMOTION_PLAZA.code())
                 .sourceId(String.valueOf(card.getId()))
+                .sourceRevision(SourceRevision.initialOrCurrent(card.getSourceRevision()))
                 .maskedText(maskedText)
                 .topic(card.getEmotion())
                 .timestamp(card.getCreatedAt())
@@ -309,6 +312,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
         String emotion = analyzeContentEmotion(filteredContent);
         card.setContent(filteredContent);
         card.setEmotion(emotion);
+        card.setSourceRevision(SourceRevision.next(card.getSourceRevision()));
 
         SoulCard saved = cardRepository.save(card);
         publishLifeGraphEvent(saved, PlazaCardChangedEvent.Type.MODIFY);
@@ -346,6 +350,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
                 .userId(card.getUserId())
                 .sourceType(SourceType.PLAZA.code())
                 .sourceId(String.valueOf(card.getId()))
+                .sourceRevision(SourceRevision.initialOrCurrent(card.getSourceRevision()))
                 .maskedText(maskedText)
                 .timestamp(card.getCreatedAt())
                 .confidenceHint(0.45)
@@ -362,6 +367,7 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
                 .userId(card.getUserId())
                 .sourceType(SourceType.PLAZA.code())
                 .sourceId(String.valueOf(card.getId()))
+                .sourceRevision(SourceRevision.initialOrCurrent(card.getSourceRevision()))
                 .build(), PlazaCardChangedEvent.Type.DELETE);
         recordPlazaEvent(card, event);
         eventPublisher.publishEvent(event);
@@ -373,10 +379,11 @@ public class SoulPlazaServiceImpl implements SoulPlazaService {
                 .ownerUserId(card.getUserId())
                 .sourceType(TaskExecutionSourceType.PLAZA.code())
                 .sourceId(String.valueOf(card.getId()))
-                .sourceVersion(event.getEventId())
+                .sourceVersion(String.valueOf(event.getSourceRevision()))
                 .triggerEventId(event.getEventId())
-                .idempotencyKey(TaskExecutionKeys.fromEvent(TaskExecutionType.PLAZA,
-                        TaskExecutionSourceType.PLAZA.code(), String.valueOf(card.getId()), event.getEventId()))
+                .idempotencyKey(TaskExecutionKeys.fromSourceRevision(TaskExecutionType.PLAZA,
+                        card.getUserId(), TaskExecutionSourceType.PLAZA.code(), String.valueOf(card.getId()),
+                        event.getSourceRevision()))
                 .build(), card.getCreatedAt() == null ? LocalDateTime.now() : card.getCreatedAt());
     }
 }

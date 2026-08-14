@@ -18,6 +18,13 @@ public final class TaskExecutionKeys {
                 + sourceId + ":" + eventId);
     }
 
+    public static String fromSourceRevision(TaskExecutionType taskType, String ownerUserId,
+            String sourceType, String sourceId, Long sourceRevision) {
+        long revision = SourceRevision.initialOrCurrent(sourceRevision);
+        return compact(taskType.code().toLowerCase() + ":revision:" + revision + ":"
+                + ownerUserId + ":" + sourceType + ":" + sourceId);
+    }
+
     public static String scheduled(TaskExecutionType taskType, String sourceId, String runId) {
         return compact(taskType.code().toLowerCase() + ":scheduled:" + sourceId + ":" + runId);
     }

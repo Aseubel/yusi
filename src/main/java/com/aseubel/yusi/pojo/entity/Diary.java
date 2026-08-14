@@ -88,6 +88,10 @@ public class Diary {
     @JsonDeserialize(using = LocalDateTimeDeserializer.class)
     private LocalDateTime updateTime;
 
+    /** Monotonic revision for derived-data idempotency; historical rows may be null. */
+    @Column(name = "source_revision")
+    private Long sourceRevision;
+
     // ========== Geo-location fields (Epic 5: 时空足迹) ==========
 
     /**

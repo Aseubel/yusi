@@ -25,6 +25,7 @@ import com.aseubel.yusi.service.lifegraph.LifeGraphPromotionPolicy;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphExtractor;
 import com.aseubel.yusi.service.lifegraph.constant.LifeGraphConstants;
 import com.aseubel.yusi.service.lifegraph.constant.LifeGraphEvidenceKind;
+import com.aseubel.yusi.pojo.constant.SourceRevision;
 import com.aseubel.yusi.service.lifegraph.dto.LifeGraphExtractionResult;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -510,9 +511,11 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                     .relationId(relation.getId())
                     .sourceType(source.sourceType())
                     .sourceId(source.sourceId())
+                    .sourceRevision(source.sourceRevision())
                     .build();
         }
         evidence.setOccurrenceCount(Math.max(1, occurrenceCount));
+        evidence.setSourceRevision(source.sourceRevision());
         evidence.setEvidenceSnippet(trimSnippet(extracted.getEvidenceSnippet(), 1000));
         evidence.setConfidence(toConfidence(extracted.getConfidence()));
         relationEvidenceRepository.save(evidence);
@@ -534,7 +537,9 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                         .entityId(entityId)
                         .sourceType(source.sourceType())
                         .sourceId(source.sourceId())
+                        .sourceRevision(source.sourceRevision())
                         .build());
+        evidence.setSourceRevision(source.sourceRevision());
         evidence.setOccurrenceCount(1);
         evidence.setEvidenceKind(evidenceKind);
         evidence.setSnippet(trimSnippet(
@@ -554,9 +559,11 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
                 .userId(source.userId())
                 .entityId(entityId)
                 .diaryId(source.sourceId())
+                .sourceRevision(source.sourceRevision())
                 .build()
                 : existing.get(0);
         mention.setEntryDate(source.entryDate());
+        mention.setSourceRevision(source.sourceRevision());
         mention.setSnippet(trimSnippet(extracted == null ? null : extracted.getSnippet(), 1000));
         mention.setProps(toJson(extracted == null ? null : extracted.getProps()));
         mentionRepository.save(mention);
@@ -666,7 +673,8 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         return new SourceContext(SourceType.DIARY.code(), diary.getDiaryId(), diary.getUserId(), content,
                 diary.getEntryDate(), diary.getUpdateTime() == null ? LocalDateTime.now() : diary.getUpdateTime(),
                 diary.getTitle(), diary.getPlaceName(), diary.getAddress(),
-                coordinates(diary.getLatitude(), diary.getLongitude()), diary);
+                coordinates(diary.getLatitude(), diary.getLongitude()), diary,
+                SourceRevision.initialOrCurrent(diary.getSourceRevision()));
     }
 
     private SourceContext sourceFromPlaza(CognitionIngestCommand command) {
@@ -674,7 +682,8 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
         return new SourceContext(SourceType.PLAZA.code(), command.getSourceId(), command.getUserId(),
                 command.getMaskedText(), entryDate,
                 command.getTimestamp() == null ? LocalDateTime.now() : command.getTimestamp(),
-                command.getTitle(), command.getPlaceName(), null, null, null);
+                command.getTitle(), command.getPlaceName(), null, null, null,
+                SourceRevision.initialOrCurrent(command.getSourceRevision()));
     }
 
     private String evidenceKind(String sourceType, String key,
@@ -843,6 +852,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
             String placeName,
             String address,
             String coordinates,
-            Diary diary) {
+            Diary diary,
+            Long sourceRevision) {
     }
 }

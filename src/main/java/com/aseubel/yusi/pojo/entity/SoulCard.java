@@ -47,6 +47,10 @@ public class SoulCard {
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
 
+    /** Monotonic revision for derived-data idempotency; historical rows may be null. */
+    @Column(name = "source_revision")
+    private Long sourceRevision;
+
     @Transient
     private Boolean isResonated;
 }

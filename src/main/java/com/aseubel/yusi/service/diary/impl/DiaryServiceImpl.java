@@ -17,6 +17,7 @@ import com.aseubel.yusi.pojo.constant.DiaryAttachmentType;
 import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
 import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
 import com.aseubel.yusi.pojo.constant.TaskExecutionType;
+import com.aseubel.yusi.pojo.constant.SourceRevision;
 import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentAnchor;
 import com.aseubel.yusi.pojo.dto.diary.DiaryAttachmentBinding;
 import com.aseubel.yusi.pojo.entity.Diary;
@@ -89,6 +90,7 @@ public class DiaryServiceImpl implements DiaryService {
     public Diary addDiary(Diary diary) {
         validateDiaryAssets(diary);
         diary.generateId();
+        diary.setSourceRevision(SourceRevision.INITIAL);
         diary.setCreateTime(LocalDateTime.now());
         diary.setUpdateTime(LocalDateTime.now());
         User user = userRepository.findByUserId(diary.getUserId());
@@ -156,6 +158,7 @@ public class DiaryServiceImpl implements DiaryService {
             deleteRemovedImages(existingDiary.getImages(), diary.getImages(), diary.getUserId());
 
             diary.setId(existingDiary.getId());
+            diary.setSourceRevision(SourceRevision.next(existingDiary.getSourceRevision()));
             diary.setUpdateTime(LocalDateTime.now());
             diary.setCreateTime(existingDiary.getCreateTime());
             User user = userRepository.findByUserId(diary.getUserId());
@@ -532,15 +535,16 @@ public class DiaryServiceImpl implements DiaryService {
             return;
         }
         DiaryChangedEvent diaryEvent = new DiaryChangedEvent(this, diary, type);
+        long sourceRevision = SourceRevision.initialOrCurrent(diary.getSourceRevision());
         taskExecutionService.recordCompleted(TaskExecutionCommand.builder()
                 .taskType(TaskExecutionType.DIARY)
                 .ownerUserId(diary.getUserId())
                 .sourceType(TaskExecutionSourceType.DIARY.code())
                 .sourceId(diary.getDiaryId())
-                .sourceVersion(diaryEvent.getEventId())
+                .sourceVersion(String.valueOf(sourceRevision))
                 .triggerEventId(diaryEvent.getEventId())
-                .idempotencyKey(TaskExecutionKeys.fromEvent(TaskExecutionType.DIARY,
-                        TaskExecutionSourceType.DIARY.code(), diary.getDiaryId(), diaryEvent.getEventId()))
+                .idempotencyKey(TaskExecutionKeys.fromSourceRevision(TaskExecutionType.DIARY,
+                        diary.getUserId(), TaskExecutionSourceType.DIARY.code(), diary.getDiaryId(), sourceRevision))
                 .build(), diary.getUpdateTime());
         eventPublisher.publishEvent(diaryEvent);
 
@@ -561,6 +565,7 @@ public class DiaryServiceImpl implements DiaryService {
                 .userId(diary.getUserId())
                 .sourceType(SourceType.DIARY.code())
                 .sourceId(diary.getDiaryId())
+                .sourceRevision(sourceRevision)
                 .maskedText(maskedText)
                 .title(diary.getTitle())
                 .placeName(diary.getPlaceName())

@@ -23,6 +23,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -49,7 +50,6 @@ class AsyncTaskCorrelationTest {
 
     @Test
     void embeddingTaskKeepsDiaryChangeEventId() {
-        when(embeddingTaskRepository.findPendingByDiaryId("diary-1")).thenReturn(List.of());
         when(taskExecutionService.createOrGet(org.mockito.ArgumentMatchers.any(TaskExecutionCommand.class)))
                 .thenReturn(TaskExecution.builder().taskId("execution-1").build());
 
@@ -66,6 +66,31 @@ class AsyncTaskCorrelationTest {
         verify(embeddingTaskRepository).save(captor.capture());
         assertEquals("diary-change-1", captor.getValue().getTriggerEventId());
         assertEquals("execution-1", captor.getValue().getTaskExecutionId());
+    }
+
+    @Test
+    void embeddingTaskUsesDiarySourceRevisionForIdempotency() {
+        when(taskExecutionService.createOrGet(org.mockito.ArgumentMatchers.any(TaskExecutionCommand.class)))
+                .thenReturn(TaskExecution.builder().taskId("execution-revision-1").build());
+
+        Diary diary = Diary.builder()
+                .diaryId("diary-revision-1")
+                .userId("user-1")
+                .sourceRevision(7L)
+                .build();
+        DiaryChangedEvent event = new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.MODIFY,
+                "diary-change-revision-1");
+
+        new EmbeddingService(embeddingTaskRepository, taskExecutionService).onDiaryChanged(event);
+
+        ArgumentCaptor<TaskExecutionCommand> commandCaptor = ArgumentCaptor.forClass(TaskExecutionCommand.class);
+        verify(taskExecutionService).createOrGet(commandCaptor.capture());
+        assertEquals("7", commandCaptor.getValue().getSourceVersion());
+        assertTrue(commandCaptor.getValue().getIdempotencyKey().contains("revision:7"));
+
+        ArgumentCaptor<EmbeddingTask> taskCaptor = ArgumentCaptor.forClass(EmbeddingTask.class);
+        verify(embeddingTaskRepository).save(taskCaptor.capture());
+        assertEquals(7L, taskCaptor.getValue().getSourceRevision());
     }
 
     @Test
@@ -88,6 +113,33 @@ class AsyncTaskCorrelationTest {
         verify(lifeGraphTaskRepository).save(captor.capture());
         assertEquals("diary-change-2", captor.getValue().getTriggerEventId());
         assertEquals("execution-2", captor.getValue().getTaskExecutionId());
+    }
+
+    @Test
+    void lifeGraphTaskUsesDiarySourceRevisionForIdempotency() {
+        Diary diary = Diary.builder()
+                .diaryId("diary-revision-2")
+                .userId("user-2")
+                .sourceRevision(4L)
+                .build();
+        DiaryChangedEvent event = new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.DELETE,
+                "diary-change-revision-2");
+
+        when(taskExecutionService.createOrGet(org.mockito.ArgumentMatchers.any(TaskExecutionCommand.class)))
+                .thenReturn(TaskExecution.builder().taskId("execution-revision-2").build());
+
+        new LifeGraphTaskCreator(lifeGraphTaskRepository, lifeGraphTaskBatchService, threadPoolTaskExecutor,
+                taskExecutionService)
+                .onDiaryChanged(event);
+
+        ArgumentCaptor<TaskExecutionCommand> commandCaptor = ArgumentCaptor.forClass(TaskExecutionCommand.class);
+        verify(taskExecutionService).createOrGet(commandCaptor.capture());
+        assertEquals("4", commandCaptor.getValue().getSourceVersion());
+        assertTrue(commandCaptor.getValue().getIdempotencyKey().contains("revision:4"));
+
+        ArgumentCaptor<LifeGraphTask> taskCaptor = ArgumentCaptor.forClass(LifeGraphTask.class);
+        verify(lifeGraphTaskRepository).save(taskCaptor.capture());
+        assertEquals(4L, taskCaptor.getValue().getSourceRevision());
     }
 
     @Test
