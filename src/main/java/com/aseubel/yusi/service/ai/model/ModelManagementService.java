@@ -13,7 +13,14 @@ import com.aseubel.yusi.pojo.dto.model.ModelMetricSummary;
 import com.aseubel.yusi.pojo.dto.model.ModelRoutePreviewRequest;
 import com.aseubel.yusi.pojo.dto.model.ModelRoutePreviewResponse;
 import com.aseubel.yusi.pojo.entity.ModelCallTrace;
+import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
+import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
+import com.aseubel.yusi.pojo.constant.SecurityAuditReasonCode;
+import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.repository.ModelCallTraceRepository;
+import com.aseubel.yusi.service.security.SecurityAuditService;
 import com.aseubel.yusi.service.ai.model.constant.ModelHealthPhase;
 import com.aseubel.yusi.service.ai.model.constant.ModelRouteExclusionReason;
 import lombok.RequiredArgsConstructor;
@@ -48,6 +55,7 @@ public class ModelManagementService {
     private final ModelRouterService modelRouterService;
     private final ModelInstanceRegistry modelInstanceRegistry;
     private final ModelCallTraceRepository modelCallTraceRepository;
+    private final SecurityAuditService securityAuditService;
 
     public List<ModelRuntimeState> listModelStates() {
         return modelStateCenter.listStates();
@@ -90,6 +98,14 @@ public class ModelManagementService {
         }
         ModelRoutingProperties updated = modelConfigCenter.updateCanonical(
                 request.toProperties(), request.getExpectedVersion(), operatorId);
+        if (securityAuditService != null && operatorId != null && !operatorId.isBlank()) {
+            securityAuditService.recordAdmin(SecurityAuditAction.MODEL_GOVERNANCE_UPDATED, operatorId, null,
+                    SecurityAuditResourceType.MODEL_GOVERNANCE, "active", SecurityAuditOutcome.SUCCESS,
+                    SecurityAuditReasonCode.ADMIN_MUTATION,
+                    Map.of(
+                            SecurityAuditDetailKeys.OPERATION, SecurityAuditOperation.UPDATE.name(),
+                            SecurityAuditDetailKeys.VERSION, String.valueOf(updated.getVersion())));
+        }
         return updated.getVersion();
     }
 

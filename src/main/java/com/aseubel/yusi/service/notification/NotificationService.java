@@ -8,6 +8,12 @@ import com.aseubel.yusi.pojo.dto.notification.PublishAnnouncementRequest;
 import com.aseubel.yusi.pojo.constant.ProductEventName;
 import com.aseubel.yusi.pojo.constant.ProductEventSensitivity;
 import com.aseubel.yusi.pojo.constant.ProductEventSource;
+import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
+import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
+import com.aseubel.yusi.pojo.constant.SecurityAuditReasonCode;
+import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.entity.NotificationAnnouncement;
 import com.aseubel.yusi.pojo.entity.ProductEvent;
 import com.aseubel.yusi.pojo.entity.UserNotification;
@@ -18,6 +24,7 @@ import com.aseubel.yusi.repository.UserNotificationRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.event.ProductEventCommand;
 import com.aseubel.yusi.service.event.ProductEventService;
+import com.aseubel.yusi.service.security.SecurityAuditService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -44,6 +51,7 @@ public class NotificationService {
     private final NotificationAnnouncementRepository announcementRepository;
     private final UserRepository userRepository;
     private final ProductEventService productEventService;
+    private final SecurityAuditService securityAuditService;
 
     /**
      * Creates a typed notification. Runtime producers should use this overload
@@ -212,6 +220,16 @@ public class NotificationService {
                     .build());
         }
         notificationRepository.saveAll(inboxItems);
+
+        if (securityAuditService != null) {
+            securityAuditService.recordAdmin(SecurityAuditAction.ANNOUNCEMENT_PUBLISHED, publisherId, null,
+                    SecurityAuditResourceType.ANNOUNCEMENT, announcement.getAnnouncementId(),
+                    SecurityAuditOutcome.SUCCESS, SecurityAuditReasonCode.ADMIN_MUTATION,
+                    Map.of(
+                            SecurityAuditDetailKeys.OPERATION, SecurityAuditOperation.PUBLISH.name(),
+                            SecurityAuditDetailKeys.AUDIENCE, audience,
+                            SecurityAuditDetailKeys.COUNT, String.valueOf(userIds.size())));
+        }
 
         return AnnouncementResponse.from(announcement);
     }

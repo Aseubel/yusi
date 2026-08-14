@@ -97,7 +97,7 @@ public class PromptController {
     @DeleteMapping("/{id}")
     public Response<Void> deletePrompt(@PathVariable Long id) {
         checkAdmin();
-        promptService.deletePrompt(id);
+        promptService.deletePrompt(id, UserContext.getUserId());
         return Response.success();
     }
 

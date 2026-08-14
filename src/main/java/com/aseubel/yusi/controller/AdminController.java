@@ -13,6 +13,14 @@ import com.aseubel.yusi.pojo.dto.admin.AdminStatsResponse;
 import com.aseubel.yusi.pojo.dto.admin.AdminPermissionResponse;
 import com.aseubel.yusi.pojo.dto.admin.AdminUserResponse;
 import com.aseubel.yusi.pojo.dto.admin.ScenarioAuditRequest;
+import com.aseubel.yusi.pojo.dto.admin.SecurityAuditEventResponse;
+import com.aseubel.yusi.pojo.dto.admin.SecurityAuditQuery;
+import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
+import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
+import com.aseubel.yusi.pojo.constant.SecurityAuditReasonCode;
+import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.dto.notification.AnnouncementResponse;
 import com.aseubel.yusi.pojo.dto.notification.PublishAnnouncementRequest;
 import com.aseubel.yusi.common.Response;
@@ -22,9 +30,11 @@ import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.service.ai.embedding.EmbeddingBatchService;
 import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.suggestion.SuggestionService;
+import com.aseubel.yusi.service.security.SecurityAuditService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.validation.annotation.Validated;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -36,11 +46,14 @@ import lombok.RequiredArgsConstructor;
 import java.util.HashMap;
 import java.util.Map;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 
 @Auth
 @Slf4j
 @RestController
 @RequiredArgsConstructor
+@Validated
 @RequestMapping("/api/admin")
 public class AdminController {
 
@@ -51,6 +64,7 @@ public class AdminController {
     private final EmbeddingBatchService embeddingBatchService;
     private final MemoryConfigProperties memoryConfigProperties;
     private final NotificationService notificationService;
+    private final SecurityAuditService securityAuditService;
 
     private void checkAdminPermission() {
         String userId = UserContext.getUserId();
@@ -93,6 +107,25 @@ public class AdminController {
     public Response<AdminPermissionResponse> getCurrentAdminPermission() {
         checkAdminPermission();
         return Response.success(new AdminPermissionResponse(getCurrentUserPermissionLevel()));
+    }
+
+    @GetMapping("/audit")
+    public Response<Page<SecurityAuditEventResponse>> getSecurityAudit(
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
+            @RequestParam(required = false) com.aseubel.yusi.pojo.constant.SecurityAuditAction action,
+            @RequestParam(required = false) com.aseubel.yusi.pojo.constant.SecurityAuditOutcome outcome,
+            @RequestParam(required = false) com.aseubel.yusi.pojo.constant.SecurityAuditResourceType resourceType,
+            @RequestParam(required = false) String userId) {
+        checkAdminPermission();
+        return Response.success(securityAuditService.findAdminPage(true,
+                SecurityAuditQuery.builder()
+                        .action(action)
+                        .outcome(outcome)
+                        .resourceType(resourceType)
+                        .userId(userId)
+                        .build(),
+                PageRequest.of(page, size)));
     }
 
     @PostMapping("/users/{userId}/permission")
@@ -210,6 +243,11 @@ public class AdminController {
     public Response<Integer> fullSyncEmbeddings() {
         checkSuperAdminPermission();
         int count = embeddingBatchService.fullSync();
+        securityAuditService.recordAdmin(SecurityAuditAction.EMBEDDINGS_FULL_SYNC, UserContext.getUserId(), null,
+                SecurityAuditResourceType.EMBEDDING_SYNC, "all", SecurityAuditOutcome.SUCCESS,
+                SecurityAuditReasonCode.ADMIN_MUTATION,
+                Map.of(SecurityAuditDetailKeys.OPERATION, SecurityAuditOperation.FULL_SYNC.name(),
+                        SecurityAuditDetailKeys.COUNT, String.valueOf(count)));
         return Response.success(count);
     }
 

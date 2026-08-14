@@ -1,16 +1,24 @@
 package com.aseubel.yusi.service.security;
 
 import cn.hutool.core.util.IdUtil;
+import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
 import com.aseubel.yusi.pojo.constant.SecurityAuditActorType;
 import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
+import com.aseubel.yusi.pojo.constant.SecurityAuditReasonCode;
 import com.aseubel.yusi.pojo.constant.SecurityAuditRetention;
+import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.constant.SecurityAuditScopeRole;
+import com.aseubel.yusi.pojo.dto.admin.SecurityAuditEventResponse;
+import com.aseubel.yusi.pojo.dto.admin.SecurityAuditQuery;
 import com.aseubel.yusi.pojo.entity.SecurityAuditEvent;
 import com.aseubel.yusi.pojo.entity.SecurityAuditEventScope;
 import com.aseubel.yusi.repository.SecurityAuditEventRepository;
 import com.aseubel.yusi.repository.SecurityAuditEventScopeRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,7 +45,10 @@ public class SecurityAuditService {
             SecurityAuditDetailKeys.FAILURE_CATEGORY,
             SecurityAuditDetailKeys.RETRY_COUNT,
             SecurityAuditDetailKeys.OPERATION,
-            SecurityAuditDetailKeys.SOURCE_TYPE);
+            SecurityAuditDetailKeys.SOURCE_TYPE,
+            SecurityAuditDetailKeys.VERSION,
+            SecurityAuditDetailKeys.COUNT,
+            SecurityAuditDetailKeys.AUDIENCE);
     private static final String SAFE_DETAIL_VALUE = "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$";
 
     private final SecurityAuditEventRepository eventRepository;
@@ -78,6 +89,24 @@ public class SecurityAuditService {
         return saved;
     }
 
+    /** Records an administrator mutation through the same redaction and scope path as user events. */
+    @Transactional
+    public SecurityAuditEvent recordAdmin(SecurityAuditAction action, String adminUserId,
+            String subjectUserId, SecurityAuditResourceType resourceType, String resourceId,
+            SecurityAuditOutcome outcome, String reasonCode, Map<String, String> details) {
+        return record(SecurityAuditCommand.builder()
+                .action(action)
+                .actorType(SecurityAuditActorType.ADMIN)
+                .actorUserId(adminUserId)
+                .subjectUserId(subjectUserId)
+                .resourceType(resourceType)
+                .resourceId(resourceId)
+                .outcome(outcome)
+                .reasonCode(reasonCode == null ? SecurityAuditReasonCode.ADMIN_MUTATION : reasonCode)
+                .details(details)
+                .build());
+    }
+
     @Transactional(readOnly = true)
     public List<SecurityAuditEvent> findForUser(String userId, Pageable pageable) {
         if (isBlank(userId) || pageable == null) {
@@ -95,6 +124,25 @@ public class SecurityAuditService {
             throw new IllegalArgumentException("Audit page is required");
         }
         return eventRepository.findAllByOrderByOccurredAtDesc(pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<SecurityAuditEventResponse> findAdminPage(boolean authorized, SecurityAuditQuery query,
+            Pageable pageable) {
+        if (!authorized) {
+            throw new SecurityException("Administrator authorization is required");
+        }
+        if (pageable == null) {
+            throw new IllegalArgumentException("Audit page is required");
+        }
+        SecurityAuditQuery effectiveQuery = query == null ? SecurityAuditQuery.builder().build() : query;
+        return eventRepository.searchForAdmin(
+                effectiveQuery.getAction(),
+                effectiveQuery.getOutcome(),
+                effectiveQuery.getResourceType(),
+                normalize(effectiveQuery.getUserId()),
+                pageable)
+                .map(this::toResponse);
     }
 
     @Transactional
@@ -171,6 +219,45 @@ public class SecurityAuditService {
             return json;
         } catch (JsonProcessingException exception) {
             return "{}";
+        }
+    }
+
+    private SecurityAuditEventResponse toResponse(SecurityAuditEvent event) {
+        return SecurityAuditEventResponse.builder()
+                .eventId(event.getEventId())
+                .action(event.getAction() == null ? null : event.getAction().code())
+                .actionKey(event.getAction() == null ? null : event.getAction().name())
+                .actorType(event.getActorType() == null ? null : event.getActorType().name())
+                .actorUserId(event.getActorUserId())
+                .subjectUserId(event.getSubjectUserId())
+                .resourceType(event.getResourceType() == null ? null : event.getResourceType().name())
+                .resourceId(event.getResourceId())
+                .outcome(event.getOutcome() == null ? null : event.getOutcome().name())
+                .reasonCode(event.getReasonCode())
+                .details(deserializeDetails(event.getDetailsJson()))
+                .occurredAt(event.getOccurredAt())
+                .build();
+    }
+
+    private Map<String, String> deserializeDetails(String detailsJson) {
+        if (isBlank(detailsJson)) {
+            return Map.of();
+        }
+        try {
+            Map<String, String> details = objectMapper.readValue(detailsJson,
+                    new TypeReference<Map<String, String>>() {
+                    });
+            Map<String, String> safeDetails = new LinkedHashMap<>();
+            if (details != null) {
+                details.entrySet().stream()
+                        .filter(entry -> ALLOWED_DETAIL_KEYS.contains(entry.getKey()))
+                        .filter(entry -> isSafeDetailValue(entry.getValue()))
+                        .sorted(Map.Entry.comparingByKey())
+                        .forEach(entry -> safeDetails.put(entry.getKey(), entry.getValue()));
+            }
+            return safeDetails;
+        } catch (JsonProcessingException | IllegalArgumentException exception) {
+            return Map.of();
         }
     }
 

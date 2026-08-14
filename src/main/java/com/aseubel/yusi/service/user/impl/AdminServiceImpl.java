@@ -9,6 +9,11 @@ import com.aseubel.yusi.pojo.entity.SituationRoom;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.pojo.constant.SuggestionStatus;
+import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
+import com.aseubel.yusi.pojo.constant.SecurityAuditReasonCode;
+import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.dto.admin.AdminUserResponse;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.SituationRoomRepository;
@@ -18,6 +23,7 @@ import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.repository.InterfaceDailyUsageRepository;
 import com.aseubel.yusi.service.user.AdminService;
 import com.aseubel.yusi.service.user.TokenService;
+import com.aseubel.yusi.service.security.SecurityAuditService;
 import com.aseubel.yusi.redis.service.IRedisService;
 import io.milvus.v2.client.MilvusClientV2;
 import io.milvus.v2.service.vector.request.DeleteReq;
@@ -30,6 +36,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.time.LocalDate;
 
 @Slf4j
@@ -47,6 +54,7 @@ public class AdminServiceImpl implements AdminService {
     private final TokenService tokenService;
     private final IRedisService redissonService;
     private final MilvusClientV2 milvusClientV2;
+    private final SecurityAuditService securityAuditService;
 
     @Override
     public AdminStatsResponse getStats() {
@@ -84,28 +92,48 @@ public class AdminServiceImpl implements AdminService {
         if (user == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "User not found");
         }
+        String currentAdminId = UserContext.getUserId();
+        int previousLevel = user.getPermissionLevel() == null ? 0 : user.getPermissionLevel();
         user.setPermissionLevel(permissionLevel);
         userRepository.save(user);
+        recordAdminAudit(SecurityAuditAction.ADMIN_PERMISSION_UPDATED, currentAdminId, userId,
+                SecurityAuditResourceType.USER, userId, SecurityAuditOutcome.SUCCESS,
+                SecurityAuditReasonCode.ADMIN_MUTATION,
+                Map.of(
+                        com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys.OPERATION,
+                        SecurityAuditOperation.UPDATE.name(),
+                        com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys.FROM_STATUS,
+                        String.valueOf(previousLevel),
+                        com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys.TO_STATUS,
+                        String.valueOf(permissionLevel)));
     }
 
     @Override
     public void validatePermissionChange(String currentUserId, String targetUserId, Integer newLevel, Integer currentAdminLevel) {
         if (currentUserId.equals(targetUserId)) {
+            recordAdminDenied(SecurityAuditAction.ADMIN_PERMISSION_UPDATED, currentUserId, targetUserId,
+                    SecurityAuditReasonCode.ADMIN_POLICY_DENIED);
             throw new BusinessException(ErrorCode.FORBIDDEN, "Cannot modify your own permissions");
         }
         
         User targetUser = userRepository.findByUserId(targetUserId);
         if (targetUser == null) {
+            recordAdminDenied(SecurityAuditAction.ADMIN_PERMISSION_UPDATED, currentUserId, targetUserId,
+                    SecurityAuditReasonCode.TARGET_NOT_FOUND);
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Target user not found");
         }
         
         int targetCurrentLevel = targetUser.getPermissionLevel() != null ? targetUser.getPermissionLevel() : 0;
         
         if (targetCurrentLevel >= currentAdminLevel) {
+            recordAdminDenied(SecurityAuditAction.ADMIN_PERMISSION_UPDATED, currentUserId, targetUserId,
+                    SecurityAuditReasonCode.ADMIN_POLICY_DENIED);
             throw new BusinessException(ErrorCode.FORBIDDEN, "Cannot modify users with equal or higher permission level");
         }
         
         if (newLevel >= currentAdminLevel) {
+            recordAdminDenied(SecurityAuditAction.ADMIN_PERMISSION_UPDATED, currentUserId, targetUserId,
+                    SecurityAuditReasonCode.ADMIN_POLICY_DENIED);
             throw new BusinessException(ErrorCode.FORBIDDEN, "Cannot set permission level equal or higher than your own");
         }
     }
@@ -129,13 +157,26 @@ public class AdminServiceImpl implements AdminService {
         SituationScenario scenario = situationScenarioRepository.findById(scenarioId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Scenario not found"));
 
+        int previousStatus = scenario.getStatus() == null ? SituationScenario.STATUS_PENDING : scenario.getStatus();
         if (request.isApproved()) {
-            scenario.setStatus(4);
+            scenario.setStatus(SituationScenario.STATUS_MANUAL_APPROVED);
         } else {
-            scenario.setStatus(1);
+            scenario.setStatus(SituationScenario.STATUS_MANUAL_REJECTED);
             scenario.setRejectReason(request.getRejectReason());
         }
         situationScenarioRepository.save(scenario);
+        recordAdminAudit(SecurityAuditAction.SCENARIO_REVIEWED, UserContext.getUserId(), scenario.getSubmitterId(),
+                SecurityAuditResourceType.SITUATION_SCENARIO, scenarioId, SecurityAuditOutcome.SUCCESS,
+                SecurityAuditReasonCode.ADMIN_MUTATION,
+                Map.of(
+                        com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys.OPERATION,
+                        SecurityAuditOperation.REVIEW.name(),
+                        com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys.ACTION,
+                        request.isApproved() ? "APPROVE" : "REJECT",
+                        com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys.FROM_STATUS,
+                        String.valueOf(previousStatus),
+                        com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys.TO_STATUS,
+                        String.valueOf(scenario.getStatus())));
     }
 
     @Override
@@ -148,6 +189,8 @@ public class AdminServiceImpl implements AdminService {
 
         String currentUserId = UserContext.getUserId();
         if (userId.equals(currentUserId)) {
+            recordAdminDenied(SecurityAuditAction.ADMIN_USER_DEREGISTERED, currentUserId, userId,
+                    SecurityAuditReasonCode.ADMIN_POLICY_DENIED);
             throw new BusinessException(ErrorCode.FORBIDDEN, "Cannot deregister yourself");
         }
 
@@ -155,6 +198,8 @@ public class AdminServiceImpl implements AdminService {
         int currentAdminLevel = currentUser != null && currentUser.getPermissionLevel() != null ? currentUser.getPermissionLevel() : 0;
         int targetUserLevel = user.getPermissionLevel() != null ? user.getPermissionLevel() : 0;
         if (targetUserLevel >= currentAdminLevel) {
+            recordAdminDenied(SecurityAuditAction.ADMIN_USER_DEREGISTERED, currentUserId, userId,
+                    SecurityAuditReasonCode.ADMIN_POLICY_DENIED);
             throw new BusinessException(ErrorCode.FORBIDDEN, "Cannot deregister users with equal or higher permission level");
         }
 
@@ -258,5 +303,28 @@ public class AdminServiceImpl implements AdminService {
             }
         }
         log.info("Successfully deregistered user {} and cleaned up all associated data", userId);
+        recordAdminAudit(SecurityAuditAction.ADMIN_USER_DEREGISTERED, currentUserId, userId,
+                SecurityAuditResourceType.USER, userId, SecurityAuditOutcome.SUCCESS,
+                SecurityAuditReasonCode.ADMIN_MUTATION,
+                Map.of(com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys.OPERATION,
+                        SecurityAuditOperation.DEREGISTER.name()));
+    }
+
+    private void recordAdminDenied(SecurityAuditAction action, String adminUserId, String subjectUserId,
+            String reasonCode) {
+        recordAdminAudit(action, adminUserId, subjectUserId,
+                SecurityAuditResourceType.USER, subjectUserId, SecurityAuditOutcome.DENIED, reasonCode,
+                Map.of(com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys.OPERATION,
+                        SecurityAuditOperation.UPDATE.name()));
+    }
+
+    private void recordAdminAudit(SecurityAuditAction action, String adminUserId, String subjectUserId,
+            SecurityAuditResourceType resourceType, String resourceId, SecurityAuditOutcome outcome,
+            String reasonCode, Map<String, String> details) {
+        if (securityAuditService == null || adminUserId == null || adminUserId.isBlank()) {
+            return;
+        }
+        securityAuditService.recordAdmin(action, adminUserId, subjectUserId, resourceType, resourceId,
+                outcome, reasonCode, details);
     }
 }

@@ -10,5 +10,5 @@ public interface PromptService {
     PromptTemplate savePrompt(PromptTemplate prompt, String updatedBy);
     PromptTemplate updatePrompt(Long id, PromptTemplate prompt, String updatedBy);
     void activatePrompt(Long id, String updatedBy);
-    void deletePrompt(Long id);
+    void deletePrompt(Long id, String updatedBy);
 }

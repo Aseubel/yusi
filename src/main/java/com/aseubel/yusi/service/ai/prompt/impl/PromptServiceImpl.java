@@ -4,15 +4,25 @@ import com.aseubel.yusi.common.constant.PromptDefaults;
 import com.aseubel.yusi.common.event.PromptUpdatedEvent;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
+import com.aseubel.yusi.pojo.constant.SecurityAuditActorType;
+import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
+import com.aseubel.yusi.pojo.constant.SecurityAuditReasonCode;
+import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.entity.PromptTemplate;
 import com.aseubel.yusi.repository.PromptRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptService;
+import com.aseubel.yusi.service.security.SecurityAuditCommand;
+import com.aseubel.yusi.service.security.SecurityAuditService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
+import java.util.Map;
 
 @Service
 public class PromptServiceImpl implements PromptService {
@@ -22,6 +32,9 @@ public class PromptServiceImpl implements PromptService {
 
     @Autowired
     private org.springframework.context.ApplicationEventPublisher eventPublisher;
+
+    @Autowired(required = false)
+    private SecurityAuditService securityAuditService;
 
     private void publishUpdateEvent(String promptName) {
         if (promptName != null) {
@@ -65,6 +78,8 @@ public class PromptServiceImpl implements PromptService {
         prompt.setUpdatedBy(updatedBy);
         PromptTemplate saved = promptRepository.save(prompt);
         publishUpdateEvent(saved.getName());
+        recordPromptAudit(SecurityAuditAction.PROMPT_CREATED, saved.getId(), updatedBy,
+                SecurityAuditOperation.CREATE);
         return saved;
     }
 
@@ -105,6 +120,8 @@ public class PromptServiceImpl implements PromptService {
         existing.setUpdatedBy(updatedBy);
         PromptTemplate saved = promptRepository.save(existing);
         publishUpdateEvent(saved.getName());
+        recordPromptAudit(SecurityAuditAction.PROMPT_UPDATED, saved.getId(), updatedBy,
+                SecurityAuditOperation.UPDATE);
         return saved;
     }
 
@@ -116,13 +133,39 @@ public class PromptServiceImpl implements PromptService {
         existing.setUpdatedBy(updatedBy);
         promptRepository.save(existing);
         publishUpdateEvent(existing.getName());
+        recordPromptAudit(SecurityAuditAction.PROMPT_ACTIVATED, existing.getId(), updatedBy,
+                SecurityAuditOperation.ACTIVATE);
     }
 
     @Override
-    public void deletePrompt(Long id) {
+    public void deletePrompt(Long id, String updatedBy) {
         PromptTemplate existing = promptRepository.findById(id)
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Prompt不存在"));
         promptRepository.delete(existing);
         publishUpdateEvent(existing.getName());
+        recordPromptAudit(SecurityAuditAction.PROMPT_DELETED, id, updatedBy,
+                SecurityAuditOperation.DELETE);
+    }
+
+    private void recordPromptAudit(SecurityAuditAction action, Long promptId, String operatorId,
+            SecurityAuditOperation operation) {
+        if (securityAuditService == null) {
+            return;
+        }
+        boolean systemOperator = PromptDefaults.SYSTEM_UPDATER.equalsIgnoreCase(operatorId);
+        String actorUserId = systemOperator ? null : operatorId;
+        SecurityAuditActorType actorType = systemOperator
+                ? SecurityAuditActorType.SYSTEM : SecurityAuditActorType.ADMIN;
+        securityAuditService.record(SecurityAuditCommand.builder()
+                .action(action)
+                .actorType(actorType)
+                .actorUserId(actorUserId)
+                .resourceType(SecurityAuditResourceType.PROMPT_TEMPLATE)
+                .resourceId(promptId == null ? null : String.valueOf(promptId))
+                .outcome(SecurityAuditOutcome.SUCCESS)
+                .reasonCode(systemOperator ? SecurityAuditReasonCode.SYSTEM_INITIALIZATION
+                        : SecurityAuditReasonCode.ADMIN_MUTATION)
+                .details(Map.of(SecurityAuditDetailKeys.OPERATION, operation.name()))
+                .build());
     }
 }

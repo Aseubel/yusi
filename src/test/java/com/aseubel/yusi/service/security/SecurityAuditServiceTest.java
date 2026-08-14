@@ -2,8 +2,13 @@ package com.aseubel.yusi.service.security;
 
 import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
 import com.aseubel.yusi.pojo.constant.SecurityAuditActorType;
+import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
 import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
+import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
+import com.aseubel.yusi.pojo.constant.SecurityAuditReasonCode;
 import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
+import com.aseubel.yusi.pojo.dto.admin.SecurityAuditEventResponse;
+import com.aseubel.yusi.pojo.dto.admin.SecurityAuditQuery;
 import com.aseubel.yusi.pojo.entity.SecurityAuditEvent;
 import com.aseubel.yusi.pojo.entity.SecurityAuditEventScope;
 import com.aseubel.yusi.repository.SecurityAuditEventRepository;
@@ -14,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDateTime;
@@ -22,6 +28,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -88,6 +95,42 @@ class SecurityAuditServiceTest {
     }
 
     @Test
+    void administratorQueryReturnsOnlyLowSensitivityProjection() {
+        PageRequest page = PageRequest.of(0, 20);
+        SecurityAuditEvent event = SecurityAuditEvent.builder()
+                .id(8L)
+                .eventId("event-8")
+                .action(SecurityAuditAction.MEMORY_UPDATED)
+                .actorType(SecurityAuditActorType.ADMIN)
+                .actorUserId("admin-1")
+                .subjectUserId("user-1")
+                .resourceType(SecurityAuditResourceType.MID_TERM_MEMORY)
+                .resourceId("memory-8")
+                .outcome(SecurityAuditOutcome.SUCCESS)
+                .reasonCode("ADMIN_MUTATION")
+                .detailsJson("{\"operation\":\"UPDATE\",\"prompt\":\"must-not-leak\"}")
+                .occurredAt(LocalDateTime.of(2026, 8, 14, 12, 0))
+                .build();
+        when(eventRepository.searchForAdmin(SecurityAuditAction.MEMORY_UPDATED,
+                SecurityAuditOutcome.SUCCESS, SecurityAuditResourceType.MID_TERM_MEMORY,
+                "user-1", page)).thenReturn(new PageImpl<>(List.of(event), page, 1));
+
+        var result = service().findAdminPage(true, SecurityAuditQuery.builder()
+                .action(SecurityAuditAction.MEMORY_UPDATED)
+                .outcome(SecurityAuditOutcome.SUCCESS)
+                .resourceType(SecurityAuditResourceType.MID_TERM_MEMORY)
+                .userId("user-1")
+                .build(), page);
+
+        SecurityAuditEventResponse projection = result.getContent().getFirst();
+        assertEquals("event-8", projection.getEventId());
+        assertEquals("admin-1", projection.getActorUserId());
+        assertEquals("memory-8", projection.getResourceId());
+        assertEquals("UPDATE", projection.getDetails().get("operation"));
+        assertFalse(projection.getDetails().containsKey("prompt"));
+    }
+
+    @Test
     void retentionDeletesScopesBeforeAuditEvents() {
         LocalDateTime now = LocalDateTime.of(2026, 8, 14, 12, 0);
         when(eventRepository.findIdsByOccurredAtBefore(any(LocalDateTime.class)))
@@ -98,6 +141,33 @@ class SecurityAuditServiceTest {
         assertTrue(service().cleanupExpired(now) == 2);
         verify(scopeRepository).deleteByAuditEventIdIn(List.of(1L, 2L));
         verify(eventRepository).deleteByIdIn(List.of(1L, 2L));
+    }
+
+    @Test
+    void exposesBackupKeyAccessAsLowSensitivityAdministratorMetadata() {
+        when(eventRepository.save(any(SecurityAuditEvent.class))).thenAnswer(invocation -> {
+            SecurityAuditEvent event = invocation.getArgument(0);
+            event.setId(9L);
+            return event;
+        });
+
+        service().recordAdmin(
+                SecurityAuditAction.BACKUP_KEY_ACCESSED,
+                "admin-1",
+                "user-1",
+                SecurityAuditResourceType.USER_BACKUP_KEY,
+                "user-1",
+                SecurityAuditOutcome.SUCCESS,
+                SecurityAuditReasonCode.SENSITIVE_ACCESS,
+                Map.of(SecurityAuditDetailKeys.OPERATION, SecurityAuditOperation.READ.name()));
+
+        ArgumentCaptor<SecurityAuditEvent> eventCaptor = ArgumentCaptor.forClass(SecurityAuditEvent.class);
+        verify(eventRepository).save(eventCaptor.capture());
+        SecurityAuditEvent event = eventCaptor.getValue();
+        assertEquals(SecurityAuditAction.BACKUP_KEY_ACCESSED, event.getAction());
+        assertEquals(SecurityAuditResourceType.USER_BACKUP_KEY, event.getResourceType());
+        assertEquals("{\"operation\":\"READ\"}", event.getDetailsJson());
+        assertFalse(event.getDetailsJson().contains("encrypted"));
     }
 
     private SecurityAuditService service() {

@@ -12,6 +12,9 @@ public final class SecurityAuditDetailKeys {
     public static final String RETRY_COUNT = "retryCount";
     public static final String OPERATION = "operation";
     public static final String SOURCE_TYPE = "sourceType";
+    public static final String VERSION = "version";
+    public static final String COUNT = "count";
+    public static final String AUDIENCE = "audience";
 
     private SecurityAuditDetailKeys() {
     }
