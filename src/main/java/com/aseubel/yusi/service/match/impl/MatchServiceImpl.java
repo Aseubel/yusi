@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.match.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.constant.MatchAction;
@@ -102,6 +103,7 @@ public class MatchServiceImpl implements MatchService {
     @Override
     public void runWeeklyMatching() {
         log.info("Starting weekly matching process...");
+        String generationRunId = IdUtil.fastSimpleUUID();
         ModelRouteContextHolder.set(ModelRouteContext.builder()
                 .scene(PromptKey.SOUL_MATCH.getKey())
                 .build());
@@ -188,7 +190,7 @@ public class MatchServiceImpl implements MatchService {
                     processedUserIds.add(userA.getUserId());
                     processedUserIds.add(partner.getUserId());
                     createMatch(userA, partner, profileA,
-                            getOrLoadProfile(profileCache, partner.getUserId()), bestResult);
+                            getOrLoadProfile(profileCache, partner.getUserId()), bestResult, generationRunId);
                 }
             }
         } finally {
@@ -198,7 +200,7 @@ public class MatchServiceImpl implements MatchService {
     }
 
     private void createMatch(User userA, User userB, MatchProfile profileA, MatchProfile profileB,
-            MatchRerankResult rerankResult) {
+            MatchRerankResult rerankResult, String generationRunId) {
         log.info("Creating match for {} and {}", userA.getUserName(), userB.getUserName());
         CompletableFuture<String> futureA = generateLetter(userA.getUserId(),
                 buildStructuredProfileForMatching(profileA),
@@ -213,6 +215,7 @@ public class MatchServiceImpl implements MatchService {
             CompletableFuture.allOf(futureA, futureB).join();
 
             SoulMatch match = SoulMatch.builder()
+                    .generationRunId(generationRunId)
                     .userAId(userA.getUserId())
                     .userBId(userB.getUserId())
                     .letterAtoB(futureA.get())

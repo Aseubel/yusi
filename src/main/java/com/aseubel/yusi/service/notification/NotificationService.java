@@ -42,12 +42,22 @@ public class NotificationService {
     public UserNotification createNotification(String userId, UserNotification.NotificationType type,
                                                 String title, String content, String refType, String refId,
                                                 String extraData) {
-        return createNotification(userId, type, title, content, refType, refId, extraData, null);
+        return createNotificationInternal(userId, type, title, content, refType, refId, extraData,
+                null, null);
     }
 
-    private UserNotification createNotification(String userId, UserNotification.NotificationType type,
+    /** Creates a notification linked to a durable product event. */
+    @UpdateCache(key = "'notifications:user:' + #userId + ':*'", evictOnly = true)
+    public UserNotification createNotification(String userId, UserNotification.NotificationType type,
                                                 String title, String content, String refType, String refId,
-                                                String extraData, String announcementId) {
+                                                String extraData, String sourceEventId) {
+        return createNotificationInternal(userId, type, title, content, refType, refId, extraData,
+                sourceEventId, null);
+    }
+
+    private UserNotification createNotificationInternal(String userId, UserNotification.NotificationType type,
+                                                String title, String content, String refType, String refId,
+                                                String extraData, String sourceEventId, String announcementId) {
         UserNotification notification = UserNotification.builder()
                 .notificationId(IdUtil.fastSimpleUUID())
                 .userId(userId)
@@ -57,6 +67,7 @@ public class NotificationService {
                 .refType(refType)
                 .refId(refId)
                 .announcementId(announcementId)
+                .sourceEventId(sourceEventId)
                 .extraData(extraData)
                 .isRead(false)
                 .build();

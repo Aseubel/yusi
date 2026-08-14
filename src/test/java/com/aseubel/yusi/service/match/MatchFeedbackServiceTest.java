@@ -40,6 +40,19 @@ class MatchFeedbackServiceTest {
     }
 
     @Test
+    void recordConnectionFeedbackPersistsSourceEventAndIdempotencyKey() {
+        MatchFeedbackService service = new MatchFeedbackService(feedbackRepository);
+
+        service.recordConnectionFeedback(99L, 7L, "user-a", "DEEP_INTERACTION", 2,
+                "event-feedback-1", "feedback-key-1");
+
+        ArgumentCaptor<MatchFeedback> captor = ArgumentCaptor.forClass(MatchFeedback.class);
+        verify(feedbackRepository).save(captor.capture());
+        assertEquals("event-feedback-1", captor.getValue().getSourceEventId());
+        assertEquals("feedback-key-1", captor.getValue().getIdempotencyKey());
+    }
+
+    @Test
     void strongNegativeSignalIncludesReportAndDoNotContinue() {
         when(feedbackRepository.countByMatchIdAndActionIn(eq(7L), any(Collection.class))).thenReturn(1L);
         MatchFeedbackService service = new MatchFeedbackService(feedbackRepository);

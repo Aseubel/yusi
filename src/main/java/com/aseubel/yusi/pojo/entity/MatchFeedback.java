@@ -39,6 +39,14 @@ public class MatchFeedback {
     @Column(name = "connection_id")
     private Long connectionId;
 
+    /** Product event that caused this feedback row. */
+    @Column(name = "source_event_id", length = 64)
+    private String sourceEventId;
+
+    /** Stable retry key supplied by the owning workflow. */
+    @Column(name = "idempotency_key", length = 128)
+    private String idempotencyKey;
+
     /** 用户 ID */
     @Column(name = "user_id", nullable = false, length = 64)
     private String userId;

@@ -191,6 +191,8 @@ DROP TABLE IF EXISTS `soul_match`;
 
 CREATE TABLE `soul_match` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `generation_run_id` VARCHAR(64) DEFAULT NULL COMMENT '生成本次推荐的运行 ID',
+    `recommendation_event_id` VARCHAR(64) DEFAULT NULL COMMENT '推荐产品事件 ID',
     `user_a_id` VARCHAR(255) DEFAULT NULL COMMENT '用户A ID',
     `user_b_id` VARCHAR(255) DEFAULT NULL COMMENT '用户B ID',
     `letter_a_to_b` VARCHAR(2000) DEFAULT NULL COMMENT 'A写给B的信',
@@ -205,6 +207,8 @@ CREATE TABLE `soul_match` (
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (`id`),
+    KEY `idx_soul_match_generation_run` (`generation_run_id`),
+    KEY `idx_soul_match_recommendation_event` (`recommendation_event_id`),
     KEY `idx_soul_match_user_a` (`user_a_id`),
     KEY `idx_soul_match_user_b` (`user_b_id`),
     KEY `idx_soul_match_is_matched` (`is_matched`),
@@ -276,6 +280,9 @@ DROP TABLE IF EXISTS `soul_message`;
 CREATE TABLE `soul_message` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `match_id` BIGINT DEFAULT NULL COMMENT '匹配ID',
+    `connection_id` BIGINT DEFAULT NULL COMMENT '独立连接 ID',
+    `run_id` VARCHAR(64) DEFAULT NULL COMMENT '关联的 AgentRun ID',
+    `source_event_id` VARCHAR(64) DEFAULT NULL COMMENT '来源产品事件 ID',
     `sender_id` VARCHAR(255) DEFAULT NULL COMMENT '发送者ID',
     `receiver_id` VARCHAR(255) DEFAULT NULL COMMENT '接收者ID',
     `content` VARCHAR(1000) DEFAULT NULL COMMENT '消息内容',
@@ -283,6 +290,8 @@ CREATE TABLE `soul_message` (
     `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     PRIMARY KEY (`id`),
     KEY `idx_soul_message_match_id` (`match_id`),
+    KEY `idx_soul_message_connection` (`connection_id`),
+    KEY `idx_soul_message_source_event` (`source_event_id`),
     KEY `idx_soul_message_receiver_id` (`receiver_id`),
     KEY `idx_soul_message_create_time` (`create_time`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '匹配用户聊天消息表';
@@ -543,6 +552,8 @@ DROP TABLE IF EXISTS `chat_memory_message`;
 CREATE TABLE IF NOT EXISTS `chat_memory_message` (
     `id` bigint(20) NOT NULL AUTO_INCREMENT COMMENT '主键 ID',
     `memory_id` varchar(64) NOT NULL COMMENT '记忆 ID (通常为 userId)',
+    `run_id` varchar(64) DEFAULT NULL COMMENT '关联的 AgentRun ID',
+    `source_event_id` varchar(64) DEFAULT NULL COMMENT '来源产品事件 ID',
     `role` varchar(30) NOT NULL COMMENT '消息角色 (USER, AI, SYSTEM, TOOL_EXECUTION_RESULT)',
     `content` text NOT NULL COMMENT '消息内容',
     `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -551,6 +562,8 @@ CREATE TABLE IF NOT EXISTS `chat_memory_message` (
     `images` TEXT NULL COMMENT '图片列表（JSON数组格式存储OSS objectKey）',
     PRIMARY KEY (`id`),
     KEY `idx_memory_id_created` (`memory_id`, `created_at`),
+    KEY `idx_chat_memory_message_run` (`run_id`),
+    KEY `idx_chat_memory_message_source_event` (`source_event_id`),
     KEY `idx_memory_id_summarized` (`memory_id`, `is_summarized`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = 'AI 对话记忆存储表';
 
@@ -641,6 +654,7 @@ CREATE TABLE `user_notification` (
     `ref_type` VARCHAR(32) DEFAULT NULL COMMENT '关联类型: MERGE_JUDGMENT/DIARY/ENTITY 等',
     `ref_id` VARCHAR(64) DEFAULT NULL COMMENT '关联记录ID',
     `announcement_id` VARCHAR(64) DEFAULT NULL COMMENT '来源公告ID，仅公告消息使用',
+    `source_event_id` VARCHAR(64) DEFAULT NULL COMMENT '触发通知的产品事件 ID',
     `extra_data` JSON DEFAULT NULL COMMENT '扩展数据(JSON格式)',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `read_at` DATETIME DEFAULT NULL COMMENT '阅读时间',
@@ -650,6 +664,7 @@ CREATE TABLE `user_notification` (
     KEY `idx_notification_user_read` (`user_id`, `is_read`),
     KEY `idx_notification_user_type` (`user_id`, `type`),
     KEY `idx_notification_announcement` (`announcement_id`),
+    KEY `idx_notification_source_event` (`source_event_id`),
     UNIQUE KEY `uk_notification_user_announcement` (`user_id`, `announcement_id`),
     KEY `idx_notification_created` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户统一消息表';
@@ -795,6 +810,8 @@ CREATE TABLE `match_feedback` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     `match_id` BIGINT NOT NULL COMMENT '关联的匹配记录ID',
     `connection_id` BIGINT DEFAULT NULL COMMENT '独立连接 ID',
+    `source_event_id` VARCHAR(64) DEFAULT NULL COMMENT '来源产品事件 ID',
+    `idempotency_key` VARCHAR(128) DEFAULT NULL COMMENT '反馈写入幂等键',
     `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
     `action` VARCHAR(32) NOT NULL COMMENT '反馈动作或连接反馈类别',
     `interaction_depth` INT DEFAULT NULL COMMENT '互动深度（消息条数，仅INTERACT时有效）',
@@ -803,6 +820,8 @@ CREATE TABLE `match_feedback` (
     KEY `idx_match_feedback_user` (`user_id`),
     KEY `idx_match_feedback_match` (`match_id`),
     KEY `idx_match_feedback_connection_user` (`connection_id`, `user_id`, `action`),
+    KEY `idx_match_feedback_source_event` (`source_event_id`),
+    KEY `idx_match_feedback_idempotency` (`idempotency_key`),
     KEY `idx_match_feedback_action` (`user_id`, `action`),
     KEY `idx_match_feedback_created` (`created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '匹配反馈记录表';
@@ -846,6 +865,8 @@ DROP TABLE IF EXISTS `soul_report`;
 
 CREATE TABLE `soul_report` (
     `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `generation_run_id` VARCHAR(64) DEFAULT NULL COMMENT '报告生成运行 ID',
+    `task_execution_id` VARCHAR(64) DEFAULT NULL COMMENT '任务执行账本 ID',
     `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
     `report_type` VARCHAR(16) NOT NULL COMMENT '报告类型: WEEKLY/MONTHLY',
     `title` VARCHAR(200) NOT NULL COMMENT '报告标题',
@@ -855,6 +876,8 @@ CREATE TABLE `soul_report` (
     `notified` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已通知用户',
     `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '生成时间',
     PRIMARY KEY (`id`),
+    KEY `idx_soul_report_generation_run` (`generation_run_id`),
+    KEY `idx_soul_report_task_execution` (`task_execution_id`),
     KEY `idx_soul_report_user` (`user_id`),
     KEY `idx_soul_report_user_type` (`user_id`, `report_type`),
     KEY `idx_soul_report_period` (`user_id`, `report_type`, `period_start`)

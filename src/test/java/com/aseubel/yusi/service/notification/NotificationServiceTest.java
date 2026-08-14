@@ -59,6 +59,19 @@ class NotificationServiceTest {
     }
 
     @Test
+    void createNotificationPersistsSourceEventId() {
+        when(notificationRepository.save(any(UserNotification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        notificationService.createNotification("user-1", UserNotification.NotificationType.SYSTEM,
+                "Title", "Content", null, null, null, "event-system-1");
+
+        ArgumentCaptor<UserNotification> captor = ArgumentCaptor.forClass(UserNotification.class);
+        verify(notificationRepository).save(captor.capture());
+        assertThat(captor.getValue().getSourceEventId()).isEqualTo("event-system-1");
+    }
+
+    @Test
     void publishesAnnouncementSourceAndOneInboxItemPerDistinctUser() {
         when(userRepository.findAllUserIds()).thenReturn(List.of("user-1", "", "user-1", "user-2"));
         when(announcementRepository.save(any(NotificationAnnouncement.class)))

@@ -28,6 +28,14 @@ public class SoulMatch {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Stable run that generated this recommendation batch. */
+    @Column(name = "generation_run_id", length = 64)
+    private String generationRunId;
+
+    /** Product event that announced this recommendation. */
+    @Column(name = "recommendation_event_id", length = 64)
+    private String recommendationEventId;
+
     @Column(name = "user_a_id")
     private String userAId;
 

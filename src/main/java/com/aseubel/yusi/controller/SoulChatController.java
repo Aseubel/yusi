@@ -10,6 +10,7 @@ import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.chat.SendMessageRequest;
 import com.aseubel.yusi.pojo.entity.SoulMatch;
 import com.aseubel.yusi.pojo.entity.SoulMessage;
+import com.aseubel.yusi.pojo.entity.SoulConnection;
 import com.aseubel.yusi.repository.SoulMatchRepository;
 import com.aseubel.yusi.repository.SoulMessageRepository;
 import com.aseubel.yusi.service.match.SoulConnectionLifecycleService;
@@ -55,6 +56,7 @@ public class SoulChatController {
                 .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "匹配不存在"));
 
         connectionLifecycleService.assertChatAllowed(match, senderId);
+        SoulConnection connection = connectionLifecycleService.findByMatchId(match.getId()).orElse(null);
 
         String receiverId;
         if (senderId.equals(match.getUserAId())) {
@@ -67,6 +69,7 @@ public class SoulChatController {
 
         SoulMessage message = SoulMessage.builder()
                 .matchId(request.getMatchId())
+                .connectionId(connection != null ? connection.getId() : null)
                 .senderId(senderId)
                 .receiverId(receiverId)
                 .content(request.getContent())

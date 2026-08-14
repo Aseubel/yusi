@@ -67,6 +67,13 @@ public class MatchFeedbackService {
     @Transactional
     public void recordConnectionFeedback(Long connectionId, Long matchId, String userId,
             String action, Integer interactionDepth) {
+        recordConnectionFeedback(connectionId, matchId, userId, action, interactionDepth, null, null);
+    }
+
+    /** Record feedback together with its product event and retry identity. */
+    @Transactional
+    public void recordConnectionFeedback(Long connectionId, Long matchId, String userId,
+            String action, Integer interactionDepth, String sourceEventId, String idempotencyKey) {
         if (matchId == null || StrUtil.isBlank(userId) || StrUtil.isBlank(action)) {
             return;
         }
@@ -74,6 +81,8 @@ public class MatchFeedbackService {
             feedbackRepository.save(MatchFeedback.builder()
                     .connectionId(connectionId)
                     .matchId(matchId)
+                    .sourceEventId(sourceEventId)
+                    .idempotencyKey(idempotencyKey)
                     .userId(userId)
                     .action(action)
                     .interactionDepth(interactionDepth)

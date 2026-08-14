@@ -30,6 +30,15 @@ public class SoulMessage {
     @Column(name = "match_id")
     private Long matchId;
 
+    @Column(name = "connection_id")
+    private Long connectionId;
+
+    @Column(name = "run_id", length = 64)
+    private String runId;
+
+    @Column(name = "source_event_id", length = 64)
+    private String sourceEventId;
+
     @Column(name = "sender_id")
     private String senderId;
 

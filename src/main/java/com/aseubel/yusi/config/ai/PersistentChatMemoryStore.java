@@ -7,6 +7,8 @@ import com.aseubel.yusi.common.constant.ChatMessageRole;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.service.ai.chat.ContextBuilderService;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.redis.service.IRedisService;
 import dev.langchain4j.data.message.*;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
@@ -125,6 +127,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         if (shouldInsert) {
             ChatMemoryMessage entity = ChatMemoryMessage.builder()
                     .memoryId(memId)
+                    .runId(currentRunId(memId))
                     .role(lastMsg.type().name())
                     .content(serializedLastMsg)
                     .images(extractImages(lastMsg))
@@ -133,7 +136,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             messageRepository.save(entity);
 
             if (lastMsg instanceof AiMessage) {
-                eventPublisher.publishEvent(new MessageSavedEvent(this, memId));
+                eventPublisher.publishEvent(new MessageSavedEvent(this, memId, entity.getRunId()));
             }
         }
     }
@@ -147,6 +150,14 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
 
     private String getCacheKey(Object memoryId) {
         return "yusi:langchain:" + memoryId.toString();
+    }
+
+    private String currentRunId(String memoryId) {
+        ModelRouteContext context = ModelRouteContextHolder.get();
+        if (context == null || !memoryId.equals(context.getUserId())) {
+            return null;
+        }
+        return context.getRunId();
     }
 
     private String serializeForDb(ChatMessage message) {

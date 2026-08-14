@@ -22,6 +22,12 @@ public class ChatMemoryMessage {
     @Column(name = "memory_id", nullable = false, length = 64)
     private String memoryId;
 
+    @Column(name = "run_id", length = 64)
+    private String runId;
+
+    @Column(name = "source_event_id", length = 64)
+    private String sourceEventId;
+
     @Column(name = "role", nullable = false, length = 20)
     private String role;
 

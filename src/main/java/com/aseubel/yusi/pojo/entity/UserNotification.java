@@ -89,6 +89,10 @@ public class UserNotification {
     @Column(name = "announcement_id", length = 64)
     private String announcementId;
 
+    /** Product event that caused this inbox item. */
+    @Column(name = "source_event_id", length = 64)
+    private String sourceEventId;
+
     @Column(name = "extra_data", columnDefinition = "JSON")
     @JdbcTypeCode(SqlTypes.JSON)
     private String extraData;
