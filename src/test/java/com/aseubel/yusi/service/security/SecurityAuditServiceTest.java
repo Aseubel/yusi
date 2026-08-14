@@ -2,10 +2,7 @@ package com.aseubel.yusi.service.security;
 
 import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
 import com.aseubel.yusi.pojo.constant.SecurityAuditActorType;
-import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
 import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
-import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
-import com.aseubel.yusi.pojo.constant.SecurityAuditReasonCode;
 import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.dto.admin.SecurityAuditEventResponse;
 import com.aseubel.yusi.pojo.dto.admin.SecurityAuditQuery;
@@ -141,33 +138,6 @@ class SecurityAuditServiceTest {
         assertTrue(service().cleanupExpired(now) == 2);
         verify(scopeRepository).deleteByAuditEventIdIn(List.of(1L, 2L));
         verify(eventRepository).deleteByIdIn(List.of(1L, 2L));
-    }
-
-    @Test
-    void exposesBackupKeyAccessAsLowSensitivityAdministratorMetadata() {
-        when(eventRepository.save(any(SecurityAuditEvent.class))).thenAnswer(invocation -> {
-            SecurityAuditEvent event = invocation.getArgument(0);
-            event.setId(9L);
-            return event;
-        });
-
-        service().recordAdmin(
-                SecurityAuditAction.BACKUP_KEY_ACCESSED,
-                "admin-1",
-                "user-1",
-                SecurityAuditResourceType.USER_BACKUP_KEY,
-                "user-1",
-                SecurityAuditOutcome.SUCCESS,
-                SecurityAuditReasonCode.SENSITIVE_ACCESS,
-                Map.of(SecurityAuditDetailKeys.OPERATION, SecurityAuditOperation.READ.name()));
-
-        ArgumentCaptor<SecurityAuditEvent> eventCaptor = ArgumentCaptor.forClass(SecurityAuditEvent.class);
-        verify(eventRepository).save(eventCaptor.capture());
-        SecurityAuditEvent event = eventCaptor.getValue();
-        assertEquals(SecurityAuditAction.BACKUP_KEY_ACCESSED, event.getAction());
-        assertEquals(SecurityAuditResourceType.USER_BACKUP_KEY, event.getResourceType());
-        assertEquals("{\"operation\":\"READ\"}", event.getDetailsJson());
-        assertFalse(event.getDetailsJson().contains("encrypted"));
     }
 
     private SecurityAuditService service() {

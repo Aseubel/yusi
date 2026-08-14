@@ -44,12 +44,4 @@ public interface KeyManagementService {
      */
     void batchUpdateReEncryptedDiaries(String userId, DiaryReEncryptRequest request);
 
-    /**
-     * 验证用户是否有权访问备份密钥（管理员功能）
-     * 
-     * @param adminUserId  管理员用户ID
-     * @param targetUserId 目标用户ID
-     * @return 加密的备份密钥
-     */
-    String getBackupKeyForRecovery(String adminUserId, String targetUserId);
 }

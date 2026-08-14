@@ -70,13 +70,4 @@ public class KeyManagementController {
         return Response.success();
     }
 
-    /**
-     * 管理员获取用户备份密钥（用于密钥找回）
-     */
-    @GetMapping("/admin/backup-key/{targetUserId}")
-    public Response<String> getBackupKey(@PathVariable("targetUserId") String targetUserId) {
-        String adminUserId = UserContext.getUserId();
-        String encryptedKey = keyManagementService.getBackupKeyForRecovery(adminUserId, targetUserId);
-        return Response.success(encryptedKey);
-    }
 }

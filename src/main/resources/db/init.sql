@@ -15,7 +15,7 @@ CREATE TABLE `user` (
     `permission_level` INT NOT NULL DEFAULT 0 COMMENT '权限等级',
     `key_mode` VARCHAR(255) DEFAULT NULL COMMENT '密钥模式: DEFAULT(默认服务端密钥) / CUSTOM(用户自定义密钥)',
     `has_cloud_backup` TINYINT(1) DEFAULT NULL COMMENT '是否开启云端密钥备份（仅CUSTOM模式有效）',
-    `encrypted_backup_key` VARCHAR(1024) DEFAULT NULL COMMENT '云端备份的加密密钥（使用管理员公钥加密）',
+    `encrypted_backup_key` VARCHAR(1024) DEFAULT NULL COMMENT '云端备份的加密密钥（使用服务端备份公钥加密，管理员不可读取）',
     `key_salt` VARCHAR(255) DEFAULT NULL COMMENT '密钥派生盐值（用于PBKDF2/Argon2）',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_user_user_id` (`user_id`),

@@ -8,12 +8,6 @@ import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.utils.UuidUtils;
 import com.aseubel.yusi.pojo.constant.RoomStatus;
-import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
-import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
-import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
-import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
-import com.aseubel.yusi.pojo.constant.SecurityAuditReasonCode;
-import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.dto.situation.SituationRoomDetailResponse;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
@@ -23,7 +17,6 @@ import com.aseubel.yusi.redis.service.IRedisService;
 import com.aseubel.yusi.repository.SituationRoomRepository;
 import com.aseubel.yusi.repository.SituationScenarioRepository;
 import com.aseubel.yusi.service.room.SituationRoomService;
-import com.aseubel.yusi.service.security.SecurityAuditService;
 import com.aseubel.yusi.service.user.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,8 +46,6 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     private final SituationScenarioRepository scenarioRepository;
 
     private final UserService userService;
-
-    private final SecurityAuditService securityAuditService;
 
     private final SituationReportService reportService;
 
@@ -426,38 +417,6 @@ public class SituationRoomServiceImpl implements SituationRoomService {
     @Override
     public List<SituationScenario> getMyScenarios(String userId) {
         return scenarioRepository.findBySubmitterIdAndStatusNot(userId, SituationScenario.STATUS_DELETED);
-    }
-
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public SituationScenario reviewScenario(String adminId, String scenarioId, Integer status, String rejectReason) {
-        if (!userService.checkAdmin(adminId)) {
-            throw new AuthenticationException("无权限");
-        }
-
-        SituationScenario scenario = scenarioRepository.findById(scenarioId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "Scenario not found"));
-        int previousStatus = scenario.getStatus() == null ? SituationScenario.STATUS_PENDING : scenario.getStatus();
-        scenario.setStatus(status);
-        if (status == SituationScenario.STATUS_MANUAL_REJECTED || status == SituationScenario.STATUS_AI_REJECTED) {
-            scenario.setRejectReason(rejectReason);
-        }
-        SituationScenario saved = scenarioRepository.save(scenario);
-        securityAuditService.recordAdmin(
-                SecurityAuditAction.SCENARIO_REVIEWED,
-                adminId,
-                scenario.getSubmitterId(),
-                SecurityAuditResourceType.SITUATION_SCENARIO,
-                scenarioId,
-                SecurityAuditOutcome.SUCCESS,
-                SecurityAuditReasonCode.ADMIN_MUTATION,
-                Map.of(
-                        SecurityAuditDetailKeys.OPERATION, SecurityAuditOperation.REVIEW.name(),
-                        SecurityAuditDetailKeys.ACTION,
-                        status == SituationScenario.STATUS_MANUAL_APPROVED ? "APPROVE" : "REJECT",
-                        SecurityAuditDetailKeys.FROM_STATUS, String.valueOf(previousStatus),
-                        SecurityAuditDetailKeys.TO_STATUS, String.valueOf(status)));
-        return saved;
     }
 
     @Override

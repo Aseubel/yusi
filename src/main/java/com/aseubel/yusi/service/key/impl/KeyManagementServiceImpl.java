@@ -8,20 +8,12 @@ import com.aseubel.yusi.pojo.dto.key.DiaryReEncryptRequest;
 import com.aseubel.yusi.pojo.dto.key.KeyModeUpdateRequest;
 import com.aseubel.yusi.pojo.dto.key.KeySettingsResponse;
 import com.aseubel.yusi.pojo.constant.KeyMode;
-import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
-import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
-import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
-import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
-import com.aseubel.yusi.pojo.constant.SecurityAuditReasonCode;
-import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.key.KeyManagementService;
-import com.aseubel.yusi.service.user.UserService;
 import com.aseubel.yusi.service.diary.DiaryService;
-import com.aseubel.yusi.service.security.SecurityAuditService;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -48,8 +40,6 @@ public class KeyManagementServiceImpl implements KeyManagementService {
     private final UserRepository userRepository;
     private final DiaryRepository diaryRepository;
     private final CryptoService cryptoService;
-    private final UserService userService;
-    private final SecurityAuditService securityAuditService;
 
     @Autowired
     @Lazy
@@ -195,35 +185,4 @@ public class KeyManagementServiceImpl implements KeyManagementService {
         userRepository.save(user);
     }
 
-    @Override
-    public String getBackupKeyForRecovery(String adminUserId, String targetUserId) {
-        if (!userService.checkAdmin(adminUserId)) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "无权限：仅管理员可访问备份密钥");
-        }
-
-        User targetUser = userRepository.findByUserId(targetUserId);
-        if (targetUser == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "目标用户不存在");
-        }
-
-        if (!Boolean.TRUE.equals(targetUser.getHasCloudBackup())) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "该用户未开启云端密钥备份");
-        }
-
-        if (targetUser.getEncryptedBackupKey() == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND, "未找到备份密钥");
-        }
-
-        securityAuditService.recordAdmin(
-                SecurityAuditAction.BACKUP_KEY_ACCESSED,
-                adminUserId,
-                targetUserId,
-                SecurityAuditResourceType.USER_BACKUP_KEY,
-                targetUserId,
-                SecurityAuditOutcome.SUCCESS,
-                SecurityAuditReasonCode.SENSITIVE_ACCESS,
-                Map.of(SecurityAuditDetailKeys.OPERATION, SecurityAuditOperation.READ.name()));
-        log.info("Admin {} accessed backup key for user {}", adminUserId, targetUserId);
-        return targetUser.getEncryptedBackupKey();
-    }
 }

@@ -42,7 +42,5 @@ public interface SituationRoomService {
 
     List<SituationScenario> getMyScenarios(String userId);
 
-    SituationScenario reviewScenario(String adminId, String scenarioId, Integer status, String rejectReason);
-
     List<SituationRoom> getHistory(String userId);
 }

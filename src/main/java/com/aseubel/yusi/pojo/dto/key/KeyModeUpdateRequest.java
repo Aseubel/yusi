@@ -19,7 +19,7 @@ public class KeyModeUpdateRequest {
     private Boolean enableCloudBackup;
 
     /**
-     * 加密后的备份密钥（使用管理员公钥加密，仅当enableCloudBackup为true时需要）
+     * 加密后的备份密钥（使用服务端备份公钥加密，仅当enableCloudBackup为true时需要）
      */
     private String encryptedBackupKey;
 

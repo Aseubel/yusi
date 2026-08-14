@@ -23,6 +23,10 @@ public enum SecurityAuditAction {
     PROMPT_ACTIVATED("prompt.activated"),
     PROMPT_DELETED("prompt.deleted"),
     MODEL_GOVERNANCE_UPDATED("model.governance.updated"),
+    /**
+     * Retained so historical JPA audit rows remain readable; no new events use it.
+     */
+    @Deprecated
     BACKUP_KEY_ACCESSED("backup_key.accessed"),
     TASK_FAILED("task.failed"),
     ACCESS_DENIED("access.denied");

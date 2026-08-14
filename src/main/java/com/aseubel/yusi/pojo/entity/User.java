@@ -67,7 +67,7 @@ public class User {
     private Boolean hasCloudBackup = false;
 
     /**
-     * 云端备份的加密密钥（使用管理员公钥加密）
+     * 云端备份的加密密钥（使用服务端备份公钥加密；管理员不可读取）
      */
     @Column(name = "encrypted_backup_key", length = 1024)
     @JsonIgnore

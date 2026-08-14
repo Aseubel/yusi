@@ -68,11 +68,6 @@ public class SituationRoomController {
         return Response.success(situationRoomService.resubmitScenario(UserContext.getUserId(), scenarioId));
     }
 
-    @PostMapping("/scenarios/review")
-    public Response<SituationScenario> reviewScenario(@RequestBody ReviewScenarioRequest request) {
-        return Response.success(situationRoomService.reviewScenario(UserContext.getUserId(), request.getScenarioId(), request.getStatus(), request.getRejectReason()));
-    }
-
     @GetMapping("/scenarios")
     public Response<List<SituationScenario>> getScenarios() {
         return Response.success(situationRoomService.getScenarios());
