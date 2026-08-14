@@ -7,6 +7,7 @@ import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.user.UserService;
@@ -101,7 +102,8 @@ public class MidMemoryFusionService {
         if (a.getMergedIntoId() != null || b.getMergedIntoId() != null) { return false; }
 
         try {
-            String template = promptManager.getPrompt(PromptKey.MEMORY_FUSION);
+            PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.MEMORY_FUSION);
+            String template = snapshot == null ? "" : snapshot.template();
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
             String timeA = a.getCreatedAt() != null ? a.getCreatedAt().format(formatter) : "未知";
             String timeB = b.getCreatedAt() != null ? b.getCreatedAt().format(formatter) : "未知";
@@ -115,6 +117,7 @@ public class MidMemoryFusionService {
             ModelRouteContextHolder.set(ModelRouteContext.builder()
                     .scene(PromptKey.MEMORY_FUSION.getKey())
                     .userId(userId)
+                    .prompt(snapshot)
                     .build());
             AiMessage aiMessage;
             try {

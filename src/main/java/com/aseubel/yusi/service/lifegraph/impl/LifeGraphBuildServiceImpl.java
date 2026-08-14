@@ -20,6 +20,7 @@ import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.lifegraph.LifeGraphBuildService;
 import com.aseubel.yusi.service.lifegraph.LifeGraphPromotionPolicy;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphExtractor;
@@ -181,11 +182,14 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
     private LifeGraphExtractionResult extract(String userId, String entryDate, String title,
                                               String placeName, String address, String coordinates,
                                               String plainContent) {
-        String prompt = promptManager.getPrompt(PromptKey.GRAPHRAG_EXTRACT);
+        PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.GRAPHRAG_EXTRACT);
+        String prompt = snapshot == null ? "" : snapshot.template();
         String raw;
         try {
             ModelRouteContextHolder.set(ModelRouteContext.builder()
                     .scene(PromptKey.GRAPHRAG_EXTRACT.getKey())
+                    .userId(userId)
+                    .prompt(snapshot)
                     .build());
             raw = extractor.extract(prompt, buildKnownEntities(userId),
                     StrUtil.blankToDefault(entryDate, ""),

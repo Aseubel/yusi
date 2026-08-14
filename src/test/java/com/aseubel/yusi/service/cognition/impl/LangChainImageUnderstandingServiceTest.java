@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.cognition.impl;
 
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.oss.OssService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.Content;
@@ -28,7 +29,8 @@ class LangChainImageUnderstandingServiceTest {
         ChatModel chatModel = mock(ChatModel.class);
         OssService ossService = mock(OssService.class);
         PromptManager promptManager = mock(PromptManager.class);
-        when(promptManager.getPrompt(PromptKey.IMAGE_UNDERSTANDING)).thenReturn("managed image prompt");
+        when(promptManager.getSnapshot(PromptKey.IMAGE_UNDERSTANDING))
+                .thenReturn(new PromptSnapshot("image-understanding", "test", "zh-CN", "managed image prompt"));
         when(ossService.generateOwnedUrl("diary/image.png", "user-1"))
                 .thenReturn("https://example.com/diary/image.png");
         when(chatModel.chat(any(UserMessage.class)))
@@ -47,6 +49,6 @@ class LangChainImageUnderstandingServiceTest {
         assertThat(contents.getFirst()).isInstanceOf(TextContent.class);
         assertThat(((TextContent) contents.getFirst()).text()).isEqualTo("managed image prompt");
         assertThat(contents.get(1)).isInstanceOf(ImageContent.class);
-        verify(promptManager).getPrompt(PromptKey.IMAGE_UNDERSTANDING);
+        verify(promptManager).getSnapshot(PromptKey.IMAGE_UNDERSTANDING);
     }
 }

@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.cognition.impl;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.cognition.ImageUnderstandingService;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.oss.OssService;
@@ -35,8 +36,9 @@ public class LangChainImageUnderstandingService implements ImageUnderstandingSer
             return null;
         }
         try {
+            PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.IMAGE_UNDERSTANDING);
             List<Content> contents = new ArrayList<>();
-            contents.add(TextContent.from(promptManager.getPrompt(PromptKey.IMAGE_UNDERSTANDING)));
+            contents.add(TextContent.from(snapshot == null ? "" : snapshot.template()));
             for (String objectKey : imageObjectKeys) {
                 if (objectKey != null && !objectKey.isBlank()) {
                     contents.add(ImageContent.from(URI.create(ossService.generateOwnedUrl(objectKey, userId))));
@@ -48,6 +50,7 @@ public class LangChainImageUnderstandingService implements ImageUnderstandingSer
             ModelRouteContextHolder.set(ModelRouteContext.builder()
                     .scene(PromptKey.IMAGE_UNDERSTANDING.getKey())
                     .userId(userId)
+                    .prompt(snapshot)
                     .build());
             AiMessage message;
             try {

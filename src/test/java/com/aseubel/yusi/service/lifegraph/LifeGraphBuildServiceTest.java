@@ -9,6 +9,7 @@ import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphExtractor;
 import com.aseubel.yusi.service.lifegraph.impl.LifeGraphBuildServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -71,7 +72,8 @@ class LifeGraphBuildServiceTest {
                 .thenReturn(List.of());
         when(mentionRepository.findByUserIdAndDiaryId("user-1", "diary-1"))
                 .thenReturn(List.of());
-        when(promptManager.getPrompt(any(PromptKey.class))).thenReturn("");
+        when(promptManager.getSnapshot(any(PromptKey.class)))
+                .thenReturn(new PromptSnapshot("graphrag-extract", "test", "zh-CN", ""));
         when(extractor.extract(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString()))
                 .thenReturn("{\"entities\":[{\"type\":\"User\",\"displayName\":\"我\","

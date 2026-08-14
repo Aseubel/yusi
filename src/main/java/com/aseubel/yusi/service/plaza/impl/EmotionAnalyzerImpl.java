@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.plaza.impl;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.common.constant.EmotionType;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
@@ -36,15 +37,19 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
         }
 
         try {
+            PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.EMOTION_ANALYSIS);
             // 构建简洁的 prompt
-            String prompt = buildEmotionPrompt(content);
+            String prompt = buildEmotionPrompt(content, snapshot);
 
             // 直接调用专门的情感分析模型
             UserMessage userMessage = UserMessage.from(prompt);
             AiMessage aiMessage;
             try {
                 ModelRouteContextHolder
-                        .set(ModelRouteContext.builder().scene(PromptKey.EMOTION_ANALYSIS.getKey()).build());
+                        .set(ModelRouteContext.builder()
+                                .scene(PromptKey.EMOTION_ANALYSIS.getKey())
+                                .prompt(snapshot)
+                                .build());
                 aiMessage = chatModel.chat(userMessage).aiMessage();
             } finally {
                 ModelRouteContextHolder.clear();
@@ -70,8 +75,8 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
      * 构建情感分析的 prompt
      * 使用极简格式减少 token 消耗，提升响应速度
      */
-    private String buildEmotionPrompt(String content) {
-        String template = promptManager.getPrompt(PromptKey.EMOTION_ANALYSIS);
+    private String buildEmotionPrompt(String content, PromptSnapshot snapshot) {
+        String template = snapshot == null ? "" : snapshot.template();
         return template.replace("{{content}}", content);
     }
 }

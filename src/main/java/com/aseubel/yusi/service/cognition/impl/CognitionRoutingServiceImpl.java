@@ -4,9 +4,10 @@ import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
 import com.aseubel.yusi.pojo.dto.cognition.CognitionRoutingResult;
-import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
+import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.cognition.CognitionRoutingService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.AiMessage;
@@ -33,11 +34,13 @@ public class CognitionRoutingServiceImpl implements CognitionRoutingService {
             return CognitionRoutingResult.builder().build();
         }
         try {
-            String prompt = buildPrompt(command);
+            PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.COGNITION_ROUTING);
+            String prompt = buildPrompt(command, snapshot);
             AiMessage aiMessage;
             try {
                 ModelRouteContextHolder.set(ModelRouteContext.builder()
                         .scene(PromptKey.COGNITION_ROUTING.getKey())
+                        .prompt(snapshot)
                         .build());
                 aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
             } finally {
@@ -56,7 +59,7 @@ public class CognitionRoutingServiceImpl implements CognitionRoutingService {
         }
     }
 
-    private String buildPrompt(CognitionIngestCommand command) {
+    private String buildPrompt(CognitionIngestCommand command, PromptSnapshot snapshot) {
         return """
                 %s
 
@@ -69,7 +72,7 @@ public class CognitionRoutingServiceImpl implements CognitionRoutingService {
                 文本：
                 %s
                 """.formatted(
-                promptManager.getPrompt(PromptKey.COGNITION_ROUTING),
+                snapshot == null ? "" : snapshot.template(),
                 StrUtil.blankToDefault(command.getSourceType(), ""),
                 StrUtil.blankToDefault(command.getTitle(), ""),
                 StrUtil.blankToDefault(command.getTopic(), ""),

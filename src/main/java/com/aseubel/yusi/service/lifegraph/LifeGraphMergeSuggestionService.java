@@ -12,6 +12,7 @@ import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphMergeJudgmentRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphAssistant;
 import com.aseubel.yusi.service.lifegraph.constant.LifeGraphMergeStatus;
 import com.aseubel.yusi.service.lifegraph.constant.LifeGraphMergeDecision;
@@ -110,13 +111,17 @@ public class LifeGraphMergeSuggestionService {
             return List.of();
         }
 
-        String prompt = promptManager.getPrompt(PromptKey.GRAPHRAG_MERGE_SUGGEST);
+        PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.GRAPHRAG_MERGE_SUGGEST);
+        String prompt = snapshot == null ? "" : snapshot.template();
 
         String response;
         try {
             com.aseubel.yusi.service.ai.model.ModelRouteContextHolder.set(
                     com.aseubel.yusi.service.ai.model.ModelRouteContext.builder()
-                            .scene(PromptKey.GRAPHRAG_MERGE_SUGGEST.getKey()).build());
+                            .scene(PromptKey.GRAPHRAG_MERGE_SUGGEST.getKey())
+                            .userId(userId)
+                            .prompt(snapshot)
+                            .build());
             response = assistant.analyzeMergeCandidates(prompt, candidatesJson);
         } finally {
             com.aseubel.yusi.service.ai.model.ModelRouteContextHolder.clear();

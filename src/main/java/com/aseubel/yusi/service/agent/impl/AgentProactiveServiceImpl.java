@@ -12,6 +12,7 @@ import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.repository.UserNotificationRepository;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.agent.AgentProactiveService;
@@ -170,7 +171,8 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
 
         String greetingMessage;
         try {
-            String template = promptManager.getPrompt(PromptKey.AGENT_PROACTIVE_GREETING);
+            PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.AGENT_PROACTIVE_GREETING);
+            String template = snapshot == null ? "" : snapshot.template();
             String prompt = template
                     .replace("{{userName}}", userName)
                     .replace("{{personalityStyle}}", config.getPersonalityStyle())
@@ -179,6 +181,7 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
             ModelRouteContextHolder.set(ModelRouteContext.builder()
                     .scene(PromptKey.AGENT_PROACTIVE_GREETING.getKey())
                     .userId(user.getUserId())
+                    .prompt(snapshot)
                     .build());
             AiMessage aiMessage;
             try {

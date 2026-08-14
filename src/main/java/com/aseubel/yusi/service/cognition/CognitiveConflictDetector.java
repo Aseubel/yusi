@@ -7,6 +7,7 @@ import com.aseubel.yusi.pojo.entity.UserPersona;
 import com.aseubel.yusi.repository.CognitiveConflictRepository;
 import com.aseubel.yusi.service.cognition.constant.CognitiveConflictSource;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.user.UserPersonaService;
@@ -73,7 +74,8 @@ public class CognitiveConflictDetector {
         }
 
         try {
-            String template = promptManager.getPrompt(PromptKey.COGNITIVE_CONFLICT);
+            PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.COGNITIVE_CONFLICT);
+            String template = snapshot == null ? "" : snapshot.template();
             String prompt = template
                     .replace("{{existingBelief}}", existingBelief)
                     .replace("{{newObservation}}", newInsight);
@@ -81,6 +83,7 @@ public class CognitiveConflictDetector {
             ModelRouteContextHolder.set(ModelRouteContext.builder()
                     .scene(PromptKey.COGNITIVE_CONFLICT.getKey())
                     .userId(userId)
+                    .prompt(snapshot)
                     .build());
             AiMessage aiMessage;
             try {

@@ -40,6 +40,7 @@ import com.aseubel.yusi.service.event.ProductEventService;
 import com.aseubel.yusi.service.task.TaskExecutionCommand;
 import com.aseubel.yusi.service.task.TaskExecutionService;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.data.message.AiMessage;
@@ -125,9 +126,6 @@ public class MatchServiceImpl implements MatchService {
                 .runId(generationRunId)
                 .idempotencyKey(TaskExecutionKeys.scheduled(TaskExecutionType.MATCHING,
                         generationRunId, generationRunId))
-                .build());
-        ModelRouteContextHolder.set(ModelRouteContext.builder()
-                .scene(PromptKey.SOUL_MATCH.getKey())
                 .build());
         try {
             List<User> candidates = userService.getMatchEnabledUsers();
@@ -303,10 +301,13 @@ public class MatchServiceImpl implements MatchService {
             MatchRerankResult rerankResult) {
         return CompletableFuture.supplyAsync(() -> {
             try {
+                PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.SOUL_MATCH_LETTER);
                 ModelRouteContextHolder.set(ModelRouteContext.builder()
                         .scene(PromptKey.SOUL_MATCH_LETTER.getKey())
+                        .userId(userId)
+                        .prompt(snapshot)
                         .build());
-                String template = promptManager.getPrompt(PromptKey.SOUL_MATCH_LETTER);
+                String template = snapshot == null ? "" : snapshot.template();
                 String prompt = template
                         .replace("{{userAProfile}}", myProfile)
                         .replace("{{userBProfile}}", partnerProfile)
@@ -678,12 +679,23 @@ public class MatchServiceImpl implements MatchService {
     private MatchRerankResult rerank(MatchProfile targetProfile, MatchProfile candidateProfile) {
         try {
             String preferenceContext = buildRerankPreferenceContext(targetProfile.getUserId());
-            String template = promptManager.getPrompt(PromptKey.SOUL_MATCH);
+            PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.SOUL_MATCH);
+            String template = snapshot == null ? "" : snapshot.template();
             String prompt = template
                     .replace("{{preferenceContext}}", preferenceContext)
                     .replace("{{userAProfile}}", buildStructuredProfileForMatching(targetProfile))
                     .replace("{{userBProfile}}", buildStructuredProfileForMatching(candidateProfile));
-            AiMessage aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+            ModelRouteContextHolder.set(ModelRouteContext.builder()
+                    .scene(PromptKey.SOUL_MATCH.getKey())
+                    .userId(targetProfile.getUserId())
+                    .prompt(snapshot)
+                    .build());
+            AiMessage aiMessage;
+            try {
+                aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
+            } finally {
+                ModelRouteContextHolder.clear();
+            }
             String raw = aiMessage.text();
             return objectMapper.readValue(extractJsonObject(raw), MatchRerankResult.class);
         } catch (Exception e) {

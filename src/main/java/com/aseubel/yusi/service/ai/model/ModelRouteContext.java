@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.ai.model;
 
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import lombok.Builder;
 import lombok.Value;
 
@@ -18,4 +19,15 @@ public class ModelRouteContext {
     Integer reservedOutputTokens;
     @Builder.Default
     boolean maskSensitiveData = true;
+
+    public static class ModelRouteContextBuilder {
+        public ModelRouteContextBuilder prompt(PromptSnapshot snapshot) {
+            if (snapshot == null) {
+                return this;
+            }
+            return promptKey(snapshot.key())
+                    .promptVersion(snapshot.version())
+                    .promptLocale(snapshot.locale());
+        }
+    }
 }

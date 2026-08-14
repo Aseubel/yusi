@@ -18,6 +18,7 @@ import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.ai.runtime.AiLockService;
 import dev.langchain4j.model.chat.ChatModel;
 import lombok.RequiredArgsConstructor;
@@ -197,7 +198,8 @@ public class MemoryCompressionService {
                 .map(m -> m.getRole() + ": " + m.getContent())
                 .collect(Collectors.joining("\n"));
 
-        String promptTemplate = promptManager.getPrompt(PromptKey.MEMORY_EXTRACT);
+        PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.MEMORY_EXTRACT);
+        String promptTemplate = snapshot == null ? "" : snapshot.template();
 
         StringBuilder promptBuilder = new StringBuilder();
         promptBuilder.append("当前系统时间: ").append(DateUtil.now()).append("\n\n");
@@ -212,7 +214,11 @@ public class MemoryCompressionService {
         try {
             // Step 1: LLM 调用（事务外，避免长时间持有 DB 连接）
             ModelRouteContextHolder
-                    .set(ModelRouteContext.builder().scene(PromptKey.MEMORY_EXTRACT.getKey()).build());
+                    .set(ModelRouteContext.builder()
+                            .scene(PromptKey.MEMORY_EXTRACT.getKey())
+                            .userId(memoryId)
+                            .prompt(snapshot)
+                            .build());
 
             String summaryText = memoryCompressionAssistant.extractMemory(prompt);
 

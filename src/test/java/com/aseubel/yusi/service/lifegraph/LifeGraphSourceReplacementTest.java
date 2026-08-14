@@ -14,6 +14,7 @@ import com.aseubel.yusi.repository.LifeGraphMentionRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.lifegraph.LifeGraphPromotionPolicy;
 import com.aseubel.yusi.service.lifegraph.ai.LifeGraphExtractor;
 import com.aseubel.yusi.service.lifegraph.impl.LifeGraphBuildServiceImpl;
@@ -69,7 +70,8 @@ class LifeGraphSourceReplacementTest {
         when(entityRepository.findVisibleByUserId(eq("user-1"), any(), any()))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
         when(aliasRepository.findTop200ByUserIdOrderByConfidenceDesc("user-1")).thenReturn(List.of());
-        when(promptManager.getPrompt(any(PromptKey.class))).thenReturn("prompt");
+        when(promptManager.getSnapshot(any(PromptKey.class)))
+                .thenReturn(new PromptSnapshot("graphrag-extract", "test", "zh-CN", "prompt"));
         when(extractor.extract(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString())).thenReturn("not-json");
 
@@ -143,7 +145,8 @@ class LifeGraphSourceReplacementTest {
         when(mentionRepository.findByUserIdAndDiaryId("user-1", "diary-1")).thenReturn(List.of());
         when(evidenceRepository.findByUserIdAndSourceTypeAndSourceId("user-1", "DIARY", "diary-1"))
                 .thenReturn(List.of());
-        when(promptManager.getPrompt(any(PromptKey.class))).thenReturn("prompt");
+        when(promptManager.getSnapshot(any(PromptKey.class)))
+                .thenReturn(new PromptSnapshot("graphrag-extract", "test", "zh-CN", "prompt"));
         when(extractor.extract(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString())).thenReturn(""
                         + "{\"entities\":["
@@ -245,7 +248,8 @@ class LifeGraphSourceReplacementTest {
         when(mentionRepository.findByUserIdAndDiaryId("user-1", "diary-1")).thenReturn(List.of());
         when(evidenceRepository.findByUserIdAndSourceTypeAndSourceId("user-1", "DIARY", "diary-1"))
                 .thenReturn(List.of());
-        when(promptManager.getPrompt(any(PromptKey.class))).thenReturn("prompt");
+        when(promptManager.getSnapshot(any(PromptKey.class)))
+                .thenReturn(new PromptSnapshot("graphrag-extract", "test", "zh-CN", "prompt"));
         when(extractor.extract(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString())).thenReturn(""
                         + "{\"entities\":[{\"type\":\"User\",\"displayName\":\"我\","
@@ -307,7 +311,8 @@ class LifeGraphSourceReplacementTest {
         when(mentionRepository.findByUserIdAndDiaryId("user-1", "diary-1")).thenReturn(List.of());
         when(evidenceRepository.findByUserIdAndSourceTypeAndSourceId("user-1", "DIARY", "diary-1"))
                 .thenReturn(List.of());
-        when(promptManager.getPrompt(any(PromptKey.class))).thenReturn("prompt");
+        when(promptManager.getSnapshot(any(PromptKey.class)))
+                .thenReturn(new PromptSnapshot("graphrag-extract", "test", "zh-CN", "prompt"));
         when(extractor.extract(anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString())).thenReturn(""
                         + "{\"entities\":[{\"type\":\"User\",\"displayName\":\"我\","

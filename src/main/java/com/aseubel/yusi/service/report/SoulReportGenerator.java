@@ -9,6 +9,7 @@ import com.aseubel.yusi.pojo.constant.TaskExecutionType;
 import com.aseubel.yusi.pojo.entity.*;
 import com.aseubel.yusi.repository.*;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.notification.NotificationService;
@@ -132,13 +133,15 @@ public class SoulReportGenerator {
         String userId = user.getUserId();
         String context = buildReportContext(userId, periodStart, periodEnd);
         
-        String template = promptManager.getPrompt(PromptKey.SOUL_WEEKLY_REPORT);
+        PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.SOUL_WEEKLY_REPORT);
+        String template = snapshot == null ? "" : snapshot.template();
         String prompt = template.replace("{{context}}", context);
         
         ModelRouteContextHolder.set(ModelRouteContext.builder()
                 .scene(PromptKey.SOUL_WEEKLY_REPORT.getKey())
                 .userId(userId)
                 .runId(generationRunId)
+                .prompt(snapshot)
                 .build());
         AiMessage aiMessage;
         try {
