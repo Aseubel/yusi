@@ -41,3 +41,5 @@ yusi_prod.env
 .env
 .codegraph/daemon.pid
 .promo
+.lapis-cv
+tmp/
