@@ -15,6 +15,7 @@ import java.util.List;
 public class CognitionIngestCommand {
 
     private String userId;
+    private String runId;
     private String sourceType;
     private String sourceId;
     private Long sourceRevision;
