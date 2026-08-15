@@ -701,6 +701,7 @@ CREATE TABLE `agent_run_trace` (
     `status` VARCHAR(20) NOT NULL COMMENT '运行状态: RUNNING/COMPLETED/FAILED/CANCELLED',
     `current_stage` VARCHAR(32) DEFAULT NULL COMMENT '最近公开阶段',
     `tool_count` INT NOT NULL DEFAULT 0 COMMENT '已完成工具调用数量',
+    `response_char_count` BIGINT NOT NULL DEFAULT 0 COMMENT '助手响应 Unicode code point 数量，不保存响应内容',
     `failure_category` VARCHAR(64) DEFAULT NULL COMMENT '低敏失败分类',
     `cancel_source` VARCHAR(32) DEFAULT NULL COMMENT '取消来源',
     `started_at` DATETIME NOT NULL COMMENT '开始时间',

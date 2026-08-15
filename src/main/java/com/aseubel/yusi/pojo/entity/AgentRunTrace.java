@@ -65,6 +65,10 @@ public class AgentRunTrace {
     @Builder.Default
     private Integer toolCount = 0;
 
+    @Column(name = "response_char_count", nullable = false)
+    @Builder.Default
+    private Long responseCharCount = 0L;
+
     @Column(name = "failure_category", length = 64)
     private String failureCategory;
 
@@ -94,6 +98,9 @@ public class AgentRunTrace {
         }
         if (toolCount == null) {
             toolCount = 0;
+        }
+        if (responseCharCount == null) {
+            responseCharCount = 0L;
         }
         if (startedAt == null) {
             startedAt = now;

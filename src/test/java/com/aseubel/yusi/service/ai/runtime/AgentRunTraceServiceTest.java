@@ -46,6 +46,7 @@ class AgentRunTraceServiceTest {
         assertEquals(AgentRunTrace.Status.RUNNING, trace.getStatus());
         assertEquals("preparing", trace.getCurrentStage());
         assertEquals(0, trace.getToolCount());
+        assertEquals(0L, trace.getResponseCharCount());
         assertNotNull(trace.getStartedAt());
     }
 
