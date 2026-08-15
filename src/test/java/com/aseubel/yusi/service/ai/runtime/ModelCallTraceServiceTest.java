@@ -34,6 +34,8 @@ class ModelCallTraceServiceTest {
         ArgumentCaptor<ModelCallTrace> captor = ArgumentCaptor.forClass(ModelCallTrace.class);
         verify(traceRepository).save(captor.capture());
         ModelCallTrace trace = captor.getValue();
+        assertEquals("run-1", trace.getRunId());
+        assertEquals("user-1", trace.getUserId());
         assertEquals("chat", trace.getPromptKey());
         assertEquals("v7", trace.getPromptVersion());
         assertEquals("zh-CN", trace.getPromptLocale());

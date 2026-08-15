@@ -30,7 +30,8 @@ import java.time.LocalDateTime;
         @Index(name = "idx_model_call_trace_provider_created", columnList = "provider, created_at"),
         @Index(name = "idx_model_call_trace_status_created", columnList = "status, created_at"),
         @Index(name = "idx_model_call_trace_fallback_created", columnList = "fallback_used, created_at"),
-        @Index(name = "idx_model_call_trace_prompt_version", columnList = "prompt_key, prompt_version, created_at")
+        @Index(name = "idx_model_call_trace_prompt_version", columnList = "prompt_key, prompt_version, created_at"),
+        @Index(name = "idx_model_call_trace_user_run_created", columnList = "user_id, run_id, created_at")
 })
 @NoArgsConstructor
 @AllArgsConstructor

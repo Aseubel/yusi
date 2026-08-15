@@ -228,6 +228,7 @@ public class ModelManagementService {
             }
             addLike(predicates, criteriaBuilder, root, "scene", query.getScene());
             addLike(predicates, criteriaBuilder, root, "userId", query.getUserId());
+            addLike(predicates, criteriaBuilder, root, "runId", query.getRunId());
             addLike(predicates, criteriaBuilder, root, "promptKey", query.getPromptKey());
             addLike(predicates, criteriaBuilder, root, "promptVersion", query.getPromptVersion());
             addLike(predicates, criteriaBuilder, root, "selectedTier", query.getModelTier());
