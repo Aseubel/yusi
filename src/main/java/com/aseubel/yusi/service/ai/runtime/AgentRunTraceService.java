@@ -79,24 +79,51 @@ public class AgentRunTraceService {
 
     @Transactional
     public void complete(String userId, String runId) {
+        completeInternal(userId, runId, null);
+    }
+
+    @Transactional
+    public void complete(String userId, String runId, long responseCharCount) {
+        completeInternal(userId, runId, responseCharCount);
+    }
+
+    private void completeInternal(String userId, String runId, Long responseCharCount) {
         closeRunningTools(userId, runId, AgentToolTrace.Status.COMPLETED, null);
-        finish(userId, runId, AgentRunTrace.Status.COMPLETED, null, null);
+        finish(userId, runId, AgentRunTrace.Status.COMPLETED, null, null, responseCharCount);
     }
 
     @Transactional
     public void fail(String userId, String runId, String failureCategory) {
+        failInternal(userId, runId, failureCategory, null);
+    }
+
+    @Transactional
+    public void fail(String userId, String runId, String failureCategory, long responseCharCount) {
+        failInternal(userId, runId, failureCategory, responseCharCount);
+    }
+
+    private void failInternal(String userId, String runId, String failureCategory, Long responseCharCount) {
         closeRunningTools(userId, runId, AgentToolTrace.Status.FAILED,
                 AgentToolTrace.FailureCategory.AGENT_ERROR);
         finish(userId, runId, AgentRunTrace.Status.FAILED,
-                isBlank(failureCategory) ? "agent_error" : failureCategory, null);
+                isBlank(failureCategory) ? "agent_error" : failureCategory, null, responseCharCount);
     }
 
     @Transactional
     public void cancel(String userId, String runId, String cancelSource) {
+        cancelInternal(userId, runId, cancelSource, null);
+    }
+
+    @Transactional
+    public void cancel(String userId, String runId, String cancelSource, long responseCharCount) {
+        cancelInternal(userId, runId, cancelSource, responseCharCount);
+    }
+
+    private void cancelInternal(String userId, String runId, String cancelSource, Long responseCharCount) {
         closeRunningTools(userId, runId, AgentToolTrace.Status.CANCELLED,
                 AgentToolTrace.FailureCategory.CANCELLED);
         finish(userId, runId, AgentRunTrace.Status.CANCELLED, null,
-                isBlank(cancelSource) ? "stream_closed" : cancelSource);
+                isBlank(cancelSource) ? "stream_closed" : cancelSource, responseCharCount);
     }
 
     private void closeRunningTools(String userId, String runId, AgentToolTrace.Status status,
@@ -112,13 +139,18 @@ public class AgentRunTraceService {
     }
 
     private void finish(String userId, String runId, AgentRunTrace.Status status,
-            String failureCategory, String cancelSource) {
+            String failureCategory, String cancelSource, Long responseCharCount) {
         findRunning(userId, runId).ifPresent(trace -> {
             LocalDateTime completedAt = LocalDateTime.now();
             trace.setStatus(status);
             trace.setCurrentStage(status.name().toLowerCase());
             trace.setFailureCategory(failureCategory);
             trace.setCancelSource(cancelSource);
+            if (responseCharCount != null) {
+                trace.setResponseCharCount(Math.max(0L, responseCharCount));
+            } else if (trace.getResponseCharCount() == null) {
+                trace.setResponseCharCount(0L);
+            }
             trace.setCompletedAt(completedAt);
             trace.setDurationMs(calculateDuration(trace.getStartedAt(), completedAt));
             traceRepository.save(trace);

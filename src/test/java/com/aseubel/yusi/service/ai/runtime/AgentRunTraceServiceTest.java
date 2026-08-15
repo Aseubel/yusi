@@ -67,6 +67,7 @@ class AgentRunTraceServiceTest {
         service.complete("user-1", "run-2");
 
         assertEquals(1, trace.getToolCount());
+        assertEquals(0L, trace.getResponseCharCount());
         assertEquals(AgentRunTrace.Status.COMPLETED, trace.getStatus());
         assertEquals("completed", trace.getCurrentStage());
         assertNotNull(trace.getCompletedAt());
@@ -74,6 +75,35 @@ class AgentRunTraceServiceTest {
         assertTrue(trace.getDurationMs() >= 0);
         verify(traceRepository, org.mockito.Mockito.times(2)).save(trace);
         verify(agentToolTraceService).closeRunning("user-1", "run-2", AgentToolTrace.Status.COMPLETED, null);
+    }
+
+    @Test
+    void completeStoresResponseCountWithoutChangingToolCount() {
+        AgentRunTrace trace = runningTrace("run-response-complete");
+        trace.setToolCount(3);
+        when(traceRepository.findByUserIdAndRunId("user-1", "run-response-complete"))
+                .thenReturn(Optional.of(trace));
+
+        service().complete("user-1", "run-response-complete", 27L);
+
+        assertEquals(3, trace.getToolCount());
+        assertEquals(27L, trace.getResponseCharCount());
+    }
+
+    @Test
+    void failAndCancelClampNegativeResponseCountsToZero() {
+        AgentRunTrace failed = runningTrace("run-response-failed");
+        AgentRunTrace cancelled = runningTrace("run-response-cancelled");
+        when(traceRepository.findByUserIdAndRunId("user-1", "run-response-failed"))
+                .thenReturn(Optional.of(failed));
+        when(traceRepository.findByUserIdAndRunId("user-1", "run-response-cancelled"))
+                .thenReturn(Optional.of(cancelled));
+
+        service().fail("user-1", "run-response-failed", "agent_error", -1L);
+        service().cancel("user-1", "run-response-cancelled", "user", -1L);
+
+        assertEquals(0L, failed.getResponseCharCount());
+        assertEquals(0L, cancelled.getResponseCharCount());
     }
 
     @Test
