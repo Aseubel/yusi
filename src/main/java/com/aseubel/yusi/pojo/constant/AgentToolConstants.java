@@ -5,6 +5,8 @@ public final class AgentToolConstants {
     public static final String SEARCH_MEMORIES = "searchMemories";
     public static final String SEARCH_DIARY = "searchDiary";
     public static final String SEARCH_LIFE_GRAPH = "searchLifeGraph";
+    public static final String UPDATE_USER_PERSONA = "updateUserPersona";
+    public static final String WEB_SEARCH = "web_search";
 
     public static final String SOURCE_LOCAL = "local";
     public static final String SOURCE_MCP = "mcp";

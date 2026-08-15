@@ -7,6 +7,7 @@ import com.aseubel.yusi.pojo.dto.chat.AgentStreamEvent;
 import com.aseubel.yusi.pojo.dto.chat.ChatCancelRequest;
 import com.aseubel.yusi.pojo.dto.chat.ChatRequest;
 import com.aseubel.yusi.service.ai.runtime.AiLockService;
+import com.aseubel.yusi.service.ai.runtime.AgentToolTraceService;
 import com.aseubel.yusi.service.ai.runtime.ChatStreamCancellationRegistry;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.oss.OssService;
@@ -56,6 +57,7 @@ class AiControllerCancellationTest {
     private final AiLockService aiLockService = mock(AiLockService.class);
     private final Assistant diaryAssistant = mock(Assistant.class);
     private final OssService ossService = mock(OssService.class);
+    private final AgentToolTraceService agentToolTraceService = mock(AgentToolTraceService.class);
     private final ChatStreamCancellationRegistry registry = new ChatStreamCancellationRegistry();
     private final AtomicReference<Runnable> submittedTask = new AtomicReference<>();
 
@@ -67,6 +69,7 @@ class AiControllerCancellationTest {
         ReflectionTestUtils.setField(controller, "diaryAssistant", diaryAssistant);
         ReflectionTestUtils.setField(controller, "aiLockService", aiLockService);
         ReflectionTestUtils.setField(controller, "ossService", ossService);
+        ReflectionTestUtils.setField(controller, "agentToolTraceService", agentToolTraceService);
         ReflectionTestUtils.setField(controller, "chatStreamCancellationRegistry", registry);
 
         UserContext.setUserId("user-1");
@@ -221,14 +224,76 @@ class AiControllerCancellationTest {
                 .orElse(null);
 
         assertNotNull(toolStarted);
-        assertEquals("tool-call-1", toolStarted.toolCallId());
+        assertNotNull(toolStarted.toolCallId());
+        assertFalse(toolStarted.toolCallId().isBlank());
         assertEquals("web_search", toolStarted.toolName());
         assertEquals("mcp", toolStarted.toolSource());
         assertNotNull(toolCompleted);
-        assertEquals("tool-call-1", toolCompleted.toolCallId());
+        assertEquals(toolStarted.toolCallId(), toolCompleted.toolCallId());
         assertFalse(toolCompleted.success());
         assertEquals(1500L, toolCompleted.durationMs());
         assertTrue(controller.events().stream().allMatch(event -> event.text() == null));
+        verify(agentToolTraceService).start(eq("user-1"), eq("request-tool"),
+                eq(toolStarted.toolCallId()), eq("tool-call-1"), eq("web_search"), eq("mcp"));
+        verify(agentToolTraceService).complete(eq("user-1"), eq("request-tool"),
+                eq(toolStarted.toolCallId()), eq(1500L), eq(true));
+    }
+
+    @Test
+    void generatesLocalToolIdWhenUpstreamIdIsNull() {
+        TokenStream tokenStream = tokenStream();
+        when(diaryAssistant.chatWithMessage(eq("user-1"), anyString(), anyList())).thenReturn(tokenStream);
+
+        controller.chatStream(ChatRequest.builder()
+                .requestId("request-tool-null-id")
+                .message("搜索我的记忆")
+                .build());
+        submittedTask.get().run();
+        UserContext.setUserId("user-1");
+
+        ArgumentCaptor<Consumer<BeforeToolExecution>> beforeCaptor = ArgumentCaptor.forClass(Consumer.class);
+        ArgumentCaptor<Consumer<ToolExecution>> completedCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(tokenStream).beforeToolExecution(beforeCaptor.capture());
+        verify(tokenStream).onToolExecuted(completedCaptor.capture());
+
+        InvocationContext invocationContext = mock(InvocationContext.class);
+        ToolExecutionRequest request = ToolExecutionRequest.builder()
+                .id(null)
+                .name("searchMemories")
+                .arguments("{\"query\":\"private\"}")
+                .build();
+
+        beforeCaptor.getValue().accept(BeforeToolExecution.builder()
+                .request(request)
+                .invocationContext(invocationContext)
+                .build());
+        completedCaptor.getValue().accept(ToolExecution.builder()
+                .request(request)
+                .result(ToolExecutionResult.builder()
+                        .isError(false)
+                        .resultText("private result")
+                        .build())
+                .startTime(LocalDateTime.of(2026, 8, 4, 12, 0, 0))
+                .finishTime(LocalDateTime.of(2026, 8, 4, 12, 0, 1))
+                .invocationContext(invocationContext)
+                .build());
+
+        AgentStreamEvent toolStarted = controller.events().stream()
+                .filter(event -> "tool.started".equals(event.type()))
+                .findFirst()
+                .orElseThrow();
+        AgentStreamEvent toolCompleted = controller.events().stream()
+                .filter(event -> "tool.completed".equals(event.type()))
+                .findFirst()
+                .orElseThrow();
+
+        assertTrue(toolStarted.toolCallId() != null && !toolStarted.toolCallId().isBlank());
+        assertEquals(toolStarted.toolCallId(), toolCompleted.toolCallId());
+        assertTrue(toolCompleted.success());
+        verify(agentToolTraceService).start(eq("user-1"), eq("request-tool-null-id"),
+                eq(toolStarted.toolCallId()), eq((String) null), eq("searchMemories"), eq("local"));
+        verify(agentToolTraceService).complete(eq("user-1"), eq("request-tool-null-id"),
+                eq(toolStarted.toolCallId()), eq(1000L), eq(false));
     }
 
     private static final class RecordingAiController extends AiController {

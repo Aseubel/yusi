@@ -1,6 +1,7 @@
 package com.aseubel.yusi.controller;
 
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.core.util.IdUtil;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
@@ -18,6 +19,7 @@ import com.aseubel.yusi.pojo.dto.agent.AgentGrowthResponse;
 import com.aseubel.yusi.pojo.dto.chat.ChatCancelRequest;
 import com.aseubel.yusi.pojo.dto.chat.ChatRequest;
 import com.aseubel.yusi.pojo.dto.chat.AgentStreamEvent;
+import com.aseubel.yusi.pojo.constant.AgentToolConstants;
 import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.pojo.entity.SoulReport;
@@ -29,6 +31,8 @@ import com.aseubel.yusi.service.agent.AgentGrowthService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
+import com.aseubel.yusi.service.ai.runtime.AgentToolTraceCorrelation;
+import com.aseubel.yusi.service.ai.runtime.AgentToolTraceService;
 import com.aseubel.yusi.service.ai.runtime.AiLockService;
 import com.aseubel.yusi.service.ai.runtime.ChatStreamCancellationRegistry;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
@@ -68,6 +72,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -132,6 +138,11 @@ public class AiController {
 
     @Autowired
     private AgentRunTraceService agentRunTraceService;
+
+    @Autowired
+    private AgentToolTraceService agentToolTraceService;
+
+    private final ConcurrentMap<ToolRunKey, AgentToolTraceCorrelation> toolCorrelations = new ConcurrentHashMap<>();
 
     @Auth
     @GetMapping("/chat/history")
@@ -299,6 +310,7 @@ public class AiController {
                         .scene(PromptKey.CHAT.getKey())
                         .build());
 
+                AgentToolTraceCorrelation toolCorrelation = correlationFor(userId, requestId);
                 TokenStream tokenStream = diaryAssistant.chatWithMessage(userId, sandwichContent, imageContents);
                 if (!session.isActive()) {
                     return;
@@ -345,10 +357,15 @@ public class AiController {
                             }
                             var requestToExecute = beforeToolExecution.request();
                             String toolName = requestToExecute.name();
+                            String upstreamToolCallId = requestToExecute.id();
+                            String localToolCallId = IdUtil.fastSimpleUUID();
+                            toolCorrelation.register(requestToExecute, upstreamToolCallId, toolName, localToolCallId);
+                            traceToolStarted(userId, requestId, localToolCallId, upstreamToolCallId,
+                                    toolName, resolveToolSource(toolName));
                             emitAgentStage(emitter, session, requestId, lastStage, "tool");
                             sendAgentEvent(emitter, session, AgentStreamEvent.toolStarted(
                                     requestId,
-                                    requestToExecute.id(),
+                                    localToolCallId,
                                     toolName,
                                     resolveToolSource(toolName)));
                         })
@@ -357,13 +374,20 @@ public class AiController {
                                 return;
                             }
                             var requestToExecute = toolExecution.request();
+                            String localToolCallId = toolCorrelation.resolve(
+                                    requestToExecute, requestToExecute.id(), requestToExecute.name())
+                                    .orElse(null);
                             Long durationMs = toolExecution.duration() != null
                                     ? toolExecution.duration().toMillis()
                                     : null;
+                            if (localToolCallId != null) {
+                                traceToolCompleted(userId, requestId, localToolCallId, durationMs,
+                                        toolExecution.hasFailed());
+                            }
                             traceRunToolCompleted(session.getUserId(), requestId);
                             sendAgentEvent(emitter, session, AgentStreamEvent.toolCompleted(
                                     requestId,
-                                    requestToExecute.id(),
+                                    localToolCallId,
                                     requestToExecute.name(),
                                     resolveToolSource(requestToExecute.name()),
                                     !toolExecution.hasFailed(),
@@ -428,16 +452,40 @@ public class AiController {
     }
 
     private String resolveToolSource(String toolName) {
-        if ("web_search".equals(toolName)) {
-            return "mcp";
+        if (AgentToolConstants.WEB_SEARCH.equals(toolName)) {
+            return AgentToolConstants.SOURCE_MCP;
         }
-        if ("searchMemories".equals(toolName)
-                || "searchLifeGraph".equals(toolName)
-                || "searchDiary".equals(toolName)
-                || "updateUserPersona".equals(toolName)) {
-            return "local";
+        if (AgentToolConstants.SEARCH_MEMORIES.equals(toolName)
+                || AgentToolConstants.SEARCH_LIFE_GRAPH.equals(toolName)
+                || AgentToolConstants.SEARCH_DIARY.equals(toolName)
+                || AgentToolConstants.UPDATE_USER_PERSONA.equals(toolName)) {
+            return AgentToolConstants.SOURCE_LOCAL;
         }
-        return "tool";
+        return AgentToolConstants.SOURCE_TOOL;
+    }
+
+    private AgentToolTraceCorrelation correlationFor(String userId, String runId) {
+        return toolCorrelations.computeIfAbsent(new ToolRunKey(userId, runId),
+                ignored -> new AgentToolTraceCorrelation());
+    }
+
+    private void clearToolCorrelation(String userId, String runId) {
+        AgentToolTraceCorrelation correlation = toolCorrelations.remove(new ToolRunKey(userId, runId));
+        if (correlation != null) {
+            correlation.clear();
+        }
+    }
+
+    private void traceToolStarted(String userId, String runId, String localToolCallId,
+            String upstreamToolCallId, String toolName, String toolSource) {
+        runToolTrace("tool_start", () -> agentToolTraceService.start(userId, runId, localToolCallId,
+                upstreamToolCallId, toolName, toolSource));
+    }
+
+    private void traceToolCompleted(String userId, String runId, String localToolCallId,
+            Long durationMs, boolean failed) {
+        runToolTrace("tool_complete", () -> agentToolTraceService.complete(userId, runId, localToolCallId,
+                durationMs, failed));
     }
 
     @Auth
@@ -454,6 +502,7 @@ public class AiController {
     }
 
     private void traceRunStarted(String userId, String runId) {
+        clearToolCorrelation(userId, runId);
         runTrace("start", () -> agentRunTraceService.start(userId, runId, "chat"));
     }
 
@@ -467,14 +516,17 @@ public class AiController {
 
     private void traceRunCompleted(String userId, String runId) {
         runTrace("complete", () -> agentRunTraceService.complete(userId, runId));
+        clearToolCorrelation(userId, runId);
     }
 
     private void traceRunFailed(String userId, String runId, String failureCategory) {
         runTrace("fail", () -> agentRunTraceService.fail(userId, runId, failureCategory));
+        clearToolCorrelation(userId, runId);
     }
 
     private void traceRunCancelled(String userId, String runId, String cancelSource) {
         runTrace("cancel", () -> agentRunTraceService.cancel(userId, runId, cancelSource));
+        clearToolCorrelation(userId, runId);
     }
 
     private void runTrace(String operation, Runnable action) {
@@ -486,6 +538,20 @@ public class AiController {
         } catch (RuntimeException exception) {
             log.warn("AgentRun trace {} failed; continuing chat stream", operation, exception);
         }
+    }
+
+    private void runToolTrace(String operation, Runnable action) {
+        if (agentToolTraceService == null) {
+            return;
+        }
+        try {
+            action.run();
+        } catch (RuntimeException exception) {
+            log.warn("AgentToolTrace {} failed; continuing chat stream", operation, exception);
+        }
+    }
+
+    private record ToolRunKey(String userId, String runId) {
     }
 
     private List<ImageContent> buildImageContents(String userId, List<String> images) {
