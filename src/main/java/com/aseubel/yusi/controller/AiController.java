@@ -72,6 +72,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Collectors;
@@ -250,12 +251,13 @@ public class AiController {
         }
 
         traceRunStarted(userId, requestId);
+        AtomicLong responseCharCount = new AtomicLong();
 
         SseEmitter emitter = new SseEmitter(180000L);
         ChatStreamCancellationRegistry.ChatStreamSession session;
         try {
             session = chatStreamCancellationRegistry.register(userId, requestId, emitter, () -> {
-                traceRunCancelled(userId, requestId, "stream_closed");
+                traceRunCancelled(userId, requestId, "stream_closed", responseCharCount.get());
                 UserContext.clear();
                 ModelRouteContextHolder.clear();
                 aiLockService.releaseLock(userId);
@@ -281,7 +283,8 @@ public class AiController {
                 String violationMessage = sensitiveWordUtils.checkAndHandleViolation(userId, message);
                 if (violationMessage != null) {
                     if (session.isActive()) {
-                        traceRunCompleted(userId, requestId);
+                        responseCharCount.addAndGet(countResponseCodePoints(violationMessage));
+                        traceRunCompleted(userId, requestId, responseCharCount.get());
                         sendAgentEvent(emitter, session, AgentStreamEvent.responseDelta(requestId, violationMessage));
                         sendAgentEvent(emitter, session, AgentStreamEvent.runCompleted(requestId));
                         session.complete();
@@ -325,10 +328,12 @@ public class AiController {
                                 return;
                             }
                             try {
-                                if (StrUtil.isNotBlank(partialResponse.text())) {
+                                String responseText = partialResponse.text();
+                                if (StrUtil.isNotBlank(responseText)) {
+                                    responseCharCount.addAndGet(countResponseCodePoints(responseText));
                                     emitAgentStage(emitter, session, requestId, lastStage, "responding");
                                     sendAgentEvent(emitter, session,
-                                            AgentStreamEvent.responseDelta(requestId, partialResponse.text()));
+                                            AgentStreamEvent.responseDelta(requestId, responseText));
                                 }
                             } catch (RuntimeException e) {
                                 session.complete();
@@ -395,19 +400,19 @@ public class AiController {
                             emitAgentStage(emitter, session, requestId, lastStage, "thinking");
                         })
                         .onCompleteResponse(response -> {
-                            traceRunCompleted(userId, requestId);
+                            traceRunCompleted(userId, requestId, responseCharCount.get());
                             sendAgentEvent(emitter, session, AgentStreamEvent.runCompleted(requestId));
                             session.complete();
                         })
                         .onError(error -> {
-                            traceRunFailed(userId, requestId, "agent_error");
+                            traceRunFailed(userId, requestId, "agent_error", responseCharCount.get());
                             sendAgentEvent(emitter, session, AgentStreamEvent.runFailed(requestId));
                             session.complete();
                         })
                         .start();
             } catch (Exception e) {
                 log.error("Error during AI chat stream", e);
-                traceRunFailed(userId, requestId, "agent_error");
+                traceRunFailed(userId, requestId, "agent_error", responseCharCount.get());
                 sendAgentEvent(emitter, session, AgentStreamEvent.runFailed(requestId));
                 session.complete();
             } finally {
@@ -519,14 +524,36 @@ public class AiController {
         clearToolCorrelation(userId, runId);
     }
 
+    private void traceRunCompleted(String userId, String runId, long responseCharCount) {
+        runTrace("complete", () -> agentRunTraceService.complete(userId, runId, responseCharCount));
+        clearToolCorrelation(userId, runId);
+    }
+
     private void traceRunFailed(String userId, String runId, String failureCategory) {
         runTrace("fail", () -> agentRunTraceService.fail(userId, runId, failureCategory));
+        clearToolCorrelation(userId, runId);
+    }
+
+    private void traceRunFailed(String userId, String runId, String failureCategory, long responseCharCount) {
+        runTrace("fail", () -> agentRunTraceService.fail(userId, runId, failureCategory, responseCharCount));
         clearToolCorrelation(userId, runId);
     }
 
     private void traceRunCancelled(String userId, String runId, String cancelSource) {
         runTrace("cancel", () -> agentRunTraceService.cancel(userId, runId, cancelSource));
         clearToolCorrelation(userId, runId);
+    }
+
+    private void traceRunCancelled(String userId, String runId, String cancelSource, long responseCharCount) {
+        runTrace("cancel", () -> agentRunTraceService.cancel(userId, runId, cancelSource, responseCharCount));
+        clearToolCorrelation(userId, runId);
+    }
+
+    private long countResponseCodePoints(String responseText) {
+        if (StrUtil.isBlank(responseText)) {
+            return 0L;
+        }
+        return responseText.codePointCount(0, responseText.length());
     }
 
     private void runTrace(String operation, Runnable action) {

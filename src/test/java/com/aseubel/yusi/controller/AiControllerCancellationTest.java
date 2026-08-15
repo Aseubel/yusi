@@ -7,6 +7,7 @@ import com.aseubel.yusi.pojo.dto.chat.AgentStreamEvent;
 import com.aseubel.yusi.pojo.dto.chat.ChatCancelRequest;
 import com.aseubel.yusi.pojo.dto.chat.ChatRequest;
 import com.aseubel.yusi.service.ai.runtime.AiLockService;
+import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import com.aseubel.yusi.service.ai.runtime.AgentToolTraceService;
 import com.aseubel.yusi.service.ai.runtime.ChatStreamCancellationRegistry;
 import com.aseubel.yusi.service.diary.Assistant;
@@ -57,6 +58,7 @@ class AiControllerCancellationTest {
     private final AiLockService aiLockService = mock(AiLockService.class);
     private final Assistant diaryAssistant = mock(Assistant.class);
     private final OssService ossService = mock(OssService.class);
+    private final AgentRunTraceService agentRunTraceService = mock(AgentRunTraceService.class);
     private final AgentToolTraceService agentToolTraceService = mock(AgentToolTraceService.class);
     private final ChatStreamCancellationRegistry registry = new ChatStreamCancellationRegistry();
     private final AtomicReference<Runnable> submittedTask = new AtomicReference<>();
@@ -69,6 +71,7 @@ class AiControllerCancellationTest {
         ReflectionTestUtils.setField(controller, "diaryAssistant", diaryAssistant);
         ReflectionTestUtils.setField(controller, "aiLockService", aiLockService);
         ReflectionTestUtils.setField(controller, "ossService", ossService);
+        ReflectionTestUtils.setField(controller, "agentRunTraceService", agentRunTraceService);
         ReflectionTestUtils.setField(controller, "agentToolTraceService", agentToolTraceService);
         ReflectionTestUtils.setField(controller, "chatStreamCancellationRegistry", registry);
 
@@ -173,6 +176,96 @@ class AiControllerCancellationTest {
         assertTrue(controller.events().stream().anyMatch(event -> "run.failed".equals(event.type())));
         assertTrue(registry.find("user-1", "request-provider-error").isEmpty());
         verify(aiLockService).releaseLock("user-1");
+    }
+
+    @Test
+    void completedChatPassesUnicodeCodePointCountToRunTrace() {
+        TokenStream tokenStream = tokenStream();
+        when(diaryAssistant.chatWithMessage(eq("user-1"), anyString(), anyList())).thenReturn(tokenStream);
+
+        controller.chatStream(ChatRequest.builder()
+                .requestId("request-response")
+                .message("hello")
+                .build());
+        submittedTask.get().run();
+        UserContext.setUserId("user-1");
+
+        ArgumentCaptor<BiConsumer<PartialResponse, PartialResponseContext>> responseCaptor =
+                ArgumentCaptor.forClass(BiConsumer.class);
+        ArgumentCaptor<Consumer<dev.langchain4j.model.chat.response.ChatResponse>> completeCaptor =
+                ArgumentCaptor.forClass(Consumer.class);
+        verify(tokenStream).onPartialResponseWithContext(responseCaptor.capture());
+        verify(tokenStream).onCompleteResponse(completeCaptor.capture());
+
+        responseCaptor.getValue().accept(new PartialResponse("你好"), null);
+        completeCaptor.getValue().accept(null);
+
+        verify(agentRunTraceService).complete("user-1", "request-response", 2L);
+    }
+
+    @Test
+    void providerFailurePassesPartialResponseCountToRunTrace() {
+        TokenStream tokenStream = tokenStream();
+        when(diaryAssistant.chatWithMessage(eq("user-1"), anyString(), anyList())).thenReturn(tokenStream);
+
+        controller.chatStream(ChatRequest.builder()
+                .requestId("request-response-failed")
+                .message("hello")
+                .build());
+        submittedTask.get().run();
+        UserContext.setUserId("user-1");
+
+        ArgumentCaptor<BiConsumer<PartialResponse, PartialResponseContext>> responseCaptor =
+                ArgumentCaptor.forClass(BiConsumer.class);
+        ArgumentCaptor<Consumer<Throwable>> errorCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(tokenStream).onPartialResponseWithContext(responseCaptor.capture());
+        verify(tokenStream).onError(errorCaptor.capture());
+
+        responseCaptor.getValue().accept(new PartialResponse("partial"), null);
+        errorCaptor.getValue().accept(new IllegalStateException("provider failed"));
+
+        verify(agentRunTraceService).fail("user-1", "request-response-failed", "agent_error", 7L);
+    }
+
+    @Test
+    void cancellationPassesPartialResponseCountToRunTraceCleanup() {
+        TokenStream tokenStream = tokenStream();
+        when(diaryAssistant.chatWithMessage(eq("user-1"), anyString(), anyList())).thenReturn(tokenStream);
+
+        controller.chatStream(ChatRequest.builder()
+                .requestId("request-response-cancelled")
+                .message("hello")
+                .build());
+        submittedTask.get().run();
+        UserContext.setUserId("user-1");
+
+        ArgumentCaptor<BiConsumer<PartialResponse, PartialResponseContext>> responseCaptor =
+                ArgumentCaptor.forClass(BiConsumer.class);
+        verify(tokenStream).onPartialResponseWithContext(responseCaptor.capture());
+        responseCaptor.getValue().accept(new PartialResponse("partial"), null);
+
+        controller.cancelChat(new ChatCancelRequest("request-response-cancelled"));
+
+        verify(agentRunTraceService).cancel("user-1", "request-response-cancelled", "stream_closed", 7L);
+    }
+
+    @Test
+    void sensitiveWordFallbackPassesFallbackResponseCountToRunTrace() {
+        TokenStream tokenStream = tokenStream();
+        when(sensitiveWordUtils.checkAndHandleViolation(anyString(), anyString()))
+                .thenReturn("请换一种方式描述这个问题");
+
+        controller.chatStream(ChatRequest.builder()
+                .requestId("request-response-fallback")
+                .message("blocked")
+                .build());
+        submittedTask.get().run();
+
+        verify(agentRunTraceService).complete("user-1", "request-response-fallback", 12L);
+        assertTrue(controller.events().stream()
+                .anyMatch(event -> "请换一种方式描述这个问题".equals(event.text())));
+        verify(diaryAssistant, org.mockito.Mockito.never())
+                .chatWithMessage(eq("user-1"), anyString(), anyList());
     }
 
     @Test
