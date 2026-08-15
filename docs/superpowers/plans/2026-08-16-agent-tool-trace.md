@@ -18,6 +18,7 @@
 - `failureCategory` 只使用固定枚举分类，不从工具结果文本或异常 message 推导并落库。
 - 不保存 query、工具参数、召回内容、工具结果、Prompt、模型输出、思考内容或密钥。
 - `McpGrpcServiceImpl` 的原始 keyword/query 日志本次显式排除，另立日志安全切片处理。
+- Hutool 使用已核对的 `5.8.39`；不在本切片连带升级 Spring、LangChain、gRPC 等高耦合依赖。
 
 ---
 
@@ -37,7 +38,7 @@
 - `AgentToolTraceService.complete(String userId, String runId, String localToolCallId, long durationMs, boolean failed)` transitions a running trace to `COMPLETED` or `FAILED`.
 - `AgentToolTraceService.closeRunning(String userId, String runId, AgentToolTrace.Status status, AgentToolTrace.FailureCategory failureCategory)` transitions all remaining `RUNNING` rows for one user/run to the supplied terminal state.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add tests that prove:
 
@@ -53,7 +54,7 @@ assertEquals("local-1", saved.getToolCallId());
 
 Also assert that `complete(..., true)` stores only `TOOL_FAILED`, duplicate completion does not alter the terminal row, and `closeRunning(..., CANCELLED, CANCELLED)` closes every running row without touching completed rows.
 
-- [ ] **Step 2: Run the focused test to verify it fails**
+- [x] **Step 2: Run the focused test to verify it fails**
 
 Run:
 
@@ -63,13 +64,13 @@ Run:
 
 Expected: compilation failure because the entity, service and repository do not exist.
 
-- [ ] **Step 3: Implement the persistence model**
+- [x] **Step 3: Implement the persistence model**
 
 Create `AgentToolTrace` with `RUNNING`, `COMPLETED`, `FAILED`, `CANCELLED` statuses and fixed failure categories `TOOL_FAILED`, `AGENT_ERROR`, `TIMEOUT`, `CANCELLED`, `UNKNOWN`. Add `upstream_tool_call_id` as nullable reference-only data. Add the unique constraint `(user_id, run_id, tool_call_id)`, the run history index `(user_id, run_id, created_at)`, and the recovery index `(status, updated_at)`.
 
 The service must reject blank user/run/local IDs, never accept an arbitrary failure string, update only `RUNNING` rows, and catch no business exceptions from the caller. The controller wrapper will make Trace writes non-blocking.
 
-- [ ] **Step 4: Run the focused test to verify it passes**
+- [x] **Step 4: Run the focused test to verify it passes**
 
 Run:
 
@@ -79,7 +80,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the persistence slice**
+- [x] **Step 5: Commit the persistence slice**
 
 ```powershell
 git add src/main/java/com/aseubel/yusi/pojo/constant/AgentToolConstants.java src/main/java/com/aseubel/yusi/pojo/entity/AgentToolTrace.java src/main/java/com/aseubel/yusi/repository/AgentToolTraceRepository.java src/main/java/com/aseubel/yusi/service/ai/runtime/AgentToolTraceService.java src/main/resources/db/migration/V20260826__create_agent_tool_trace.sql src/main/resources/db/init.sql src/test/java/com/aseubel/yusi/service/ai/runtime/AgentToolTraceServiceTest.java
@@ -99,7 +100,7 @@ git commit -m "feat: add low-sensitivity agent tool trace"
 - `AgentToolTraceCorrelation.resolve(Object requestIdentity, String upstreamToolCallId, String toolName)` returns the local id using identity, upstream id, then per-tool FIFO fallback.
 - `AgentToolTraceCorrelation.clear()` removes all pending handles for the chat request.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Test the correlation object with an upstream id, a null upstream id, and two null-id calls to the same tool. The first two must resolve to their local IDs; the fallback must consume FIFO entries and return empty when no pending handle exists. Test `clear()` removes all pending entries.
 
@@ -111,7 +112,7 @@ Extend `AiControllerCancellationTest` to inject a mocked `AgentToolTraceService`
 - records `TOOL_FAILED` only when `hasFailed()` is true;
 - does not expose the private tool result text in any event.
 
-- [ ] **Step 2: Run the focused tests to verify they fail**
+- [x] **Step 2: Run the focused tests to verify they fail**
 
 Run:
 
@@ -121,7 +122,7 @@ Run:
 
 Expected: compilation or assertion failure because the controller has no Trace dependency or local-id correlation.
 
-- [ ] **Step 3: Implement the callback integration**
+- [x] **Step 3: Implement the callback integration**
 
 Inject `AgentToolTraceService` into `AiController`. In the actual `beforeToolExecution` callback at L342-L354:
 
@@ -134,7 +135,7 @@ In the actual `onToolExecuted` callback at L355-L372, resolve the local id, comp
 
 All Trace operations go through the existing non-blocking `runTrace`-style guard. A missing or unmatched callback must not complete a different tool row. The per-chat correlation object is cleared after run completion, failure, cancellation, and synchronous setup failure.
 
-- [ ] **Step 4: Run the focused tests to verify they pass**
+- [x] **Step 4: Run the focused tests to verify they pass**
 
 Run:
 
@@ -144,7 +145,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the controller slice**
+- [x] **Step 5: Commit the controller slice**
 
 ```powershell
 git add src/main/java/com/aseubel/yusi/controller/AiController.java src/main/java/com/aseubel/yusi/service/ai/runtime/AgentToolTraceCorrelation.java src/test/java/com/aseubel/yusi/controller/AiControllerCancellationTest.java src/test/java/com/aseubel/yusi/service/ai/runtime/AgentToolTraceCorrelationTest.java
@@ -163,11 +164,11 @@ git commit -m "feat: correlate chat tool calls with local ids"
 - `AgentRunTraceService` receives `AgentToolTraceService` and calls `closeRunning` before persisting each of `complete`, `fail`, and `cancel`.
 - `complete` uses `COMPLETED`; `fail` uses `FAILED + AGENT_ERROR`; `cancel` uses `CANCELLED + CANCELLED`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add tests for all three terminal paths with one running tool row and one already completed row. Assert that the running row reaches the corresponding terminal status, the completed row is unchanged, and repeated terminal calls do not create or reopen traces. Add a cancellation test where no `onToolExecuted` callback is invoked.
 
-- [ ] **Step 2: Run the focused tests to verify they fail**
+- [x] **Step 2: Run the focused tests to verify they fail**
 
 Run:
 
@@ -177,11 +178,11 @@ Run:
 
 Expected: failure because AgentRun terminal methods do not yet close tool traces.
 
-- [ ] **Step 3: Implement terminal convergence**
+- [x] **Step 3: Implement terminal convergence**
 
 Call the tool service from the three terminal methods before or together with the existing AgentRun update. Preserve AgentRun Trace write-failure tolerance and make tool convergence idempotent. Do not derive categories from any exception message or tool result. Keep the existing `tool_count` increment logic unchanged.
 
-- [ ] **Step 4: Run the focused tests to verify they pass**
+- [x] **Step 4: Run the focused tests to verify they pass**
 
 Run:
 
@@ -191,7 +192,7 @@ Run:
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the terminal convergence slice**
+- [x] **Step 5: Commit the terminal convergence slice**
 
 ```powershell
 git add src/main/java/com/aseubel/yusi/service/ai/runtime/AgentRunTraceService.java src/main/java/com/aseubel/yusi/service/ai/runtime/AgentToolTraceService.java src/test/java/com/aseubel/yusi/service/ai/runtime/AgentRunTraceServiceTest.java src/test/java/com/aseubel/yusi/service/ai/runtime/AgentToolTraceServiceTest.java
@@ -205,11 +206,11 @@ git commit -m "feat: converge agent tool traces on run termination"
 - Modify: `docs/superpowers/specs/2026-08-16-agent-tool-trace-design.md`
 - Modify: `docs/superpowers/plans/2026-08-16-agent-tool-trace.md`
 
-- [ ] **Step 1: Self-review the persisted data boundary**
+- [x] **Step 1: Self-review the persisted data boundary**
 
 Search the changed Java files and schema for `query`, `keyword`, `arguments`, `resultText`, Prompt content, exception message persistence, and secret fields. The only allowed upstream request field is nullable `upstreamToolCallId`; no raw content may be stored or sent in SSE.
 
-- [ ] **Step 2: Run focused and full verification**
+- [x] **Step 2: Run focused and full verification**
 
 Run:
 
@@ -222,13 +223,51 @@ git status --short --branch
 
 Expected: all tests and `git diff --check` pass, no service process is started, and `McpGrpcServiceImpl.java` is unchanged.
 
-- [ ] **Step 3: Update records**
+- [x] **Step 3: Update records**
 
 Record that chat tool calls now have low-sensitivity persistent children of AgentRun, local tool IDs handle null LangChain/MCP IDs, all three AgentRun terminal paths converge orphan rows, `agent_run_trace.tool_count` remains an aggregate completed-call count, and MCP gRPC raw query logs are explicitly deferred.
 
-- [ ] **Step 4: Commit the documentation record**
+- [x] **Step 4: Commit the documentation record**
 
 ```powershell
 git add docs/engineering/plans/2026-08-04-yusi-agent-product-roadmap.md docs/superpowers/specs/2026-08-16-agent-tool-trace-design.md docs/superpowers/plans/2026-08-16-agent-tool-trace.md
 git commit -m "docs: record agent tool trace boundaries"
+```
+
+### Task 5: Hutool Compatibility Refresh
+
+**Files:**
+- Modify: `pom.xml`
+
+- [x] **Step 1: Confirm the resolved dependency before changing it**
+
+Run:
+
+```powershell
+.\mvnw.cmd dependency:tree '-Dincludes=cn.hutool:*' -Dverbose
+```
+
+Expected before the change: `cn.hutool:hutool-all:5.8.24`.
+
+- [x] **Step 2: Update only the directly affected utility dependency**
+
+Set `<hutool.version>` to `5.8.39`. Keep all other pinned dependencies unchanged in this slice because their upgrade would change independent compatibility surfaces.
+
+- [x] **Step 3: Verify API compatibility and the complete build**
+
+Run:
+
+```powershell
+.\mvnw.cmd dependency:tree '-Dincludes=cn.hutool:*' -Dverbose
+.\mvnw.cmd -q '-Dtest=AgentToolTraceServiceTest,AgentToolTraceCorrelationTest,AgentRunTraceServiceTest,AiControllerCancellationTest' test
+.\mvnw.cmd -q test
+```
+
+Expected: dependency tree resolves `5.8.39`, all focused tests and the full test suite pass. Code must continue to use stable `StrUtil.isBlank`/`StrUtil.hasBlank` checks rather than depending on undocumented convenience methods.
+
+- [ ] **Step 4: Commit the dependency refresh**
+
+```powershell
+git add pom.xml docs/superpowers/plans/2026-08-16-agent-tool-trace.md
+git commit -m "chore: refresh hutool dependency"
 ```
