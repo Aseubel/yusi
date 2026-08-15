@@ -1,10 +1,16 @@
 package com.aseubel.yusi.service.agent.impl;
 
+import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.pojo.constant.AgentPersonaStyle;
 import com.aseubel.yusi.pojo.constant.ProactiveFrequency;
+import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
+import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
+import com.aseubel.yusi.pojo.constant.TaskExecutionType;
+import com.aseubel.yusi.pojo.constant.TaskFailureCategory;
 import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
+import com.aseubel.yusi.pojo.entity.TaskExecution;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.pojo.entity.UserNotification;
 import com.aseubel.yusi.repository.AgentPersonaConfigRepository;
@@ -15,8 +21,11 @@ import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
+import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import com.aseubel.yusi.service.agent.AgentProactiveService;
 import com.aseubel.yusi.service.notification.NotificationService;
+import com.aseubel.yusi.service.task.TaskExecutionCommand;
+import com.aseubel.yusi.service.task.TaskExecutionService;
 import com.aseubel.yusi.service.user.UserService;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.data.message.UserMessage;
@@ -27,10 +36,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -45,6 +54,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AgentProactiveServiceImpl implements AgentProactiveService {
 
+    private static final String WORKER_ID = "proactive-greeting";
+    private static final String RUN_SCENE = "proactive_greeting";
+    private static final String GREETING_SOURCE_ID = "greeting";
+
     /** 默认未互动天数阈值 */
     private static final int DEFAULT_INACTIVE_DAYS = 3;
     /** 单次扫描最大处理用户数 */
@@ -57,6 +70,8 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
     private final NotificationService notificationService;
     private final PromptManager promptManager;
     private final ChatModel chatModel;
+    private final TaskExecutionService taskExecutionService;
+    private final AgentRunTraceService agentRunTraceService;
 
     @Override
     // Called by the centralized scheduler and can also be triggered by an application workflow.
@@ -87,8 +102,9 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
                 }
 
                 // 条件满足，生成主动问候通知
-                generateGreetingNotification(user, config);
-                processed++;
+                if (processGreeting(user, config)) {
+                    processed++;
+                }
             }
 
             if (processed > 0) {
@@ -96,6 +112,59 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
             }
         } catch (Exception e) {
             log.error("主动问候扫描异常", e);
+        }
+    }
+
+    private boolean processGreeting(User user, AgentPersonaConfig config) {
+        TaskExecution execution = null;
+        AgentRunTraceService.RunScope scope = null;
+        try {
+            LocalDate bucket = LocalDate.now();
+            String requestedRunId = IdUtil.fastSimpleUUID();
+            execution = taskExecutionService.createOrGet(TaskExecutionCommand.builder()
+                    .taskType(TaskExecutionType.PROACTIVE_GREETING)
+                    .ownerUserId(user.getUserId())
+                    .sourceType(TaskExecutionSourceType.PROACTIVE_GREETING.code())
+                    .sourceId(GREETING_SOURCE_ID)
+                    .sourceVersion(bucket.toString())
+                    .runId(requestedRunId)
+                    .idempotencyKey(TaskExecutionKeys.daily(
+                            TaskExecutionType.PROACTIVE_GREETING, user.getUserId(),
+                            GREETING_SOURCE_ID, bucket))
+                    .build());
+            if (execution == null || taskExecutionService.isTerminal(execution.getStatus())) {
+                return false;
+            }
+            if (StrUtil.isBlank(execution.getRunId())) {
+                execution = taskExecutionService.ensureRunId(execution.getTaskId(), requestedRunId);
+            }
+            String runId = StrUtil.blankToDefault(
+                    execution == null ? null : execution.getRunId(), requestedRunId);
+            execution = taskExecutionService.claim(
+                    execution.getTaskId(), WORKER_ID, LocalDateTime.now()).orElse(null);
+            if (execution == null) {
+                return false;
+            }
+            runId = StrUtil.blankToDefault(execution.getRunId(), runId);
+            scope = agentRunTraceService.open(user.getUserId(), runId, RUN_SCENE);
+            generateGreetingNotification(user, config);
+            taskExecutionService.succeed(execution.getTaskId(), null, LocalDateTime.now());
+            scope.complete();
+            return true;
+        } catch (Exception e) {
+            if (execution != null) {
+                taskExecutionService.fail(execution.getTaskId(), TaskFailureCategory.DEPENDENCY,
+                        null, LocalDateTime.now());
+            }
+            if (scope != null) {
+                scope.fail(TaskFailureCategory.DEPENDENCY.name().toLowerCase());
+            }
+            log.warn("主动问候工作流失败: userId={}", user.getUserId(), e);
+            return false;
+        } finally {
+            if (scope != null) {
+                scope.close();
+            }
         }
     }
 

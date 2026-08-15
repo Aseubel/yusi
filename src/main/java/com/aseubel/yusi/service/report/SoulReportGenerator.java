@@ -5,6 +5,7 @@ import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
 import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
+import com.aseubel.yusi.pojo.constant.TaskFailureCategory;
 import com.aseubel.yusi.pojo.constant.TaskExecutionType;
 import com.aseubel.yusi.pojo.entity.*;
 import com.aseubel.yusi.repository.*;
@@ -12,6 +13,7 @@ import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
+import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.report.constant.SoulReportType;
 import com.aseubel.yusi.service.task.TaskExecutionCommand;
@@ -44,6 +46,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class SoulReportGenerator {
 
+    private static final String WORKER_ID = "weekly-report";
+    private static final String RUN_SCENE = "weekly_report";
+    private static final String REPORT_SOURCE_ID = "weekly";
+
     private final SoulReportRepository reportRepository;
     @Qualifier("chatModel")
     private final ChatModel chatModel;
@@ -56,6 +62,7 @@ public class SoulReportGenerator {
     private final AgentPersonaConfigRepository personaConfigRepository;
     private final NotificationService notificationService;
     private final TaskExecutionService taskExecutionService;
+    private final AgentRunTraceService agentRunTraceService;
 
     /** 单次扫描最大处理用户数 */
     private static final int MAX_BATCH_SIZE = 50;
@@ -68,7 +75,7 @@ public class SoulReportGenerator {
         try {
             LocalDate periodStart = LocalDate.now().minusDays(7);
             LocalDate periodEnd = LocalDate.now();
-            String generationRunId = IdUtil.fastSimpleUUID();
+            String batchId = IdUtil.fastSimpleUUID();
             List<User> matchEnabledUsers = userService.getMatchEnabledUsers();
             int processed = 0;
 
@@ -86,18 +93,37 @@ public class SoulReportGenerator {
                 }
 
                 TaskExecution execution = null;
+                AgentRunTraceService.RunScope scope = null;
                 try {
                     String sourceId = userId + ":" + periodStart;
+                    String requestedRunId = IdUtil.fastSimpleUUID();
                     execution = taskExecutionService.createOrGet(TaskExecutionCommand.builder()
                             .taskType(TaskExecutionType.WEEKLY_REPORT)
                             .ownerUserId(userId)
                             .sourceType(TaskExecutionSourceType.WEEKLY_REPORT.code())
                             .sourceId(sourceId)
                             .sourceVersion(periodEnd.toString())
-                            .runId(generationRunId)
-                            .idempotencyKey(TaskExecutionKeys.scheduled(TaskExecutionType.WEEKLY_REPORT,
-                                    sourceId, generationRunId))
+                            .runId(requestedRunId)
+                            .idempotencyKey(TaskExecutionKeys.daily(TaskExecutionType.WEEKLY_REPORT,
+                                    userId, REPORT_SOURCE_ID, periodStart))
                             .build());
+
+                    if (execution == null || taskExecutionService.isTerminal(execution.getStatus())) {
+                        continue;
+                    }
+                    if (StrUtil.isBlank(execution.getRunId())) {
+                        execution = taskExecutionService.ensureRunId(execution.getTaskId(), requestedRunId);
+                    }
+                    String runId = StrUtil.blankToDefault(
+                            execution == null ? null : execution.getRunId(), requestedRunId);
+                    execution = taskExecutionService.claim(
+                            execution.getTaskId(), WORKER_ID, LocalDateTime.now()).orElse(null);
+                    if (execution == null) {
+                        continue;
+                    }
+                    runId = StrUtil.blankToDefault(execution.getRunId(), runId);
+                    scope = agentRunTraceService.open(userId, runId, RUN_SCENE);
+
                     // Check if there is any activity this week (diaries or chats)
                     LocalDateTime start = periodStart.atStartOfDay();
                     LocalDateTime end = periodEnd.plusDays(1).atStartOfDay();
@@ -105,24 +131,35 @@ public class SoulReportGenerator {
                     long chatCount = chatMemoryMessageRepository.countByMemoryIdAndCreatedAtBetween(userId, start, end);
                     if (diaryCount == 0 && chatCount == 0) {
                         log.info("用户 {} 本周无任何活动，跳过周报生成", userId);
+                        taskExecutionService.succeed(execution.getTaskId(), null, LocalDateTime.now());
+                        scope.complete();
                         continue;
                     }
 
                     SoulReport report = generateReport(user, periodStart, periodEnd,
-                            generationRunId, execution.getTaskId());
+                            runId, execution.getTaskId());
                     reportRepository.save(report);
                     notifyUser(userId, report);
                     taskExecutionService.succeed(execution.getTaskId(), null, LocalDateTime.now());
+                    scope.complete();
                     processed++;
                 } catch (Exception e) {
                     if (execution != null) {
-                        taskExecutionService.fail(execution.getTaskId(), null, null, LocalDateTime.now());
+                        taskExecutionService.fail(execution.getTaskId(), TaskFailureCategory.DEPENDENCY,
+                                null, LocalDateTime.now());
+                    }
+                    if (scope != null) {
+                        scope.fail(TaskFailureCategory.DEPENDENCY.name().toLowerCase());
                     }
                     log.warn("为用户 {} 生成周报失败", userId, e);
+                } finally {
+                    if (scope != null) {
+                        scope.close();
+                    }
                 }
             }
 
-            log.info("灵魂周报生成完成，共生成 {} 份", processed);
+            log.info("灵魂周报生成完成，共生成 {} 份，batchId={}", processed, batchId);
         } catch (Exception e) {
             log.error("灵魂周报批量生成异常", e);
         }
