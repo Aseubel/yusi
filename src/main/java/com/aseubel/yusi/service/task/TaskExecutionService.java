@@ -85,6 +85,17 @@ public class TaskExecutionService {
     }
 
     @Transactional
+    public TaskExecution ensureRunId(String taskId, String runId) {
+        TaskExecution execution = require(taskId);
+        if (isBlank(execution.getRunId()) && !isBlank(runId)) {
+            execution.setRunId(runId);
+            execution.setUpdatedAt(LocalDateTime.now());
+            return repository.save(execution);
+        }
+        return execution;
+    }
+
+    @Transactional
     public TaskExecution recordCompleted(TaskExecutionCommand command, LocalDateTime completedAt) {
         TaskExecution execution = createOrGet(command);
         if (isTerminal(execution.getStatus())) {

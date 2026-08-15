@@ -8,6 +8,7 @@ import com.aseubel.yusi.pojo.entity.TaskExecution;
 import com.aseubel.yusi.repository.EmbeddingTaskRepository;
 import com.aseubel.yusi.repository.LifeGraphTaskRepository;
 import com.aseubel.yusi.service.ai.embedding.EmbeddingService;
+import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import com.aseubel.yusi.service.lifegraph.LifeGraphTaskBatchService;
 import com.aseubel.yusi.service.lifegraph.LifeGraphTaskCreator;
 import com.aseubel.yusi.service.task.TaskExecutionCommand;
@@ -47,6 +48,9 @@ class AsyncTaskCorrelationTest {
 
     @Mock
     private TaskExecutionService taskExecutionService;
+
+    @Mock
+    private AgentRunTraceService agentRunTraceService;
 
     @Test
     void embeddingTaskKeepsDiaryChangeEventId() {
@@ -103,10 +107,10 @@ class AsyncTaskCorrelationTest {
                 "diary-change-2");
 
         when(taskExecutionService.createOrGet(org.mockito.ArgumentMatchers.any(TaskExecutionCommand.class)))
-                .thenReturn(TaskExecution.builder().taskId("execution-2").build());
+                .thenReturn(TaskExecution.builder().taskId("execution-2").runId("run-2").build());
 
         new LifeGraphTaskCreator(lifeGraphTaskRepository, lifeGraphTaskBatchService, threadPoolTaskExecutor,
-                taskExecutionService)
+                taskExecutionService, agentRunTraceService)
                 .onDiaryChanged(event);
 
         ArgumentCaptor<LifeGraphTask> captor = ArgumentCaptor.forClass(LifeGraphTask.class);
@@ -126,10 +130,10 @@ class AsyncTaskCorrelationTest {
                 "diary-change-revision-2");
 
         when(taskExecutionService.createOrGet(org.mockito.ArgumentMatchers.any(TaskExecutionCommand.class)))
-                .thenReturn(TaskExecution.builder().taskId("execution-revision-2").build());
+                .thenReturn(TaskExecution.builder().taskId("execution-revision-2").runId("run-revision-2").build());
 
         new LifeGraphTaskCreator(lifeGraphTaskRepository, lifeGraphTaskBatchService, threadPoolTaskExecutor,
-                taskExecutionService)
+                taskExecutionService, agentRunTraceService)
                 .onDiaryChanged(event);
 
         ArgumentCaptor<TaskExecutionCommand> commandCaptor = ArgumentCaptor.forClass(TaskExecutionCommand.class);
@@ -165,10 +169,10 @@ class AsyncTaskCorrelationTest {
                 .thenReturn(List.of(processing));
 
         when(taskExecutionService.createOrGet(org.mockito.ArgumentMatchers.any(TaskExecutionCommand.class)))
-                .thenReturn(TaskExecution.builder().taskId("execution-3").build());
+                .thenReturn(TaskExecution.builder().taskId("execution-3").runId("run-3").build());
 
         new LifeGraphTaskCreator(lifeGraphTaskRepository, lifeGraphTaskBatchService, threadPoolTaskExecutor,
-                taskExecutionService)
+                taskExecutionService, agentRunTraceService)
                 .onDiaryChanged(new DiaryChangedEvent(this, diary, DiaryChangedEvent.Type.MODIFY));
 
         ArgumentCaptor<LifeGraphTask> captor = ArgumentCaptor.forClass(LifeGraphTask.class);

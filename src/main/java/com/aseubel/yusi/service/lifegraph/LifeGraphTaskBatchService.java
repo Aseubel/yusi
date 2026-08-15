@@ -5,6 +5,7 @@ import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.LifeGraphTask;
+import com.aseubel.yusi.pojo.entity.TaskExecution;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.pojo.constant.KeyMode;
 import com.aseubel.yusi.pojo.constant.TaskFailureCategory;
@@ -12,6 +13,7 @@ import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.LifeGraphTaskRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.task.TaskExecutionService;
+import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,6 +34,7 @@ public class LifeGraphTaskBatchService {
     private final CryptoService cryptoService;
     private final LifeGraphBuildService lifeGraphBuildService;
     private final TaskExecutionService taskExecutionService;
+    private final AgentRunTraceService agentRunTraceService;
 
     private static final int BATCH_SIZE = 10;
     private static final long PROCESSING_TIMEOUT_MINUTES = 30;
@@ -45,11 +48,15 @@ public class LifeGraphTaskBatchService {
         }
 
         for (LifeGraphTask task : tasks) {
+            TaskExecution execution = null;
+            AgentRunTraceService.RunScope scope = null;
             try {
-                claimExecution(task, now);
+                execution = claimExecution(task, now);
+                scope = openScope(task, execution);
                 if (task.getTaskType() == LifeGraphTask.TaskType.DELETE) {
                     lifeGraphBuildService.deleteByDiary(task.getUserId(), task.getDiaryId());
                     markCompleted(task, now);
+                    completeScope(scope);
                     continue;
                 }
 
@@ -57,11 +64,13 @@ public class LifeGraphTaskBatchService {
                 if (diary == null) {
                     lifeGraphBuildService.deleteByDiary(task.getUserId(), task.getDiaryId());
                     markCompleted(task, now);
+                    completeScope(scope);
                     continue;
                 }
 
                 if (isSuperseded(task.getSourceRevision(), diary.getSourceRevision())) {
                     markCompleted(task, now);
+                    completeScope(scope);
                     continue;
                 }
 
@@ -69,13 +78,24 @@ public class LifeGraphTaskBatchService {
                 if (StrUtil.isBlank(plain)) {
                     lifeGraphBuildService.deleteByDiary(task.getUserId(), task.getDiaryId());
                     markCompleted(task, now);
+                    completeScope(scope);
                     continue;
                 }
 
                 lifeGraphBuildService.upsertFromDiary(diary, plain);
                 markCompleted(task, now);
+                completeScope(scope);
             } catch (Exception e) {
-                markRetry(task, e, now);
+                TaskExecution retry = markRetry(task, e, now);
+                if (scope != null) {
+                    if (retry != null && retry.getStatus() == com.aseubel.yusi.pojo.constant.TaskExecutionStatus.FAILED) {
+                        scope.fail(com.aseubel.yusi.pojo.constant.TaskFailureCategory.DEPENDENCY.name().toLowerCase());
+                    } else {
+                        scope.retryWait();
+                    }
+                }
+            } finally {
+                closeScope(scope);
             }
         }
     }
@@ -105,40 +125,58 @@ public class LifeGraphTaskBatchService {
 
     public void processSingleTask(Long taskId, Diary diary, String plainContent) {
         LocalDateTime now = LocalDateTime.now();
+        LifeGraphTask task = taskRepository.findById(taskId).orElse(null);
+        TaskExecution execution = task == null ? null : loadExecution(task);
+        AgentRunTraceService.RunScope scope = openScope(task, execution);
         try {
             if (diary == null) {
                 markCompleted(taskId, now);
+                completeScope(scope);
                 return;
             }
-            LifeGraphTask task = taskRepository.findById(taskId).orElse(null);
             Diary currentDiary = diaryRepository.findByDiaryIdAndUserId(diary.getDiaryId(), diary.getUserId());
             if (task != null && currentDiary != null
                     && isSuperseded(task.getSourceRevision(), currentDiary.getSourceRevision())) {
                 markCompleted(taskId, now);
+                completeScope(scope);
                 return;
             }
             String plain = StrUtil.isNotBlank(plainContent) ? plainContent : decryptDiaryContent(diary);
             if (StrUtil.isBlank(plain)) {
                 lifeGraphBuildService.deleteByDiary(diary.getUserId(), diary.getDiaryId());
                 markCompleted(taskId, now);
+                completeScope(scope);
                 return;
             }
             lifeGraphBuildService.upsertFromDiary(diary, plain);
             markCompleted(taskId, now);
+            completeScope(scope);
         } catch (Exception e) {
             LocalDateTime nextRetry = calculateNextRetry(1);
             taskRepository.incrementRetryAndSetNextAttempt(taskId, e.getMessage(), nextRetry, now);
             String executionId = findTaskExecutionId(taskId);
             if (executionId != null) {
-                taskExecutionService.retry(executionId, TaskFailureCategory.DEPENDENCY, null, now);
+                TaskExecution retry = taskExecutionService.retry(executionId,
+                        TaskFailureCategory.DEPENDENCY, null, now);
+                if (scope != null) {
+                    if (retry != null && retry.getStatus() == com.aseubel.yusi.pojo.constant.TaskExecutionStatus.FAILED) {
+                        scope.fail(TaskFailureCategory.DEPENDENCY.name().toLowerCase());
+                    } else {
+                        scope.retryWait();
+                    }
+                }
             }
+        } finally {
+            closeScope(scope);
         }
     }
 
-    private void claimExecution(LifeGraphTask task, LocalDateTime now) {
-        if (task.getTaskExecutionId() != null) {
-            taskExecutionService.claim(task.getTaskExecutionId(), WORKER_ID, now);
+    private TaskExecution claimExecution(LifeGraphTask task, LocalDateTime now) {
+        if (task.getTaskExecutionId() == null) {
+            return null;
         }
+        return taskExecutionService.claim(task.getTaskExecutionId(), WORKER_ID, now)
+                .orElseGet(() -> loadExecution(task));
     }
 
     private void markCompleted(LifeGraphTask task, LocalDateTime now) {
@@ -156,16 +194,50 @@ public class LifeGraphTaskBatchService {
         }
     }
 
-    private void markRetry(LifeGraphTask task, Exception exception, LocalDateTime now) {
+    private TaskExecution markRetry(LifeGraphTask task, Exception exception, LocalDateTime now) {
         LocalDateTime nextRetry = calculateNextRetry(task.getRetryCount() + 1);
         taskRepository.incrementRetryAndSetNextAttempt(task.getId(), exception.getMessage(), nextRetry, now);
         if (task.getTaskExecutionId() != null) {
-            taskExecutionService.retry(task.getTaskExecutionId(), TaskFailureCategory.DEPENDENCY, null, now);
+            return taskExecutionService.retry(task.getTaskExecutionId(), TaskFailureCategory.DEPENDENCY, null, now);
         }
+        return null;
     }
 
     private String findTaskExecutionId(Long taskId) {
         return taskRepository.findById(taskId).map(LifeGraphTask::getTaskExecutionId).orElse(null);
+    }
+
+    private TaskExecution loadExecution(LifeGraphTask task) {
+        if (task == null || task.getTaskExecutionId() == null) {
+            return null;
+        }
+        return taskExecutionService.findByTaskId(task.getTaskExecutionId()).map(execution -> {
+            if (execution.getRunId() == null || execution.getRunId().isBlank()) {
+                return taskExecutionService.ensureRunId(execution.getTaskId(),
+                        cn.hutool.core.util.IdUtil.fastSimpleUUID());
+            }
+            return execution;
+        }).orElse(null);
+    }
+
+    private AgentRunTraceService.RunScope openScope(LifeGraphTask task, TaskExecution execution) {
+        if (task == null || execution == null || execution.getRunId() == null
+                || execution.getRunId().isBlank()) {
+            return null;
+        }
+        return agentRunTraceService.open(task.getUserId(), execution.getRunId(), "life_graph");
+    }
+
+    private void completeScope(AgentRunTraceService.RunScope scope) {
+        if (scope != null) {
+            scope.complete();
+        }
+    }
+
+    private void closeScope(AgentRunTraceService.RunScope scope) {
+        if (scope != null) {
+            scope.close();
+        }
     }
 
     LocalDateTime calculateNextRetry(int retryCount) {

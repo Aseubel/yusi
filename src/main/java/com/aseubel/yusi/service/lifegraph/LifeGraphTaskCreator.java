@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.lifegraph;
 
+import cn.hutool.core.util.IdUtil;
 import com.aseubel.yusi.common.event.DiaryChangedEvent;
 import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
 import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
@@ -8,6 +9,7 @@ import com.aseubel.yusi.pojo.constant.SourceRevision;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.pojo.entity.LifeGraphTask;
 import com.aseubel.yusi.repository.LifeGraphTaskRepository;
+import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import com.aseubel.yusi.service.task.TaskExecutionCommand;
 import com.aseubel.yusi.service.task.TaskExecutionService;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ public class LifeGraphTaskCreator {
     private final LifeGraphTaskBatchService batchService;
     private final ThreadPoolTaskExecutor threadPoolExecutor;
     private final TaskExecutionService taskExecutionService;
+    private final AgentRunTraceService agentRunTraceService;
 
     @Async("threadPoolExecutor")
     @EventListener
@@ -66,6 +69,7 @@ public class LifeGraphTaskCreator {
         String plainContent = diary.getPlainContent();
         boolean canProcessImmediately = !processing && plainContent != null && !plainContent.isBlank();
 
+        String requestedRunId = IdUtil.fastSimpleUUID();
         var execution = taskExecutionService.createOrGet(TaskExecutionCommand.builder()
                 .taskType(TaskExecutionType.LIFE_GRAPH)
                 .ownerUserId(diary.getUserId())
@@ -73,9 +77,14 @@ public class LifeGraphTaskCreator {
                 .sourceId(diary.getDiaryId())
                 .sourceVersion(String.valueOf(sourceRevision))
                 .triggerEventId(triggerEventId)
+                .runId(requestedRunId)
                 .idempotencyKey(TaskExecutionKeys.fromSourceRevision(TaskExecutionType.LIFE_GRAPH,
                         diary.getUserId(), TaskExecutionSourceType.DIARY.code(), diary.getDiaryId(), sourceRevision))
                 .build());
+        if (execution.getRunId() == null || execution.getRunId().isBlank()) {
+            execution = taskExecutionService.ensureRunId(execution.getTaskId(), requestedRunId);
+        }
+        agentRunTraceService.start(diary.getUserId(), execution.getRunId(), "life_graph");
         if (taskRepository.findByTaskExecutionId(execution.getTaskId()).isPresent()) {
             return;
         }
@@ -104,6 +113,7 @@ public class LifeGraphTaskCreator {
 
     private void createDeleteTask(Diary diary, String triggerEventId) {
         long sourceRevision = SourceRevision.initialOrCurrent(diary.getSourceRevision());
+        String requestedRunId = IdUtil.fastSimpleUUID();
         var execution = taskExecutionService.createOrGet(TaskExecutionCommand.builder()
                 .taskType(TaskExecutionType.LIFE_GRAPH)
                 .ownerUserId(diary.getUserId())
@@ -111,9 +121,14 @@ public class LifeGraphTaskCreator {
                 .sourceId(diary.getDiaryId())
                 .sourceVersion(String.valueOf(sourceRevision))
                 .triggerEventId(triggerEventId)
+                .runId(requestedRunId)
                 .idempotencyKey(TaskExecutionKeys.fromSourceRevision(TaskExecutionType.LIFE_GRAPH,
                         diary.getUserId(), TaskExecutionSourceType.DIARY.code(), diary.getDiaryId(), sourceRevision))
                 .build());
+        if (execution.getRunId() == null || execution.getRunId().isBlank()) {
+            execution = taskExecutionService.ensureRunId(execution.getTaskId(), requestedRunId);
+        }
+        agentRunTraceService.start(diary.getUserId(), execution.getRunId(), "life_graph");
         if (taskRepository.findByTaskExecutionId(execution.getTaskId()).isPresent()) {
             return;
         }

@@ -6,6 +6,7 @@ import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
 import com.aseubel.yusi.pojo.entity.TaskExecution;
 import com.aseubel.yusi.pojo.entity.SoulCard;
 import com.aseubel.yusi.repository.SoulCardRepository;
+import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import com.aseubel.yusi.service.task.TaskExecutionCommand;
 import com.aseubel.yusi.service.task.TaskExecutionService;
 import org.junit.jupiter.api.Test;
@@ -34,10 +35,18 @@ class PlazaLifeGraphListenerTest {
     @Mock
     private SoulCardRepository cardRepository;
 
+    @Mock
+    private AgentRunTraceService agentRunTraceService;
+
+    @Mock
+    private AgentRunTraceService.RunScope runScope;
+
     @Test
     void completesLedgerExecutionWhenPlazaLifeGraphSourceIsApplied() {
         when(taskExecutionService.createOrGet(any(TaskExecutionCommand.class)))
-                .thenReturn(TaskExecution.builder().taskId("task-1").build());
+                .thenReturn(TaskExecution.builder().taskId("task-1").runId("run-1").build());
+        when(agentRunTraceService.open("user-1", "run-1", "life_graph"))
+                .thenReturn(runScope);
 
         CognitionIngestCommand command = CognitionIngestCommand.builder()
                 .userId("user-1")
@@ -49,16 +58,20 @@ class PlazaLifeGraphListenerTest {
         PlazaCardChangedEvent event = new PlazaCardChangedEvent(this, command,
                 PlazaCardChangedEvent.Type.WRITE);
 
-        new PlazaLifeGraphListener(lifeGraphBuildService, taskExecutionService, cardRepository).onCardChanged(event);
+        new PlazaLifeGraphListener(lifeGraphBuildService, taskExecutionService, cardRepository,
+                agentRunTraceService).onCardChanged(event);
 
         verify(lifeGraphBuildService).upsertFromPlaza(command);
         verify(taskExecutionService).succeed(eq("task-1"), isNull(), any(LocalDateTime.class));
+        verify(runScope).complete();
     }
 
     @Test
     void skipsOlderPlazaRevisionAfterCardWasUpdated() {
         when(taskExecutionService.createOrGet(any(TaskExecutionCommand.class)))
-                .thenReturn(TaskExecution.builder().taskId("task-2").build());
+                .thenReturn(TaskExecution.builder().taskId("task-2").runId("run-2").build());
+        when(agentRunTraceService.open("user-1", "run-2", "life_graph"))
+                .thenReturn(runScope);
         when(cardRepository.findById(42L)).thenReturn(Optional.of(SoulCard.builder()
                 .id(42L)
                 .userId("user-1")
@@ -73,11 +86,13 @@ class PlazaLifeGraphListenerTest {
                 .maskedText("old masked")
                 .build();
 
-        new PlazaLifeGraphListener(lifeGraphBuildService, taskExecutionService, cardRepository)
+        new PlazaLifeGraphListener(lifeGraphBuildService, taskExecutionService, cardRepository,
+                agentRunTraceService)
                 .onCardChanged(new PlazaCardChangedEvent(this, command, PlazaCardChangedEvent.Type.MODIFY));
 
         org.mockito.Mockito.verify(lifeGraphBuildService,
                 org.mockito.Mockito.never()).upsertFromPlaza(command);
         verify(taskExecutionService).succeed(eq("task-2"), isNull(), any(LocalDateTime.class));
+        verify(runScope).complete();
     }
 }

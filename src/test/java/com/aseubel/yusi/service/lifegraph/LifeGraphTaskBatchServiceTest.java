@@ -7,6 +7,7 @@ import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.LifeGraphTaskRepository;
 import com.aseubel.yusi.repository.UserRepository;
+import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import com.aseubel.yusi.service.task.TaskExecutionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -45,6 +46,12 @@ class LifeGraphTaskBatchServiceTest {
 
     @Mock
     private TaskExecutionService taskExecutionService;
+
+    @Mock
+    private AgentRunTraceService agentRunTraceService;
+
+    @Mock
+    private AgentRunTraceService.RunScope runScope;
 
     @Test
     void loadsDiaryWithTheTaskUserAndRetriesWhenExtractionFails() {
@@ -112,8 +119,39 @@ class LifeGraphTaskBatchServiceTest {
         verify(taskRepository).markAsCompleted(any(Long.class), any(LocalDateTime.class));
     }
 
+    @Test
+    void completesTheAgentRunForAProcessedTask() {
+        LifeGraphTask task = LifeGraphTask.createUpsertTask("diary-1", "user-a");
+        task.setId(10L);
+        task.setTaskExecutionId("execution-1");
+        when(taskClaimService.claimPendingTasks(any(LocalDateTime.class), any(Integer.class)))
+                .thenReturn(List.of(task));
+        com.aseubel.yusi.pojo.entity.TaskExecution execution =
+                com.aseubel.yusi.pojo.entity.TaskExecution.builder()
+                        .taskId("execution-1")
+                        .runId("life-run-1")
+                        .status(com.aseubel.yusi.pojo.constant.TaskExecutionStatus.RUNNING)
+                        .build();
+        when(taskExecutionService.claim(anyString(), anyString(), any(LocalDateTime.class)))
+                .thenReturn(java.util.Optional.of(execution));
+        when(agentRunTraceService.open("user-a", "life-run-1", "life_graph"))
+                .thenReturn(runScope);
+        when(diaryRepository.findByDiaryIdAndUserId("diary-1", "user-a"))
+                .thenReturn(Diary.builder()
+                        .diaryId("diary-1")
+                        .userId("user-a")
+                        .plainContent("content")
+                        .build());
+
+        service().processPendingTasks();
+
+        verify(agentRunTraceService).open("user-a", "life-run-1", "life_graph");
+        verify(runScope).complete();
+    }
+
     private LifeGraphTaskBatchService service() {
         return new LifeGraphTaskBatchService(taskRepository, taskClaimService, diaryRepository,
-                userRepository, cryptoService, lifeGraphBuildService, taskExecutionService);
+                userRepository, cryptoService, lifeGraphBuildService, taskExecutionService,
+                agentRunTraceService);
     }
 }

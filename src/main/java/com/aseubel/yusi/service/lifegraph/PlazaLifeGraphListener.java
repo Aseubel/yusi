@@ -1,12 +1,16 @@
 package com.aseubel.yusi.service.lifegraph;
 
+import cn.hutool.core.util.IdUtil;
+import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.SourceType;
 import com.aseubel.yusi.common.event.PlazaCardChangedEvent;
 import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
 import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
 import com.aseubel.yusi.pojo.constant.TaskExecutionType;
+import com.aseubel.yusi.pojo.constant.TaskFailureCategory;
 import com.aseubel.yusi.pojo.entity.SoulCard;
 import com.aseubel.yusi.repository.SoulCardRepository;
+import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import com.aseubel.yusi.service.task.TaskExecutionCommand;
 import com.aseubel.yusi.service.task.TaskExecutionService;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +35,7 @@ public class PlazaLifeGraphListener {
     private final LifeGraphBuildService lifeGraphBuildService;
     private final TaskExecutionService taskExecutionService;
     private final SoulCardRepository cardRepository;
+    private final AgentRunTraceService agentRunTraceService;
 
     @Async("threadPoolExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
@@ -40,6 +45,7 @@ public class PlazaLifeGraphListener {
         }
         String userId = event.getCommand().getUserId();
         String sourceId = event.getCommand().getSourceId();
+        String requestedRunId = StrUtil.blankToDefault(event.getCommand().getRunId(), IdUtil.fastSimpleUUID());
         var execution = taskExecutionService.createOrGet(TaskExecutionCommand.builder()
                 .taskType(TaskExecutionType.LIFE_GRAPH)
                 .ownerUserId(userId)
@@ -47,21 +53,29 @@ public class PlazaLifeGraphListener {
                 .sourceId(sourceId)
                 .sourceVersion(String.valueOf(event.getSourceRevision()))
                 .triggerEventId(event.getEventId())
+                .runId(requestedRunId)
                 .idempotencyKey(TaskExecutionKeys.fromSourceRevision(TaskExecutionType.LIFE_GRAPH,
                         userId, TaskExecutionSourceType.PLAZA.code(), sourceId, event.getSourceRevision()))
                 .build());
-        taskExecutionService.claim(execution.getTaskId(), WORKER_ID, LocalDateTime.now());
+        if (StrUtil.isBlank(execution.getRunId())) {
+            execution = taskExecutionService.ensureRunId(execution.getTaskId(), requestedRunId);
+        }
+        AgentRunTraceService.RunScope scope = agentRunTraceService.open(
+                userId, execution.getRunId(), "life_graph");
         try {
+            taskExecutionService.claim(execution.getTaskId(), WORKER_ID, LocalDateTime.now());
             SoulCard currentCard = currentCard(event.getCommand().getSourceId());
             if (currentCard == null && event.getType() != PlazaCardChangedEvent.Type.DELETE
                     && isNumericId(event.getCommand().getSourceId())) {
                 lifeGraphBuildService.deleteBySource(
                         event.getCommand().getUserId(), SourceType.PLAZA.code(), event.getCommand().getSourceId());
                 taskExecutionService.succeed(execution.getTaskId(), null, LocalDateTime.now());
+                scope.complete();
                 return;
             }
             if (currentCard != null && isSuperseded(event.getSourceRevision(), currentCard.getSourceRevision())) {
                 taskExecutionService.succeed(execution.getTaskId(), null, LocalDateTime.now());
+                scope.complete();
                 return;
             }
             if (event.getType() == PlazaCardChangedEvent.Type.DELETE) {
@@ -71,10 +85,15 @@ public class PlazaLifeGraphListener {
                 lifeGraphBuildService.upsertFromPlaza(event.getCommand());
             }
             taskExecutionService.succeed(execution.getTaskId(), null, LocalDateTime.now());
+            scope.complete();
         } catch (Exception exception) {
-            taskExecutionService.fail(execution.getTaskId(), null, null, LocalDateTime.now());
+            taskExecutionService.fail(execution.getTaskId(), TaskFailureCategory.DEPENDENCY,
+                    null, LocalDateTime.now());
+            scope.fail(TaskFailureCategory.DEPENDENCY.name().toLowerCase());
             log.warn("Plaza LifeGraph source processing failed: sourceId={}",
                     event.getCommand().getSourceId(), exception);
+        } finally {
+            scope.close();
         }
     }
 

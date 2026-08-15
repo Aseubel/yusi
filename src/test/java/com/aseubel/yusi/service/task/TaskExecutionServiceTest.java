@@ -160,6 +160,21 @@ class TaskExecutionServiceTest {
         assertEquals(first, second);
     }
 
+    @Test
+    void assignsRunIdToLegacyExecutionOnlyWhenItIsMissing() {
+        TaskExecution execution = TaskExecution.builder()
+                .taskId("legacy-task")
+                .status(TaskExecutionStatus.PENDING)
+                .build();
+        when(repository.findByTaskId("legacy-task")).thenReturn(Optional.of(execution));
+        when(repository.save(execution)).thenReturn(execution);
+
+        TaskExecution result = service().ensureRunId("legacy-task", "legacy-run");
+
+        assertEquals("legacy-run", result.getRunId());
+        verify(repository).save(execution);
+    }
+
     private TaskExecutionService service() {
         return new TaskExecutionService(repository, securityAuditService);
     }
