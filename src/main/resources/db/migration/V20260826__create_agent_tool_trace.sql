@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `agent_tool_trace` (
+    `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id` VARCHAR(64) NOT NULL COMMENT '用户ID',
+    `run_id` VARCHAR(64) NOT NULL COMMENT 'AgentRun ID',
+    `tool_call_id` VARCHAR(64) NOT NULL COMMENT 'Yusi生成的本地工具调用ID',
+    `upstream_tool_call_id` VARCHAR(128) DEFAULT NULL COMMENT '上游工具调用ID，仅作参考',
+    `tool_name` VARCHAR(64) NOT NULL COMMENT '工具稳定名称',
+    `tool_source` VARCHAR(16) NOT NULL COMMENT '工具来源',
+    `status` VARCHAR(20) NOT NULL COMMENT '工具状态: RUNNING/COMPLETED/FAILED/CANCELLED',
+    `failure_category` VARCHAR(32) DEFAULT NULL COMMENT '固定低敏失败分类',
+    `started_at` DATETIME NOT NULL COMMENT '开始时间',
+    `completed_at` DATETIME DEFAULT NULL COMMENT '终态时间',
+    `duration_ms` BIGINT DEFAULT NULL COMMENT '耗时毫秒',
+    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_agent_tool_trace_user_run_call` (`user_id`, `run_id`, `tool_call_id`),
+    KEY `idx_agent_tool_trace_user_run_created` (`user_id`, `run_id`, `created_at`),
+    KEY `idx_agent_tool_trace_status_updated` (`status`, `updated_at`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'AgentRun 工具调用低敏生命周期明细';
