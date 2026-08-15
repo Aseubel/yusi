@@ -36,7 +36,7 @@
         <java-uuid-generator.version>5.0.0</java-uuid-generator.version>
         <lombok.version>1.18.30</lombok.version>
         <jjwt.version>0.11.5</jjwt.version>
-        <hutool.version>5.8.24</hutool.version>
+        <hutool.version>5.8.39</hutool.version>
         <redisson.version>3.26.0</redisson.version>
         <sensitive-word.version>0.29.4</sensitive-word.version>
         <langchain4j-mcp.version>1.18.0-beta28</langchain4j-mcp.version>

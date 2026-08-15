@@ -265,7 +265,7 @@ Run:
 
 Expected: dependency tree resolves `5.8.39`, all focused tests and the full test suite pass. Code must continue to use stable `StrUtil.isBlank`/`StrUtil.hasBlank` checks rather than depending on undocumented convenience methods.
 
-- [ ] **Step 4: Commit the dependency refresh**
+- [x] **Step 4: Commit the dependency refresh**
 
 ```powershell
 git add pom.xml docs/superpowers/plans/2026-08-16-agent-tool-trace.md
