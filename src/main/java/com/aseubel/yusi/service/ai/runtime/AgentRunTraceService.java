@@ -1,11 +1,13 @@
 package com.aseubel.yusi.service.ai.runtime;
 
 import cn.hutool.core.util.IdUtil;
+import com.aseubel.yusi.pojo.entity.AgentToolTrace;
 import com.aseubel.yusi.pojo.entity.AgentRunTrace;
 import com.aseubel.yusi.repository.AgentRunTraceRepository;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,9 +20,11 @@ import java.util.Optional;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AgentRunTraceService {
 
     private final AgentRunTraceRepository traceRepository;
+    private final AgentToolTraceService agentToolTraceService;
 
     public RunScope open(String userId, String runId, String scene) {
         String effectiveRunId = isBlank(runId) ? IdUtil.fastSimpleUUID() : runId;
@@ -75,19 +79,36 @@ public class AgentRunTraceService {
 
     @Transactional
     public void complete(String userId, String runId) {
+        closeRunningTools(userId, runId, AgentToolTrace.Status.COMPLETED, null);
         finish(userId, runId, AgentRunTrace.Status.COMPLETED, null, null);
     }
 
     @Transactional
     public void fail(String userId, String runId, String failureCategory) {
+        closeRunningTools(userId, runId, AgentToolTrace.Status.FAILED,
+                AgentToolTrace.FailureCategory.AGENT_ERROR);
         finish(userId, runId, AgentRunTrace.Status.FAILED,
                 isBlank(failureCategory) ? "agent_error" : failureCategory, null);
     }
 
     @Transactional
     public void cancel(String userId, String runId, String cancelSource) {
+        closeRunningTools(userId, runId, AgentToolTrace.Status.CANCELLED,
+                AgentToolTrace.FailureCategory.CANCELLED);
         finish(userId, runId, AgentRunTrace.Status.CANCELLED, null,
                 isBlank(cancelSource) ? "stream_closed" : cancelSource);
+    }
+
+    private void closeRunningTools(String userId, String runId, AgentToolTrace.Status status,
+            AgentToolTrace.FailureCategory failureCategory) {
+        if (agentToolTraceService == null) {
+            return;
+        }
+        try {
+            agentToolTraceService.closeRunning(userId, runId, status, failureCategory);
+        } catch (RuntimeException exception) {
+            log.warn("AgentToolTrace terminal convergence failed for run {}", runId, exception);
+        }
     }
 
     private void finish(String userId, String runId, AgentRunTrace.Status status,

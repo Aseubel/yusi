@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.ai.runtime;
 
 import com.aseubel.yusi.pojo.entity.AgentRunTrace;
 import com.aseubel.yusi.repository.AgentRunTraceRepository;
+import com.aseubel.yusi.pojo.entity.AgentToolTrace;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -26,10 +27,13 @@ class AgentRunTraceServiceTest {
     @Mock
     private AgentRunTraceRepository traceRepository;
 
+    @Mock
+    private AgentToolTraceService agentToolTraceService;
+
     @Test
     void startCreatesOnlyLowSensitivityLifecycleSummary() {
         when(traceRepository.findByUserIdAndRunId("user-1", "run-1")).thenReturn(Optional.empty());
-        AgentRunTraceService service = new AgentRunTraceService(traceRepository);
+        AgentRunTraceService service = service();
 
         service.start("user-1", "run-1", "chat");
 
@@ -56,7 +60,7 @@ class AgentRunTraceServiceTest {
                 .startedAt(LocalDateTime.now().minusSeconds(1))
                 .build();
         when(traceRepository.findByUserIdAndRunId("user-1", "run-2")).thenReturn(Optional.of(trace));
-        AgentRunTraceService service = new AgentRunTraceService(traceRepository);
+        AgentRunTraceService service = service();
 
         service.toolCompleted("user-1", "run-2");
         service.complete("user-1", "run-2");
@@ -68,6 +72,7 @@ class AgentRunTraceServiceTest {
         assertNotNull(trace.getDurationMs());
         assertTrue(trace.getDurationMs() >= 0);
         verify(traceRepository, org.mockito.Mockito.times(2)).save(trace);
+        verify(agentToolTraceService).closeRunning("user-1", "run-2", AgentToolTrace.Status.COMPLETED, null);
     }
 
     @Test
@@ -79,7 +84,7 @@ class AgentRunTraceServiceTest {
                 .status(AgentRunTrace.Status.COMPLETED)
                 .build();
         when(traceRepository.findByUserIdAndRunId("user-1", "run-3")).thenReturn(Optional.of(trace));
-        AgentRunTraceService service = new AgentRunTraceService(traceRepository);
+        AgentRunTraceService service = service();
 
         service.fail("user-1", "run-3", "agent_error");
 
@@ -91,7 +96,7 @@ class AgentRunTraceServiceTest {
     void scopedRunCarriesCorrelationAndClearsItWhenClosed() {
         when(traceRepository.findByUserIdAndRunId("user-1", "run-scope"))
                 .thenReturn(Optional.empty());
-        AgentRunTraceService service = new AgentRunTraceService(traceRepository);
+        AgentRunTraceService service = service();
 
         try (AgentRunTraceService.RunScope scope = service.open("user-1", "run-scope", "life_graph")) {
             assertEquals("run-scope", scope.runId());
@@ -104,5 +109,38 @@ class AgentRunTraceServiceTest {
         verify(traceRepository).save(org.mockito.ArgumentMatchers.argThat(trace ->
                 trace.getUserId().equals("user-1")
                         && trace.getRunId().equals("run-scope")));
+    }
+
+    @Test
+    void failAndCancelConvergeRunningToolTracesWithFixedCategories() {
+        AgentRunTrace failedRun = runningTrace("run-failed");
+        AgentRunTrace cancelledRun = runningTrace("run-cancelled");
+        when(traceRepository.findByUserIdAndRunId("user-1", "run-failed"))
+                .thenReturn(Optional.of(failedRun));
+        when(traceRepository.findByUserIdAndRunId("user-1", "run-cancelled"))
+                .thenReturn(Optional.of(cancelledRun));
+        AgentRunTraceService service = service();
+
+        service.fail("user-1", "run-failed", "agent_error");
+        service.cancel("user-1", "run-cancelled", "user");
+
+        verify(agentToolTraceService).closeRunning("user-1", "run-failed",
+                AgentToolTrace.Status.FAILED, AgentToolTrace.FailureCategory.AGENT_ERROR);
+        verify(agentToolTraceService).closeRunning("user-1", "run-cancelled",
+                AgentToolTrace.Status.CANCELLED, AgentToolTrace.FailureCategory.CANCELLED);
+    }
+
+    private AgentRunTraceService service() {
+        return new AgentRunTraceService(traceRepository, agentToolTraceService);
+    }
+
+    private AgentRunTrace runningTrace(String runId) {
+        return AgentRunTrace.builder()
+                .userId("user-1")
+                .runId(runId)
+                .scene("chat")
+                .status(AgentRunTrace.Status.RUNNING)
+                .startedAt(LocalDateTime.now().minusSeconds(1))
+                .build();
     }
 }
