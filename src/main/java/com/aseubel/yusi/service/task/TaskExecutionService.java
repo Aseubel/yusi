@@ -76,6 +76,14 @@ public class TaskExecutionService {
                 .build());
     }
 
+    @Transactional(readOnly = true)
+    public Optional<TaskExecution> findByTaskId(String taskId) {
+        if (isBlank(taskId)) {
+            return Optional.empty();
+        }
+        return repository.findByTaskId(taskId);
+    }
+
     @Transactional
     public TaskExecution recordCompleted(TaskExecutionCommand command, LocalDateTime completedAt) {
         TaskExecution execution = createOrGet(command);
@@ -251,7 +259,7 @@ public class TaskExecutionService {
         return value == null || value.isBlank();
     }
 
-    private boolean isTerminal(TaskExecutionStatus status) {
+    public boolean isTerminal(TaskExecutionStatus status) {
         return status == TaskExecutionStatus.SUCCEEDED
                 || status == TaskExecutionStatus.FAILED
                 || status == TaskExecutionStatus.CANCELLED;

@@ -1,7 +1,10 @@
 package com.aseubel.yusi.service.ai.runtime;
 
+import cn.hutool.core.util.IdUtil;
 import com.aseubel.yusi.pojo.entity.AgentRunTrace;
 import com.aseubel.yusi.repository.AgentRunTraceRepository;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +21,18 @@ import java.util.Optional;
 public class AgentRunTraceService {
 
     private final AgentRunTraceRepository traceRepository;
+
+    public RunScope open(String userId, String runId, String scene) {
+        String effectiveRunId = isBlank(runId) ? IdUtil.fastSimpleUUID() : runId;
+        start(userId, effectiveRunId, scene);
+        ModelRouteContextHolder.Scope contextScope = ModelRouteContextHolder.open(
+                ModelRouteContext.builder()
+                        .userId(userId)
+                        .runId(effectiveRunId)
+                        .scene(scene)
+                        .build());
+        return new RunScope(this, userId, effectiveRunId, contextScope);
+    }
 
     @Transactional
     public void start(String userId, String runId, String scene) {
@@ -106,5 +121,51 @@ public class AgentRunTraceService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    public static final class RunScope implements AutoCloseable {
+
+        private final AgentRunTraceService service;
+        private final String userId;
+        private final String runId;
+        private final ModelRouteContextHolder.Scope contextScope;
+        private boolean terminal;
+
+        private RunScope(AgentRunTraceService service, String userId, String runId,
+                ModelRouteContextHolder.Scope contextScope) {
+            this.service = service;
+            this.userId = userId;
+            this.runId = runId;
+            this.contextScope = contextScope;
+        }
+
+        public String runId() {
+            return runId;
+        }
+
+        public void complete() {
+            if (!terminal) {
+                terminal = true;
+                service.complete(userId, runId);
+            }
+        }
+
+        public void fail(String failureCategory) {
+            if (!terminal) {
+                terminal = true;
+                service.fail(userId, runId, failureCategory);
+            }
+        }
+
+        public void retryWait() {
+            if (!terminal) {
+                service.stage(userId, runId, "retry_wait");
+            }
+        }
+
+        @Override
+        public void close() {
+            contextScope.close();
+        }
     }
 }

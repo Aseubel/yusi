@@ -841,7 +841,7 @@ public class ModelProxyFactory {
         }
 
         private ModelRouteContext resolveContext(ChatRequest request) {
-            ModelRouteContext context = ModelRouteContextHolder.get();
+            ModelRouteContext context = ModelRouteContextHolder.getEffective();
             String scene = context == null ? null : context.getScene();
             String resolvedScene = Objects.requireNonNullElse(scene, defaultScene);
             Integer estimatedInputTokens = context == null ? null : context.getEstimatedInputTokens();

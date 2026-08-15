@@ -8,7 +8,9 @@ public enum TaskExecutionType {
     LIFE_GRAPH("LIFE_GRAPH"),
     PERSONA("PERSONA"),
     WEEKLY_REPORT("WEEKLY_REPORT"),
-    MATCHING("MATCHING");
+    MATCHING("MATCHING"),
+    COGNITION_INGEST("COGNITION_INGEST"),
+    PROACTIVE_GREETING("PROACTIVE_GREETING");
 
     private final String code;
 

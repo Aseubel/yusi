@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.ai.runtime;
 
 import com.aseubel.yusi.pojo.entity.AgentRunTrace;
 import com.aseubel.yusi.repository.AgentRunTraceRepository;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -13,6 +14,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -83,5 +85,24 @@ class AgentRunTraceServiceTest {
 
         assertEquals(AgentRunTrace.Status.COMPLETED, trace.getStatus());
         verify(traceRepository, never()).save(trace);
+    }
+
+    @Test
+    void scopedRunCarriesCorrelationAndClearsItWhenClosed() {
+        when(traceRepository.findByUserIdAndRunId("user-1", "run-scope"))
+                .thenReturn(Optional.empty());
+        AgentRunTraceService service = new AgentRunTraceService(traceRepository);
+
+        try (AgentRunTraceService.RunScope scope = service.open("user-1", "run-scope", "life_graph")) {
+            assertEquals("run-scope", scope.runId());
+            assertEquals("run-scope", ModelRouteContextHolder.getEffective().getRunId());
+            assertEquals("user-1", ModelRouteContextHolder.getEffective().getUserId());
+            scope.complete();
+        }
+
+        assertNull(ModelRouteContextHolder.get());
+        verify(traceRepository).save(org.mockito.ArgumentMatchers.argThat(trace ->
+                trace.getUserId().equals("user-1")
+                        && trace.getRunId().equals("run-scope")));
     }
 }

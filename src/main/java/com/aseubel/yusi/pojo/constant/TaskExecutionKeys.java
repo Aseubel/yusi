@@ -1,6 +1,7 @@
 package com.aseubel.yusi.pojo.constant;
 
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
@@ -27,6 +28,12 @@ public final class TaskExecutionKeys {
 
     public static String scheduled(TaskExecutionType taskType, String sourceId, String runId) {
         return compact(taskType.code().toLowerCase() + ":scheduled:" + sourceId + ":" + runId);
+    }
+
+    public static String daily(TaskExecutionType taskType, String ownerUserId,
+            String sourceId, LocalDate bucket) {
+        return compact(taskType.code().toLowerCase() + ":daily:" + ownerUserId + ":"
+                + sourceId + ":" + (bucket == null ? "unknown" : bucket));
     }
 
     public static String invocation(TaskExecutionType taskType, String ownerUserId,

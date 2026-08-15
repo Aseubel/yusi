@@ -4,6 +4,7 @@ import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
 import com.aseubel.yusi.pojo.constant.TaskExecutionStatus;
 import com.aseubel.yusi.pojo.constant.TaskExecutionType;
 import com.aseubel.yusi.pojo.constant.TaskFailureCategory;
+import com.aseubel.yusi.pojo.constant.TaskExecutionKeys;
 import com.aseubel.yusi.pojo.entity.TaskExecution;
 import com.aseubel.yusi.repository.TaskExecutionRepository;
 import com.aseubel.yusi.service.security.SecurityAuditService;
@@ -13,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -136,6 +138,26 @@ class TaskExecutionServiceTest {
                         .build()));
 
         verify(repository, never()).save(any(TaskExecution.class));
+    }
+
+    @Test
+    void findsExecutionByStableTaskId() {
+        TaskExecution execution = TaskExecution.builder().taskId("task-lookup").build();
+        when(repository.findByTaskId("task-lookup")).thenReturn(Optional.of(execution));
+
+        assertEquals(Optional.of(execution), service().findByTaskId("task-lookup"));
+    }
+
+    @Test
+    void dailyIdempotencyKeyIsStableForTheSameBucket() {
+        LocalDate bucket = LocalDate.of(2026, 8, 15);
+
+        String first = TaskExecutionKeys.daily(
+                TaskExecutionType.PROACTIVE_GREETING, "user-1", "greeting", bucket);
+        String second = TaskExecutionKeys.daily(
+                TaskExecutionType.PROACTIVE_GREETING, "user-1", "greeting", bucket);
+
+        assertEquals(first, second);
     }
 
     private TaskExecutionService service() {

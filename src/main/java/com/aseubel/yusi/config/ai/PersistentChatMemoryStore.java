@@ -153,7 +153,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     }
 
     private String currentRunId(String memoryId) {
-        ModelRouteContext context = ModelRouteContextHolder.get();
+        ModelRouteContext context = ModelRouteContextHolder.getEffective();
         if (context == null || !memoryId.equals(context.getUserId())) {
             return null;
         }
