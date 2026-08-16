@@ -18,6 +18,12 @@ public class AgentToolTraceService {
     @Transactional
     public String start(String userId, String runId, String localToolCallId,
             String upstreamToolCallId, String toolName, String toolSource) {
+        return start(userId, runId, localToolCallId, upstreamToolCallId, toolName, toolSource, null);
+    }
+
+    @Transactional
+    public String start(String userId, String runId, String localToolCallId,
+            String upstreamToolCallId, String toolName, String toolSource, String capabilityVersion) {
         if (StrUtil.hasBlank(userId, runId, localToolCallId, toolName, toolSource)) {
             return localToolCallId;
         }
@@ -33,6 +39,7 @@ public class AgentToolTraceService {
                             .upstreamToolCallId(nullable(upstreamToolCallId))
                             .toolName(toolName)
                             .toolSource(toolSource)
+                            .capabilityVersion(nullable(capabilityVersion))
                             .status(AgentToolTrace.Status.RUNNING)
                             .startedAt(now)
                             .createdAt(now)

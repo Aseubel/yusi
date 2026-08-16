@@ -33,6 +33,8 @@ import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import com.aseubel.yusi.service.ai.runtime.AgentToolTraceCorrelation;
 import com.aseubel.yusi.service.ai.runtime.AgentToolTraceService;
+import com.aseubel.yusi.service.ai.tool.AgentToolCapability;
+import com.aseubel.yusi.service.ai.tool.AgentToolCapabilityCatalog;
 import com.aseubel.yusi.service.ai.runtime.AiLockService;
 import com.aseubel.yusi.service.ai.runtime.ChatStreamCancellationRegistry;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
@@ -142,6 +144,9 @@ public class AiController {
 
     @Autowired
     private AgentToolTraceService agentToolTraceService;
+
+    @Autowired(required = false)
+    private AgentToolCapabilityCatalog agentToolCapabilityCatalog;
 
     private final ConcurrentMap<ToolRunKey, AgentToolTraceCorrelation> toolCorrelations = new ConcurrentHashMap<>();
 
@@ -364,15 +369,19 @@ public class AiController {
                             String toolName = requestToExecute.name();
                             String upstreamToolCallId = requestToExecute.id();
                             String localToolCallId = IdUtil.fastSimpleUUID();
+                            AgentToolCapability capability = resolveToolCapability(toolName);
+                            String toolSource = capability == null
+                                    ? resolveToolSource(toolName)
+                                    : capability.source();
                             toolCorrelation.register(requestToExecute, upstreamToolCallId, toolName, localToolCallId);
                             traceToolStarted(userId, requestId, localToolCallId, upstreamToolCallId,
-                                    toolName, resolveToolSource(toolName));
+                                    toolName, toolSource, capability == null ? null : capability.version());
                             emitAgentStage(emitter, session, requestId, lastStage, "tool");
                             sendAgentEvent(emitter, session, AgentStreamEvent.toolStarted(
                                     requestId,
                                     localToolCallId,
                                     toolName,
-                                    resolveToolSource(toolName)));
+                                    toolSource));
                         })
                         .onToolExecuted(toolExecution -> {
                             if (toolExecution == null || toolExecution.request() == null) {
@@ -389,12 +398,16 @@ public class AiController {
                                 traceToolCompleted(userId, requestId, localToolCallId, durationMs,
                                         toolExecution.hasFailed());
                             }
+                            AgentToolCapability capability = resolveToolCapability(requestToExecute.name());
+                            String toolSource = capability == null
+                                    ? resolveToolSource(requestToExecute.name())
+                                    : capability.source();
                             traceRunToolCompleted(session.getUserId(), requestId);
                             sendAgentEvent(emitter, session, AgentStreamEvent.toolCompleted(
                                     requestId,
                                     localToolCallId,
                                     requestToExecute.name(),
-                                    resolveToolSource(requestToExecute.name()),
+                                    toolSource,
                                     !toolExecution.hasFailed(),
                                     durationMs));
                             emitAgentStage(emitter, session, requestId, lastStage, "thinking");
@@ -469,6 +482,16 @@ public class AiController {
         return AgentToolConstants.SOURCE_TOOL;
     }
 
+    private AgentToolCapability resolveToolCapability(String toolName) {
+        if (agentToolCapabilityCatalog == null) {
+            return null;
+        }
+        String expectedSource = resolveToolSource(toolName);
+        return agentToolCapabilityCatalog.find(toolName, expectedSource)
+                .or(() -> agentToolCapabilityCatalog.findByName(toolName))
+                .orElse(null);
+    }
+
     private AgentToolTraceCorrelation correlationFor(String userId, String runId) {
         return toolCorrelations.computeIfAbsent(new ToolRunKey(userId, runId),
                 ignored -> new AgentToolTraceCorrelation());
@@ -482,9 +505,16 @@ public class AiController {
     }
 
     private void traceToolStarted(String userId, String runId, String localToolCallId,
-            String upstreamToolCallId, String toolName, String toolSource) {
-        runToolTrace("tool_start", () -> agentToolTraceService.start(userId, runId, localToolCallId,
-                upstreamToolCallId, toolName, toolSource));
+            String upstreamToolCallId, String toolName, String toolSource, String capabilityVersion) {
+        runToolTrace("tool_start", () -> {
+            if (StrUtil.isBlank(capabilityVersion)) {
+                agentToolTraceService.start(userId, runId, localToolCallId,
+                        upstreamToolCallId, toolName, toolSource);
+            } else {
+                agentToolTraceService.start(userId, runId, localToolCallId,
+                        upstreamToolCallId, toolName, toolSource, capabilityVersion);
+            }
+        });
     }
 
     private void traceToolCompleted(String userId, String runId, String localToolCallId,

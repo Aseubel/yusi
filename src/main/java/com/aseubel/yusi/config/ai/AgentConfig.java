@@ -2,6 +2,7 @@ package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.ai.tool.MemorySearchTool;
+import com.aseubel.yusi.service.ai.tool.AgentToolCapabilityCatalog;
 import com.aseubel.yusi.service.ai.tool.UserPersonaTool;
 import com.aseubel.yusi.service.memory.MemoryCompressionAssistant;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
@@ -48,6 +49,8 @@ public class AgentConfig {
 
     private final PromptManager promptManager;
 
+    private final AgentToolCapabilityCatalog agentToolCapabilityCatalog;
+
     @Value("${mcp.enabled:false}")
     private boolean mcpEnabled;
 
@@ -55,12 +58,17 @@ public class AgentConfig {
     public Assistant diaryAssistant() {
         log.info("正在配置 DiaryAssistant (Singleton)");
 
+        MemorySearchTool memorySearchTool = applicationContext.getBean(MemorySearchTool.class);
+        UserPersonaTool userPersonaTool = applicationContext.getBean(UserPersonaTool.class);
+        agentToolCapabilityCatalog.registerLocal(memorySearchTool);
+        agentToolCapabilityCatalog.registerLocal(userPersonaTool);
+
         // 构建 AiServices - 单例模式，用户隔离通过 memoryId 和 UserContext 实现
         AiServices<Assistant> builder = AiServices.builder(Assistant.class)
                 .streamingChatModel((StreamingChatModel) applicationContext.getBean("streamingChatModel"))
                 .tools(
-                        applicationContext.getBean(MemorySearchTool.class),
-                        applicationContext.getBean(UserPersonaTool.class))
+                        memorySearchTool,
+                        userPersonaTool)
                 .chatMemoryProvider((ChatMemoryProvider) applicationContext.getBean("chatMemoryProvider"));
 
         // 如果 MCP 启用，添加 MCP Tool Provider

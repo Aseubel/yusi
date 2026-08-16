@@ -725,6 +725,7 @@ CREATE TABLE `agent_tool_trace` (
     `upstream_tool_call_id` VARCHAR(128) DEFAULT NULL COMMENT '上游工具调用ID，仅作参考',
     `tool_name` VARCHAR(64) NOT NULL COMMENT '工具稳定名称',
     `tool_source` VARCHAR(16) NOT NULL COMMENT '工具来源',
+    `capability_version` VARCHAR(32) DEFAULT NULL COMMENT '工具能力契约版本',
     `status` VARCHAR(20) NOT NULL COMMENT '工具状态: RUNNING/COMPLETED/FAILED/CANCELLED',
     `failure_category` VARCHAR(32) DEFAULT NULL COMMENT '固定低敏失败分类',
     `started_at` DATETIME NOT NULL COMMENT '开始时间',

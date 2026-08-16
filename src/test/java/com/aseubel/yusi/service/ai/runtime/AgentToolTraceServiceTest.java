@@ -49,6 +49,23 @@ class AgentToolTraceServiceTest {
     }
 
     @Test
+    void startPersistsCapabilityVersionWithoutChangingExistingTraceFields() {
+        when(traceRepository.findByUserIdAndRunIdAndToolCallId("user-1", "run-1", "local-version"))
+                .thenReturn(Optional.empty());
+        AgentToolTraceService service = new AgentToolTraceService(traceRepository);
+
+        service.start("user-1", "run-1", "local-version", null,
+                AgentToolConstants.SEARCH_MEMORIES, AgentToolConstants.SOURCE_LOCAL, "v1");
+
+        ArgumentCaptor<AgentToolTrace> captor = ArgumentCaptor.forClass(AgentToolTrace.class);
+        verify(traceRepository).save(captor.capture());
+        AgentToolTrace trace = captor.getValue();
+        assertEquals("v1", trace.getCapabilityVersion());
+        assertEquals(AgentToolConstants.SEARCH_MEMORIES, trace.getToolName());
+        assertEquals(AgentToolConstants.SOURCE_LOCAL, trace.getToolSource());
+    }
+
+    @Test
     void failedCompletionUsesFixedCategoryAndDuplicateCompletionDoesNotOverwriteTerminalRow() {
         AgentToolTrace trace = runningTrace("local-2");
         when(traceRepository.findByUserIdAndRunIdAndToolCallId("user-1", "run-1", "local-2"))

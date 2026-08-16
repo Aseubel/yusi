@@ -1,5 +1,7 @@
 package com.aseubel.yusi.config.ai;
 
+import com.aseubel.yusi.pojo.constant.AgentToolConstants;
+import com.aseubel.yusi.service.ai.tool.AgentToolCapabilityCatalog;
 import dev.langchain4j.mcp.McpToolProvider;
 import dev.langchain4j.mcp.client.DefaultMcpClient;
 import dev.langchain4j.mcp.client.McpClient;
@@ -97,16 +99,18 @@ public class McpConfig {
      * 配置只获取需要的工具（web_search），避免工具过多导致 LLM 混淆。
      */
     @Bean(name = "mcpToolProvider")
-    public ToolProvider mcpToolProvider(McpClient mcpClient) {
+    public ToolProvider mcpToolProvider(McpClient mcpClient,
+            AgentToolCapabilityCatalog agentToolCapabilityCatalog) {
         log.info("正在创建 MCP Tool Provider");
 
         McpToolProvider toolProvider = McpToolProvider.builder()
                 .mcpClients(mcpClient)
                 // 只允许使用 web_search 工具，避免暴露过多工具
-                .filterToolNames("web_search")
+                .filterToolNames(AgentToolConstants.WEB_SEARCH)
+                .toolSpecificationMapper(agentToolCapabilityCatalog::mapMcpSpecification)
                 .build();
 
-        log.info("MCP Tool Provider 创建成功，已注册工具过滤器: web_search");
+        log.info("MCP Tool Provider 创建成功，已注册工具过滤器: {}", AgentToolConstants.WEB_SEARCH);
         return toolProvider;
     }
 

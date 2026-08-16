@@ -65,6 +65,9 @@ public class AgentToolTrace {
     @Column(name = "tool_source", nullable = false, length = 16)
     private String toolSource;
 
+    @Column(name = "capability_version", length = 32)
+    private String capabilityVersion;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
