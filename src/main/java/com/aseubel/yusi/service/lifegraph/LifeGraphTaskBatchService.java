@@ -54,6 +54,14 @@ public class LifeGraphTaskBatchService {
                 execution = claimExecution(task, now);
                 scope = openScope(task, execution);
                 if (task.getTaskType() == LifeGraphTask.TaskType.DELETE) {
+                    Diary currentDiary = diaryRepository.findByDiaryIdAndUserId(
+                            task.getDiaryId(), task.getUserId());
+                    if (currentDiary != null
+                            && isSuperseded(task.getSourceRevision(), currentDiary.getSourceRevision())) {
+                        markCompleted(task, now);
+                        completeScope(scope);
+                        continue;
+                    }
                     lifeGraphBuildService.deleteByDiary(task.getUserId(), task.getDiaryId());
                     markCompleted(task, now);
                     completeScope(scope);
@@ -129,6 +137,20 @@ public class LifeGraphTaskBatchService {
         TaskExecution execution = task == null ? null : loadExecution(task);
         AgentRunTraceService.RunScope scope = openScope(task, execution);
         try {
+            if (task != null && task.getTaskType() == LifeGraphTask.TaskType.DELETE) {
+                Diary currentDiary = diaryRepository.findByDiaryIdAndUserId(
+                        task.getDiaryId(), task.getUserId());
+                if (currentDiary != null
+                        && isSuperseded(task.getSourceRevision(), currentDiary.getSourceRevision())) {
+                    markCompleted(taskId, now);
+                    completeScope(scope);
+                    return;
+                }
+                lifeGraphBuildService.deleteByDiary(task.getUserId(), task.getDiaryId());
+                markCompleted(taskId, now);
+                completeScope(scope);
+                return;
+            }
             if (diary == null) {
                 markCompleted(taskId, now);
                 completeScope(scope);

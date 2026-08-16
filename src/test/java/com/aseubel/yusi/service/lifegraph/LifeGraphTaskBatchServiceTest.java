@@ -19,6 +19,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -117,6 +118,48 @@ class LifeGraphTaskBatchServiceTest {
         verify(lifeGraphBuildService, never()).upsertFromDiary(any(Diary.class), anyString());
         verify(lifeGraphBuildService, never()).deleteByDiary(anyString(), anyString());
         verify(taskRepository).markAsCompleted(any(Long.class), any(LocalDateTime.class));
+    }
+
+    @Test
+    void skipsOlderDeleteRevisionWithoutRemovingCurrentLifeGraph() {
+        LifeGraphTask task = LifeGraphTask.createDeleteTask("diary-1", "user-a", "event-old-delete");
+        task.setId(11L);
+        task.setSourceRevision(1L);
+        when(taskClaimService.claimPendingTasks(any(LocalDateTime.class), any(Integer.class)))
+                .thenReturn(List.of(task));
+        when(diaryRepository.findByDiaryIdAndUserId("diary-1", "user-a"))
+                .thenReturn(Diary.builder()
+                        .diaryId("diary-1")
+                        .userId("user-a")
+                        .sourceRevision(2L)
+                        .build());
+
+        service().processPendingTasks();
+
+        verify(lifeGraphBuildService, never()).deleteByDiary(anyString(), anyString());
+        verify(taskRepository).markAsCompleted(eq(11L), any(LocalDateTime.class));
+    }
+
+    @Test
+    void processesCurrentDeleteInSingleTaskPathWithoutRebuildingTheDiary() {
+        LifeGraphTask task = LifeGraphTask.createDeleteTask("diary-1", "user-a", "event-delete");
+        task.setId(12L);
+        task.setSourceRevision(2L);
+        when(taskRepository.findById(12L)).thenReturn(java.util.Optional.of(task));
+        when(diaryRepository.findByDiaryIdAndUserId("diary-1", "user-a"))
+                .thenReturn(Diary.builder()
+                        .diaryId("diary-1")
+                        .userId("user-a")
+                        .sourceRevision(2L)
+                        .build());
+
+        service().processSingleTask(12L,
+                Diary.builder().diaryId("diary-1").userId("user-a").plainContent("content").build(),
+                "content");
+
+        verify(lifeGraphBuildService).deleteByDiary("user-a", "diary-1");
+        verify(lifeGraphBuildService, never()).upsertFromDiary(any(Diary.class), anyString());
+        verify(taskRepository).markAsCompleted(eq(12L), any(LocalDateTime.class));
     }
 
     @Test
