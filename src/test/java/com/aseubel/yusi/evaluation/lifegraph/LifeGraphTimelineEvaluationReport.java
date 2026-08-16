@@ -1,14 +1,13 @@
 package com.aseubel.yusi.evaluation.lifegraph;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import com.aseubel.yusi.evaluation.OfflineEvaluationReportWriter;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Stable, low-sensitivity output contract for the offline replay suite. */
 public final class LifeGraphTimelineEvaluationReport {
@@ -64,31 +63,51 @@ public final class LifeGraphTimelineEvaluationReport {
     }
 
     public static void write(Path path, List<CaseResult> inputCases) throws IOException {
-        List<CaseResult> cases = inputCases == null ? List.of() : inputCases.stream()
-                .sorted(Comparator.comparing(CaseResult::caseId)
-                        .thenComparing(CaseResult::scenarioId))
-                .toList();
-        int passedCaseCount = (int) cases.stream()
-                .filter(item -> "PASS".equals(item.status()))
-                .count();
-        int assertionCount = cases.stream().mapToInt(CaseResult::assertionCount).sum();
-        int passedAssertionCount = cases.stream().mapToInt(CaseResult::passedAssertionCount).sum();
-        Summary summary = new Summary(
-                cases.size(),
-                passedCaseCount,
-                cases.size() - passedCaseCount,
-                assertionCount,
-                passedAssertionCount,
-                !cases.isEmpty() && passedCaseCount == cases.size() ? "PASS" : "FAIL");
-        Report report = new Report(SCHEMA_VERSION, SUITE_ID, RUNNER_VERSION,
-                Instant.now(), cases, summary);
+        List<OfflineEvaluationReportWriter.CaseResult> cases = inputCases == null ? List.of()
+                : inputCases.stream().map(LifeGraphTimelineEvaluationReport::toGenericCase).toList();
+        OfflineEvaluationReportWriter.write(path, SUITE_ID, cases);
+    }
 
-        Path parent = path.toAbsolutePath().getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
+    private static OfflineEvaluationReportWriter.CaseResult toGenericCase(CaseResult result) {
+        return new OfflineEvaluationReportWriter.CaseResult(
+                result.caseId(),
+                result.scenarioId(),
+                result.status(),
+                result.inputVersion(),
+                result.expectedVersion(),
+                toGenericVersions(result.versions()),
+                result.assertionCount(),
+                result.passedAssertionCount(),
+                result.violationCodes(),
+                toSummaryMap(result.actualSummary()));
+    }
+
+    private static OfflineEvaluationReportWriter.Versions toGenericVersions(Versions versions) {
+        if (versions == null) {
+            return OfflineEvaluationReportWriter.Versions.fixtureBaseline();
         }
-        ObjectMapper mapper = new ObjectMapper().findAndRegisterModules()
-                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
-        mapper.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), report);
+        return new OfflineEvaluationReportWriter.Versions(
+                new OfflineEvaluationReportWriter.ModelVersion(
+                        versions.model().provider(), versions.model().name(), versions.model().version()),
+                new OfflineEvaluationReportWriter.PromptVersion(
+                        versions.prompt().key(), versions.prompt().version(), versions.prompt().locale()),
+                new OfflineEvaluationReportWriter.StrategyVersion(
+                        versions.retrieval().strategy(), versions.retrieval().version()),
+                new OfflineEvaluationReportWriter.StrategyVersion(
+                        versions.ranking().strategy(), versions.ranking().version()));
+    }
+
+    private static Map<String, Object> toSummaryMap(ActualSummary summary) {
+        if (summary == null) {
+            return Map.of();
+        }
+        Map<String, Object> values = new LinkedHashMap<>();
+        values.put("entityCount", summary.entityCount());
+        values.put("relationCount", summary.relationCount());
+        values.put("entityEvidenceCount", summary.entityEvidenceCount());
+        values.put("relationEvidenceCount", summary.relationEvidenceCount());
+        values.put("mentionCount", summary.mentionCount());
+        values.put("timelineNodeCount", summary.timelineNodeCount());
+        return values;
     }
 }
