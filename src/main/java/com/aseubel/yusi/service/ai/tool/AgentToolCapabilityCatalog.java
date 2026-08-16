@@ -93,7 +93,8 @@ public class AgentToolCapabilityCatalog {
                 AgentToolCapabilityConstants.VERSION_V1,
                 specification.description(),
                 parameterSchemaJson(specification),
-                permissionScopes(specification.name(), source));
+                permissionScopes(specification.name(), source),
+                executionPolicy(specification.name(), source));
         capabilities.put(key(capability.name(), capability.source()), capability);
         return capability;
     }
@@ -122,6 +123,21 @@ public class AgentToolCapabilityCatalog {
             return Set.of(AgentToolPermission.MEMORY_READ.code());
         }
         return Set.of(AgentToolPermission.TOOL_EXECUTE.code());
+    }
+
+    private AgentToolExecutionPolicy executionPolicy(String toolName, String source) {
+        if (AgentToolConstants.UPDATE_USER_PERSONA.equals(toolName)) {
+            return AgentToolExecutionPolicy.PERSONA_WRITE;
+        }
+        if (AgentToolConstants.SOURCE_MCP.equals(source)) {
+            return AgentToolExecutionPolicy.NETWORK_READ;
+        }
+        if (AgentToolConstants.SEARCH_MEMORIES.equals(toolName)
+                || AgentToolConstants.SEARCH_DIARY.equals(toolName)
+                || AgentToolConstants.SEARCH_LIFE_GRAPH.equals(toolName)) {
+            return AgentToolExecutionPolicy.MEMORY_READ;
+        }
+        return AgentToolExecutionPolicy.DEFAULT;
     }
 
     private String key(String name, String source) {

@@ -65,6 +65,19 @@ class ChatStreamCancellationRegistryTest {
     }
 
     @Test
+    void cancellationMarksTheSessionTokenForRunningTools() {
+        ChatStreamCancellationRegistry registry = new ChatStreamCancellationRegistry();
+        SseEmitter emitter = mock(SseEmitter.class);
+        ChatStreamCancellationRegistry.ChatStreamSession session = registry.register(
+                "user-1", "request-token", emitter, () -> {
+                });
+
+        assertFalse(session.cancellationToken().isCancelled());
+        assertTrue(session.cancel());
+        assertTrue(session.cancellationToken().isCancelled());
+    }
+
+    @Test
     void normalCompletionDoesNotCancelModelAndIsIdempotent() {
         ChatStreamCancellationRegistry registry = new ChatStreamCancellationRegistry();
         SseEmitter emitter = mock(SseEmitter.class);

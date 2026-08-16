@@ -280,12 +280,32 @@ Unicode code point 数量；正常完成、模型失败和用户取消都会沿�
 - `agent_run_trace.tool_count` 语义保持不变，仍表示已完成工具调用总数；本切片不引入超时、重试、
   幂等键或取消传播策略。
 
+### 2026-08-16：完成工具执行超时与取消传播切片
+
+本次在本地工具和 MCP 工具之间建立统一的执行策略边界：工具调用在专用线程池中执行，按能力
+类型施加超时，并从聊天流 session 将用户取消传播到正在运行的工具。超时和取消只做一次终止尝试，
+底层客户端是否响应线程中断仍由其自身实现决定；本切片不假设可以强制停止已经产生副作用的外部调用。
+
+- `AgentToolExecutionPolicyService` 同时包装 `@Tool` 本地 executor 和动态 MCP `ToolProvider` 返回的
+  executor，策略由工具能力目录统一提供；当前 memory read、persona write、MCP network read 和未知
+  工具分别使用固定超时，线程池大小由 `agent.tool.execution.pool-size` 配置。
+- `ChatStreamSession` 持有 `AgentCancellationToken`，取消或失败时先标记令牌，再取消流句柄；
+  `ModelRouteContext` 和 `ModelRouteContextHolder.getEffective()` 将令牌传递到工具执行线程，避免
+  session 从 registry 移除后丢失取消信号。
+- 超时抛出固定的 `AgentToolTimeoutException`，取消抛出固定的 `AgentToolCancelledException`；
+  不从异常 message 或工具结果推导失败类别，也不在本切片引入自动重试、幂等键或用户确认。
+- `agent_run_trace.tool_count` 语义保持不变，仍表示已完成工具调用总数；`McpGrpcServiceImpl` 的
+  原始 `keyword/query` 日志收敛仍属于独立安全日志切片。
+
+本次没有提前扩展新的用户流程。工具重试、工具幂等键、写操作确认、暂停/恢复和固定样例评测仍属于
+Phase 3/4 后续工作。
+
 ### 后续推进顺序
 
 Phase 2 后端基础已经完成，后续仍沿整体架构推进，不扩展新的用户可见功能：
 
-1. 在已有 AgentRun、模型/Prompt Trace 和工具/响应摘要之上，继续补齐本地工具与 MCP 的超时、重试、
-   幂等和取消传播；让流式 UI 事件只是安全投影，而不是唯一运行记录。
+1. 在已有 AgentRun、模型/Prompt Trace 和工具/响应摘要之上，继续补齐本地工具与 MCP 的重试、幂等
+   和必要的写操作确认；超时与取消传播已经落地，流式 UI 事件继续只是安全投影而不是唯一运行记录。
 2. 随后完成 Phase 4 的固定样例回放、质量指标和回归门槛，优先覆盖 LifeGraph、Timeline、
    记忆删除生效和主动触发判断。
 3. 连接体验的剩余产品工作和 Phase 5 的主动陪伴功能，等前述后端质量门槛通过后再扩展。
@@ -409,9 +429,9 @@ Yusi 的核心产品是“隐私优先的长期记忆 AI companion”，不是�
 都可以被观测和恢复；流式 UI 只作为安全投影。
 
 **当前进度：** 用户聊天流的 AgentRun 事件层和低敏生命周期摘要、聊天工具 Trace、最终响应低敏
-摘要、模型调用与 Prompt 身份 Trace、工具能力契约，以及认知摄取、LifeGraph、周报和主动问候的
-用户级后台运行关联已完成；Phase 2 已提供产品事件、任务执行和安全审计关联。工具执行策略、取消
-传播和需要暂停/恢复的跨任务 Runtime 仍未完成。
+摘要、模型调用与 Prompt 身份 Trace、工具能力契约、工具执行超时与聊天取消传播，以及认知摄取、
+LifeGraph、周报和主动问候的用户级后台运行关联已完成；Phase 2 已提供产品事件、任务执行和安全
+审计关联。工具重试、幂等、用户确认和需要暂停/恢复的跨任务 Runtime 仍未完成。
 
 - [x] 为用户聊天流建立用户可见的 `AgentRun` 标识，使用 `requestId` 关联一次任务。
 - [x] 为聊天流发送安全的阶段、工具生命周期、回答增量和终态事件。
@@ -426,7 +446,9 @@ Yusi 的核心产品是“隐私优先的长期记忆 AI companion”，不是�
 - [x] 为记忆召回工具和最终 Agent 结果建立统一的低敏摘要：记忆召回沿 `AgentToolTrace` 关联，
       最终结果只记录响应 code point 数量和既有终态；禁止持久化原始思考和敏感工具正文。
 - [x] 为本地工具和 MCP 工具定义统一的能力描述、参数 Schema、权限范围和版本。
-- [ ] 为工具增加超时、重试、幂等键、取消传播和必要的用户确认边界。
+- [x] 为本地工具和 MCP 工具增加统一超时策略与聊天取消传播；执行上下文携带取消令牌，超时/取消
+      由固定异常终止等待并尽力中断底层执行。
+- [ ] 为工具增加自动重试、幂等键和必要的写操作用户确认边界。
 - [x] 为认知摄取、LifeGraph、Embedding、周报和主动问候等异步任务补充任务状态、失败原因和
       恢复策略；重试复用逻辑运行 ID，终态更新幂等。
 - [ ] 只将需要暂停、确认和恢复的流程迁移到持久化 Agentic Runtime，不重写普通同步服务。

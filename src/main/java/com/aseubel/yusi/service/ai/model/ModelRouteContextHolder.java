@@ -53,6 +53,7 @@ public final class ModelRouteContextHolder {
                 .riskLevel(first(contexts, ModelRouteContext::getRiskLevel))
                 .estimatedInputTokens(first(contexts, ModelRouteContext::getEstimatedInputTokens))
                 .reservedOutputTokens(first(contexts, ModelRouteContext::getReservedOutputTokens))
+                .cancellationToken(first(contexts, ModelRouteContext::getCancellationToken))
                 .maskSensitiveData(nearest.isMaskSensitiveData())
                 .build();
     }

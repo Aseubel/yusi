@@ -2,6 +2,7 @@ package com.aseubel.yusi.config.ai;
 
 import com.aseubel.yusi.pojo.constant.AgentToolConstants;
 import com.aseubel.yusi.service.ai.tool.AgentToolCapabilityCatalog;
+import com.aseubel.yusi.service.ai.tool.AgentToolExecutionPolicyService;
 import dev.langchain4j.mcp.McpToolProvider;
 import dev.langchain4j.mcp.client.DefaultMcpClient;
 import dev.langchain4j.mcp.client.McpClient;
@@ -100,7 +101,8 @@ public class McpConfig {
      */
     @Bean(name = "mcpToolProvider")
     public ToolProvider mcpToolProvider(McpClient mcpClient,
-            AgentToolCapabilityCatalog agentToolCapabilityCatalog) {
+            AgentToolCapabilityCatalog agentToolCapabilityCatalog,
+            AgentToolExecutionPolicyService agentToolExecutionPolicyService) {
         log.info("正在创建 MCP Tool Provider");
 
         McpToolProvider toolProvider = McpToolProvider.builder()
@@ -111,7 +113,7 @@ public class McpConfig {
                 .build();
 
         log.info("MCP Tool Provider 创建成功，已注册工具过滤器: {}", AgentToolConstants.WEB_SEARCH);
-        return toolProvider;
+        return agentToolExecutionPolicyService.wrapProvider(toolProvider);
     }
 
     /**

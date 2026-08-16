@@ -11,10 +11,12 @@ public record AgentToolCapability(
         String version,
         String description,
         String parameterSchemaJson,
-        Set<String> permissionScopes) {
+        Set<String> permissionScopes,
+        AgentToolExecutionPolicy executionPolicy) {
 
     public AgentToolCapability {
         permissionScopes = permissionScopes == null ? Set.of() : Set.copyOf(permissionScopes);
         parameterSchemaJson = parameterSchemaJson == null ? "{}" : parameterSchemaJson;
+        executionPolicy = executionPolicy == null ? AgentToolExecutionPolicy.DEFAULT : executionPolicy;
     }
 }

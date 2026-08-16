@@ -26,6 +26,7 @@ class AgentToolCapabilityCatalogTest {
         assertEquals("memory.read", capability.permissionScopes().iterator().next());
         assertTrue(capability.parameterSchemaJson().contains("query"));
         assertTrue(capability.parameterSchemaJson().contains("startDate"));
+        assertEquals(java.time.Duration.ofSeconds(15), capability.executionPolicy().timeout());
     }
 
     @Test
@@ -46,6 +47,7 @@ class AgentToolCapabilityCatalogTest {
         assertEquals(AgentToolConstants.SOURCE_MCP, capability.source());
         assertEquals("network.read", capability.permissionScopes().iterator().next());
         assertTrue(capability.parameterSchemaJson().contains("query"));
+        assertEquals(java.time.Duration.ofSeconds(20), capability.executionPolicy().timeout());
         assertEquals("v1", mapped.metadata().get(AgentToolCapabilityCatalog.METADATA_VERSION));
         assertNotNull(mapped.metadata().get(AgentToolCapabilityCatalog.METADATA_PERMISSION_SCOPES));
     }

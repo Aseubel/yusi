@@ -316,6 +316,7 @@ public class AiController {
                         .runId(requestId)
                         .userId(userId)
                         .scene(PromptKey.CHAT.getKey())
+                        .cancellationToken(session.cancellationToken())
                         .build());
 
                 AgentToolTraceCorrelation toolCorrelation = correlationFor(userId, requestId);

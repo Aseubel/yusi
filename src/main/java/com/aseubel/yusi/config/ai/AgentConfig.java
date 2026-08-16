@@ -3,6 +3,7 @@ package com.aseubel.yusi.config.ai;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.service.ai.tool.MemorySearchTool;
 import com.aseubel.yusi.service.ai.tool.AgentToolCapabilityCatalog;
+import com.aseubel.yusi.service.ai.tool.AgentToolExecutionPolicyService;
 import com.aseubel.yusi.service.ai.tool.UserPersonaTool;
 import com.aseubel.yusi.service.memory.MemoryCompressionAssistant;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
@@ -14,6 +15,8 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.service.AiServices;
 import dev.langchain4j.service.tool.ToolProvider;
+import dev.langchain4j.service.tool.ToolExecutor;
+import dev.langchain4j.agent.tool.ToolSpecification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -22,6 +25,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.Map;
 
 /**
  * Agent 配置类 - 实现 Agentic RAG 模式 + MCP 集成
@@ -51,6 +56,8 @@ public class AgentConfig {
 
     private final AgentToolCapabilityCatalog agentToolCapabilityCatalog;
 
+    private final AgentToolExecutionPolicyService agentToolExecutionPolicyService;
+
     @Value("${mcp.enabled:false}")
     private boolean mcpEnabled;
 
@@ -62,13 +69,13 @@ public class AgentConfig {
         UserPersonaTool userPersonaTool = applicationContext.getBean(UserPersonaTool.class);
         agentToolCapabilityCatalog.registerLocal(memorySearchTool);
         agentToolCapabilityCatalog.registerLocal(userPersonaTool);
+        Map<ToolSpecification, ToolExecutor> localToolExecutors = agentToolExecutionPolicyService
+                .localExecutors(memorySearchTool, userPersonaTool);
 
         // 构建 AiServices - 单例模式，用户隔离通过 memoryId 和 UserContext 实现
         AiServices<Assistant> builder = AiServices.builder(Assistant.class)
                 .streamingChatModel((StreamingChatModel) applicationContext.getBean("streamingChatModel"))
-                .tools(
-                        memorySearchTool,
-                        userPersonaTool)
+                .tools(localToolExecutors)
                 .chatMemoryProvider((ChatMemoryProvider) applicationContext.getBean("chatMemoryProvider"));
 
         // 如果 MCP 启用，添加 MCP Tool Provider

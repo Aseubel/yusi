@@ -70,6 +70,7 @@ public class ChatStreamCancellationRegistry {
         private final SseEmitter emitter;
         private final Runnable cleanup;
         private final Runnable removeFromRegistry;
+        private final AgentCancellationToken cancellationToken = new AgentCancellationToken();
         private final AtomicReference<State> state = new AtomicReference<>(State.ACTIVE);
         private final AtomicReference<StreamingHandle> streamingHandle = new AtomicReference<>();
         private final AtomicBoolean cleanupStarted = new AtomicBoolean();
@@ -94,6 +95,10 @@ public class ChatStreamCancellationRegistry {
             return state.get() == State.ACTIVE;
         }
 
+        public AgentCancellationToken cancellationToken() {
+            return cancellationToken;
+        }
+
         public void bind(StreamingHandle handle) {
             if (handle == null) {
                 return;
@@ -114,6 +119,7 @@ public class ChatStreamCancellationRegistry {
                 return false;
             }
 
+            cancellationToken.cancel();
             cancelHandle(streamingHandle.getAndSet(null));
             try {
                 emitter.complete();
@@ -142,6 +148,7 @@ public class ChatStreamCancellationRegistry {
                 return false;
             }
 
+            cancellationToken.cancel();
             cancelHandle(streamingHandle.getAndSet(null));
             try {
                 emitter.completeWithError(error);

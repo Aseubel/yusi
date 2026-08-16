@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai.model;
 
 import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
+import com.aseubel.yusi.service.ai.runtime.AgentCancellationToken;
 import lombok.Builder;
 import lombok.Value;
 
@@ -17,6 +18,7 @@ public class ModelRouteContext {
     String riskLevel;
     Integer estimatedInputTokens;
     Integer reservedOutputTokens;
+    AgentCancellationToken cancellationToken;
     @Builder.Default
     boolean maskSensitiveData = true;
 
