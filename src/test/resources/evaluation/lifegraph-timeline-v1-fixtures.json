@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "lifegraph-timeline-v1",
+  "cases": [
+    {
+      "caseId": "EVAL-MEM-002",
+      "scenarios": [
+        {
+          "scenarioId": "EVAL-MEM-002-A",
+          "userId": "fixture-user-a",
+          "sources": [
+            {
+              "sourceType": "DIARY",
+              "sourceId": "fixture-diary-a",
+              "events": [
+                {
+                  "operation": "UPSERT",
+                  "sourceRevision": 3,
+                  "entryDate": "2026-08-10",
+                  "extraction": {
+                    "entities": [
+                      {"type": "User", "displayName": "我", "nameNorm": "__USER__"},
+                      {"type": "Person", "displayName": "fixture-partner", "nameNorm": "fixture-partner", "summary": "fixture-summary-partner", "importance": 0.9, "confidence": 0.9},
+                      {"type": "Item", "displayName": "fixture-strawberry", "nameNorm": "fixture-strawberry", "summary": "fixture-summary-item", "importance": 0.7, "confidence": 0.9},
+                      {"type": "Person", "displayName": "fixture-coworker", "nameNorm": "fixture-coworker", "summary": "fixture-summary-coworker", "importance": 0.7, "confidence": 0.9},
+                      {"type": "Topic", "displayName": "fixture-basketball", "nameNorm": "fixture-basketball", "summary": "fixture-summary-topic", "importance": 0.3, "confidence": 0.9},
+                      {"type": "Event", "displayName": "fixture-trip-v3", "nameNorm": "fixture-trip-v3", "summary": "fixture-summary-trip", "importance": 0.9, "confidence": 0.9}
+                    ],
+                    "relations": [
+                      {"source": "__USER__", "target": "fixture-partner", "type": "PARTNER_OF", "confidence": 0.9, "evidenceSnippet": "evidence-token-partner"},
+                      {"source": "fixture-partner", "target": "fixture-strawberry", "type": "LIKES", "confidence": 0.9, "evidenceSnippet": "evidence-token-likes"},
+                      {"source": "fixture-partner", "target": "fixture-coworker", "type": "FRIEND_OF", "confidence": 0.9, "evidenceSnippet": "evidence-token-person-hop"},
+                      {"source": "fixture-coworker", "target": "fixture-basketball", "type": "LIKES", "confidence": 0.9, "evidenceSnippet": "evidence-token-background"},
+                      {"source": "__USER__", "target": "fixture-trip-v3", "type": "PARTICIPATED_IN", "confidence": 0.9, "evidenceSnippet": "evidence-token-trip"},
+                      {"source": "__USER__", "target": "fixture-trip-v3", "type": "MENTIONED", "confidence": 0.9, "evidenceSnippet": "evidence-token-mentioned"},
+                      {"source": "__USER__", "target": "fixture-trip-v3", "type": "SAID", "confidence": 0.9, "evidenceSnippet": "evidence-token-said"}
+                    ],
+                    "mentions": [
+                      {"entity": "fixture-partner", "snippet": "evidence-token-partner"},
+                      {"entity": "fixture-strawberry", "snippet": "evidence-token-likes"},
+                      {"entity": "fixture-trip-v3", "snippet": "evidence-token-trip"}
+                    ]
+                  }
+                },
+                {
+                  "operation": "UPSERT",
+                  "sourceRevision": 1,
+                  "entryDate": "2026-08-01",
+                  "extraction": {
+                    "entities": [{"type": "Event", "displayName": "fixture-trip-v1", "nameNorm": "fixture-trip-v1", "summary": "fixture-summary-old", "importance": 0.9, "confidence": 0.9}],
+                    "relations": [{"source": "__USER__", "target": "fixture-trip-v1", "type": "PARTICIPATED_IN", "confidence": 0.9, "evidenceSnippet": "evidence-token-old"}],
+                    "mentions": [{"entity": "fixture-trip-v1", "snippet": "evidence-token-old"}]
+                  }
+                }
+              ]
+            }
+          ],
+          "expected": {"currentEvent": "fixture-trip-v3", "rejectedPerson": "fixture-coworker"}
+        },
+        {
+          "scenarioId": "EVAL-MEM-002-B",
+          "userId": "fixture-user-b",
+          "sources": [
+            {
+              "sourceType": "DIARY",
+              "sourceId": "fixture-diary-b",
+              "events": [
+                {
+                  "operation": "UPSERT",
+                  "sourceRevision": 5,
+                  "entryDate": "2026-08-09",
+                  "extraction": {
+                    "entities": [
+                      {"type": "User", "displayName": "我", "nameNorm": "__USER__"},
+                      {"type": "Event", "displayName": "fixture-duplicate-event", "nameNorm": "fixture-duplicate-event", "summary": "fixture-summary-duplicate", "importance": 0.8, "confidence": 0.9}
+                    ],
+                    "relations": [{"source": "__USER__", "target": "fixture-duplicate-event", "type": "PARTICIPATED_IN", "confidence": 0.9, "evidenceSnippet": "evidence-token-duplicate"}],
+                    "mentions": [{"entity": "fixture-duplicate-event", "snippet": "evidence-token-duplicate"}]
+                  }
+                },
+                {
+                  "operation": "UPSERT",
+                  "sourceRevision": 5,
+                  "entryDate": "2026-08-09",
+                  "extraction": {
+                    "entities": [
+                      {"type": "User", "displayName": "我", "nameNorm": "__USER__"},
+                      {"type": "Event", "displayName": "fixture-duplicate-event", "nameNorm": "fixture-duplicate-event", "summary": "fixture-summary-duplicate", "importance": 0.8, "confidence": 0.9}
+                    ],
+                    "relations": [{"source": "__USER__", "target": "fixture-duplicate-event", "type": "PARTICIPATED_IN", "confidence": 0.9, "evidenceSnippet": "evidence-token-duplicate"}],
+                    "mentions": [{"entity": "fixture-duplicate-event", "snippet": "evidence-token-duplicate"}]
+                  }
+                }
+              ]
+            }
+          ],
+          "expected": {"entityEvidenceCount": 1, "relationEvidenceCount": 1, "mentionCount": 1}
+        },
+        {
+          "scenarioId": "EVAL-MEM-002-C",
+          "userId": "fixture-user-c",
+          "sources": [
+            {
+              "sourceType": "DIARY",
+              "sourceId": "fixture-diary-c",
+              "events": [
+                {
+                  "operation": "UPSERT",
+                  "sourceRevision": 1,
+                  "entryDate": "2026-08-08",
+                  "extraction": {
+                    "entities": [{"type": "User", "displayName": "我", "nameNorm": "__USER__"}, {"type": "Event", "displayName": "fixture-shared-event", "nameNorm": "fixture-shared-event", "summary": "fixture-summary-shared", "importance": 0.8, "confidence": 0.9}],
+                    "relations": [{"source": "__USER__", "target": "fixture-shared-event", "type": "PARTICIPATED_IN", "confidence": 0.9, "evidenceSnippet": "evidence-token-shared"}],
+                    "mentions": [{"entity": "fixture-shared-event", "snippet": "evidence-token-shared"}]
+                  }
+                },
+                {"operation": "DELETE", "sourceRevision": 1, "entryDate": "2026-08-08", "extraction": {}}
+              ]
+            },
+            {
+              "sourceType": "PLAZA",
+              "sourceId": "fixture-plaza-c",
+              "events": [
+                {
+                  "operation": "UPSERT",
+                  "sourceRevision": 1,
+                  "entryDate": "2026-08-08",
+                  "extraction": {
+                    "entities": [{"type": "User", "displayName": "我", "nameNorm": "__USER__"}, {"type": "Event", "displayName": "fixture-shared-event", "nameNorm": "fixture-shared-event", "summary": "fixture-summary-shared", "importance": 0.8, "confidence": 0.9}],
+                    "relations": [{"source": "__USER__", "target": "fixture-shared-event", "type": "PARTICIPATED_IN", "confidence": 0.9, "evidenceSnippet": "evidence-token-shared"}],
+                    "mentions": []
+                  }
+                },
+                {"operation": "DELETE", "sourceRevision": 1, "entryDate": "2026-08-08", "extraction": {}}
+              ]
+            }
+          ],
+          "expected": {"remainingSourceType": "DIARY", "finalEntityEvidenceCount": 0, "finalRelationEvidenceCount": 0}
+        }
+      ]
+    },
+    {
+      "caseId": "EVAL-TIMELINE-001",
+      "scenarios": [
+        {
+          "scenarioId": "EVAL-TIMELINE-001-A",
+          "userId": "fixture-user-timeline",
+          "sources": [
+            {
+              "sourceType": "DIARY",
+              "sourceId": "fixture-diary-timeline",
+              "events": [
+                {
+                  "operation": "UPSERT",
+                  "sourceRevision": 1,
+                  "entryDate": "2026-08-11",
+                  "extraction": {
+                    "entities": [
+                      {"type": "User", "displayName": "我", "nameNorm": "__USER__"},
+                      {"type": "Event", "displayName": "fixture-dated-event", "nameNorm": "fixture-dated-event", "summary": "fixture-summary-dated", "importance": 0.9, "confidence": 0.9},
+                      {"type": "Person", "displayName": "fixture-person", "nameNorm": "fixture-person", "summary": "fixture-summary-person", "importance": 0.7, "confidence": 0.9},
+                      {"type": "Topic", "displayName": "fixture-topic", "nameNorm": "fixture-topic", "summary": "fixture-summary-topic", "importance": 0.3, "confidence": 0.9}
+                    ],
+                    "relations": [
+                      {"source": "__USER__", "target": "fixture-dated-event", "type": "PARTICIPATED_IN", "confidence": 0.9, "evidenceSnippet": "evidence-token-dated"},
+                      {"source": "__USER__", "target": "fixture-person", "type": "FRIEND_OF", "confidence": 0.9, "evidenceSnippet": "evidence-token-person"},
+                      {"source": "__USER__", "target": "fixture-topic", "type": "LIKES", "confidence": 0.9, "evidenceSnippet": "evidence-token-topic"}
+                    ],
+                    "mentions": [{"entity": "fixture-dated-event", "snippet": "evidence-token-dated"}]
+                  }
+                },
+                {"operation": "DELETE", "sourceRevision": 1, "entryDate": "2026-08-11", "extraction": {}}
+              ]
+            }
+          ],
+          "expected": {"timelineNodeCount": 1, "afterDeleteTimelineNodeCount": 0}
+        }
+      ]
+    }
+  ]
+}
