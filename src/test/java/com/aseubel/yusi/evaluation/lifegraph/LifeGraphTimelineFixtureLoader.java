@@ -1,5 +1,6 @@
 package com.aseubel.yusi.evaluation.lifegraph;
 
+import com.aseubel.yusi.evaluation.EvaluationFixtureRedLineValidator;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -7,8 +8,6 @@ import org.springframework.core.io.ClassPathResource;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Locale;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 import static com.aseubel.yusi.evaluation.lifegraph.LifeGraphTimelineEvaluationFixture.EvaluationCase;
@@ -23,15 +22,10 @@ public final class LifeGraphTimelineFixtureLoader {
     public static final String DEFAULT_RESOURCE =
             "evaluation/lifegraph-timeline-v1-fixtures.json";
     private static final String INVALID_CODE = "FIXTURE_INVALID";
-    private static final int MAX_STRING_LENGTH = 256;
     private static final Pattern CASE_ID = Pattern.compile("EVAL-[A-Z]+-\\d{3}");
     private static final Pattern SCENARIO_ID = Pattern.compile("EVAL-[A-Z]+-\\d{3}-[A-Z]");
     private static final Pattern USER_ID = Pattern.compile("fixture-user-[a-z0-9-]+");
     private static final Pattern SOURCE_ID = Pattern.compile("fixture-(diary|plaza)-[a-z0-9-]+");
-    private static final Pattern TOKEN = Pattern.compile("evidence-token-[a-z0-9-]+");
-    private static final Set<String> FORBIDDEN_FIELDS = Set.of(
-            "plaincontent", "rawtext", "prompt", "toolarguments", "toolresult", "secret", "password",
-            "content");
 
     private final ObjectMapper objectMapper;
 
@@ -50,42 +44,15 @@ public final class LifeGraphTimelineFixtureLoader {
 
     public Suite load(JsonNode root) {
         try {
-            validateTree(root, null);
+            EvaluationFixtureRedLineValidator.validateTree(root);
             Suite suite = objectMapper.readerFor(Suite.class).readValue(root.toString());
             validateTypedSuite(suite);
             return suite;
+        } catch (EvaluationFixtureRedLineValidator.FixtureValidationException exception) {
+            throw invalid();
         } catch (FixtureValidationException exception) {
             throw exception;
         } catch (Exception exception) {
-            throw invalid();
-        }
-    }
-
-    private void validateTree(JsonNode node, String fieldName) {
-        if (node == null || node.isNull()) {
-            return;
-        }
-        if (node.isTextual() && node.textValue().length() > MAX_STRING_LENGTH) {
-            throw invalid();
-        }
-        if (node.isObject()) {
-            var fields = node.fields();
-            while (fields.hasNext()) {
-                var field = fields.next();
-                if (FORBIDDEN_FIELDS.contains(field.getKey().toLowerCase(Locale.ROOT))) {
-                    throw invalid();
-                }
-                validateTree(field.getValue(), field.getKey());
-            }
-            return;
-        }
-        if (node.isArray()) {
-            for (JsonNode child : node) {
-                validateTree(child, fieldName);
-            }
-            return;
-        }
-        if (node.isTextual() && isEvidenceField(fieldName) && !TOKEN.matcher(node.textValue()).matches()) {
             throw invalid();
         }
     }
@@ -128,10 +95,6 @@ public final class LifeGraphTimelineFixtureLoader {
                 }
             }
         }
-    }
-
-    private boolean isEvidenceField(String fieldName) {
-        return fieldName != null && ("evidenceSnippet".equals(fieldName) || "snippet".equals(fieldName));
     }
 
     private boolean matches(Pattern pattern, String value) {

@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "memory-lifecycle-v1",
+  "cases": [
+    {
+      "caseId": "EVAL-MEM-001",
+      "scenarios": [
+        {
+          "scenarioId": "EVAL-MEM-001-A",
+          "userId": "fixture-user-a",
+          "memories": [
+            {
+              "memoryKey": "fixture-memory-active-a",
+              "ownerUserId": "fixture-user-a",
+              "summaryToken": "memory-summary-active-a",
+              "lifecycle": "ACTIVE",
+              "matchAllowed": true
+            },
+            {
+              "memoryKey": "fixture-memory-chat-only-a",
+              "ownerUserId": "fixture-user-a",
+              "summaryToken": "memory-summary-chat-only-a",
+              "lifecycle": "ACTIVE",
+              "matchAllowed": false
+            },
+            {
+              "memoryKey": "fixture-memory-hidden-a",
+              "ownerUserId": "fixture-user-a",
+              "summaryToken": "memory-summary-hidden-a",
+              "lifecycle": "HIDDEN",
+              "matchAllowed": true
+            },
+            {
+              "memoryKey": "fixture-memory-expired-a",
+              "ownerUserId": "fixture-user-a",
+              "summaryToken": "memory-summary-expired-a",
+              "lifecycle": "EXPIRED",
+              "matchAllowed": true
+            },
+            {
+              "memoryKey": "fixture-memory-merged-a",
+              "ownerUserId": "fixture-user-a",
+              "summaryToken": "memory-summary-merged-a",
+              "lifecycle": "MERGED",
+              "matchAllowed": true,
+              "mergedIntoKey": "fixture-memory-active-a"
+            }
+          ],
+          "vectorCandidates": [
+            {
+              "memoryKey": "fixture-memory-active-a",
+              "ownerUserId": "fixture-user-a",
+              "summaryToken": "memory-summary-active-a"
+            },
+            {
+              "memoryKey": "fixture-memory-chat-only-a",
+              "ownerUserId": "fixture-user-a",
+              "summaryToken": "memory-summary-chat-only-a"
+            },
+            {
+              "memoryKey": "fixture-memory-hidden-a",
+              "ownerUserId": "fixture-user-a",
+              "summaryToken": "memory-summary-hidden-a"
+            },
+            {
+              "memoryKey": "fixture-memory-expired-a",
+              "ownerUserId": "fixture-user-a",
+              "summaryToken": "memory-summary-expired-a"
+            },
+            {
+              "memoryKey": "fixture-memory-merged-a",
+              "ownerUserId": "fixture-user-a",
+              "summaryToken": "memory-summary-merged-a"
+            }
+          ],
+          "positiveMemoryKey": "fixture-memory-active-a",
+          "vectorDeleteFails": false,
+          "expected": {
+            "availableKeys": ["fixture-memory-active-a", "fixture-memory-chat-only-a"],
+            "matchableKeys": ["fixture-memory-active-a"],
+            "retrievedKeys": ["fixture-memory-active-a", "fixture-memory-chat-only-a"],
+            "restrictedKeys": ["fixture-memory-hidden-a", "fixture-memory-expired-a", "fixture-memory-merged-a"],
+            "retainedUserMemoryKey": "fixture-memory-active-a"
+          }
+        },
+        {
+          "scenarioId": "EVAL-MEM-001-B",
+          "userId": "fixture-user-b",
+          "memories": [
+            {
+              "memoryKey": "fixture-memory-matchable-b",
+              "ownerUserId": "fixture-user-b",
+              "summaryToken": "memory-summary-matchable-b",
+              "lifecycle": "ACTIVE",
+              "matchAllowed": true
+            },
+            {
+              "memoryKey": "fixture-memory-chat-only-b",
+              "ownerUserId": "fixture-user-b",
+              "summaryToken": "memory-summary-chat-only-b",
+              "lifecycle": "ACTIVE",
+              "matchAllowed": false
+            },
+            {
+              "memoryKey": "fixture-memory-hidden-b",
+              "ownerUserId": "fixture-user-b",
+              "summaryToken": "memory-summary-hidden-b",
+              "lifecycle": "HIDDEN",
+              "matchAllowed": true
+            },
+            {
+              "memoryKey": "fixture-memory-expired-b",
+              "ownerUserId": "fixture-user-b",
+              "summaryToken": "memory-summary-expired-b",
+              "lifecycle": "EXPIRED",
+              "matchAllowed": true
+            },
+            {
+              "memoryKey": "fixture-memory-merged-b",
+              "ownerUserId": "fixture-user-b",
+              "summaryToken": "memory-summary-merged-b",
+              "lifecycle": "MERGED",
+              "matchAllowed": true,
+              "mergedIntoKey": "fixture-memory-matchable-b"
+            }
+          ],
+          "vectorCandidates": [
+            {
+              "memoryKey": "fixture-memory-matchable-b",
+              "ownerUserId": "fixture-user-b",
+              "summaryToken": "memory-summary-matchable-b"
+            },
+            {
+              "memoryKey": "fixture-memory-chat-only-b",
+              "ownerUserId": "fixture-user-b",
+              "summaryToken": "memory-summary-chat-only-b"
+            },
+            {
+              "memoryKey": "fixture-memory-hidden-b",
+              "ownerUserId": "fixture-user-b",
+              "summaryToken": "memory-summary-hidden-b"
+            },
+            {
+              "memoryKey": "fixture-memory-expired-b",
+              "ownerUserId": "fixture-user-b",
+              "summaryToken": "memory-summary-expired-b"
+            },
+            {
+              "memoryKey": "fixture-memory-merged-b",
+              "ownerUserId": "fixture-user-b",
+              "summaryToken": "memory-summary-merged-b"
+            }
+          ],
+          "positiveMemoryKey": "fixture-memory-matchable-b",
+          "vectorDeleteFails": false,
+          "expected": {
+            "availableKeys": ["fixture-memory-matchable-b", "fixture-memory-chat-only-b"],
+            "matchableKeys": ["fixture-memory-matchable-b"],
+            "retrievedKeys": ["fixture-memory-matchable-b", "fixture-memory-chat-only-b"],
+            "restrictedKeys": ["fixture-memory-hidden-b", "fixture-memory-expired-b", "fixture-memory-merged-b"],
+            "retainedUserMemoryKey": "fixture-memory-matchable-b"
+          }
+        },
+        {
+          "scenarioId": "EVAL-MEM-001-C",
+          "userId": "fixture-user-c",
+          "memories": [
+            {
+              "memoryKey": "fixture-memory-delete-c",
+              "ownerUserId": "fixture-user-c",
+              "summaryToken": "memory-summary-delete-c",
+              "lifecycle": "ACTIVE",
+              "matchAllowed": true
+            },
+            {
+              "memoryKey": "fixture-memory-retained-c",
+              "ownerUserId": "fixture-user-c",
+              "summaryToken": "memory-summary-retained-c",
+              "lifecycle": "ACTIVE",
+              "matchAllowed": true
+            },
+            {
+              "memoryKey": "fixture-memory-other-c",
+              "ownerUserId": "fixture-user-other",
+              "summaryToken": "memory-summary-other-c",
+              "lifecycle": "ACTIVE",
+              "matchAllowed": true
+            }
+          ],
+          "vectorCandidates": [
+            {
+              "memoryKey": "fixture-memory-delete-c",
+              "ownerUserId": "fixture-user-c",
+              "summaryToken": "memory-summary-delete-c"
+            },
+            {
+              "memoryKey": "fixture-memory-retained-c",
+              "ownerUserId": "fixture-user-c",
+              "summaryToken": "memory-summary-retained-c"
+            },
+            {
+              "memoryKey": "fixture-memory-other-c",
+              "ownerUserId": "fixture-user-other",
+              "summaryToken": "memory-summary-other-c"
+            }
+          ],
+          "positiveMemoryKey": "fixture-memory-delete-c",
+          "deleteMemoryKey": "fixture-memory-delete-c",
+          "vectorDeleteFails": true,
+          "expected": {
+            "availableKeys": ["fixture-memory-delete-c", "fixture-memory-retained-c", "fixture-memory-other-c"],
+            "matchableKeys": ["fixture-memory-delete-c", "fixture-memory-retained-c", "fixture-memory-other-c"],
+            "retrievedKeys": ["fixture-memory-delete-c", "fixture-memory-retained-c"],
+            "restrictedKeys": ["fixture-memory-delete-c"],
+            "retainedUserMemoryKey": "fixture-memory-retained-c",
+            "otherUserId": "fixture-user-other",
+            "otherUserMemoryKey": "fixture-memory-other-c"
+          }
+        }
+      ]
+    }
+  ]
+}
