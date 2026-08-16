@@ -29,7 +29,7 @@ jobs:
     - name: Run backend tests
       run: ./mvnw test
 
-    - name: Archive LifeGraph evaluation report
+    - name: Archive offline evaluation reports
       if: always()
       uses: actions/upload-artifact@v4
       with:
