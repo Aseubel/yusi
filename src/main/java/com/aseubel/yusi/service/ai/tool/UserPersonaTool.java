@@ -2,6 +2,8 @@ package com.aseubel.yusi.service.ai.tool;
 
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.pojo.entity.UserPersona;
+import com.aseubel.yusi.service.ai.runtime.AgentToolInvocationContext;
+import com.aseubel.yusi.service.ai.runtime.AgentToolInvocationContextHolder;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
@@ -45,7 +47,10 @@ public class UserPersonaTool {
                         @P("用户偏好的对话语气（如温柔、傲娇、倾听）") String tone,
                         @P("其他相处模式或自定义指令") String customInstructions) {
 
-                String userId = memoryId;
+                AgentToolInvocationContext invocationContext = AgentToolInvocationContextHolder.current();
+                String userId = invocationContext != null && StrUtil.isNotBlank(invocationContext.userId())
+                                ? invocationContext.userId()
+                                : memoryId;
                 if (StrUtil.isBlank(userId)) {
                         return "无法验证用户身份，操作失败。";
                 }

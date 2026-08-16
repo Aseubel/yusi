@@ -36,6 +36,8 @@ import com.aseubel.yusi.service.ai.runtime.AgentToolTraceCorrelation;
 import com.aseubel.yusi.service.ai.runtime.AgentToolTraceService;
 import com.aseubel.yusi.service.ai.tool.AgentToolCapability;
 import com.aseubel.yusi.service.ai.tool.AgentToolCapabilityCatalog;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
 import com.aseubel.yusi.service.ai.runtime.AiLockService;
 import com.aseubel.yusi.service.ai.runtime.ChatStreamCancellationRegistry;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
@@ -378,13 +380,21 @@ public class AiController {
                             String toolSource = capability == null
                                     ? resolveToolSource(toolName)
                                     : capability.source();
+                            AgentToolAccessMode accessMode = capability == null
+                                    ? AgentToolAccessMode.UNKNOWN
+                                    : capability.accessMode();
+                            AgentToolIdempotencyMode idempotencyMode = capability == null
+                                    ? AgentToolIdempotencyMode.NONE
+                                    : capability.idempotencyMode();
+                            String capabilityVersion = capability == null ? null : capability.version();
                             toolCorrelation.register(requestToExecute, upstreamToolCallId, toolName, localToolCallId);
                             if (agentToolExecutionAttemptRegistry != null) {
                                 agentToolExecutionAttemptRegistry.register(userId, requestId, requestToExecute,
-                                        upstreamToolCallId, toolName, toolSource, localToolCallId);
+                                        upstreamToolCallId, toolName, toolSource, localToolCallId,
+                                        accessMode, idempotencyMode, capabilityVersion);
                             }
                             traceToolStarted(userId, requestId, localToolCallId, upstreamToolCallId,
-                                    toolName, toolSource, capability == null ? null : capability.version());
+                                    toolName, toolSource, capabilityVersion, idempotencyMode);
                             emitAgentStage(emitter, session, requestId, lastStage, "tool");
                             sendAgentEvent(emitter, session, AgentStreamEvent.toolStarted(
                                     requestId,
@@ -518,13 +528,24 @@ public class AiController {
 
     private void traceToolStarted(String userId, String runId, String localToolCallId,
             String upstreamToolCallId, String toolName, String toolSource, String capabilityVersion) {
+        traceToolStarted(userId, runId, localToolCallId, upstreamToolCallId, toolName, toolSource,
+                capabilityVersion, AgentToolIdempotencyMode.NONE);
+    }
+
+    private void traceToolStarted(String userId, String runId, String localToolCallId,
+            String upstreamToolCallId, String toolName, String toolSource, String capabilityVersion,
+            AgentToolIdempotencyMode idempotencyMode) {
         runToolTrace("tool_start", () -> {
-            if (StrUtil.isBlank(capabilityVersion)) {
+            if (idempotencyMode != AgentToolIdempotencyMode.IDEMPOTENT_WRITE
+                    && StrUtil.isBlank(capabilityVersion)) {
                 agentToolTraceService.start(userId, runId, localToolCallId,
                         upstreamToolCallId, toolName, toolSource);
-            } else {
+            } else if (idempotencyMode != AgentToolIdempotencyMode.IDEMPOTENT_WRITE) {
                 agentToolTraceService.start(userId, runId, localToolCallId,
                         upstreamToolCallId, toolName, toolSource, capabilityVersion);
+            } else {
+                agentToolTraceService.start(userId, runId, localToolCallId,
+                        upstreamToolCallId, toolName, toolSource, capabilityVersion, idempotencyMode);
             }
         });
     }

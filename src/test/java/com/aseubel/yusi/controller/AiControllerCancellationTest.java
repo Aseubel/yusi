@@ -10,6 +10,8 @@ import com.aseubel.yusi.service.ai.runtime.AiLockService;
 import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import com.aseubel.yusi.service.ai.runtime.AgentToolExecutionAttemptRegistry;
 import com.aseubel.yusi.service.ai.runtime.AgentToolTraceService;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
 import com.aseubel.yusi.service.ai.runtime.ChatStreamCancellationRegistry;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.oss.OssService;
@@ -340,7 +342,8 @@ class AiControllerCancellationTest {
                 eq(toolStarted.toolCallId()), eq(1500L), eq(true));
         verify(agentToolExecutionAttemptRegistry).register(eq("user-1"), eq("request-tool"),
                 same(request), eq("tool-call-1"), eq("web_search"), eq("mcp"),
-                eq(toolStarted.toolCallId()));
+                eq(toolStarted.toolCallId()), eq(AgentToolAccessMode.UNKNOWN),
+                eq(AgentToolIdempotencyMode.NONE), eq((String) null));
         verify(agentToolExecutionAttemptRegistry).complete(same(request));
     }
 
