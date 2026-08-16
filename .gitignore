@@ -43,3 +43,4 @@ yusi_prod.env
 .promo
 .lapis-cv
 tmp/
+.worktrees/
