@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.ai.runtime;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyConstants;
 import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.invocation.InvocationContext;
@@ -37,6 +38,7 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
     private final ExecutorService executor;
     private final AgentToolExecutionAttemptObserver attemptObserver;
     private final AgentToolInvocationContextProvider invocationContextProvider;
+    private final AgentToolIdempotencyLedgerService idempotencyLedgerService;
     private final AgentToolAccessMode accessMode;
     private final AgentToolIdempotencyMode idempotencyMode;
     private final String toolName;
@@ -63,7 +65,7 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
             String toolName) {
         this(delegate, executionPolicy, retryPolicy, AgentToolAccessMode.UNKNOWN,
                 AgentToolIdempotencyMode.NONE, executor, attemptObserver,
-                AgentToolInvocationContextProvider.NOOP, toolName);
+                AgentToolInvocationContextProvider.NOOP, null, toolName);
     }
 
     public AgentToolExecutionPolicyExecutor(ToolExecutor delegate,
@@ -71,6 +73,16 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
             AgentToolAccessMode accessMode, AgentToolIdempotencyMode idempotencyMode,
             ExecutorService executor, AgentToolExecutionAttemptObserver attemptObserver,
             AgentToolInvocationContextProvider invocationContextProvider, String toolName) {
+        this(delegate, executionPolicy, retryPolicy, accessMode, idempotencyMode, executor,
+                attemptObserver, invocationContextProvider, null, toolName);
+    }
+
+    public AgentToolExecutionPolicyExecutor(ToolExecutor delegate,
+            AgentToolExecutionPolicy executionPolicy, AgentToolRetryPolicy retryPolicy,
+            AgentToolAccessMode accessMode, AgentToolIdempotencyMode idempotencyMode,
+            ExecutorService executor, AgentToolExecutionAttemptObserver attemptObserver,
+            AgentToolInvocationContextProvider invocationContextProvider,
+            AgentToolIdempotencyLedgerService idempotencyLedgerService, String toolName) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
         this.executionPolicy = Objects.requireNonNull(executionPolicy, "executionPolicy");
         this.retryPolicy = Objects.requireNonNull(retryPolicy, "retryPolicy");
@@ -78,6 +90,7 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
         this.attemptObserver = Objects.requireNonNull(attemptObserver, "attemptObserver");
         this.invocationContextProvider = Objects.requireNonNull(invocationContextProvider,
                 "invocationContextProvider");
+        this.idempotencyLedgerService = idempotencyLedgerService;
         this.accessMode = accessMode == null ? AgentToolAccessMode.UNKNOWN : accessMode;
         this.idempotencyMode = idempotencyMode == null ? AgentToolIdempotencyMode.NONE : idempotencyMode;
         this.toolName = toolName == null || toolName.isBlank() ? "unknown" : toolName;
@@ -87,7 +100,28 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
     public String execute(ToolExecutionRequest request, Object memoryId) {
         ModelRouteContext routeContext = ModelRouteContextHolder.getEffective();
         AgentToolInvocationContext invocationContext = invocationContextProvider.find(request).orElse(null);
-        return await(() -> delegate.execute(request, memoryId), routeContext, request, invocationContext);
+        boolean claimed = false;
+        try {
+            claimed = claimIfRequired(invocationContext);
+            String result = await(() -> delegate.execute(request, memoryId), routeContext, request,
+                    invocationContext);
+            if (claimed) {
+                resolveSuccess(invocationContext);
+            }
+            return result;
+        } catch (AgentToolIdempotencyBlockedException exception) {
+            return exception.response();
+        } catch (AgentToolTimeoutException | AgentToolCancelledException exception) {
+            if (claimed) {
+                resolveUnknown(invocationContext);
+            }
+            throw exception;
+        } catch (RuntimeException exception) {
+            if (claimed) {
+                resolveFailure(invocationContext);
+            }
+            throw exception;
+        }
     }
 
     @Override
@@ -95,8 +129,35 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
         InvocationContext context) {
         ModelRouteContext routeContext = ModelRouteContextHolder.getEffective();
         AgentToolInvocationContext invocationContext = invocationContextProvider.find(request).orElse(null);
-        return await(() -> delegate.executeWithContext(request, context), routeContext, request,
-                invocationContext);
+        boolean claimed = false;
+        try {
+            claimed = claimIfRequired(invocationContext);
+            ToolExecutionResult result = await(() -> delegate.executeWithContext(request, context),
+                    routeContext, request, invocationContext);
+            if (claimed) {
+                if (result != null && result.isError()) {
+                    resolveFailure(invocationContext);
+                } else {
+                    resolveSuccess(invocationContext);
+                }
+            }
+            return result;
+        } catch (AgentToolIdempotencyBlockedException exception) {
+            return ToolExecutionResult.builder()
+                    .isError(true)
+                    .resultText(exception.response())
+                    .build();
+        } catch (AgentToolTimeoutException | AgentToolCancelledException exception) {
+            if (claimed) {
+                resolveUnknown(invocationContext);
+            }
+            throw exception;
+        } catch (RuntimeException exception) {
+            if (claimed) {
+                resolveFailure(invocationContext);
+            }
+            throw exception;
+        }
     }
 
     private <T> T await(Callable<T> operation, ModelRouteContext routeContext,
@@ -119,7 +180,7 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
                 return awaitOneAttempt(operation, routeContext, request, attemptTimeout,
                         retryCount, cancellationToken, invocationContext);
             } catch (AgentToolTimeoutException timeoutException) {
-                if (!retryPolicy.allowsRetry(retryCount)) {
+                if (!allowsTimeoutRetry(retryCount)) {
                     throw timeoutException;
                 }
                 checkCancelled(cancellationToken);
@@ -218,6 +279,79 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
             attemptObserver.onRetry(request);
         } catch (RuntimeException ignored) {
             // Trace accounting must never turn a valid tool retry into a tool failure.
+        }
+    }
+
+    private boolean claimIfRequired(AgentToolInvocationContext invocationContext) {
+        if (!isIdempotentWrite()) {
+            return false;
+        }
+        if (invocationContext == null
+                || invocationContext.idempotencyMode() != AgentToolIdempotencyMode.IDEMPOTENT_WRITE
+                || invocationContext.accessMode() != AgentToolAccessMode.WRITE) {
+            throw blocked(AgentToolIdempotencyConstants.BLOCKED_CONTEXT_MISSING);
+        }
+        if (idempotencyLedgerService == null) {
+            throw blocked(AgentToolIdempotencyConstants.BLOCKED_UNKNOWN);
+        }
+        AgentToolIdempotencyLedgerService.ClaimDecision decision;
+        try {
+            decision = idempotencyLedgerService.claim(invocationContext);
+        } catch (RuntimeException exception) {
+            decision = AgentToolIdempotencyLedgerService.ClaimDecision.UNKNOWN;
+        }
+        if (decision != AgentToolIdempotencyLedgerService.ClaimDecision.CLAIMED) {
+            throw blocked(blockedResponse(decision));
+        }
+        return true;
+    }
+
+    private String blockedResponse(AgentToolIdempotencyLedgerService.ClaimDecision decision) {
+        return switch (decision) {
+            case IN_PROGRESS -> AgentToolIdempotencyConstants.BLOCKED_IN_PROGRESS;
+            case ALREADY_COMPLETED -> AgentToolIdempotencyConstants.BLOCKED_ALREADY_COMPLETED;
+            case PREVIOUS_FAILURE -> AgentToolIdempotencyConstants.BLOCKED_PREVIOUS_FAILURE;
+            case CONTEXT_MISSING -> AgentToolIdempotencyConstants.BLOCKED_CONTEXT_MISSING;
+            case UNKNOWN, NOT_APPLICABLE, CLAIMED -> AgentToolIdempotencyConstants.BLOCKED_UNKNOWN;
+        };
+    }
+
+    private AgentToolIdempotencyBlockedException blocked(String response) {
+        return new AgentToolIdempotencyBlockedException(response);
+    }
+
+    private boolean isIdempotentWrite() {
+        return accessMode == AgentToolAccessMode.WRITE
+                && idempotencyMode == AgentToolIdempotencyMode.IDEMPOTENT_WRITE;
+    }
+
+    private boolean allowsTimeoutRetry(int retryCount) {
+        return accessMode == AgentToolAccessMode.READ
+                && idempotencyMode == AgentToolIdempotencyMode.NONE
+                && retryPolicy.allowsRetry(retryCount);
+    }
+
+    private void resolveSuccess(AgentToolInvocationContext context) {
+        try {
+            idempotencyLedgerService.resolveSuccess(context);
+        } catch (RuntimeException ignored) {
+            resolveUnknown(context);
+        }
+    }
+
+    private void resolveFailure(AgentToolInvocationContext context) {
+        try {
+            idempotencyLedgerService.resolveFailure(context);
+        } catch (RuntimeException ignored) {
+            resolveUnknown(context);
+        }
+    }
+
+    private void resolveUnknown(AgentToolInvocationContext context) {
+        try {
+            idempotencyLedgerService.resolveUnknown(context);
+        } catch (RuntimeException ignored) {
+            // Ledger failures must not expose request or result content.
         }
     }
 

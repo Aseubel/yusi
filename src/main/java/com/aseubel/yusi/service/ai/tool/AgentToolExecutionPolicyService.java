@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.ai.tool;
 
 import com.aseubel.yusi.pojo.constant.AgentToolConstants;
 import com.aseubel.yusi.service.ai.runtime.AgentToolExecutionAttemptObserver;
+import com.aseubel.yusi.service.ai.runtime.AgentToolIdempotencyLedgerService;
 import com.aseubel.yusi.service.ai.runtime.AgentToolInvocationContextProvider;
 import com.aseubel.yusi.service.ai.runtime.AgentToolExecutionPolicyExecutor;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -35,6 +36,8 @@ public class AgentToolExecutionPolicyService {
 
     private final AgentToolInvocationContextProvider invocationContextProvider;
 
+    private final AgentToolIdempotencyLedgerService idempotencyLedgerService;
+
     public AgentToolExecutionPolicyService(AgentToolCapabilityCatalog capabilityCatalog,
             @Qualifier("agentToolExecutionExecutor") ExecutorService executor) {
         this(capabilityCatalog, executor, AgentToolExecutionAttemptObserver.NOOP);
@@ -46,15 +49,24 @@ public class AgentToolExecutionPolicyService {
         this(capabilityCatalog, executor, attemptObserver, AgentToolInvocationContextProvider.NOOP);
     }
 
-    @Autowired
     public AgentToolExecutionPolicyService(AgentToolCapabilityCatalog capabilityCatalog,
             @Qualifier("agentToolExecutionExecutor") ExecutorService executor,
             AgentToolExecutionAttemptObserver attemptObserver,
             AgentToolInvocationContextProvider invocationContextProvider) {
+        this(capabilityCatalog, executor, attemptObserver, invocationContextProvider, null);
+    }
+
+    @Autowired
+    public AgentToolExecutionPolicyService(AgentToolCapabilityCatalog capabilityCatalog,
+            @Qualifier("agentToolExecutionExecutor") ExecutorService executor,
+            AgentToolExecutionAttemptObserver attemptObserver,
+            AgentToolInvocationContextProvider invocationContextProvider,
+            AgentToolIdempotencyLedgerService idempotencyLedgerService) {
         this.capabilityCatalog = capabilityCatalog;
         this.executor = executor;
         this.attemptObserver = attemptObserver;
         this.invocationContextProvider = invocationContextProvider;
+        this.idempotencyLedgerService = idempotencyLedgerService;
     }
 
     public Map<ToolSpecification, ToolExecutor> localExecutors(Object... tools) {
@@ -129,6 +141,6 @@ public class AgentToolExecutionPolicyService {
                 : capability.idempotencyMode();
         return new AgentToolExecutionPolicyExecutor(delegate, executionPolicy, retryPolicy,
                 accessMode, idempotencyMode, executor, attemptObserver,
-                invocationContextProvider, specification.name());
+                invocationContextProvider, idempotencyLedgerService, specification.name());
     }
 }
