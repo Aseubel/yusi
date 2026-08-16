@@ -6,6 +6,7 @@ public final class AgentToolIdempotencyConstants {
 
     public static final Duration CLAIM_LEASE = Duration.ofMinutes(5);
     public static final Duration LEDGER_RETENTION = Duration.ofDays(30);
+    public static final String MAINTENANCE_CRON = "0 0 4 * * ?";
 
     public static final String BLOCKED_IN_PROGRESS =
             "TOOL_EXECUTION_BLOCKED: IDEMPOTENCY_IN_PROGRESS; operation was not executed.";

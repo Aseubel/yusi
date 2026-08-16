@@ -727,6 +727,11 @@ CREATE TABLE `agent_tool_trace` (
     `tool_source` VARCHAR(16) NOT NULL COMMENT '工具来源',
     `capability_version` VARCHAR(32) DEFAULT NULL COMMENT '工具能力契约版本',
     `attempt_count` INT NOT NULL DEFAULT 1 COMMENT '物理工具尝试次数，仅记录数量',
+    `idempotency_mode` VARCHAR(24) NOT NULL DEFAULT 'NONE' COMMENT '幂等声明模式: NONE/IDEMPOTENT_WRITE',
+    `idempotency_status` VARCHAR(20) DEFAULT NULL COMMENT '幂等账本状态: CLAIMED/COMPLETED/FAILED/UNKNOWN',
+    `idempotency_claimed_at` DATETIME DEFAULT NULL COMMENT '账本claim时间',
+    `idempotency_resolved_at` DATETIME DEFAULT NULL COMMENT '账本终态时间',
+    `idempotency_expires_at` DATETIME DEFAULT NULL COMMENT '账本保留截止时间',
     `status` VARCHAR(20) NOT NULL COMMENT '工具状态: RUNNING/COMPLETED/FAILED/CANCELLED',
     `failure_category` VARCHAR(32) DEFAULT NULL COMMENT '固定低敏失败分类',
     `started_at` DATETIME NOT NULL COMMENT '开始时间',
@@ -737,7 +742,8 @@ CREATE TABLE `agent_tool_trace` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_agent_tool_trace_user_run_call` (`user_id`, `run_id`, `tool_call_id`),
     KEY `idx_agent_tool_trace_user_run_created` (`user_id`, `run_id`, `created_at`),
-    KEY `idx_agent_tool_trace_status_updated` (`status`, `updated_at`)
+    KEY `idx_agent_tool_trace_status_updated` (`status`, `updated_at`),
+    KEY `idx_agent_tool_trace_idempotency_state` (`idempotency_mode`, `idempotency_status`, `idempotency_expires_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT 'AgentRun 工具调用低敏生命周期明细';
 
 -- Life Graph Merge Judgment - 实体合并判断记录

@@ -12,6 +12,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -73,6 +74,24 @@ public class AgentToolTrace {
     private Integer attemptCount = 1;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "idempotency_mode", nullable = false, length = 24)
+    @Builder.Default
+    private AgentToolIdempotencyMode idempotencyMode = AgentToolIdempotencyMode.NONE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "idempotency_status", length = 20)
+    private IdempotencyStatus idempotencyStatus;
+
+    @Column(name = "idempotency_claimed_at")
+    private LocalDateTime idempotencyClaimedAt;
+
+    @Column(name = "idempotency_resolved_at")
+    private LocalDateTime idempotencyResolvedAt;
+
+    @Column(name = "idempotency_expires_at")
+    private LocalDateTime idempotencyExpiresAt;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private Status status = Status.RUNNING;
@@ -104,6 +123,9 @@ public class AgentToolTrace {
         }
         if (attemptCount == null || attemptCount < 1) {
             attemptCount = 1;
+        }
+        if (idempotencyMode == null) {
+            idempotencyMode = AgentToolIdempotencyMode.NONE;
         }
         if (startedAt == null) {
             startedAt = now;
@@ -150,6 +172,13 @@ public class AgentToolTrace {
         AGENT_ERROR,
         TIMEOUT,
         CANCELLED,
+        UNKNOWN
+    }
+
+    public enum IdempotencyStatus {
+        CLAIMED,
+        COMPLETED,
+        FAILED,
         UNKNOWN
     }
 }

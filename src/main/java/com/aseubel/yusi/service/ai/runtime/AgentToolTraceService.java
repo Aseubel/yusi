@@ -3,27 +3,48 @@ package com.aseubel.yusi.service.ai.runtime;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.pojo.entity.AgentToolTrace;
 import com.aseubel.yusi.repository.AgentToolTraceRepository;
-import lombok.RequiredArgsConstructor;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 
 @Service
-@RequiredArgsConstructor
 public class AgentToolTraceService {
 
     private final AgentToolTraceRepository traceRepository;
+    private final AgentToolIdempotencyLedgerService idempotencyLedgerService;
+
+    public AgentToolTraceService(AgentToolTraceRepository traceRepository) {
+        this(traceRepository, null);
+    }
+
+    @Autowired
+    public AgentToolTraceService(AgentToolTraceRepository traceRepository,
+            AgentToolIdempotencyLedgerService idempotencyLedgerService) {
+        this.traceRepository = traceRepository;
+        this.idempotencyLedgerService = idempotencyLedgerService;
+    }
 
     @Transactional
     public String start(String userId, String runId, String localToolCallId,
             String upstreamToolCallId, String toolName, String toolSource) {
-        return start(userId, runId, localToolCallId, upstreamToolCallId, toolName, toolSource, null);
+        return start(userId, runId, localToolCallId, upstreamToolCallId, toolName, toolSource,
+                null, AgentToolIdempotencyMode.NONE);
     }
 
     @Transactional
     public String start(String userId, String runId, String localToolCallId,
             String upstreamToolCallId, String toolName, String toolSource, String capabilityVersion) {
+        return start(userId, runId, localToolCallId, upstreamToolCallId, toolName, toolSource,
+                capabilityVersion, AgentToolIdempotencyMode.NONE);
+    }
+
+    @Transactional
+    public String start(String userId, String runId, String localToolCallId,
+            String upstreamToolCallId, String toolName, String toolSource, String capabilityVersion,
+            AgentToolIdempotencyMode idempotencyMode) {
         if (StrUtil.hasBlank(userId, runId, localToolCallId, toolName, toolSource)) {
             return localToolCallId;
         }
@@ -41,6 +62,8 @@ public class AgentToolTraceService {
                             .toolSource(toolSource)
                             .capabilityVersion(nullable(capabilityVersion))
                             .attemptCount(1)
+                            .idempotencyMode(idempotencyMode == null
+                                    ? AgentToolIdempotencyMode.NONE : idempotencyMode)
                             .status(AgentToolTrace.Status.RUNNING)
                             .startedAt(now)
                             .createdAt(now)
@@ -93,6 +116,12 @@ public class AgentToolTraceService {
         LocalDateTime completedAt = LocalDateTime.now();
         traceRepository.findByUserIdAndRunIdAndStatus(userId, runId, AgentToolTrace.Status.RUNNING)
                 .forEach(trace -> {
+                    if (trace.getIdempotencyMode() == AgentToolIdempotencyMode.IDEMPOTENT_WRITE
+                            && trace.getIdempotencyStatus() == AgentToolTrace.IdempotencyStatus.CLAIMED
+                            && idempotencyLedgerService != null) {
+                        idempotencyLedgerService.resolveUnknown(
+                                trace.getUserId(), trace.getRunId(), trace.getToolCallId(), completedAt);
+                    }
                     trace.finish(status, failureCategory, completedAt, null);
                     traceRepository.save(trace);
                 });
