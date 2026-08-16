@@ -8,6 +8,7 @@ import com.aseubel.yusi.pojo.dto.chat.ChatCancelRequest;
 import com.aseubel.yusi.pojo.dto.chat.ChatRequest;
 import com.aseubel.yusi.service.ai.runtime.AiLockService;
 import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
+import com.aseubel.yusi.service.ai.runtime.AgentToolExecutionAttemptRegistry;
 import com.aseubel.yusi.service.ai.runtime.AgentToolTraceService;
 import com.aseubel.yusi.service.ai.runtime.ChatStreamCancellationRegistry;
 import com.aseubel.yusi.service.diary.Assistant;
@@ -44,8 +45,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -60,6 +63,8 @@ class AiControllerCancellationTest {
     private final OssService ossService = mock(OssService.class);
     private final AgentRunTraceService agentRunTraceService = mock(AgentRunTraceService.class);
     private final AgentToolTraceService agentToolTraceService = mock(AgentToolTraceService.class);
+    private final AgentToolExecutionAttemptRegistry agentToolExecutionAttemptRegistry =
+            mock(AgentToolExecutionAttemptRegistry.class);
     private final ChatStreamCancellationRegistry registry = new ChatStreamCancellationRegistry();
     private final AtomicReference<Runnable> submittedTask = new AtomicReference<>();
 
@@ -73,6 +78,8 @@ class AiControllerCancellationTest {
         ReflectionTestUtils.setField(controller, "ossService", ossService);
         ReflectionTestUtils.setField(controller, "agentRunTraceService", agentRunTraceService);
         ReflectionTestUtils.setField(controller, "agentToolTraceService", agentToolTraceService);
+        ReflectionTestUtils.setField(controller, "agentToolExecutionAttemptRegistry",
+                agentToolExecutionAttemptRegistry);
         ReflectionTestUtils.setField(controller, "chatStreamCancellationRegistry", registry);
 
         UserContext.setUserId("user-1");
@@ -154,6 +161,7 @@ class AiControllerCancellationTest {
 
         verify(handle, times(1)).cancel();
         verify(aiLockService, times(1)).releaseLock("user-1");
+        verify(agentToolExecutionAttemptRegistry, atLeastOnce()).clearRun("user-1", "request-2");
     }
 
     @Test
@@ -330,6 +338,10 @@ class AiControllerCancellationTest {
                 eq(toolStarted.toolCallId()), eq("tool-call-1"), eq("web_search"), eq("mcp"));
         verify(agentToolTraceService).complete(eq("user-1"), eq("request-tool"),
                 eq(toolStarted.toolCallId()), eq(1500L), eq(true));
+        verify(agentToolExecutionAttemptRegistry).register(eq("user-1"), eq("request-tool"),
+                same(request), eq("tool-call-1"), eq("web_search"), eq("mcp"),
+                eq(toolStarted.toolCallId()));
+        verify(agentToolExecutionAttemptRegistry).complete(same(request));
     }
 
     @Test

@@ -2,6 +2,8 @@ package com.aseubel.yusi.service.ai.tool;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aseubel.yusi.pojo.constant.AgentToolConstants;
+import com.aseubel.yusi.service.ai.runtime.AgentToolExecutionAttemptObserver;
+import com.aseubel.yusi.service.ai.runtime.AgentToolTimeoutException;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.ReturnBehavior;
 import dev.langchain4j.agent.tool.Tool;
@@ -21,12 +23,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -101,6 +105,64 @@ class AgentToolExecutionPolicyServiceTest {
         assertEquals("search-result", wrappedExecutor.execute(
                 request(AgentToolConstants.WEB_SEARCH, "{\"query\":\"test\"}"), "user-1"));
         verify(catalog).find(AgentToolConstants.WEB_SEARCH, AgentToolConstants.SOURCE_MCP);
+    }
+
+    @Test
+    void wrappedRetryReportsTheAttemptToTheInjectedObserver() {
+        AgentToolCapabilityCatalog catalog = mock(AgentToolCapabilityCatalog.class);
+        AgentToolExecutionAttemptObserver observer = mock(AgentToolExecutionAttemptObserver.class);
+        when(catalog.find(eq(AgentToolConstants.WEB_SEARCH), eq(AgentToolConstants.SOURCE_MCP)))
+                .thenReturn(Optional.of(new AgentToolCapability(
+                        AgentToolConstants.WEB_SEARCH,
+                        AgentToolConstants.SOURCE_MCP,
+                        "v1",
+                        "Search the web",
+                        "{}",
+                        Set.of(),
+                        new AgentToolExecutionPolicy(Duration.ofMillis(50), Duration.ofMillis(250)),
+                        com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode.READ,
+                        AgentToolRetryPolicy.TIMEOUT_ONCE)));
+        AgentToolExecutionPolicyService service = new AgentToolExecutionPolicyService(
+                catalog, executor, observer);
+        AtomicInteger calls = new AtomicInteger();
+        ToolExecutor delegate = (request, memoryId) -> calls.incrementAndGet() == 1
+                ? throwTimeout()
+                : "search-result";
+        ToolSpecification specification = ToolSpecification.builder()
+                .name(AgentToolConstants.WEB_SEARCH)
+                .description("Search the web")
+                .parameters(JsonObjectSchema.builder().build())
+                .build();
+        ToolProvider provider = new ToolProvider() {
+            @Override
+            public ToolProviderResult provideTools(dev.langchain4j.service.tool.ToolProviderRequest request) {
+                return ToolProviderResult.builder()
+                        .add(AiServiceTool.builder()
+                                .toolSpecification(specification)
+                                .toolExecutor(delegate)
+                                .returnBehavior(ReturnBehavior.IMMEDIATE)
+                                .immediateReturn(true)
+                                .build())
+                        .build();
+            }
+
+            @Override
+            public boolean isDynamic() {
+                return true;
+            }
+        };
+
+        ToolExecutor wrapped = service.wrapProvider(provider)
+                .provideTools(null)
+                .toolExecutorByName(AgentToolConstants.WEB_SEARCH);
+
+        assertEquals("search-result", wrapped.execute(
+                request(AgentToolConstants.WEB_SEARCH, "{}"), "user-1"));
+        verify(observer).onRetry(any(ToolExecutionRequest.class));
+    }
+
+    private String throwTimeout() {
+        throw new AgentToolTimeoutException("web_search");
     }
 
     private AgentToolCapability capability(Duration timeout) {

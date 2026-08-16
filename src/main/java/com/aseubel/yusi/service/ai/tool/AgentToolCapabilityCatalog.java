@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.ai.tool;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aseubel.yusi.pojo.constant.AgentToolConstants;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode;
 import com.aseubel.yusi.service.ai.tool.constant.AgentToolCapabilityConstants;
 import com.aseubel.yusi.service.ai.tool.constant.AgentToolPermission;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -34,6 +35,8 @@ public class AgentToolCapabilityCatalog {
     public static final String METADATA_VERSION = AgentToolCapabilityConstants.METADATA_VERSION;
     public static final String METADATA_PERMISSION_SCOPES = AgentToolCapabilityConstants.METADATA_PERMISSION_SCOPES;
     public static final String METADATA_SOURCE = AgentToolCapabilityConstants.METADATA_SOURCE;
+    public static final String METADATA_ACCESS_MODE = AgentToolCapabilityConstants.METADATA_ACCESS_MODE;
+    public static final String METADATA_RETRY_POLICY = AgentToolCapabilityConstants.METADATA_RETRY_POLICY;
 
     private final ObjectMapper objectMapper;
     private final ConcurrentMap<String, AgentToolCapability> capabilities = new ConcurrentHashMap<>();
@@ -59,6 +62,8 @@ public class AgentToolCapabilityCatalog {
                 .addMetadata(METADATA_VERSION, capability.version())
                 .addMetadata(METADATA_PERMISSION_SCOPES, capability.permissionScopes())
                 .addMetadata(METADATA_SOURCE, capability.source())
+                .addMetadata(METADATA_ACCESS_MODE, capability.accessMode().code())
+                .addMetadata(METADATA_RETRY_POLICY, capability.retryPolicy().code())
                 .build();
     }
 
@@ -94,7 +99,9 @@ public class AgentToolCapabilityCatalog {
                 specification.description(),
                 parameterSchemaJson(specification),
                 permissionScopes(specification.name(), source),
-                executionPolicy(specification.name(), source));
+                executionPolicy(specification.name(), source),
+                accessMode(specification.name(), source),
+                retryPolicy(specification.name(), source));
         capabilities.put(key(capability.name(), capability.source()), capability);
         return capability;
     }
@@ -114,7 +121,8 @@ public class AgentToolCapabilityCatalog {
         if (AgentToolConstants.UPDATE_USER_PERSONA.equals(toolName)) {
             return Set.of(AgentToolPermission.PERSONA_WRITE.code());
         }
-        if (AgentToolConstants.SOURCE_MCP.equals(source)) {
+        if (AgentToolConstants.WEB_SEARCH.equals(toolName)
+                && AgentToolConstants.SOURCE_MCP.equals(source)) {
             return Set.of(AgentToolPermission.NETWORK_READ.code());
         }
         if (AgentToolConstants.SEARCH_MEMORIES.equals(toolName)
@@ -123,6 +131,31 @@ public class AgentToolCapabilityCatalog {
             return Set.of(AgentToolPermission.MEMORY_READ.code());
         }
         return Set.of(AgentToolPermission.TOOL_EXECUTE.code());
+    }
+
+    private AgentToolAccessMode accessMode(String toolName, String source) {
+        if (AgentToolConstants.UPDATE_USER_PERSONA.equals(toolName)) {
+            return AgentToolAccessMode.WRITE;
+        }
+        if (isReadTool(toolName, source)) {
+            return AgentToolAccessMode.READ;
+        }
+        return AgentToolAccessMode.UNKNOWN;
+    }
+
+    private AgentToolRetryPolicy retryPolicy(String toolName, String source) {
+        return isReadTool(toolName, source)
+                ? AgentToolRetryPolicy.TIMEOUT_ONCE
+                : AgentToolRetryPolicy.DENY;
+    }
+
+    private boolean isReadTool(String toolName, String source) {
+        if (AgentToolConstants.SOURCE_MCP.equals(source)) {
+            return AgentToolConstants.WEB_SEARCH.equals(toolName);
+        }
+        return AgentToolConstants.SEARCH_MEMORIES.equals(toolName)
+                || AgentToolConstants.SEARCH_DIARY.equals(toolName)
+                || AgentToolConstants.SEARCH_LIFE_GRAPH.equals(toolName);
     }
 
     private AgentToolExecutionPolicy executionPolicy(String toolName, String source) {

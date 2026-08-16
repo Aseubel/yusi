@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai.tool;
 
 import com.aseubel.yusi.pojo.constant.AgentToolConstants;
+import com.aseubel.yusi.service.ai.runtime.AgentToolExecutionAttemptObserver;
 import com.aseubel.yusi.service.ai.runtime.AgentToolExecutionPolicyExecutor;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.agent.tool.ToolSpecifications;
@@ -11,6 +12,7 @@ import dev.langchain4j.service.tool.ToolExecutor;
 import dev.langchain4j.service.tool.ToolProvider;
 import dev.langchain4j.service.tool.ToolProviderRequest;
 import dev.langchain4j.service.tool.ToolProviderResult;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
@@ -28,10 +30,20 @@ public class AgentToolExecutionPolicyService {
 
     private final ExecutorService executor;
 
+    private final AgentToolExecutionAttemptObserver attemptObserver;
+
     public AgentToolExecutionPolicyService(AgentToolCapabilityCatalog capabilityCatalog,
             @Qualifier("agentToolExecutionExecutor") ExecutorService executor) {
+        this(capabilityCatalog, executor, AgentToolExecutionAttemptObserver.NOOP);
+    }
+
+    @Autowired
+    public AgentToolExecutionPolicyService(AgentToolCapabilityCatalog capabilityCatalog,
+            @Qualifier("agentToolExecutionExecutor") ExecutorService executor,
+            AgentToolExecutionAttemptObserver attemptObserver) {
         this.capabilityCatalog = capabilityCatalog;
         this.executor = executor;
+        this.attemptObserver = attemptObserver;
     }
 
     public Map<ToolSpecification, ToolExecutor> localExecutors(Object... tools) {
@@ -90,10 +102,15 @@ public class AgentToolExecutionPolicyService {
     }
 
     private ToolExecutor wrap(ToolSpecification specification, ToolExecutor delegate, String source) {
-        AgentToolExecutionPolicy policy = capabilityCatalog.find(specification.name(), source)
-                .map(AgentToolCapability::executionPolicy)
-                .orElse(AgentToolExecutionPolicy.DEFAULT);
-        return new AgentToolExecutionPolicyExecutor(delegate, policy.timeout(), executor,
-                specification.name());
+        AgentToolCapability capability = capabilityCatalog.find(specification.name(), source)
+                .orElse(null);
+        AgentToolExecutionPolicy executionPolicy = capability == null
+                ? AgentToolExecutionPolicy.DEFAULT
+                : capability.executionPolicy();
+        AgentToolRetryPolicy retryPolicy = capability == null
+                ? AgentToolRetryPolicy.DENY
+                : capability.retryPolicy();
+        return new AgentToolExecutionPolicyExecutor(delegate, executionPolicy, retryPolicy,
+                executor, attemptObserver, specification.name());
     }
 }

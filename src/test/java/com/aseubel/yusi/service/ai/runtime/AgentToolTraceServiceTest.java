@@ -45,6 +45,7 @@ class AgentToolTraceServiceTest {
         assertEquals("local-1", trace.getToolCallId());
         assertNull(trace.getUpstreamToolCallId());
         assertEquals(AgentToolTrace.Status.RUNNING, trace.getStatus());
+        assertEquals(1, trace.getAttemptCount());
         assertEquals(AgentToolConstants.SEARCH_MEMORIES, trace.getToolName());
     }
 
@@ -101,6 +102,27 @@ class AgentToolTraceServiceTest {
         verify(traceRepository, never()).save(completed);
     }
 
+    @Test
+    void incrementAttemptCountStopsAtTwoAndIgnoresTerminalRows() {
+        AgentToolTrace running = runningTrace("local-retry");
+        when(traceRepository.findByUserIdAndRunIdAndToolCallId(
+                "user-1", "run-1", "local-retry"))
+                .thenReturn(Optional.of(running));
+        AgentToolTraceService service = new AgentToolTraceService(traceRepository);
+
+        service.incrementAttemptCount("user-1", "run-1", "local-retry");
+        service.incrementAttemptCount("user-1", "run-1", "local-retry");
+
+        assertEquals(2, running.getAttemptCount());
+        verify(traceRepository).save(running);
+
+        running.setStatus(AgentToolTrace.Status.COMPLETED);
+        service.incrementAttemptCount("user-1", "run-1", "local-retry");
+
+        assertEquals(2, running.getAttemptCount());
+        verify(traceRepository).save(running);
+    }
+
     private AgentToolTrace runningTrace(String toolCallId) {
         return AgentToolTrace.builder()
                 .userId("user-1")
@@ -109,6 +131,7 @@ class AgentToolTraceServiceTest {
                 .toolName(AgentToolConstants.SEARCH_MEMORIES)
                 .toolSource(AgentToolConstants.SOURCE_LOCAL)
                 .status(AgentToolTrace.Status.RUNNING)
+                .attemptCount(1)
                 .startedAt(LocalDateTime.now().minusSeconds(1))
                 .build();
     }

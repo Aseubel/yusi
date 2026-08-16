@@ -40,12 +40,30 @@ public class AgentToolTraceService {
                             .toolName(toolName)
                             .toolSource(toolSource)
                             .capabilityVersion(nullable(capabilityVersion))
+                            .attemptCount(1)
                             .status(AgentToolTrace.Status.RUNNING)
                             .startedAt(now)
                             .createdAt(now)
                             .updatedAt(now)
                             .build());
                     return localToolCallId;
+                });
+    }
+
+    @Transactional
+    public void incrementAttemptCount(String userId, String runId, String localToolCallId) {
+        if (StrUtil.hasBlank(userId, runId, localToolCallId)) {
+            return;
+        }
+        traceRepository.findByUserIdAndRunIdAndToolCallId(userId, runId, localToolCallId)
+                .filter(trace -> trace.getStatus() == AgentToolTrace.Status.RUNNING)
+                .ifPresent(trace -> {
+                    int current = trace.getAttemptCount() == null ? 1 : trace.getAttemptCount();
+                    if (current >= 2) {
+                        return;
+                    }
+                    trace.setAttemptCount(2);
+                    traceRepository.save(trace);
                 });
     }
 

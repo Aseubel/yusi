@@ -31,6 +31,7 @@ import com.aseubel.yusi.service.agent.AgentGrowthService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
+import com.aseubel.yusi.service.ai.runtime.AgentToolExecutionAttemptRegistry;
 import com.aseubel.yusi.service.ai.runtime.AgentToolTraceCorrelation;
 import com.aseubel.yusi.service.ai.runtime.AgentToolTraceService;
 import com.aseubel.yusi.service.ai.tool.AgentToolCapability;
@@ -144,6 +145,9 @@ public class AiController {
 
     @Autowired
     private AgentToolTraceService agentToolTraceService;
+
+    @Autowired
+    private AgentToolExecutionAttemptRegistry agentToolExecutionAttemptRegistry;
 
     @Autowired(required = false)
     private AgentToolCapabilityCatalog agentToolCapabilityCatalog;
@@ -375,6 +379,10 @@ public class AiController {
                                     ? resolveToolSource(toolName)
                                     : capability.source();
                             toolCorrelation.register(requestToExecute, upstreamToolCallId, toolName, localToolCallId);
+                            if (agentToolExecutionAttemptRegistry != null) {
+                                agentToolExecutionAttemptRegistry.register(userId, requestId, requestToExecute,
+                                        upstreamToolCallId, toolName, toolSource, localToolCallId);
+                            }
                             traceToolStarted(userId, requestId, localToolCallId, upstreamToolCallId,
                                     toolName, toolSource, capability == null ? null : capability.version());
                             emitAgentStage(emitter, session, requestId, lastStage, "tool");
@@ -392,6 +400,9 @@ public class AiController {
                             String localToolCallId = toolCorrelation.resolve(
                                     requestToExecute, requestToExecute.id(), requestToExecute.name())
                                     .orElse(null);
+                            if (agentToolExecutionAttemptRegistry != null) {
+                                agentToolExecutionAttemptRegistry.complete(requestToExecute);
+                            }
                             Long durationMs = toolExecution.duration() != null
                                     ? toolExecution.duration().toMillis()
                                     : null;
@@ -553,31 +564,43 @@ public class AiController {
     private void traceRunCompleted(String userId, String runId) {
         runTrace("complete", () -> agentRunTraceService.complete(userId, runId));
         clearToolCorrelation(userId, runId);
+        clearToolExecutionAttempts(userId, runId);
     }
 
     private void traceRunCompleted(String userId, String runId, long responseCharCount) {
         runTrace("complete", () -> agentRunTraceService.complete(userId, runId, responseCharCount));
         clearToolCorrelation(userId, runId);
+        clearToolExecutionAttempts(userId, runId);
     }
 
     private void traceRunFailed(String userId, String runId, String failureCategory) {
         runTrace("fail", () -> agentRunTraceService.fail(userId, runId, failureCategory));
         clearToolCorrelation(userId, runId);
+        clearToolExecutionAttempts(userId, runId);
     }
 
     private void traceRunFailed(String userId, String runId, String failureCategory, long responseCharCount) {
         runTrace("fail", () -> agentRunTraceService.fail(userId, runId, failureCategory, responseCharCount));
         clearToolCorrelation(userId, runId);
+        clearToolExecutionAttempts(userId, runId);
     }
 
     private void traceRunCancelled(String userId, String runId, String cancelSource) {
         runTrace("cancel", () -> agentRunTraceService.cancel(userId, runId, cancelSource));
         clearToolCorrelation(userId, runId);
+        clearToolExecutionAttempts(userId, runId);
     }
 
     private void traceRunCancelled(String userId, String runId, String cancelSource, long responseCharCount) {
         runTrace("cancel", () -> agentRunTraceService.cancel(userId, runId, cancelSource, responseCharCount));
         clearToolCorrelation(userId, runId);
+        clearToolExecutionAttempts(userId, runId);
+    }
+
+    private void clearToolExecutionAttempts(String userId, String runId) {
+        if (agentToolExecutionAttemptRegistry != null) {
+            agentToolExecutionAttemptRegistry.clearRun(userId, runId);
+        }
     }
 
     private long countResponseCodePoints(String responseText) {

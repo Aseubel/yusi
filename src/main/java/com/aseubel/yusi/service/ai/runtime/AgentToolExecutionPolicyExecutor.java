@@ -8,12 +8,15 @@ import dev.langchain4j.service.tool.ToolExecutionResult;
 import dev.langchain4j.service.tool.ToolExecutor;
 
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import com.aseubel.yusi.service.ai.tool.AgentToolExecutionPolicy;
+import com.aseubel.yusi.service.ai.tool.AgentToolRetryPolicy;
 
 /**
  * Applies the execution boundary shared by local and MCP tools.
@@ -27,46 +30,85 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
     private static final Duration POLL_INTERVAL = Duration.ofMillis(25);
 
     private final ToolExecutor delegate;
-    private final Duration timeout;
+    private final AgentToolExecutionPolicy executionPolicy;
+    private final AgentToolRetryPolicy retryPolicy;
     private final ExecutorService executor;
+    private final AgentToolExecutionAttemptObserver attemptObserver;
     private final String toolName;
 
     public AgentToolExecutionPolicyExecutor(ToolExecutor delegate, Duration timeout,
             ExecutorService executor) {
-        this(delegate, timeout, executor, "unknown");
+        this(delegate, new AgentToolExecutionPolicy(timeout), AgentToolRetryPolicy.DENY,
+                executor, AgentToolExecutionAttemptObserver.NOOP, "unknown");
     }
 
     public AgentToolExecutionPolicyExecutor(ToolExecutor delegate, Duration timeout,
             ExecutorService executor, String toolName) {
-        this.delegate = delegate;
-        this.timeout = timeout;
-        this.executor = executor;
+        this(delegate, new AgentToolExecutionPolicy(timeout), AgentToolRetryPolicy.DENY,
+                executor, AgentToolExecutionAttemptObserver.NOOP, toolName);
+    }
+
+    public AgentToolExecutionPolicyExecutor(ToolExecutor delegate,
+            AgentToolExecutionPolicy executionPolicy, AgentToolRetryPolicy retryPolicy,
+            ExecutorService executor, AgentToolExecutionAttemptObserver attemptObserver,
+            String toolName) {
+        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.executionPolicy = Objects.requireNonNull(executionPolicy, "executionPolicy");
+        this.retryPolicy = Objects.requireNonNull(retryPolicy, "retryPolicy");
+        this.executor = Objects.requireNonNull(executor, "executor");
+        this.attemptObserver = Objects.requireNonNull(attemptObserver, "attemptObserver");
         this.toolName = toolName == null || toolName.isBlank() ? "unknown" : toolName;
     }
 
     @Override
     public String execute(ToolExecutionRequest request, Object memoryId) {
         ModelRouteContext routeContext = ModelRouteContextHolder.getEffective();
-        return await(() -> delegate.execute(request, memoryId), routeContext);
+        return await(() -> delegate.execute(request, memoryId), routeContext, request);
     }
 
     @Override
     public ToolExecutionResult executeWithContext(ToolExecutionRequest request,
             InvocationContext context) {
         ModelRouteContext routeContext = ModelRouteContextHolder.getEffective();
-        return await(() -> delegate.executeWithContext(request, context), routeContext);
+        return await(() -> delegate.executeWithContext(request, context), routeContext, request);
     }
 
-    private <T> T await(Callable<T> operation, ModelRouteContext routeContext) {
+    private <T> T await(Callable<T> operation, ModelRouteContext routeContext,
+            ToolExecutionRequest request) {
         AgentCancellationToken cancellationToken = routeContext == null
                 ? null
                 : routeContext.getCancellationToken();
-        if (isCancelled(cancellationToken)) {
-            throw new AgentToolCancelledException(toolName);
-        }
+        long logicalDeadline = System.nanoTime() + executionPolicy.totalDeadline().toNanos();
+        int retryCount = 0;
+        while (true) {
+            checkCancelled(cancellationToken);
+            long remaining = logicalDeadline - System.nanoTime();
+            if (remaining <= 0L) {
+                throw new AgentToolTimeoutException(toolName);
+            }
 
-        Future<T> future = executor.submit(() -> executeWithContext(operation, routeContext));
-        long deadline = System.nanoTime() + timeout.toNanos();
+            try {
+                Duration attemptTimeout = Duration.ofNanos(Math.min(
+                        executionPolicy.timeout().toNanos(), remaining));
+                return awaitOneAttempt(operation, routeContext, request, attemptTimeout,
+                        retryCount, cancellationToken);
+            } catch (AgentToolTimeoutException timeoutException) {
+                if (!retryPolicy.allowsRetry(retryCount)) {
+                    throw timeoutException;
+                }
+                checkCancelled(cancellationToken);
+                awaitRetryBackoff(retryPolicy.backoff(), cancellationToken, logicalDeadline);
+                retryCount++;
+            }
+        }
+    }
+
+    private <T> T awaitOneAttempt(Callable<T> operation, ModelRouteContext routeContext,
+            ToolExecutionRequest request, Duration attemptTimeout, int retryCount,
+            AgentCancellationToken cancellationToken) {
+        Future<T> future = executor.submit(() -> executeWithContext(operation, routeContext,
+                request, retryCount, cancellationToken));
+        long deadline = System.nanoTime() + attemptTimeout.toNanos();
         try {
             while (true) {
                 if (isCancelled(cancellationToken)) {
@@ -95,8 +137,13 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
         }
     }
 
-    private <T> T executeWithContext(Callable<T> operation, ModelRouteContext routeContext)
+    private <T> T executeWithContext(Callable<T> operation, ModelRouteContext routeContext,
+            ToolExecutionRequest request, int retryCount, AgentCancellationToken cancellationToken)
             throws Exception {
+        checkCancelled(cancellationToken);
+        if (retryCount > 0) {
+            notifyRetry(request);
+        }
         if (routeContext == null) {
             return operation.call();
         }
@@ -105,6 +152,43 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
             return operation.call();
         } finally {
             ModelRouteContextHolder.clear();
+        }
+    }
+
+    private void awaitRetryBackoff(Duration backoff, AgentCancellationToken cancellationToken,
+            long logicalDeadline) {
+        long remaining = logicalDeadline - System.nanoTime();
+        if (remaining <= 0L) {
+            throw new AgentToolTimeoutException(toolName);
+        }
+        long waitNanos = Math.min(backoff.toNanos(), remaining);
+        try {
+            if (cancellationToken == null) {
+                TimeUnit.NANOSECONDS.sleep(waitNanos);
+            } else if (cancellationToken.awaitCancellation(waitNanos, TimeUnit.NANOSECONDS)) {
+                throw new AgentToolCancelledException(toolName);
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AgentToolCancelledException(toolName);
+        }
+        checkCancelled(cancellationToken);
+        if (logicalDeadline - System.nanoTime() <= 0L) {
+            throw new AgentToolTimeoutException(toolName);
+        }
+    }
+
+    private void notifyRetry(ToolExecutionRequest request) {
+        try {
+            attemptObserver.onRetry(request);
+        } catch (RuntimeException ignored) {
+            // Trace accounting must never turn a valid tool retry into a tool failure.
+        }
+    }
+
+    private void checkCancelled(AgentCancellationToken cancellationToken) {
+        if (isCancelled(cancellationToken)) {
+            throw new AgentToolCancelledException(toolName);
         }
     }
 

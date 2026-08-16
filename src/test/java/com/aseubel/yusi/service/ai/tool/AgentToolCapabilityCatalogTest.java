@@ -2,14 +2,18 @@ package com.aseubel.yusi.service.ai.tool;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aseubel.yusi.pojo.constant.AgentToolConstants;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AgentToolCapabilityCatalogTest {
@@ -24,9 +28,12 @@ class AgentToolCapabilityCatalogTest {
         assertEquals(AgentToolConstants.SOURCE_LOCAL, capability.source());
         assertEquals("v1", capability.version());
         assertEquals("memory.read", capability.permissionScopes().iterator().next());
+        assertEquals(AgentToolAccessMode.READ, capability.accessMode());
+        assertEquals(AgentToolRetryPolicy.TIMEOUT_ONCE, capability.retryPolicy());
         assertTrue(capability.parameterSchemaJson().contains("query"));
         assertTrue(capability.parameterSchemaJson().contains("startDate"));
         assertEquals(java.time.Duration.ofSeconds(15), capability.executionPolicy().timeout());
+        assertEquals(Duration.ofSeconds(30), capability.executionPolicy().totalDeadline());
     }
 
     @Test
@@ -46,10 +53,37 @@ class AgentToolCapabilityCatalogTest {
         AgentToolCapability capability = catalog.findByName(AgentToolConstants.WEB_SEARCH).orElseThrow();
         assertEquals(AgentToolConstants.SOURCE_MCP, capability.source());
         assertEquals("network.read", capability.permissionScopes().iterator().next());
+        assertEquals(AgentToolAccessMode.READ, capability.accessMode());
+        assertEquals(AgentToolRetryPolicy.TIMEOUT_ONCE, capability.retryPolicy());
         assertTrue(capability.parameterSchemaJson().contains("query"));
         assertEquals(java.time.Duration.ofSeconds(20), capability.executionPolicy().timeout());
+        assertEquals(Duration.ofSeconds(30), capability.executionPolicy().totalDeadline());
         assertEquals("v1", mapped.metadata().get(AgentToolCapabilityCatalog.METADATA_VERSION));
         assertNotNull(mapped.metadata().get(AgentToolCapabilityCatalog.METADATA_PERMISSION_SCOPES));
+        assertEquals("read", mapped.metadata().get(AgentToolCapabilityCatalog.METADATA_ACCESS_MODE));
+        assertEquals("timeout_once", mapped.metadata().get(AgentToolCapabilityCatalog.METADATA_RETRY_POLICY));
+    }
+
+    @Test
+    void unknownMcpCapabilityDefaultsToUnknownAndDeniesRetry() {
+        AgentToolCapabilityCatalog catalog = new AgentToolCapabilityCatalog(new ObjectMapper());
+        ToolSpecification specification = ToolSpecification.builder()
+                .name("unknown_mcp_tool")
+                .description("Unknown provider tool")
+                .build();
+
+        catalog.mapMcpSpecification(null, specification);
+
+        AgentToolCapability capability = catalog.find(
+                "unknown_mcp_tool", AgentToolConstants.SOURCE_MCP).orElseThrow();
+        assertEquals(AgentToolAccessMode.UNKNOWN, capability.accessMode());
+        assertEquals(AgentToolRetryPolicy.DENY, capability.retryPolicy());
+    }
+
+    @Test
+    void toolExecutionPolicyRejectsLogicalDeadlineAboveThirtySeconds() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new AgentToolExecutionPolicy(Duration.ofSeconds(1), Duration.ofSeconds(31)));
     }
 
     private static final class LocalMemoryTool {

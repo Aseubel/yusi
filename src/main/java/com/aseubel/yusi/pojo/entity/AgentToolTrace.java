@@ -68,6 +68,10 @@ public class AgentToolTrace {
     @Column(name = "capability_version", length = 32)
     private String capabilityVersion;
 
+    @Column(name = "attempt_count", nullable = false)
+    @Builder.Default
+    private Integer attemptCount = 1;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
@@ -97,6 +101,9 @@ public class AgentToolTrace {
         LocalDateTime now = LocalDateTime.now();
         if (status == null) {
             status = Status.RUNNING;
+        }
+        if (attemptCount == null || attemptCount < 1) {
+            attemptCount = 1;
         }
         if (startedAt == null) {
             startedAt = now;
