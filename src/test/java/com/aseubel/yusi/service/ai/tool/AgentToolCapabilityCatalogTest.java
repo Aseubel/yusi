@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.ai.tool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aseubel.yusi.pojo.constant.AgentToolConstants;
 import com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolSpecification;
@@ -10,6 +11,7 @@ import dev.langchain4j.model.chat.request.json.JsonObjectSchema;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -81,6 +83,28 @@ class AgentToolCapabilityCatalogTest {
     }
 
     @Test
+    void updatePersonaDeclaresIdempotentWrite() {
+        AgentToolCapabilityCatalog catalog = new AgentToolCapabilityCatalog(new ObjectMapper());
+        catalog.registerLocal(new PersonaTool());
+
+        AgentToolCapability capability = catalog.findByName(AgentToolConstants.UPDATE_USER_PERSONA)
+                .orElseThrow();
+
+        assertEquals(AgentToolAccessMode.WRITE, capability.accessMode());
+        assertEquals(AgentToolIdempotencyMode.IDEMPOTENT_WRITE, capability.idempotencyMode());
+        assertEquals(AgentToolRetryPolicy.DENY, capability.retryPolicy());
+    }
+
+    @Test
+    void legacyCapabilitiesDefaultToNoIdempotency() {
+        AgentToolCapability capability = new AgentToolCapability(
+                "legacy", AgentToolConstants.SOURCE_LOCAL, "v1", "test", "{}", Set.of(),
+                new AgentToolExecutionPolicy(Duration.ofSeconds(1)));
+
+        assertEquals(AgentToolIdempotencyMode.NONE, capability.idempotencyMode());
+    }
+
+    @Test
     void toolExecutionPolicyRejectsLogicalDeadlineAboveThirtySeconds() {
         assertThrows(IllegalArgumentException.class,
                 () -> new AgentToolExecutionPolicy(Duration.ofSeconds(1), Duration.ofSeconds(31)));
@@ -94,6 +118,14 @@ class AgentToolCapabilityCatalogTest {
                 @P("Optional start date") String startDate,
                 @P("Optional end date") String endDate) {
             return query + startDate + endDate;
+        }
+    }
+
+    private static final class PersonaTool {
+
+        @Tool(name = AgentToolConstants.UPDATE_USER_PERSONA, value = "Update persona")
+        public String update(String preferredName) {
+            return preferredName;
         }
     }
 }

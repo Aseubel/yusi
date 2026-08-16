@@ -8,6 +8,7 @@ public final class AgentToolCapabilityConstants {
     public static final String METADATA_SOURCE = "yusi.agent.capability.source";
     public static final String METADATA_ACCESS_MODE = "yusi.agent.capability.access_mode";
     public static final String METADATA_RETRY_POLICY = "yusi.agent.capability.retry_policy";
+    public static final String METADATA_IDEMPOTENCY_MODE = "yusi.agent.capability.idempotency_mode";
 
     private AgentToolCapabilityConstants() {
     }

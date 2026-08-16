@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai.tool;
 
 import com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
 
 import java.util.Set;
 
@@ -16,13 +17,23 @@ public record AgentToolCapability(
         Set<String> permissionScopes,
         AgentToolExecutionPolicy executionPolicy,
         AgentToolAccessMode accessMode,
-        AgentToolRetryPolicy retryPolicy) {
+        AgentToolRetryPolicy retryPolicy,
+        AgentToolIdempotencyMode idempotencyMode) {
 
     public AgentToolCapability(String name, String source, String version, String description,
             String parameterSchemaJson, Set<String> permissionScopes,
             AgentToolExecutionPolicy executionPolicy) {
         this(name, source, version, description, parameterSchemaJson, permissionScopes,
-                executionPolicy, AgentToolAccessMode.UNKNOWN, AgentToolRetryPolicy.DENY);
+                executionPolicy, AgentToolAccessMode.UNKNOWN, AgentToolRetryPolicy.DENY,
+                AgentToolIdempotencyMode.NONE);
+    }
+
+    public AgentToolCapability(String name, String source, String version, String description,
+            String parameterSchemaJson, Set<String> permissionScopes,
+            AgentToolExecutionPolicy executionPolicy, AgentToolAccessMode accessMode,
+            AgentToolRetryPolicy retryPolicy) {
+        this(name, source, version, description, parameterSchemaJson, permissionScopes,
+                executionPolicy, accessMode, retryPolicy, AgentToolIdempotencyMode.NONE);
     }
 
     public AgentToolCapability {
@@ -31,5 +42,6 @@ public record AgentToolCapability(
         executionPolicy = executionPolicy == null ? AgentToolExecutionPolicy.DEFAULT : executionPolicy;
         accessMode = accessMode == null ? AgentToolAccessMode.UNKNOWN : accessMode;
         retryPolicy = retryPolicy == null ? AgentToolRetryPolicy.DENY : retryPolicy;
+        idempotencyMode = idempotencyMode == null ? AgentToolIdempotencyMode.NONE : idempotencyMode;
     }
 }

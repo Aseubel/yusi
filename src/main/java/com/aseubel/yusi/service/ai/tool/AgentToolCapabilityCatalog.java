@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aseubel.yusi.pojo.constant.AgentToolConstants;
 import com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode;
 import com.aseubel.yusi.service.ai.tool.constant.AgentToolCapabilityConstants;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
 import com.aseubel.yusi.service.ai.tool.constant.AgentToolPermission;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.agent.tool.ToolSpecifications;
@@ -37,6 +38,7 @@ public class AgentToolCapabilityCatalog {
     public static final String METADATA_SOURCE = AgentToolCapabilityConstants.METADATA_SOURCE;
     public static final String METADATA_ACCESS_MODE = AgentToolCapabilityConstants.METADATA_ACCESS_MODE;
     public static final String METADATA_RETRY_POLICY = AgentToolCapabilityConstants.METADATA_RETRY_POLICY;
+    public static final String METADATA_IDEMPOTENCY_MODE = AgentToolCapabilityConstants.METADATA_IDEMPOTENCY_MODE;
 
     private final ObjectMapper objectMapper;
     private final ConcurrentMap<String, AgentToolCapability> capabilities = new ConcurrentHashMap<>();
@@ -64,6 +66,7 @@ public class AgentToolCapabilityCatalog {
                 .addMetadata(METADATA_SOURCE, capability.source())
                 .addMetadata(METADATA_ACCESS_MODE, capability.accessMode().code())
                 .addMetadata(METADATA_RETRY_POLICY, capability.retryPolicy().code())
+                .addMetadata(METADATA_IDEMPOTENCY_MODE, capability.idempotencyMode().code())
                 .build();
     }
 
@@ -101,7 +104,8 @@ public class AgentToolCapabilityCatalog {
                 permissionScopes(specification.name(), source),
                 executionPolicy(specification.name(), source),
                 accessMode(specification.name(), source),
-                retryPolicy(specification.name(), source));
+                retryPolicy(specification.name(), source),
+                idempotencyMode(specification.name(), source));
         capabilities.put(key(capability.name(), capability.source()), capability);
         return capability;
     }
@@ -147,6 +151,13 @@ public class AgentToolCapabilityCatalog {
         return isReadTool(toolName, source)
                 ? AgentToolRetryPolicy.TIMEOUT_ONCE
                 : AgentToolRetryPolicy.DENY;
+    }
+
+    private AgentToolIdempotencyMode idempotencyMode(String toolName, String source) {
+        return AgentToolConstants.SOURCE_LOCAL.equals(source)
+                && AgentToolConstants.UPDATE_USER_PERSONA.equals(toolName)
+                ? AgentToolIdempotencyMode.IDEMPOTENT_WRITE
+                : AgentToolIdempotencyMode.NONE;
     }
 
     private boolean isReadTool(String toolName, String source) {
