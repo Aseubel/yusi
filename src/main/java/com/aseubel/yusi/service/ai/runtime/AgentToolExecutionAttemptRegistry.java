@@ -1,6 +1,8 @@
 package com.aseubel.yusi.service.ai.runtime;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -8,6 +10,7 @@ import org.springframework.stereotype.Component;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Keeps the physical retry counter associated with the logical tool callback.
@@ -15,7 +18,8 @@ import java.util.Map;
  */
 @Component
 @Slf4j
-public class AgentToolExecutionAttemptRegistry implements AgentToolExecutionAttemptObserver {
+public class AgentToolExecutionAttemptRegistry
+        implements AgentToolExecutionAttemptObserver, AgentToolInvocationContextProvider {
 
     private final AgentToolTraceService traceService;
     private final Map<Object, Pending> pendingByRequest = new IdentityHashMap<>();
@@ -26,11 +30,30 @@ public class AgentToolExecutionAttemptRegistry implements AgentToolExecutionAtte
 
     public synchronized void register(String userId, String runId, Object requestIdentity,
             String upstreamToolCallId, String toolName, String toolSource, String localToolCallId) {
+        register(userId, runId, requestIdentity, upstreamToolCallId, toolName, toolSource,
+                localToolCallId, AgentToolAccessMode.UNKNOWN, AgentToolIdempotencyMode.NONE, null);
+    }
+
+    public synchronized void register(String userId, String runId, Object requestIdentity,
+            String upstreamToolCallId, String toolName, String toolSource, String localToolCallId,
+            AgentToolAccessMode accessMode, AgentToolIdempotencyMode idempotencyMode,
+            String capabilityVersion) {
         if (requestIdentity == null || StrUtil.hasBlank(userId, runId, toolName, toolSource, localToolCallId)) {
             return;
         }
         pendingByRequest.put(requestIdentity,
-                new Pending(userId, runId, localToolCallId, upstreamToolCallId, toolName, toolSource));
+                new Pending(userId, runId, localToolCallId, upstreamToolCallId, toolName, toolSource,
+                        new AgentToolInvocationContext(userId, runId, localToolCallId, toolName,
+                                toolSource, accessMode, idempotencyMode, capabilityVersion)));
+    }
+
+    @Override
+    public synchronized Optional<AgentToolInvocationContext> find(Object requestIdentity) {
+        if (requestIdentity == null) {
+            return Optional.empty();
+        }
+        Pending pending = pendingByRequest.get(requestIdentity);
+        return pending == null ? Optional.empty() : Optional.of(pending.context);
     }
 
     @Override
@@ -79,16 +102,19 @@ public class AgentToolExecutionAttemptRegistry implements AgentToolExecutionAtte
         private final String toolName;
         @SuppressWarnings("unused")
         private final String toolSource;
+        private final AgentToolInvocationContext context;
         private boolean retryRecorded;
 
         private Pending(String userId, String runId, String localToolCallId,
-                String upstreamToolCallId, String toolName, String toolSource) {
+                String upstreamToolCallId, String toolName, String toolSource,
+                AgentToolInvocationContext context) {
             this.userId = userId;
             this.runId = runId;
             this.localToolCallId = localToolCallId;
             this.upstreamToolCallId = upstreamToolCallId;
             this.toolName = toolName;
             this.toolSource = toolSource;
+            this.context = context;
         }
     }
 }

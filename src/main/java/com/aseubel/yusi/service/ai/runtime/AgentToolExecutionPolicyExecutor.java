@@ -2,6 +2,8 @@ package com.aseubel.yusi.service.ai.runtime;
 
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import dev.langchain4j.invocation.InvocationContext;
 import dev.langchain4j.service.tool.ToolExecutionResult;
@@ -34,47 +36,71 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
     private final AgentToolRetryPolicy retryPolicy;
     private final ExecutorService executor;
     private final AgentToolExecutionAttemptObserver attemptObserver;
+    private final AgentToolInvocationContextProvider invocationContextProvider;
+    private final AgentToolAccessMode accessMode;
+    private final AgentToolIdempotencyMode idempotencyMode;
     private final String toolName;
 
     public AgentToolExecutionPolicyExecutor(ToolExecutor delegate, Duration timeout,
             ExecutorService executor) {
         this(delegate, new AgentToolExecutionPolicy(timeout), AgentToolRetryPolicy.DENY,
-                executor, AgentToolExecutionAttemptObserver.NOOP, "unknown");
+                AgentToolAccessMode.UNKNOWN, AgentToolIdempotencyMode.NONE, executor,
+                AgentToolExecutionAttemptObserver.NOOP, AgentToolInvocationContextProvider.NOOP,
+                "unknown");
     }
 
     public AgentToolExecutionPolicyExecutor(ToolExecutor delegate, Duration timeout,
             ExecutorService executor, String toolName) {
         this(delegate, new AgentToolExecutionPolicy(timeout), AgentToolRetryPolicy.DENY,
-                executor, AgentToolExecutionAttemptObserver.NOOP, toolName);
+                AgentToolAccessMode.UNKNOWN, AgentToolIdempotencyMode.NONE, executor,
+                AgentToolExecutionAttemptObserver.NOOP, AgentToolInvocationContextProvider.NOOP,
+                toolName);
     }
 
     public AgentToolExecutionPolicyExecutor(ToolExecutor delegate,
             AgentToolExecutionPolicy executionPolicy, AgentToolRetryPolicy retryPolicy,
             ExecutorService executor, AgentToolExecutionAttemptObserver attemptObserver,
             String toolName) {
+        this(delegate, executionPolicy, retryPolicy, AgentToolAccessMode.UNKNOWN,
+                AgentToolIdempotencyMode.NONE, executor, attemptObserver,
+                AgentToolInvocationContextProvider.NOOP, toolName);
+    }
+
+    public AgentToolExecutionPolicyExecutor(ToolExecutor delegate,
+            AgentToolExecutionPolicy executionPolicy, AgentToolRetryPolicy retryPolicy,
+            AgentToolAccessMode accessMode, AgentToolIdempotencyMode idempotencyMode,
+            ExecutorService executor, AgentToolExecutionAttemptObserver attemptObserver,
+            AgentToolInvocationContextProvider invocationContextProvider, String toolName) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
         this.executionPolicy = Objects.requireNonNull(executionPolicy, "executionPolicy");
         this.retryPolicy = Objects.requireNonNull(retryPolicy, "retryPolicy");
         this.executor = Objects.requireNonNull(executor, "executor");
         this.attemptObserver = Objects.requireNonNull(attemptObserver, "attemptObserver");
+        this.invocationContextProvider = Objects.requireNonNull(invocationContextProvider,
+                "invocationContextProvider");
+        this.accessMode = accessMode == null ? AgentToolAccessMode.UNKNOWN : accessMode;
+        this.idempotencyMode = idempotencyMode == null ? AgentToolIdempotencyMode.NONE : idempotencyMode;
         this.toolName = toolName == null || toolName.isBlank() ? "unknown" : toolName;
     }
 
     @Override
     public String execute(ToolExecutionRequest request, Object memoryId) {
         ModelRouteContext routeContext = ModelRouteContextHolder.getEffective();
-        return await(() -> delegate.execute(request, memoryId), routeContext, request);
+        AgentToolInvocationContext invocationContext = invocationContextProvider.find(request).orElse(null);
+        return await(() -> delegate.execute(request, memoryId), routeContext, request, invocationContext);
     }
 
     @Override
     public ToolExecutionResult executeWithContext(ToolExecutionRequest request,
-            InvocationContext context) {
+        InvocationContext context) {
         ModelRouteContext routeContext = ModelRouteContextHolder.getEffective();
-        return await(() -> delegate.executeWithContext(request, context), routeContext, request);
+        AgentToolInvocationContext invocationContext = invocationContextProvider.find(request).orElse(null);
+        return await(() -> delegate.executeWithContext(request, context), routeContext, request,
+                invocationContext);
     }
 
     private <T> T await(Callable<T> operation, ModelRouteContext routeContext,
-            ToolExecutionRequest request) {
+            ToolExecutionRequest request, AgentToolInvocationContext invocationContext) {
         AgentCancellationToken cancellationToken = routeContext == null
                 ? null
                 : routeContext.getCancellationToken();
@@ -91,7 +117,7 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
                 Duration attemptTimeout = Duration.ofNanos(Math.min(
                         executionPolicy.timeout().toNanos(), remaining));
                 return awaitOneAttempt(operation, routeContext, request, attemptTimeout,
-                        retryCount, cancellationToken);
+                        retryCount, cancellationToken, invocationContext);
             } catch (AgentToolTimeoutException timeoutException) {
                 if (!retryPolicy.allowsRetry(retryCount)) {
                     throw timeoutException;
@@ -105,9 +131,9 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
 
     private <T> T awaitOneAttempt(Callable<T> operation, ModelRouteContext routeContext,
             ToolExecutionRequest request, Duration attemptTimeout, int retryCount,
-            AgentCancellationToken cancellationToken) {
+            AgentCancellationToken cancellationToken, AgentToolInvocationContext invocationContext) {
         Future<T> future = executor.submit(() -> executeWithContext(operation, routeContext,
-                request, retryCount, cancellationToken));
+                request, retryCount, cancellationToken, invocationContext));
         long deadline = System.nanoTime() + attemptTimeout.toNanos();
         try {
             while (true) {
@@ -140,18 +166,27 @@ public final class AgentToolExecutionPolicyExecutor implements ToolExecutor {
     private <T> T executeWithContext(Callable<T> operation, ModelRouteContext routeContext,
             ToolExecutionRequest request, int retryCount, AgentCancellationToken cancellationToken)
             throws Exception {
+        return executeWithContext(operation, routeContext, request, retryCount, cancellationToken, null);
+    }
+
+    private <T> T executeWithContext(Callable<T> operation, ModelRouteContext routeContext,
+            ToolExecutionRequest request, int retryCount, AgentCancellationToken cancellationToken,
+            AgentToolInvocationContext invocationContext) throws Exception {
         checkCancelled(cancellationToken);
         if (retryCount > 0) {
             notifyRetry(request);
         }
-        if (routeContext == null) {
-            return operation.call();
-        }
-        ModelRouteContextHolder.set(routeContext);
-        try {
-            return operation.call();
-        } finally {
-            ModelRouteContextHolder.clear();
+        try (AgentToolInvocationContextHolder.Scope ignored =
+                AgentToolInvocationContextHolder.open(invocationContext)) {
+            if (routeContext == null) {
+                return operation.call();
+            }
+            ModelRouteContextHolder.set(routeContext);
+            try {
+                return operation.call();
+            } finally {
+                ModelRouteContextHolder.clear();
+            }
         }
     }
 

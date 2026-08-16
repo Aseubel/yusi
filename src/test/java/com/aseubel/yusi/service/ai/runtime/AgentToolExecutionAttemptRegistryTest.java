@@ -1,6 +1,8 @@
 package com.aseubel.yusi.service.ai.runtime;
 
 import com.aseubel.yusi.pojo.constant.AgentToolConstants;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode;
+import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -10,6 +12,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ExtendWith(MockitoExtension.class)
 class AgentToolExecutionAttemptRegistryTest {
@@ -46,6 +50,20 @@ class AgentToolExecutionAttemptRegistryTest {
         registry.onRetry(clearedRequest);
 
         verify(traceService, never()).incrementAttemptCount(eq("user-1"), eq("run-1"), eq("local-2"));
+    }
+
+    @Test
+    void contextUsesTheSameLocalIdAndIsRemovedWithTheRequest() {
+        AgentToolExecutionAttemptRegistry registry = new AgentToolExecutionAttemptRegistry(traceService);
+        ToolExecutionRequest request = request();
+
+        registry.register("user-1", "run-1", request, null,
+                AgentToolConstants.SEARCH_MEMORIES, AgentToolConstants.SOURCE_LOCAL, "local-1",
+                AgentToolAccessMode.READ, AgentToolIdempotencyMode.NONE, "v1");
+
+        assertEquals("local-1", registry.find(request).orElseThrow().localToolCallId());
+        registry.complete(request);
+        assertTrue(registry.find(request).isEmpty());
     }
 
     private ToolExecutionRequest request() {

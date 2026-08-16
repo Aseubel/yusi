@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.ai.tool;
 
 import com.aseubel.yusi.pojo.constant.AgentToolConstants;
 import com.aseubel.yusi.service.ai.runtime.AgentToolExecutionAttemptObserver;
+import com.aseubel.yusi.service.ai.runtime.AgentToolInvocationContextProvider;
 import com.aseubel.yusi.service.ai.runtime.AgentToolExecutionPolicyExecutor;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import dev.langchain4j.agent.tool.ToolSpecifications;
@@ -32,18 +33,28 @@ public class AgentToolExecutionPolicyService {
 
     private final AgentToolExecutionAttemptObserver attemptObserver;
 
+    private final AgentToolInvocationContextProvider invocationContextProvider;
+
     public AgentToolExecutionPolicyService(AgentToolCapabilityCatalog capabilityCatalog,
             @Qualifier("agentToolExecutionExecutor") ExecutorService executor) {
         this(capabilityCatalog, executor, AgentToolExecutionAttemptObserver.NOOP);
     }
 
-    @Autowired
     public AgentToolExecutionPolicyService(AgentToolCapabilityCatalog capabilityCatalog,
             @Qualifier("agentToolExecutionExecutor") ExecutorService executor,
             AgentToolExecutionAttemptObserver attemptObserver) {
+        this(capabilityCatalog, executor, attemptObserver, AgentToolInvocationContextProvider.NOOP);
+    }
+
+    @Autowired
+    public AgentToolExecutionPolicyService(AgentToolCapabilityCatalog capabilityCatalog,
+            @Qualifier("agentToolExecutionExecutor") ExecutorService executor,
+            AgentToolExecutionAttemptObserver attemptObserver,
+            AgentToolInvocationContextProvider invocationContextProvider) {
         this.capabilityCatalog = capabilityCatalog;
         this.executor = executor;
         this.attemptObserver = attemptObserver;
+        this.invocationContextProvider = invocationContextProvider;
     }
 
     public Map<ToolSpecification, ToolExecutor> localExecutors(Object... tools) {
@@ -110,7 +121,14 @@ public class AgentToolExecutionPolicyService {
         AgentToolRetryPolicy retryPolicy = capability == null
                 ? AgentToolRetryPolicy.DENY
                 : capability.retryPolicy();
+        var accessMode = capability == null
+                ? com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode.UNKNOWN
+                : capability.accessMode();
+        var idempotencyMode = capability == null
+                ? com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode.NONE
+                : capability.idempotencyMode();
         return new AgentToolExecutionPolicyExecutor(delegate, executionPolicy, retryPolicy,
-                executor, attemptObserver, specification.name());
+                accessMode, idempotencyMode, executor, attemptObserver,
+                invocationContextProvider, specification.name());
     }
 }
