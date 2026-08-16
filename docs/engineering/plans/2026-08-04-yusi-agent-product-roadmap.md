@@ -319,15 +319,31 @@ Phase 3/4 后续工作。
 - 本次仍不实现通用幂等键、写操作用户确认、跨请求恢复，也不覆盖 `McpGrpcServiceImpl` 中原始
   `keyword/query` 日志收敛；失败分类继续只依据异常类型或 `hasFailed`。
 
+### 2026-08-16：完成声明式写工具幂等账本与重复执行保护
+
+本次完成 Phase 3 的声明式写工具保护切片。幂等账本复用 `agent_tool_trace`，不新增独立的
+`idempotency_key`：Controller 生成的 `localToolCallId` 同时作为 `tool_call_id`、SSE 工具事件 ID、
+Invocation Context 中的调用 ID 和账本 key。只有能力目录明确声明为 `WRITE + IDEMPOTENT_WRITE` 的工具
+才进入账本；当前真实消费方只有本地 `updateUserPersona`，默认能力和未知工具仍拒绝自动重试及幂等写入。
+
+- `updateUserPersona` 首次执行先原子 claim，Context 在专用 worker 中传播用户 ID 并被真实工具消费；同一
+  本地调用 ID 的重放返回 `isError=true` 的稳定阻断响应，业务画像服务不会再次执行。
+- 写工具没有自动超时重试；超时、取消、线程池提交失败和 run 终态收敛会把 `CLAIMED` 账本置为
+  `UNKNOWN`，`UNKNOWN`、`COMPLETED`、`FAILED` 和并发 claim 失败都不会静默调用 delegate。启动扫描将
+  超过 5 分钟的孤儿 `CLAIMED` 置为 `UNKNOWN`，账本状态保留 30 天。
+- `AgentToolInvocationContext` 的显式跨线程传播已通过技术验证，不启用隐式 ThreadLocal 继承，也不需要
+  `ModelRouteContextHolder` 退回方案。`agent_run_trace.tool_count` 仍表示完成的逻辑工具调用总数，不按
+  claim 或物理尝试次数增加。
+- 本次不覆盖 `McpGrpcServiceImpl` 中原始 `keyword/query` 日志，不增加用户确认、暂停/恢复或跨请求重放；
+  这些边界另行切片处理。
+
 ### 后续推进顺序
 
 Phase 2 后端基础已经完成，后续仍沿整体架构推进，不扩展新的用户可见功能：
 
-1. 在已有 AgentRun、模型/Prompt Trace 和工具/响应摘要之上，继续补齐本地工具与 MCP 的幂等和必要的
-   写操作确认；超时、取消传播和受限超时重试已经落地，流式 UI 事件继续只是安全投影而不是唯一运行记录。
-2. 随后完成 Phase 4 的固定样例回放、质量指标和回归门槛，优先覆盖 LifeGraph、Timeline、
+1. 工具幂等账本已经落地；下一步完成 Phase 4 的固定样例回放、质量指标和回归门槛，优先覆盖 LifeGraph、Timeline、
    记忆删除生效和主动触发判断。
-3. 连接体验的剩余产品工作和 Phase 5 的主动陪伴功能，等前述后端质量门槛通过后再扩展。
+2. 连接体验的剩余产品工作和 Phase 5 的主动陪伴功能，等前述后端质量门槛通过后再扩展。
 
 ## 设计决策
 
@@ -450,7 +466,7 @@ Yusi 的核心产品是“隐私优先的长期记忆 AI companion”，不是�
 **当前进度：** 用户聊天流的 AgentRun 事件层和低敏生命周期摘要、聊天工具 Trace、最终响应低敏
 摘要、模型调用与 Prompt 身份 Trace、工具能力契约、工具执行超时、取消传播与受限超时重试，以及
 认知摄取、LifeGraph、周报和主动问候的用户级后台运行关联已完成；Phase 2 已提供产品事件、任务执行
-和安全审计关联。工具幂等、用户确认和需要暂停/恢复的跨任务 Runtime 仍未完成。
+和安全审计关联。声明式写工具幂等已完成；用户确认和需要暂停/恢复的跨任务 Runtime 仍未完成。
 
 - [x] 为用户聊天流建立用户可见的 `AgentRun` 标识，使用 `requestId` 关联一次任务。
 - [x] 为聊天流发送安全的阶段、工具生命周期、回答增量和终态事件。
@@ -469,7 +485,9 @@ Yusi 的核心产品是“隐私优先的长期记忆 AI companion”，不是�
       由固定异常终止等待并尽力中断底层执行。
 - [x] 为明确允许的只读工具增加最多一次超时自动重试、逻辑调用总 deadline、可取消退避和低敏尝试计数；
       不对写操作、未知能力或非超时失败自动重试。
-- [ ] 为工具增加通用幂等键和必要的写操作用户确认边界。
+- [x] 为能力目录明确声明的写工具增加与 `localToolCallId/tool_call_id` 共用的幂等 claim 账本；未知和
+      未声明写工具默认拒绝重放，写操作用户确认仍单独保留为后续边界。
+- [ ] 为需要用户确认的非幂等写操作建立确认、暂停和恢复边界。
 - [x] 为认知摄取、LifeGraph、Embedding、周报和主动问候等异步任务补充任务状态、失败原因和
       恢复策略；重试复用逻辑运行 ID，终态更新幂等。
 - [ ] 只将需要暂停、确认和恢复的流程迁移到持久化 Agentic Runtime，不重写普通同步服务。

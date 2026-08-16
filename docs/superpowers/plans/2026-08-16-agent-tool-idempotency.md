@@ -39,7 +39,7 @@
 - `AgentToolCapabilityCatalog.METADATA_IDEMPOTENCY_MODE` is exposed in mapped MCP specifications.
 - `AgentToolIdempotencyConstants` owns the 5-minute lease, 30-day retention, and stable model responses: `IN_PROGRESS`, `ALREADY_COMPLETED`, `PREVIOUS_FAILURE`, `UNKNOWN`, `CONTEXT_MISSING`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Extend `AgentToolCapabilityCatalogTest` with these assertions:
 
@@ -67,7 +67,7 @@ void unknownAndLegacyCapabilitiesDefaultToNoIdempotency() {
 
 `PersonaTool` must contain an actual `@Tool(name = AgentToolConstants.UPDATE_USER_PERSONA, value = "Update persona")` method so the test exercises schema registration rather than a name-only mock.
 
-- [ ] **Step 2: Run the focused test to verify it fails**
+- [x] **Step 2: Run the focused test to verify it fails**
 
 Run:
 
@@ -77,15 +77,15 @@ Run:
 
 Expected: compilation failure for the missing idempotency mode and missing record field.
 
-- [ ] **Step 3: Implement the contract**
+- [x] **Step 3: Implement the contract**
 
 Add the enum and constants. Append `AgentToolIdempotencyMode idempotencyMode` to `AgentToolCapability`; preserve the existing 7-argument and 9-argument constructors by delegating to `NONE`. In `AgentToolCapabilityCatalog`, map only `updateUserPersona` to `IDEMPOTENT_WRITE`; all other tools return `NONE`. Add the mode to `ToolSpecification.metadata()` using the existing capability metadata pattern. Do not infer idempotency from a tool description or parameter schema.
 
-- [ ] **Step 4: Run the focused test to verify it passes**
+- [x] **Step 4: Run the focused test to verify it passes**
 
 Run the same Maven command. Expected: PASS, including the pre-existing read/MCP retry assertions.
 
-- [ ] **Step 5: Commit the contract slice**
+- [x] **Step 5: Commit the contract slice**
 
 ```powershell
 git add src/main/java/com/aseubel/yusi/service/ai/tool src/test/java/com/aseubel/yusi/service/ai/tool/AgentToolCapabilityCatalogTest.java
@@ -111,7 +111,7 @@ git commit -m "feat: declare agent tool idempotency capability"
 - `AgentToolExecutionAttemptRegistry` stores the Context under request object identity while preserving its existing retry observer and cleanup methods.
 - `AgentToolExecutionPolicyExecutor` captures the provider result before submitting to the dedicated pool and opens the holder only around delegate execution; the `finally` block always clears it.
 
-- [ ] **Step 1: Write the failing propagation test**
+- [x] **Step 1: Write the failing propagation test**
 
 Create a real worker propagation test:
 
@@ -146,7 +146,7 @@ void contextIsCapturedBeforeSubmitAndVisibleOnlyDuringDelegate() {
 
 Add a registry assertion that `registry.find(request)` returns the same `localToolCallId` as the retry trace entry and becomes empty after `complete` or `clearRun`.
 
-- [ ] **Step 2: Run the focused test to verify it fails**
+- [x] **Step 2: Run the focused test to verify it fails**
 
 Run:
 
@@ -156,7 +156,7 @@ Run:
 
 Expected: compilation failure because Context, provider and the extended executor constructor do not exist.
 
-- [ ] **Step 3: Implement explicit worker propagation**
+- [x] **Step 3: Implement explicit worker propagation**
 
 Add the record, provider, and holder with no arguments/results stored. Extend the registry `register` path to create one Context from the Controller-supplied capability fields and expose it through `find`. Modify the executor to keep backward-compatible constructors that pass `UNKNOWN`, `NONE`, `NOOP` provider and no ledger. In the new constructor, resolve Context on the caller thread, capture it in the submitted lambda, and use:
 
@@ -169,7 +169,7 @@ try (AgentToolInvocationContextHolder.Scope ignored =
 
 When the propagation test passes, record that the preferred mechanism is technically viable; do not add the `ModelRouteContext` fallback fields. If the test cannot observe Context in the worker, stop this task, add the same fields to `ModelRouteContext`, pass the enriched context explicitly into the worker, and rerun the same test before moving to Task 3. In either implementation, the local tool call ID remains the sole key.
 
-- [ ] **Step 4: Run the focused tests to verify they pass**
+- [x] **Step 4: Run the focused tests to verify they pass**
 
 Run the same Maven command plus the existing executor tests:
 
@@ -179,7 +179,7 @@ Run the same Maven command plus the existing executor tests:
 
 Expected: PASS and no holder value remains on the caller or worker thread.
 
-- [ ] **Step 5: Commit the propagation slice**
+- [x] **Step 5: Commit the propagation slice**
 
 ```powershell
 git add src/main/java/com/aseubel/yusi/service/ai/runtime src/main/java/com/aseubel/yusi/service/ai/tool/AgentToolExecutionPolicyService.java src/test/java/com/aseubel/yusi/service/ai/runtime
@@ -200,13 +200,13 @@ git commit -m "feat: propagate agent tool invocation context"
 - Modify: `src/test/java/com/aseubel/yusi/service/ai/runtime/AgentToolTraceServiceTest.java`
 
 **Interfaces:**
-- `AgentToolTrace.IdempotencyMode`: `NONE`, `IDEMPOTENT_WRITE`.
+- `AgentToolIdempotencyMode`: `NONE`, `IDEMPOTENT_WRITE`.
 - `AgentToolTrace.IdempotencyStatus`: `CLAIMED`, `COMPLETED`, `FAILED`, `UNKNOWN`.
 - `AgentToolIdempotencyLedgerService.claim(AgentToolInvocationContext context)` returns a `ClaimDecision` with `CLAIMED`, `IN_PROGRESS`, `ALREADY_COMPLETED`, `PREVIOUS_FAILURE`, `UNKNOWN`, or `CONTEXT_MISSING`.
 - `resolveSuccess(context)`, `resolveFailure(context)`, `resolveUnknown(context)`, `recoverOrphanedClaims(now)`, and `clearExpiredStates(now)` are idempotent and never parse result text.
-- Existing `AgentToolTraceService.start(...)` overloads remain source-compatible; the new overload accepts `AgentToolTrace.IdempotencyMode` and stores `NONE` for old callers.
+- Existing `AgentToolTraceService.start(...)` overloads remain source-compatible; the new overload accepts `AgentToolIdempotencyMode` and stores `NONE` for old callers.
 
-- [ ] **Step 1: Write failing ledger tests**
+- [x] **Step 1: Write failing ledger tests**
 
 Add tests that create a running `AgentToolTrace` with the same `toolCallId` as the Context and assert:
 
@@ -225,7 +225,7 @@ assertEquals(ClaimDecision.ALREADY_COMPLETED, ledger.claim(context, now));
 
 Also assert that `resolveUnknown` changes only a `CLAIMED` row, `recoverOrphanedClaims` updates claims older than five minutes, `clearExpiredStates` clears only ledger columns, and `NONE` traces are never claimed.
 
-- [ ] **Step 2: Run the focused test to verify it fails**
+- [x] **Step 2: Run the focused test to verify it fails**
 
 ```powershell
 .\mvnw.cmd -q "-Dtest=AgentToolIdempotencyLedgerServiceTest,AgentToolTraceServiceTest" test
@@ -233,7 +233,7 @@ Also assert that `resolveUnknown` changes only a `CLAIMED` row, `recoverOrphaned
 
 Expected: compilation failure for the ledger fields, repository update methods, and service.
 
-- [ ] **Step 3: Implement schema and atomic state transitions**
+- [x] **Step 3: Implement schema and atomic state transitions**
 
 Add the five columns from the design document. Keep `tool_call_id` as the only ledger key. Add JPA enum fields and timestamps. Add repository methods using conditional `@Modifying` updates:
 
@@ -251,7 +251,7 @@ Add the five columns from the design document. Keep `tool_call_id` as the only l
       and (t.idempotencyStatus is null or t.idempotencyExpiresAt <= :now)
     """)
 int claimIdempotency(String userId, String runId, String toolCallId,
-        AgentToolTrace.IdempotencyMode mode, AgentToolTrace.IdempotencyStatus claimed,
+        AgentToolIdempotencyMode mode, AgentToolTrace.IdempotencyStatus claimed,
         LocalDateTime now, LocalDateTime expiresAt);
 ```
 
@@ -261,7 +261,7 @@ The service reads the row only after a zero-row claim to map the blocking status
 
 Update `AgentToolTraceService.closeRunning` so idempotent rows that remain claimed become `UNKNOWN` before/with ordinary tool trace convergence. Existing constructors and non-ledger trace tests must remain valid.
 
-- [ ] **Step 4: Run focused persistence tests**
+- [x] **Step 4: Run focused persistence tests**
 
 ```powershell
 .\mvnw.cmd -q "-Dtest=AgentToolIdempotencyLedgerServiceTest,AgentToolTraceServiceTest,AgentRunTraceServiceTest" test
@@ -269,7 +269,7 @@ Update `AgentToolTraceService.closeRunning` so idempotent rows that remain claim
 
 Expected: PASS; terminal convergence still leaves completed traces unchanged and does not alter `tool_count`.
 
-- [ ] **Step 5: Commit the persistence slice**
+- [x] **Step 5: Commit the persistence slice**
 
 ```powershell
 git add src/main/java/com/aseubel/yusi/pojo/entity/AgentToolTrace.java src/main/java/com/aseubel/yusi/repository/AgentToolTraceRepository.java src/main/java/com/aseubel/yusi/service/ai/runtime/AgentToolIdempotencyLedgerService.java src/main/java/com/aseubel/yusi/service/ai/runtime/AgentToolIdempotencyMaintenance.java src/main/java/com/aseubel/yusi/service/ai/runtime/AgentToolTraceService.java src/main/resources/db/migration/V20260830__add_tool_idempotency_ledger.sql src/main/resources/db/init.sql src/test/java/com/aseubel/yusi/service/ai/runtime/AgentToolIdempotencyLedgerServiceTest.java src/test/java/com/aseubel/yusi/service/ai/runtime/AgentToolTraceServiceTest.java
@@ -291,7 +291,7 @@ git commit -m "feat: add agent tool idempotency ledger"
 - `execute(...)` returns the stable response string for a blocked decision. `executeWithContext(...)` returns `ToolExecutionResult.builder().isError(true).resultText(response).build()`.
 - `allowsTimeoutRetry(...)` is true only when `accessMode == READ`, `idempotencyMode == NONE`, and the declared retry policy allows the current retry count.
 
-- [ ] **Step 1: Write the failing matrix tests**
+- [x] **Step 1: Write the failing matrix tests**
 
 Add these focused tests to `AgentToolExecutionPolicyExecutorTest`:
 
@@ -334,7 +334,7 @@ void competingClaimReturnsErrorAndNeverInvokesDelegate() {
 
 Add equivalent assertions for `COMPLETED`, `FAILED`, `UNKNOWN`, and missing Context. Preserve existing READ timeout retry, ordinary failure, cancellation, backoff cancellation, deadline and attempt observer tests.
 
-- [ ] **Step 2: Run the focused tests to verify they fail**
+- [x] **Step 2: Run the focused tests to verify they fail**
 
 ```powershell
 .\mvnw.cmd -q "-Dtest=AgentToolExecutionPolicyExecutorTest,AgentToolExecutionPolicyServiceTest" test
@@ -342,7 +342,7 @@ Add equivalent assertions for `COMPLETED`, `FAILED`, `UNKNOWN`, and missing Cont
 
 Expected: compilation failure for the ledger-aware constructor and failure because a WRITE with `TIMEOUT_ONCE` currently retries.
 
-- [ ] **Step 3: Implement the wrapper-layer decision order**
+- [x] **Step 3: Implement the wrapper-layer decision order**
 
 In both execute methods, resolve Context before claim. For `IDEMPOTENT_WRITE`, return `CONTEXT_MISSING` if no Context exists; otherwise call `ledger.claim(context)` and return an error response for every non-`CLAIMED` decision. Claim must happen before `executor.submit`.
 
@@ -374,7 +374,7 @@ try {
 
 Wire the full constructor from `AgentToolExecutionPolicyService`, while the two existing test constructors inject no-op provider/ledger dependencies. Pass the catalog's access and idempotency declarations into every local and MCP wrapper.
 
-- [ ] **Step 4: Run the focused matrix**
+- [x] **Step 4: Run the focused matrix**
 
 ```powershell
 .\mvnw.cmd -q "-Dtest=AgentToolExecutionPolicyExecutorTest,AgentToolExecutionPolicyServiceTest,AgentToolCapabilityCatalogTest" test
@@ -382,7 +382,7 @@ Wire the full constructor from `AgentToolExecutionPolicyService`, while the two 
 
 Expected: PASS; READ still retries once, WRITE never retries, blocked results are `isError == true`, and no retry observer is called for writes.
 
-- [ ] **Step 5: Commit the executor slice**
+- [x] **Step 5: Commit the executor slice**
 
 ```powershell
 git add src/main/java/com/aseubel/yusi/service/ai/runtime/AgentToolIdempotencyBlockedException.java src/main/java/com/aseubel/yusi/service/ai/runtime/AgentToolExecutionPolicyExecutor.java src/main/java/com/aseubel/yusi/service/ai/tool/AgentToolExecutionPolicyService.java src/test/java/com/aseubel/yusi/service/ai/runtime/AgentToolExecutionPolicyExecutorTest.java src/test/java/com/aseubel/yusi/service/ai/tool/AgentToolExecutionPolicyServiceTest.java
@@ -394,18 +394,16 @@ git commit -m "feat: enforce idempotent tool execution policy"
 **Files:**
 - Modify: `src/main/java/com/aseubel/yusi/controller/AiController.java`
 - Modify: `src/main/java/com/aseubel/yusi/service/ai/tool/UserPersonaTool.java`
-- Modify: `src/main/java/com/aseubel/yusi/service/ai/runtime/AgentRunTraceService.java`
-- Modify: `src/main/java/com/aseubel/yusi/service/ai/runtime/AgentToolTraceService.java`
 - Modify: `src/test/java/com/aseubel/yusi/controller/AiControllerCancellationTest.java`
 - Create: `src/test/java/com/aseubel/yusi/service/ai/tool/UserPersonaToolIdempotencyTest.java`
 
 **Interfaces:**
-- At the existing `AiController` callback location L342-L372, `beforeToolExecution` generates one local ID, creates `AgentToolInvocationContext`, registers it under the request identity, and starts Trace with the same idempotency mode.
+- At the existing `AiController` callback location L342-L372, `beforeToolExecution` generates one local ID, registers all capability fields under the request identity as an `AgentToolInvocationContext`, and starts Trace with the same idempotency mode.
 - `onToolExecuted` resolves and completes the same local ID; it never creates a second ID and calls `toolCompleted` once per logical callback.
 - `traceRunCompleted`, `traceRunFailed`, `traceRunCancelled`, and synchronous setup failure clear the context registry after invoking the existing terminal Trace path.
 - `UserPersonaTool` uses `AgentToolInvocationContextHolder.current().userId()` when present; it falls back to the LangChain memory ID only for direct non-Agent tests. The context's `localToolCallId` is consumed by the wrapper ledger, not regenerated by the tool.
 
-- [ ] **Step 1: Write the failing controller and E2E tests**
+- [x] **Step 1: Write the failing controller and E2E tests**
 
 Extend the existing controller callback test to capture the registry Context and verify:
 
@@ -416,14 +414,9 @@ verify(agentToolExecutionAttemptRegistry).register(
         eq(AgentToolAccessMode.READ), eq(AgentToolIdempotencyMode.NONE), anyString());
 ```
 
-Create `UserPersonaToolIdempotencyTest` with a mocked `UserPersonaService`, an actual `UserPersonaTool`, an actual `AgentToolCapabilityCatalog`, a real single-worker executor, an `AgentToolIdempotencyLedgerService` backed by a Mockito repository, and the unified policy service. Assert:
+Create `UserPersonaToolIdempotencyTest` with a mocked `UserPersonaService`, an actual `UserPersonaTool`, an actual `AgentToolCapabilityCatalog`, a real single-worker executor, an actual `AgentToolIdempotencyLedgerService` backed by a stateful Mockito repository, and the unified policy service. Assert that the first `executeWithContext` reaches `updateUserPersona` using the Context user ID, that replaying the same local ID returns `IDEMPOTENCY_ALREADY_COMPLETED` with `isError == true`, and that the service invocation count remains one. The concurrent-claim, timeout-to-`UNKNOWN`, and cancellation matrix remains covered by the executor and ledger-focused tests in Tasks 3-4.
 
-1. one first call reaches `updateUserPersona` using the Context user ID;
-2. replaying the same local ID returns `IDEMPOTENCY_ALREADY_COMPLETED` with `isError == true` and the service invocation count remains one;
-3. two concurrent claims allow exactly one delegate and the other returns `IDEMPOTENCY_IN_PROGRESS` as an error;
-4. a timeout produces one delegate call, `resolveUnknown`, and a later replay returns `IDEMPOTENCY_UNKNOWN`.
-
-- [ ] **Step 2: Run the focused tests to verify they fail**
+- [x] **Step 2: Run the focused tests to verify they fail**
 
 ```powershell
 .\mvnw.cmd -q "-Dtest=AiControllerCancellationTest,UserPersonaToolIdempotencyTest" test
@@ -431,15 +424,18 @@ Create `UserPersonaToolIdempotencyTest` with a mocked `UserPersonaService`, an a
 
 Expected: compilation or verification failure because the Controller has no idempotency Context registration and `UserPersonaTool` does not read the holder.
 
-- [ ] **Step 3: Implement lifecycle wiring and real tool consumption**
+- [x] **Step 3: Implement lifecycle wiring and real tool consumption**
 
-Use the catalog result already resolved by the Controller to populate every Context field. Add a `traceToolStarted` overload that passes `AgentToolTrace.IdempotencyMode` to `AgentToolTraceService.start`; the old trace method remains unchanged for existing callers. Register the Context before the tool can execute, then emit the existing safe SSE event with the same local ID.
+Use the catalog result already resolved by the Controller to populate every Context field. Add a `traceToolStarted` overload that passes `AgentToolIdempotencyMode` to `AgentToolTraceService.start`; the old trace method remains unchanged for existing callers. Register the Context before the tool can execute, then emit the existing safe SSE event with the same local ID.
 
 In `UserPersonaTool`, select the effective user ID with the holder Context first and reject a blank value. Do not read or write the tool call ID from arguments. Keep result text handling unchanged; the executor, not the tool, owns ledger resolution.
 
-In `AgentToolTraceService.closeRunning`, invoke `resolveUnknown` for rows whose idempotency status is `CLAIMED` before finishing the ordinary trace. Keep the existing `AgentRunTraceService` complete/fail/cancel calls and `tool_count` updates unchanged.
+Use the `AgentToolTraceService.closeRunning` behavior delivered in Task 3: rows whose idempotency status is
+`CLAIMED` are resolved to `UNKNOWN` before ordinary trace convergence. Keep the existing
+`AgentRunTraceService` complete/fail/cancel calls and `tool_count` updates unchanged while this task wires the
+Controller lifecycle and clears request identity state.
 
-- [ ] **Step 4: Run the E2E and lifecycle tests**
+- [x] **Step 4: Run the E2E and lifecycle tests**
 
 ```powershell
 .\mvnw.cmd -q "-Dtest=AiControllerCancellationTest,UserPersonaToolIdempotencyTest,AgentRunTraceServiceTest,AgentToolTraceServiceTest" test
@@ -447,10 +443,10 @@ In `AgentToolTraceService.closeRunning`, invoke `resolveUnknown` for rows whose 
 
 Expected: PASS; null upstream IDs still use one generated local ID, cancel closes orphan traces, and the persona service is never called by a blocked replay.
 
-- [ ] **Step 5: Commit the end-to-end slice**
+- [x] **Step 5: Commit the end-to-end slice**
 
 ```powershell
-git add src/main/java/com/aseubel/yusi/controller/AiController.java src/main/java/com/aseubel/yusi/service/ai/tool/UserPersonaTool.java src/main/java/com/aseubel/yusi/service/ai/runtime/AgentRunTraceService.java src/main/java/com/aseubel/yusi/service/ai/runtime/AgentToolTraceService.java src/test/java/com/aseubel/yusi/controller/AiControllerCancellationTest.java src/test/java/com/aseubel/yusi/service/ai/tool/UserPersonaToolIdempotencyTest.java
+git add src/main/java/com/aseubel/yusi/controller/AiController.java src/main/java/com/aseubel/yusi/service/ai/tool/UserPersonaTool.java src/test/java/com/aseubel/yusi/controller/AiControllerCancellationTest.java src/test/java/com/aseubel/yusi/service/ai/tool/UserPersonaToolIdempotencyTest.java
 git commit -m "feat: protect persona writes from duplicate execution"
 ```
 
@@ -461,11 +457,11 @@ git commit -m "feat: protect persona writes from duplicate execution"
 - Modify: `docs/superpowers/specs/2026-08-16-agent-tool-idempotency-design.md`
 - Modify: `docs/superpowers/plans/2026-08-16-agent-tool-idempotency.md`
 
-- [ ] **Step 1: Write the roadmap/documentation assertions**
+- [x] **Step 1: Write the roadmap/documentation assertions**
 
 Update the Phase 3 entry to state that tool idempotency now covers only explicitly declared write tools, shares `localToolCallId/tool_call_id`, blocks `UNKNOWN`, scans stale `CLAIMED`, and leaves write confirmation/pause-resume out of scope. Add a completion entry with the exact `updateUserPersona` E2E object and unchanged `agent_run_trace.tool_count` semantics. Ensure the design doc's six requested points and the implementation plan's task names match the code.
 
-- [ ] **Step 2: Run the persisted-boundary checks**
+- [x] **Step 2: Run the persisted-boundary checks**
 
 ```powershell
 rg -n -i "query|keyword|arguments|resultText|exception\.getMessage|prompt|secret|password" src/main/java/com/aseubel/yusi/service/ai/runtime/AgentTool* src/main/java/com/aseubel/yusi/service/ai/tool/AgentTool* src/main/java/com/aseubel/yusi/pojo/entity/AgentToolTrace.java
@@ -473,7 +469,7 @@ rg -n -i "query|keyword|arguments|resultText|exception\.getMessage|prompt|secret
 
 Expected: no new persistence or model-response path stores raw query/arguments/result/Prompt/secret data; normal tool schema descriptions may still contain parameter names in the capability catalog.
 
-- [ ] **Step 3: Run focused regression tests**
+- [x] **Step 3: Run focused regression tests**
 
 ```powershell
 .\mvnw.cmd -q "-Dtest=AgentToolCapabilityCatalogTest,AgentToolInvocationContextPropagationTest,AgentToolIdempotencyLedgerServiceTest,AgentToolExecutionPolicyExecutorTest,AgentToolExecutionPolicyServiceTest,UserPersonaToolIdempotencyTest,AgentToolTraceServiceTest,AgentRunTraceServiceTest,AiControllerCancellationTest" test
@@ -481,7 +477,7 @@ Expected: no new persistence or model-response path stores raw query/arguments/r
 
 Expected: exit code `0`; no service process is started.
 
-- [ ] **Step 4: Run complete verification**
+- [x] **Step 4: Run complete verification**
 
 ```powershell
 git diff --check
@@ -491,7 +487,7 @@ git status --short --branch
 
 Expected: all tests exit `0`, `git diff --check` is empty, and only the intentional commits/files remain.
 
-- [ ] **Step 5: Commit the roadmap/documentation slice**
+- [x] **Step 5: Commit the roadmap/documentation slice**
 
 ```powershell
 git add docs/engineering/plans/2026-08-04-yusi-agent-product-roadmap.md docs/superpowers/specs/2026-08-16-agent-tool-idempotency-design.md docs/superpowers/plans/2026-08-16-agent-tool-idempotency.md

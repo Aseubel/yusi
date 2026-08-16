@@ -209,3 +209,15 @@ onToolExecuted / AgentRun complete/fail/cancel
 5. Context 注入先有传播测试；失败时只允许显式退回 `ModelRouteContextHolder`，不能依赖隐式 ThreadLocal 继承。
 6. `updateUserPersona` 端到端证明 claim、阻断、Context 消费和真实副作用保护有效。
 7. 全量后端测试通过，`git diff --check` 通过，不启动服务、不依赖远程模型或跨域环境。
+
+## 实施状态
+
+截至 2026-08-16，本设计已按方案 3 落地。能力目录目前只有本地 `updateUserPersona` 声明
+`WRITE + IDEMPOTENT_WRITE + DENY`；真实端到端测试使用 `UserPersonaTool`、显式
+`AgentToolInvocationContext` 和账本服务，验证首次执行后同一 `(userId, runId, localToolCallId)`
+重放会返回 error 响应且不会再次调用画像服务。
+
+Context 到专用 worker 的显式传播技术验证已通过，因此没有启用 `ModelRouteContextHolder` 退回路径。
+`McpGrpcServiceImpl` 的原始 `keyword/query` 日志仍明确排除在本设计之外；用户确认、暂停/恢复和跨请求
+未知副作用的人工处置也不属于本切片。`agent_run_trace.tool_count` 仍只统计完成的逻辑工具调用，
+不随 claim、物理尝试或账本行数变化。
