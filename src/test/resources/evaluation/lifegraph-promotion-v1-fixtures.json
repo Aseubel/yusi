@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "lifegraph-promotion-v1",
+  "cases": [
+    {
+      "caseId": "EVAL-MEM-003",
+      "scenarios": [
+        {
+          "scenarioId": "EVAL-MEM-003-A",
+          "userId": "fixture-user-promotion-a",
+          "sourceId": "fixture-diary-promotion-a",
+          "confirmedImportantPersonKeys": [],
+          "extraction": {
+            "entities": [
+              {"type": "User", "displayName": "我", "nameNorm": "__USER__"},
+              {"type": "Person", "displayName": "fixture-person-a", "nameNorm": "fixture-person-a"},
+              {"type": "Item", "displayName": "fixture-item-a", "nameNorm": "fixture-item-a"},
+              {"type": "Event", "displayName": "fixture-event-a", "nameNorm": "fixture-event-a"},
+              {"type": "Person", "displayName": "fixture-person-c", "nameNorm": "fixture-person-c"}
+            ],
+            "relations": [
+              {"source": "__USER__", "target": "fixture-person-a", "type": "PARTNER_OF", "confidence": 0.60, "evidenceSnippet": "evidence-token-direct-a"},
+              {"source": "__USER__", "target": "fixture-person-a", "type": "PARTNER_OF", "confidence": 0.60, "evidenceSnippet": "evidence-token-direct-a-duplicate"},
+              {"source": "fixture-person-a", "target": "fixture-item-a", "type": "DISLIKES", "confidence": 0.59, "evidenceSnippet": "evidence-token-low-a"},
+              {"source": "fixture-person-a", "target": "fixture-event-a", "type": "HAPPENED_AT", "confidence": 0.90},
+              {"source": "fixture-person-a", "target": "fixture-item-a", "type": "LIKES", "confidence": 0.90, "evidenceSnippet": "evidence-token-item-a"},
+              {"source": "fixture-person-a", "target": "fixture-event-a", "type": "PARTICIPATED_IN", "confidence": 0.90, "evidenceSnippet": "evidence-token-event-a"},
+              {"source": "fixture-person-a", "target": "fixture-person-c", "type": "FRIEND_OF", "confidence": 0.90, "evidenceSnippet": "evidence-token-person-hop-a"},
+              {"source": "__USER__", "target": "fixture-item-a", "type": "MENTIONED", "confidence": 0.90, "evidenceSnippet": "evidence-token-mentioned-a"},
+              {"source": "__USER__", "target": "fixture-item-a", "type": "MENTIONED_IN", "confidence": 0.90, "evidenceSnippet": "evidence-token-mentioned-in-a"},
+              {"source": "__USER__", "target": "fixture-item-a", "type": "SAID", "confidence": 0.90, "evidenceSnippet": "evidence-token-said-a"},
+              {"source": "__USER__", "target": "fixture-item-a", "type": "RELATED_TO", "confidence": 0.90, "evidenceSnippet": "evidence-token-related-to-a"}
+            ],
+            "mentions": [
+              {"entity": "fixture-person-a", "snippet": "evidence-token-mention-person-a"},
+              {"entity": "fixture-item-a", "snippet": "evidence-token-mention-item-a"},
+              {"entity": "fixture-event-a", "snippet": "evidence-token-mention-event-a"}
+            ]
+          },
+          "expected": {
+            "acceptedEntityKeys": ["fixture-person-a", "fixture-item-a", "fixture-event-a"],
+            "acceptedRelationKeys": [
+              "__user__|fixture-person-a|PARTNER_OF",
+              "fixture-person-a|fixture-item-a|LIKES",
+              "fixture-person-a|fixture-event-a|PARTICIPATED_IN"
+            ],
+            "rejectedRelationKeys": [
+              "fixture-person-a|fixture-item-a|DISLIKES",
+              "fixture-person-a|fixture-event-a|HAPPENED_AT",
+              "fixture-person-a|fixture-person-c|FRIEND_OF",
+              "__user__|fixture-item-a|MENTIONED",
+              "__user__|fixture-item-a|MENTIONED_IN",
+              "__user__|fixture-item-a|SAID",
+              "__user__|fixture-item-a|RELATED_TO"
+            ],
+            "sourceEntityEvidenceCount": 3,
+            "sourceRelationEvidenceCount": 3,
+            "sourceMentionCount": 3
+          }
+        },
+        {
+          "scenarioId": "EVAL-MEM-003-B",
+          "userId": "fixture-user-promotion-b",
+          "sourceId": "fixture-diary-promotion-b",
+          "confirmedImportantPersonKeys": ["fixture-person-b"],
+          "extraction": {
+            "entities": [
+              {"type": "User", "displayName": "我", "nameNorm": "__USER__"},
+              {"type": "Person", "displayName": "fixture-person-b", "nameNorm": "fixture-person-b"},
+              {"type": "Item", "displayName": "fixture-item-b", "nameNorm": "fixture-item-b"},
+              {"type": "Event", "displayName": "fixture-event-b", "nameNorm": "fixture-event-b"},
+              {"type": "Person", "displayName": "fixture-person-c", "nameNorm": "fixture-person-c"}
+            ],
+            "relations": [
+              {"source": "fixture-person-b", "target": "fixture-item-b", "type": "LIKES", "confidence": 0.90, "evidenceSnippet": "evidence-token-item-b"},
+              {"source": "fixture-person-b", "target": "fixture-event-b", "type": "PARTICIPATED_IN", "confidence": 0.90, "evidenceSnippet": "evidence-token-event-b"},
+              {"source": "fixture-person-b", "target": "fixture-person-c", "type": "FRIEND_OF", "confidence": 0.90, "evidenceSnippet": "evidence-token-person-hop-b"}
+            ],
+            "mentions": [
+              {"entity": "fixture-person-b", "snippet": "evidence-token-mention-person-b"},
+              {"entity": "fixture-item-b", "snippet": "evidence-token-mention-item-b"},
+              {"entity": "fixture-event-b", "snippet": "evidence-token-mention-event-b"}
+            ]
+          },
+          "expected": {
+            "acceptedEntityKeys": ["fixture-person-b", "fixture-item-b", "fixture-event-b"],
+            "acceptedRelationKeys": [
+              "fixture-person-b|fixture-item-b|LIKES",
+              "fixture-person-b|fixture-event-b|PARTICIPATED_IN"
+            ],
+            "rejectedRelationKeys": [
+              "fixture-person-b|fixture-person-c|FRIEND_OF"
+            ],
+            "sourceEntityEvidenceCount": 3,
+            "sourceRelationEvidenceCount": 2,
+            "sourceMentionCount": 3
+          }
+        },
+        {
+          "scenarioId": "EVAL-MEM-003-C",
+          "userId": "fixture-user-promotion-c",
+          "sourceId": "fixture-diary-promotion-c",
+          "confirmedImportantPersonKeys": [],
+          "extraction": {
+            "entities": [
+              {"type": "User", "displayName": "我", "nameNorm": "__USER__"},
+              {"type": "Person", "displayName": "fixture-person-c", "nameNorm": "fixture-person-c"},
+              {"type": "Item", "displayName": "fixture-item-c", "nameNorm": "fixture-item-c"},
+              {"type": "Event", "displayName": "fixture-event-c", "nameNorm": "fixture-event-c"}
+            ],
+            "relations": [
+              {"source": "__USER__", "target": "fixture-person-c", "type": "PARTNER_OF", "confidence": 0.59, "evidenceSnippet": "evidence-token-low-c"},
+              {"source": "__USER__", "target": "fixture-person-c", "type": "FAMILY_OF", "confidence": 0.90},
+              {"source": "fixture-person-c", "target": "fixture-item-c", "type": "LIKES", "confidence": 0.90, "evidenceSnippet": "evidence-token-unconfirmed-c"},
+              {"source": "fixture-person-c", "target": "fixture-event-c", "type": "PARTICIPATED_IN", "confidence": 0.90, "evidenceSnippet": "evidence-token-unconfirmed-event-c"}
+            ]
+          },
+          "expected": {
+            "acceptedEntityKeys": [],
+            "acceptedRelationKeys": [],
+            "rejectedRelationKeys": [
+              "__user__|fixture-person-c|PARTNER_OF",
+              "__user__|fixture-person-c|FAMILY_OF",
+              "fixture-person-c|fixture-item-c|LIKES",
+              "fixture-person-c|fixture-event-c|PARTICIPATED_IN"
+            ],
+            "sourceEntityEvidenceCount": 0,
+            "sourceRelationEvidenceCount": 0,
+            "sourceMentionCount": 0
+          }
+        }
+      ]
+    }
+  ]
+}

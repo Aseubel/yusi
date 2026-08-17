@@ -14,6 +14,96 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class LifeGraphPromotionPolicyTest {
 
     @Test
+    void enforcesInclusiveConfidenceThresholdAndEvidenceRequirement() {
+        LifeGraphExtractionResult result = new LifeGraphExtractionResult();
+        result.setEntities(List.of(
+                entity("User", "我", "__USER__"),
+                entity("Person", "fixture-person-a", "fixture-person-a"),
+                entity("Item", "fixture-item-a", "fixture-item-a"),
+                entity("Event", "fixture-event-a", "fixture-event-a")));
+        result.setRelations(List.of(
+                relation("__USER__", "fixture-person-a", "PARTNER_OF", 0.60,
+                        "evidence-token-direct-a"),
+                relation("fixture-person-a", "fixture-item-a", "LIKES", 0.59,
+                        "evidence-token-low-a"),
+                relation("fixture-person-a", "fixture-event-a", "PARTICIPATED_IN", 0.90, null)));
+
+        LifeGraphPromotionPolicy.PromotionResult promoted =
+                new LifeGraphPromotionPolicy().promote(result, Set.of());
+
+        assertTrue(promoted.acceptedEntityKeys().contains("fixture-person-a"));
+        assertFalse(promoted.acceptedEntityKeys().contains("fixture-item-a"));
+        assertFalse(promoted.acceptedEntityKeys().contains("fixture-event-a"));
+        assertTrue(promoted.relations().stream().anyMatch(relation ->
+                "PARTNER_OF".equals(relation.getType())));
+        assertFalse(promoted.relations().stream().anyMatch(relation ->
+                "LIKES".equals(relation.getType())));
+        assertFalse(promoted.relations().stream().anyMatch(relation ->
+                "PARTICIPATED_IN".equals(relation.getType())));
+    }
+
+    @Test
+    void promotesConfirmedPersonAttributesWithoutExpandingToAnotherPerson() {
+        LifeGraphExtractionResult result = new LifeGraphExtractionResult();
+        result.setEntities(List.of(
+                entity("User", "我", "__USER__"),
+                entity("Person", "fixture-person-b", "fixture-person-b"),
+                entity("Item", "fixture-item-b", "fixture-item-b"),
+                entity("Event", "fixture-event-b", "fixture-event-b"),
+                entity("Person", "fixture-person-c", "fixture-person-c")));
+        result.setRelations(List.of(
+                relation("__USER__", "fixture-person-b", "PARTNER_OF", 0.90,
+                        "evidence-token-person-b"),
+                relation("fixture-person-b", "fixture-item-b", "LIKES", 0.90,
+                        "evidence-token-item-b"),
+                relation("fixture-person-b", "fixture-event-b", "PARTICIPATED_IN", 0.90,
+                        "evidence-token-event-b"),
+                relation("fixture-person-b", "fixture-person-c", "FRIEND_OF", 0.90,
+                        "evidence-token-person-c"),
+                relation("__USER__", "fixture-item-b", "MENTIONED", 0.90,
+                        "evidence-token-mentioned"),
+                relation("__USER__", "fixture-item-b", "MENTIONED_IN", 0.90,
+                        "evidence-token-mentioned-in"),
+                relation("__USER__", "fixture-item-b", "SAID", 0.90,
+                        "evidence-token-said"),
+                relation("__USER__", "fixture-item-b", "RELATED_TO", 0.90,
+                        "evidence-token-related-to")));
+
+        LifeGraphPromotionPolicy.PromotionResult promoted =
+                new LifeGraphPromotionPolicy().promote(result, Set.of("fixture-person-b"));
+
+        assertTrue(promoted.acceptedEntityKeys().containsAll(Set.of(
+                "fixture-person-b", "fixture-item-b", "fixture-event-b")));
+        assertFalse(promoted.acceptedEntityKeys().contains("fixture-person-c"));
+        assertTrue(promoted.relations().stream().noneMatch(relation ->
+                "fixture-person-c".equals(relation.getSource())
+                        || "fixture-person-c".equals(relation.getTarget())));
+        assertTrue(promoted.relations().stream().noneMatch(relation ->
+                Set.of("MENTIONED", "MENTIONED_IN", "SAID", "RELATED_TO")
+                        .contains(relation.getType())));
+    }
+
+    @Test
+    void countsDuplicateAcceptedRelationOccurrencesByNormalizedKey() {
+        LifeGraphExtractionResult result = new LifeGraphExtractionResult();
+        result.setEntities(List.of(
+                entity("User", "我", "__USER__"),
+                entity("Person", "fixture-person-a", "fixture-person-a")));
+        result.setRelations(List.of(
+                relation("我", "fixture-person-a", "partner_of", 0.90,
+                        "evidence-token-duplicate-a"),
+                relation("__USER__", "FIXTURE-PERSON-A", "PARTNER_OF", 0.90,
+                        "evidence-token-duplicate-b")));
+
+        LifeGraphPromotionPolicy.PromotionResult promoted =
+                new LifeGraphPromotionPolicy().promote(result, Set.of());
+
+        assertEquals(1, promoted.relations().size());
+        assertEquals(2, promoted.relationOccurrences()
+                .get("__user__|fixture-person-a|PARTNER_OF"));
+    }
+
+    @Test
     void promotesImportantPersonAndOneHopAttributeButRejectsPersonExpansion() {
         LifeGraphExtractionResult result = new LifeGraphExtractionResult();
         result.setEntities(List.of(
@@ -100,12 +190,17 @@ class LifeGraphPromotionPolicyTest {
 
     private LifeGraphExtractionResult.ExtractedRelation relation(
             String source, String target, String type, String evidence) {
+        return relation(source, target, type, 0.9, evidence);
+    }
+
+    private LifeGraphExtractionResult.ExtractedRelation relation(
+            String source, String target, String type, double confidence, String evidence) {
         LifeGraphExtractionResult.ExtractedRelation relation =
                 new LifeGraphExtractionResult.ExtractedRelation();
         relation.setSource(source);
         relation.setTarget(target);
         relation.setType(type);
-        relation.setConfidence(0.9);
+        relation.setConfidence(confidence);
         relation.setEvidenceSnippet(evidence);
         relation.setProps(Map.of());
         return relation;
