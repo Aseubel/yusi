@@ -111,8 +111,15 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
         return entities.stream()
                 .filter(entity -> entity.getType() != LifeGraphEntity.EntityType.User)
                 .sorted(Comparator
-                        .comparing((LifeGraphEntity entity) -> lifeGraphPriority(entity.getType())).reversed()
-                        .thenComparing(LifeGraphEntity::getMentionCount, Comparator.nullsLast(Comparator.reverseOrder())))
+                        .comparingInt((LifeGraphEntity entity) -> lifeGraphPriority(entity.getType())).reversed()
+                        .thenComparing(Comparator.comparingDouble(this::effectiveImportance).reversed())
+                        .thenComparing(Comparator.comparingInt(this::effectiveMentionCount).reversed())
+                        .thenComparing(LifeGraphEntity::getUpdatedAt,
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(LifeGraphEntity::getId,
+                                Comparator.nullsLast(Comparator.naturalOrder()))
+                        .thenComparing(LifeGraphEntity::getNameNorm,
+                                Comparator.nullsLast(Comparator.naturalOrder())))
                 .limit(6)
                 .map(entity -> {
                     String summary = StrUtil.blankToDefault(entity.getSummary(), "暂无结构化摘要");
@@ -215,6 +222,15 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
             case Work -> 1;
             case User -> 0;
         };
+    }
+
+    private double effectiveImportance(LifeGraphEntity entity) {
+        Double value = entity.getImportance();
+        return value == null || !Double.isFinite(value) ? 0.5 : value;
+    }
+
+    private int effectiveMentionCount(LifeGraphEntity entity) {
+        return entity.getMentionCount() == null ? 0 : entity.getMentionCount();
     }
 
     private String toChineseType(LifeGraphEntity.EntityType type) {

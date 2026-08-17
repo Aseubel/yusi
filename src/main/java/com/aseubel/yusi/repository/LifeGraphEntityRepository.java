@@ -98,7 +98,10 @@ public interface LifeGraphEntityRepository extends JpaRepository<LifeGraphEntity
               AND e.hidden = false
               AND e.matchAllowed = true
               AND (e.validUntil IS NULL OR e.validUntil > :now)
-            ORDER BY e.mentionCount DESC, e.updatedAt DESC
+            ORDER BY COALESCE(e.importance, 0.5) DESC,
+                     COALESCE(e.mentionCount, 0) DESC,
+                     e.updatedAt DESC,
+                     e.id ASC
             """)
     List<LifeGraphEntity> findMatchableTopByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now,
             Pageable pageable);
