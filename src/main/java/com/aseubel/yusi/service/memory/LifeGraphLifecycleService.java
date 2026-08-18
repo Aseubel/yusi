@@ -44,7 +44,10 @@ import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import com.aseubel.yusi.service.lifegraph.constant.LifeGraphConstants;
+import com.aseubel.yusi.service.lifegraph.constant.LifeGraphRelationType;
 
 /** 关系图谱实体的透明度和生命周期操作。 */
 @Slf4j
@@ -100,8 +103,9 @@ public class LifeGraphLifecycleService {
         Page<LifeGraphEntity> page = entityRepository.findByUserId(
                 userId, PageRequest.of(0, safeLimit, Sort.by(Sort.Direction.DESC, "mentionCount")));
         LocalDateTime now = LocalDateTime.now();
+        RelationProjectionContext relationContext = relationProjectionContext(userId, page.getContent());
         List<LifeGraphMemoryItem> items = page.getContent().stream()
-                .map(entity -> toItem(userId, entity, now))
+                .map(entity -> toItem(userId, entity, now, relationContext))
                 .toList();
 
         return LifeGraphMemoryResponse.builder()
@@ -212,6 +216,11 @@ public class LifeGraphLifecycleService {
     }
 
     private LifeGraphMemoryItem toItem(String userId, LifeGraphEntity entity, LocalDateTime now) {
+        return toItem(userId, entity, now, relationProjectionContext(userId, List.of(entity)));
+    }
+
+    private LifeGraphMemoryItem toItem(String userId, LifeGraphEntity entity, LocalDateTime now,
+            RelationProjectionContext relationContext) {
         String lifecycleStatus;
         if (Boolean.TRUE.equals(entity.getHidden())) {
             lifecycleStatus = LifecycleStatus.HIDDEN.code();
@@ -235,6 +244,7 @@ public class LifeGraphLifecycleService {
         List<LifeGraphSourceItem> sources = sourceMap.values().stream()
                 .limit(MAX_SOURCES_PER_ENTITY)
                 .toList();
+        RelationProjection relation = relationContext.projectionFor(entity.getId());
 
         return LifeGraphMemoryItem.builder()
                 .id(entity.getId())
@@ -245,6 +255,8 @@ public class LifeGraphLifecycleService {
                 .relationCount(entity.getRelationCount())
                 .confidence(entity.getConfidence() == null ? 0.5 : entity.getConfidence())
                 .importance(entity.getImportance() == null ? 0.5 : entity.getImportance())
+                .relationToUser(relation == null ? null : relation.relationToUser())
+                .relationOrigin(relation == null ? null : relation.relationOrigin())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .validUntil(entity.getValidUntil())
@@ -253,6 +265,146 @@ public class LifeGraphLifecycleService {
                 .lifecycleStatus(lifecycleStatus)
                 .sources(sources)
                 .build();
+    }
+
+    private RelationProjectionContext relationProjectionContext(String userId, List<LifeGraphEntity> entities) {
+        Long userEntityId = entityRepository.findByUserIdAndTypeAndNameNorm(
+                        userId, LifeGraphEntity.EntityType.User, LifeGraphConstants.USER_ENTITY_NORM)
+                .map(LifeGraphEntity::getId)
+                .orElse(null);
+        if (userEntityId == null || entities == null || entities.isEmpty()) {
+            return new RelationProjectionContext(Map.of());
+        }
+
+        Set<Long> personIds = entities.stream()
+                .filter(entity -> entity != null && entity.getId() != null
+                        && entity.getType() == LifeGraphEntity.EntityType.Person)
+                .map(LifeGraphEntity::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        if (personIds.isEmpty()) {
+            return new RelationProjectionContext(Map.of());
+        }
+
+        Map<Long, List<LifeGraphRelation>> candidatesByPerson = new LinkedHashMap<>();
+        for (LifeGraphRelation relation : safeRelations(relationRepository.findByUserId(userId))) {
+            Long personId = directPersonId(userId, userEntityId, personIds, relation);
+            if (personId != null) {
+                candidatesByPerson.computeIfAbsent(personId, ignored -> new ArrayList<>()).add(relation);
+            }
+        }
+
+        Map<Long, RelationProjection> projections = new LinkedHashMap<>();
+        candidatesByPerson.forEach((personId, candidates) -> {
+            LifeGraphRelation selected = chooseRepresentativeRelation(candidates);
+            if (selected == null) {
+                return;
+            }
+            LifeGraphRelationType relationType = LifeGraphRelationType.fromCode(selected.getType());
+            if (relationType == null || selected.getOrigin() == null) {
+                return;
+            }
+            projections.put(personId, new RelationProjection(
+                    relationType.code(), selected.getOrigin().name()));
+        });
+        return new RelationProjectionContext(projections);
+    }
+
+    private Long directPersonId(String userId, Long userEntityId, Set<Long> personIds,
+            LifeGraphRelation relation) {
+        if (relation == null || !Objects.equals(userId, relation.getUserId())
+                || relation.getOrigin() == null) {
+            return null;
+        }
+        LifeGraphRelationType relationType = LifeGraphRelationType.fromCode(relation.getType());
+        if (relationType == null || !relationType.isPersonRelation()) {
+            return null;
+        }
+        Long sourceId = semanticSourceId(relation);
+        Long targetId = semanticTargetId(relation);
+        if (Objects.equals(sourceId, userEntityId) && personIds.contains(targetId)) {
+            return targetId;
+        }
+        if (Objects.equals(targetId, userEntityId) && personIds.contains(sourceId)) {
+            return sourceId;
+        }
+        return null;
+    }
+
+    private LifeGraphRelation chooseRepresentativeRelation(List<LifeGraphRelation> candidates) {
+        return candidates.stream()
+                .sorted((left, right) -> {
+                    int originComparison = Integer.compare(originPriority(right), originPriority(left));
+                    if (originComparison != 0) {
+                        return originComparison;
+                    }
+                    int updatedComparison = compareDescending(left.getUpdatedAt(), right.getUpdatedAt());
+                    if (updatedComparison != 0) {
+                        return updatedComparison;
+                    }
+                    int typeComparison = normalizedRelationType(left).compareTo(normalizedRelationType(right));
+                    if (typeComparison != 0) {
+                        return typeComparison;
+                    }
+                    return compareAscending(left.getId(), right.getId());
+                })
+                .findFirst()
+                .orElse(null);
+    }
+
+    private int originPriority(LifeGraphRelation relation) {
+        return relation.getOrigin() == LifeGraphRelation.Origin.MANUAL ? 1 : 0;
+    }
+
+    private String normalizedRelationType(LifeGraphRelation relation) {
+        LifeGraphRelationType relationType = LifeGraphRelationType.fromCode(relation.getType());
+        return relationType == null ? "" : relationType.code();
+    }
+
+    private int compareDescending(LocalDateTime left, LocalDateTime right) {
+        if (Objects.equals(left, right)) {
+            return 0;
+        }
+        if (left == null) {
+            return 1;
+        }
+        if (right == null) {
+            return -1;
+        }
+        return right.compareTo(left);
+    }
+
+    private int compareAscending(Long left, Long right) {
+        if (Objects.equals(left, right)) {
+            return 0;
+        }
+        if (left == null) {
+            return 1;
+        }
+        if (right == null) {
+            return -1;
+        }
+        return left.compareTo(right);
+    }
+
+    private Long semanticSourceId(LifeGraphRelation relation) {
+        return relation.getSemanticSourceId() == null ? relation.getSourceId() : relation.getSemanticSourceId();
+    }
+
+    private Long semanticTargetId(LifeGraphRelation relation) {
+        return relation.getSemanticTargetId() == null ? relation.getTargetId() : relation.getSemanticTargetId();
+    }
+
+    private List<LifeGraphRelation> safeRelations(List<LifeGraphRelation> relations) {
+        return relations == null ? List.of() : relations;
+    }
+
+    private record RelationProjection(String relationToUser, String relationOrigin) {
+    }
+
+    private record RelationProjectionContext(Map<Long, RelationProjection> projections) {
+        private RelationProjection projectionFor(Long entityId) {
+            return projections.get(entityId);
+        }
     }
 
     private LifeGraphSourceItem toSource(String userId, LifeGraphMention mention) {

@@ -170,6 +170,147 @@ class LifeGraphLifecycleServiceTest {
     }
 
     @Test
+    void listProjectsReverseSemanticPersonRelation() {
+        LifeGraphEntity userEntity = LifeGraphEntity.builder()
+                .id(1L)
+                .userId("user-1")
+                .type(LifeGraphEntity.EntityType.User)
+                .nameNorm(LifeGraphConstants.USER_ENTITY_NORM)
+                .displayName("我")
+                .build();
+        LifeGraphEntity person = entity(11L, "user-1");
+        person.setType(LifeGraphEntity.EntityType.Person);
+        person.setNameNorm("fixture-person");
+        LifeGraphRelation relation = LifeGraphRelation.builder()
+                .id(23L)
+                .userId("user-1")
+                .sourceId(1L)
+                .targetId(11L)
+                .semanticSourceId(11L)
+                .semanticTargetId(1L)
+                .type("FAMILY_OF")
+                .origin(LifeGraphRelation.Origin.AUTO)
+                .build();
+
+        when(entityRepository.findByUserId(eq("user-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(person)));
+        when(entityRepository.findByUserIdAndTypeAndNameNorm(
+                "user-1", LifeGraphEntity.EntityType.User, LifeGraphConstants.USER_ENTITY_NORM))
+                .thenReturn(Optional.of(userEntity));
+        when(relationRepository.findByUserId("user-1")).thenReturn(List.of(relation));
+
+        LifeGraphMemoryItem item = service().list("user-1", 50).getEntities().get(0);
+
+        assertEquals("FAMILY_OF", item.getRelationToUser());
+        assertEquals("AUTO", item.getRelationOrigin());
+    }
+
+    @Test
+    void listSelectsDeterministicRelationAndRejectsForeignSemanticUserEndpoint() {
+        LocalDateTime timestamp = LocalDateTime.of(2026, 8, 18, 12, 0);
+        LifeGraphEntity userEntity = LifeGraphEntity.builder()
+                .id(1L)
+                .userId("user-1")
+                .type(LifeGraphEntity.EntityType.User)
+                .nameNorm(LifeGraphConstants.USER_ENTITY_NORM)
+                .displayName("我")
+                .build();
+        LifeGraphEntity person = entity(11L, "user-1");
+        person.setType(LifeGraphEntity.EntityType.Person);
+        person.setNameNorm("fixture-person");
+        LifeGraphRelation manualFamily = relation(31L, 1L, 11L, "FAMILY_OF",
+                LifeGraphRelation.Origin.MANUAL, timestamp);
+        LifeGraphRelation manualChild = relation(30L, 1L, 11L, "CHILD_OF",
+                LifeGraphRelation.Origin.MANUAL, timestamp);
+        LifeGraphRelation manualChildTie = relation(29L, 1L, 11L, "CHILD_OF",
+                LifeGraphRelation.Origin.MANUAL, timestamp);
+        LifeGraphRelation newerAuto = relation(20L, 1L, 11L, "PARTNER_OF",
+                LifeGraphRelation.Origin.AUTO, timestamp.plusDays(1));
+        LifeGraphRelation foreignSemanticUser = relation(40L, 2L, 11L, "PARTNER_OF",
+                LifeGraphRelation.Origin.MANUAL, timestamp.plusDays(2));
+
+        when(entityRepository.findByUserId(eq("user-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(person)));
+        when(entityRepository.findByUserIdAndTypeAndNameNorm(
+                "user-1", LifeGraphEntity.EntityType.User, LifeGraphConstants.USER_ENTITY_NORM))
+                .thenReturn(Optional.of(userEntity));
+        when(relationRepository.findByUserId("user-1"))
+                .thenReturn(List.of(manualFamily, manualChild, manualChildTie, newerAuto, foreignSemanticUser));
+
+        LifeGraphMemoryItem item = service().list("user-1", 50).getEntities().get(0);
+
+        assertEquals("CHILD_OF", item.getRelationToUser());
+        assertEquals("MANUAL", item.getRelationOrigin());
+    }
+
+    @Test
+    void listFallsBackToPhysicalRelationEndpoints() {
+        LifeGraphEntity userEntity = LifeGraphEntity.builder()
+                .id(1L)
+                .userId("user-1")
+                .type(LifeGraphEntity.EntityType.User)
+                .nameNorm(LifeGraphConstants.USER_ENTITY_NORM)
+                .displayName("我")
+                .build();
+        LifeGraphEntity person = entity(11L, "user-1");
+        person.setType(LifeGraphEntity.EntityType.Person);
+        person.setNameNorm("fixture-person");
+        LifeGraphRelation relation = LifeGraphRelation.builder()
+                .id(24L)
+                .userId("user-1")
+                .sourceId(1L)
+                .targetId(11L)
+                .type("FRIEND_OF")
+                .origin(LifeGraphRelation.Origin.MANUAL)
+                .build();
+
+        when(entityRepository.findByUserId(eq("user-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(person)));
+        when(entityRepository.findByUserIdAndTypeAndNameNorm(
+                "user-1", LifeGraphEntity.EntityType.User, LifeGraphConstants.USER_ENTITY_NORM))
+                .thenReturn(Optional.of(userEntity));
+        when(relationRepository.findByUserId("user-1")).thenReturn(List.of(relation));
+
+        LifeGraphMemoryItem item = service().list("user-1", 50).getEntities().get(0);
+
+        assertEquals("FRIEND_OF", item.getRelationToUser());
+        assertEquals("MANUAL", item.getRelationOrigin());
+    }
+
+    @Test
+    void listIgnoresUnknownRelationTypeAndMissingOrigin() {
+        LifeGraphEntity userEntity = LifeGraphEntity.builder()
+                .id(1L)
+                .userId("user-1")
+                .type(LifeGraphEntity.EntityType.User)
+                .nameNorm(LifeGraphConstants.USER_ENTITY_NORM)
+                .displayName("我")
+                .build();
+        LifeGraphEntity person = entity(11L, "user-1");
+        person.setType(LifeGraphEntity.EntityType.Person);
+        person.setNameNorm("fixture-person");
+        LifeGraphRelation unknownType = relation(25L, 1L, 11L, "FUTURE_RELATION",
+                LifeGraphRelation.Origin.MANUAL, null);
+        LifeGraphRelation missingOrigin = relation(26L, 1L, 11L, "FRIEND_OF", null, null);
+
+        when(entityRepository.findByUserId(eq("user-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(person)));
+        when(entityRepository.findByUserIdAndTypeAndNameNorm(
+                "user-1", LifeGraphEntity.EntityType.User, LifeGraphConstants.USER_ENTITY_NORM))
+                .thenReturn(Optional.of(userEntity));
+        when(relationRepository.findByUserId("user-1"))
+                .thenReturn(List.of(unknownType, missingOrigin));
+
+        LifeGraphMemoryItem item = service().list("user-1", 50).getEntities().get(0);
+
+        assertNull(item.getRelationToUser());
+        assertNull(item.getRelationOrigin());
+        assertFalse(Arrays.stream(LifeGraphMemoryItem.class.getDeclaredFields())
+                .map(Field::getName)
+                .anyMatch(Set.of("evidenceSnippet", "snippet", "props", "evidenceDiaryId")::contains));
+    }
+
+    @Test
     void listResolvesDiarySourceTitleForLifeGraphSources() {
         LifeGraphEntity entity = entity(11L, "user-1");
         LifeGraphMention mention = LifeGraphMention.builder()
@@ -332,6 +473,21 @@ class LifeGraphLifecycleServiceTest {
         return new LifeGraphLifecycleService(entityRepository, entityEvidenceRepository, aliasRepository, mentionRepository,
                 relationRepository, evidenceRepository, mergeJudgmentRepository, matchProfileAssembler,
                 diaryRepository, securityAuditService);
+    }
+
+    private LifeGraphRelation relation(Long id, Long semanticSourceId, Long semanticTargetId,
+            String type, LifeGraphRelation.Origin origin, LocalDateTime updatedAt) {
+        return LifeGraphRelation.builder()
+                .id(id)
+                .userId("user-1")
+                .sourceId(Math.min(semanticSourceId, semanticTargetId))
+                .targetId(Math.max(semanticSourceId, semanticTargetId))
+                .semanticSourceId(semanticSourceId)
+                .semanticTargetId(semanticTargetId)
+                .type(type)
+                .origin(origin)
+                .updatedAt(updatedAt)
+                .build();
     }
 
     private LifeGraphEntity entity(Long id, String userId) {
