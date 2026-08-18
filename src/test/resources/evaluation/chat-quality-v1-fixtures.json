@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "chat-quality-v1",
+  "cases": [
+    {
+      "caseId": "EVAL-CHAT-001",
+      "scenarios": [
+        {
+          "scenarioId": "EVAL-CHAT-001-A",
+          "userId": "fixture-user-chat-a",
+          "inputKind": "NO_HISTORY",
+          "availableMemoryKeys": [],
+          "restrictedMemoryKeys": [],
+          "allowedTools": [],
+          "expectedPolicyCodes": ["NO_STABLE_CLAIM_WITHOUT_CONTEXT"],
+          "expected": {
+            "semanticModelScoreAvailable": false,
+            "restrictedMemoryCount": 0
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "EVAL-CHAT-002",
+      "scenarios": [
+        {
+          "scenarioId": "EVAL-CHAT-002-A",
+          "userId": "fixture-user-chat-b",
+          "inputKind": "SUPPORTED_AND_UNSUPPORTED_MEMORY",
+          "availableMemoryKeys": ["fixture-memory-visible-b"],
+          "restrictedMemoryKeys": [
+            "fixture-memory-hidden-b",
+            "fixture-memory-expired-b",
+            "fixture-memory-other-b"
+          ],
+          "allowedTools": ["searchMemories"],
+          "expectedPolicyCodes": ["VISIBLE_MEMORY_ONLY"],
+          "expected": {
+            "semanticModelScoreAvailable": false,
+            "visibleMemoryCount": 1,
+            "restrictedMemoryCount": 3
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "EVAL-CHAT-003",
+      "scenarios": [
+        {
+          "scenarioId": "EVAL-CHAT-003-A",
+          "userId": "fixture-user-chat-c",
+          "inputKind": "UNRESOLVED_CONFLICT",
+          "availableMemoryKeys": [],
+          "restrictedMemoryKeys": [],
+          "allowedTools": [],
+          "expectedPolicyCodes": ["CONFLICT_REQUIRES_ATTENTION"],
+          "expected": {
+            "semanticModelScoreAvailable": false,
+            "conflictAttentionRequired": true
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "EVAL-TOOL-001",
+      "scenarios": [
+        {
+          "scenarioId": "EVAL-TOOL-001-A",
+          "userId": "fixture-user-chat-d",
+          "inputKind": "TOOL_FAILURE",
+          "availableMemoryKeys": [],
+          "restrictedMemoryKeys": [],
+          "allowedTools": ["searchMemories"],
+          "expectedPolicyCodes": ["TOOL_EVENT_LOW_SENSITIVITY"],
+          "expected": {
+            "semanticModelScoreAvailable": false,
+            "responseDeltaCount": 0,
+            "terminalEventRequired": true
+          }
+        }
+      ]
+    }
+  ]
+}
