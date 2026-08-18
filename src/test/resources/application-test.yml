@@ -150,3 +150,8 @@ aliyun:
 logging:
   level:
     root: warn
+    com.aseubel.yusi.service.agent.impl.AgentProactiveServiceImpl: error
+    com.aseubel.yusi.service.memory.MidTermMemoryLifecycleService: error
+    com.aseubel.yusi.service.ai.model.ModelProxyFactory: error
+    com.aseubel.yusi.common.utils.CompressUtils: error
+    org.hibernate.orm.deprecation: error

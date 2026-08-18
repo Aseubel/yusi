@@ -54,8 +54,6 @@ class YusiApplicationTests {
         user.setPassword("password");
         user.generateUserId();
         User savedUser = userRepository.save(user);
-        System.out.println(userRepository.findAll());
-        System.out.println(userRepository.findById(user.getId()).orElseThrow());
         userRepository.delete(savedUser);
     }
 
@@ -64,11 +62,6 @@ class YusiApplicationTests {
         Sort.TypedSort<Diary> sortType = Sort.sort(Diary.class);
         Sort sort = sortType.by(Diary::getEntryDate).descending().and(sortType.by(Diary::getId));
         Page<Diary> all = diaryRepository.findAll(PageRequest.of(1, 2, sort));
-        System.out.println("total pages: " + all.getTotalPages());
-        System.out.println("total elements: " + all.getSize());
-        System.out.println("current page: " + all.getNumber());
-        System.out.println("total elements: " + all.getTotalElements());
-        System.out.println("content: " + all.getContent());
     }
 
     @Test
