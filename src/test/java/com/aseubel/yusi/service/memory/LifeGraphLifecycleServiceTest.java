@@ -17,6 +17,7 @@ import com.aseubel.yusi.repository.LifeGraphMergeJudgmentRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationEvidenceRepository;
 import com.aseubel.yusi.repository.LifeGraphRelationRepository;
 import com.aseubel.yusi.repository.DiaryRepository;
+import com.aseubel.yusi.service.lifegraph.constant.LifeGraphConstants;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
 import com.aseubel.yusi.service.security.SecurityAuditService;
 import org.junit.jupiter.api.Test;
@@ -33,6 +34,7 @@ import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -41,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -78,6 +81,93 @@ class LifeGraphLifecycleServiceTest {
 
     @Mock
     private SecurityAuditService securityAuditService;
+
+    @Test
+    void listProjectsDirectPersonRelationAndImportance() {
+        LocalDateTime now = LocalDateTime.of(2026, 8, 18, 12, 0);
+        LifeGraphEntity userEntity = LifeGraphEntity.builder()
+                .id(1L)
+                .userId("user-1")
+                .type(LifeGraphEntity.EntityType.User)
+                .nameNorm(LifeGraphConstants.USER_ENTITY_NORM)
+                .displayName("我")
+                .mentionCount(0)
+                .relationCount(1)
+                .importance(1.0)
+                .confidence(1.0)
+                .build();
+        LifeGraphEntity person = entity(11L, "user-1");
+        person.setType(LifeGraphEntity.EntityType.Person);
+        person.setNameNorm("fixture-person");
+        person.setDisplayName("Fixture Person");
+        person.setImportance(0.8);
+        LifeGraphRelation relation = LifeGraphRelation.builder()
+                .id(21L)
+                .userId("user-1")
+                .sourceId(1L)
+                .targetId(11L)
+                .semanticSourceId(1L)
+                .semanticTargetId(11L)
+                .type("PARTNER_OF")
+                .origin(LifeGraphRelation.Origin.MANUAL)
+                .updatedAt(now)
+                .build();
+
+        when(entityRepository.findByUserId(eq("user-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(person)));
+        when(entityRepository.findByUserIdAndTypeAndNameNorm(
+                "user-1", LifeGraphEntity.EntityType.User, LifeGraphConstants.USER_ENTITY_NORM))
+                .thenReturn(Optional.of(userEntity));
+        when(relationRepository.findByUserId("user-1")).thenReturn(List.of(relation));
+
+        LifeGraphMemoryItem item = service().list("user-1", 50).getEntities().get(0);
+
+        assertEquals("PARTNER_OF", item.getRelationToUser());
+        assertEquals("MANUAL", item.getRelationOrigin());
+        assertEquals(0.8, item.getImportance());
+    }
+
+    @Test
+    void listDoesNotProjectRelationsForNonPersonOrMissingDirectFact() {
+        LifeGraphEntity userEntity = LifeGraphEntity.builder()
+                .id(1L)
+                .userId("user-1")
+                .type(LifeGraphEntity.EntityType.User)
+                .nameNorm(LifeGraphConstants.USER_ENTITY_NORM)
+                .displayName("我")
+                .build();
+        LifeGraphEntity person = entity(11L, "user-1");
+        person.setType(LifeGraphEntity.EntityType.Person);
+        person.setNameNorm("fixture-person");
+        LifeGraphEntity topic = entity(12L, "user-1");
+        LifeGraphRelation relationToTopic = LifeGraphRelation.builder()
+                .id(22L)
+                .userId("user-1")
+                .sourceId(1L)
+                .targetId(12L)
+                .semanticSourceId(1L)
+                .semanticTargetId(12L)
+                .type("FAMILY_OF")
+                .origin(LifeGraphRelation.Origin.MANUAL)
+                .build();
+
+        when(entityRepository.findByUserId(eq("user-1"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(person, topic)));
+        lenient().when(entityRepository.findByUserIdAndTypeAndNameNorm(
+                "user-1", LifeGraphEntity.EntityType.User, LifeGraphConstants.USER_ENTITY_NORM))
+                .thenReturn(Optional.of(userEntity));
+        lenient().when(relationRepository.findByUserId("user-1")).thenReturn(List.of(relationToTopic));
+
+        List<LifeGraphMemoryItem> items = service().list("user-1", 50).getEntities();
+
+        assertNull(items.get(0).getRelationToUser());
+        assertNull(items.get(0).getRelationOrigin());
+        assertNull(items.get(1).getRelationToUser());
+        assertNull(items.get(1).getRelationOrigin());
+        assertFalse(Arrays.stream(UpdateLifeGraphMemoryRequest.class.getDeclaredFields())
+                .map(Field::getName)
+                .anyMatch(Set.of("importance", "relationToUser", "relationOrigin")::contains));
+    }
 
     @Test
     void listResolvesDiarySourceTitleForLifeGraphSources() {
