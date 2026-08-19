@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "lifegraph-timeline-rebuild-v1",
+  "cases": [
+    {
+      "caseId": "EVAL-TIMELINE-002",
+      "scenarios": [
+        {
+          "scenarioId": "EVAL-TIMELINE-002-A",
+          "userId": "fixture-user-timeline-rebuild",
+          "sources": [
+            {
+              "sourceType": "DIARY",
+              "sourceId": "fixture-diary-timeline-rebuild",
+              "events": [
+                {
+                  "operation": "UPSERT",
+                  "sourceRevision": 1,
+                  "entryDate": "2026-07-01",
+                  "extraction": {
+                    "entities": [
+                      {
+                        "type": "User",
+                        "displayName": "__USER__",
+                        "nameNorm": "__USER__"
+                      },
+                      {
+                        "type": "Event",
+                        "displayName": "fixture-rebuild-event-old",
+                        "nameNorm": "fixture-rebuild-event-old",
+                        "importance": 0.9,
+                        "confidence": 0.9
+                      }
+                    ],
+                    "relations": [
+                      {
+                        "source": "__USER__",
+                        "target": "fixture-rebuild-event-old",
+                        "type": "PARTICIPATED_IN",
+                        "confidence": 0.9,
+                        "evidenceSnippet": "evidence-token-rebuild-old"
+                      }
+                    ],
+                    "mentions": [
+                      {
+                        "entity": "fixture-rebuild-event-old",
+                        "snippet": "evidence-token-rebuild-old"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "operation": "UPSERT",
+                  "sourceRevision": 2,
+                  "entryDate": "2026-08-11",
+                  "extraction": {
+                    "entities": [
+                      {
+                        "type": "User",
+                        "displayName": "__USER__",
+                        "nameNorm": "__USER__"
+                      },
+                      {
+                        "type": "Event",
+                        "displayName": "fixture-rebuild-event-new",
+                        "nameNorm": "fixture-rebuild-event-new",
+                        "importance": 0.9,
+                        "confidence": 0.9
+                      }
+                    ],
+                    "relations": [
+                      {
+                        "source": "__USER__",
+                        "target": "fixture-rebuild-event-new",
+                        "type": "PARTICIPATED_IN",
+                        "confidence": 0.9,
+                        "evidenceSnippet": "evidence-token-rebuild-new"
+                      }
+                    ],
+                    "mentions": [
+                      {
+                        "entity": "fixture-rebuild-event-new",
+                        "snippet": "evidence-token-rebuild-new"
+                      }
+                    ]
+                  }
+                },
+                {
+                  "operation": "DELETE",
+                  "sourceRevision": 2,
+                  "entryDate": "2026-08-11",
+                  "extraction": {
+                    "entities": [],
+                    "relations": [],
+                    "mentions": []
+                  }
+                }
+              ]
+            }
+          ],
+          "expected": {
+            "beforeRevisionNodeCount": 1,
+            "afterRevisionOldResidualCount": 0,
+            "afterRevisionNewNodeCount": 1,
+            "afterDeleteTimelineNodeCount": 0,
+            "sourceResidualCount": 0,
+            "afterRevisionEntityCount": 2,
+            "afterRevisionRelationCount": 1,
+            "afterRevisionEntityEvidenceCount": 1,
+            "afterRevisionRelationEvidenceCount": 1,
+            "afterRevisionMentionCount": 1,
+            "oldEventKey": "fixture-rebuild-event-old",
+            "newEventKey": "fixture-rebuild-event-new"
+          }
+        }
+      ]
+    }
+  ]
+}
