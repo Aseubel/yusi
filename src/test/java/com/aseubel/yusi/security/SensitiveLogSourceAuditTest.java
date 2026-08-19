@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -39,21 +38,14 @@ class SensitiveLogSourceAuditTest {
             "src/main/java/com/aseubel/yusi/service/user/impl/TokenServiceImpl.java",
             "src/main/java/com/aseubel/yusi/redis/aspect/SpelResolverAspect.java");
 
-    private static final List<DeferredException> DEFERRED_EXCEPTIONS = List.of(
-            new DeferredException("GlobalExceptionHandler.java:86",
-                    "SSE response already started; global exception policy is deferred"),
-            new DeferredException("GlobalExceptionHandler.java:89",
-                    "central HTTP exception handler stack policy is deferred"),
-            new DeferredException("ModelProxyFactory.java:279",
-                    "model retry error classification and sampling policy is deferred"),
-            new DeferredException("PromptManager.java:64",
-                    "database prompt loading exception policy is deferred"),
-            new DeferredException("PromptManager.java:123",
-                    "prompt auto-initialization exception policy is deferred"),
-            new DeferredException("AdminServiceImpl.java:302",
-                    "fixed internal cleanup SQL and exception policy is deferred"),
-            new DeferredException("CacheAspect.java:267",
-                    "cache key and throwable logging policy is deferred"));
+    private static final Set<String> EXCEPTION_POLICY_LOG_FILES = Set.of(
+            "src/main/java/com/aseubel/yusi/common/exception/GlobalExceptionHandler.java",
+            "src/main/java/com/aseubel/yusi/service/ai/model/ModelProxyFactory.java",
+            "src/main/java/com/aseubel/yusi/service/ai/prompt/PromptManager.java",
+            "src/main/java/com/aseubel/yusi/service/user/impl/AdminServiceImpl.java",
+            "src/main/java/com/aseubel/yusi/redis/aspect/CacheAspect.java");
+
+    private static final List<DeferredException> DEFERRED_EXCEPTIONS = List.of();
 
     private static final Pattern LOGGER_START = Pattern.compile(
             "\\b(?:log|logger)\\.(?:trace|debug|info|warn|error)\\s*\\(");
@@ -79,13 +71,14 @@ class SensitiveLogSourceAuditTest {
             String normalizedArguments = safeProjection(invocation.block());
             boolean deferred = location != null;
 
-            if (DIRECT_PAYLOAD.matcher(normalizedArguments).find() && !deferred) {
+            if (DIRECT_PAYLOAD.matcher(normalizedArguments).find()) {
                 directPayloadFindings.add(invocation.location() + ":DIRECT_PAYLOAD");
             }
             if (deferred && isDeferredExceptionBlock(invocation.block())) {
                 observedDeferred.add(location);
             }
-            if (MODIFIED_LOG_FILES.contains(invocation.file())
+            if ((MODIFIED_LOG_FILES.contains(invocation.file())
+                    || EXCEPTION_POLICY_LOG_FILES.contains(invocation.file()))
                     && (EXCEPTION_MESSAGE.matcher(invocation.block()).find()
                     || THROWABLE_ARGUMENT.matcher(invocation.block()).find())) {
                 modifiedMessageStackFindings.add(invocation.location() + ":MESSAGE_OR_STACK");
@@ -96,15 +89,14 @@ class SensitiveLogSourceAuditTest {
                 "SECURITY_LOG_DIRECT_PAYLOAD:" + String.join(",", directPayloadFindings));
         assertEquals(List.of(), modifiedMessageStackFindings,
                 "SECURITY_LOG_MODIFIED_MESSAGE_STACK:" + String.join(",", modifiedMessageStackFindings));
-        assertEquals(DEFERRED_EXCEPTIONS.stream().map(DeferredException::location).collect(Collectors.toCollection(LinkedHashSet::new)),
-                observedDeferred, "SECURITY_LOG_DEFERRED_ALLOWLIST_MISMATCH");
+        assertEquals(Set.of(), observedDeferred, "SECURITY_LOG_DEFERRED_LOCATIONS_OBSERVED");
         assertFalse(invocations.isEmpty(), "SECURITY_LOG_NO_LOGGERS_SCANNED");
     }
 
     @Test
     void deferredExceptionAllowlistIsExplicitAndReasoned() {
-        assertEquals(7, DEFERRED_EXCEPTIONS.size());
-        assertEquals(7, DEFERRED_EXCEPTIONS.stream().map(DeferredException::location).distinct().count());
+        assertTrue(DEFERRED_EXCEPTIONS.isEmpty(), "SECURITY_LOG_DEFERRED_ALLOWLIST_NOT_EMPTY");
+        assertEquals(0, DEFERRED_EXCEPTIONS.stream().map(DeferredException::location).distinct().count());
         assertTrue(DEFERRED_EXCEPTIONS.stream().allMatch(entry -> !entry.reason().isBlank()));
         assertTrue(DEFERRED_EXCEPTIONS.stream().noneMatch(entry -> entry.location().contains("*")
                 || entry.location().contains("/")));

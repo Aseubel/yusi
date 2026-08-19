@@ -7,6 +7,7 @@ import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.common.constant.PromptDefaults;
 import com.aseubel.yusi.common.constant.PromptScope;
 import com.aseubel.yusi.common.event.PromptUpdatedEvent;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -61,7 +62,8 @@ public class PromptManager {
         try {
             dbTemplate = promptService.getPromptTemplate(keyStr, PromptDefaults.LOCALE);
         } catch (Exception e) {
-            log.warn("从数据库加载 Prompt [{}] 失败: {}", keyStr, e.getMessage());
+            log.warn("Prompt database load failed: operation=prompt_load_db, promptKey={}, exceptionType={}",
+                    keyStr, LowSensitivityLogSummary.exceptionType(e));
         }
 
         if (dbTemplate != null && StrUtil.isNotBlank(dbTemplate.getTemplate())
@@ -91,7 +93,8 @@ public class PromptManager {
                 }
             }
         } catch (Exception e) {
-            log.warn("从 Classpath 读取提示词文件 [{}] 发生异常", classpathFileName, e);
+            log.warn("Prompt classpath load failed: operation=prompt_load_classpath, promptKey={}, exceptionType={}",
+                    keyStr, LowSensitivityLogSummary.exceptionType(e));
         }
 
         if (contentToUse == null) {
@@ -120,7 +123,8 @@ public class PromptManager {
             log.info("自动初始化 Prompt [{}] 至数据库", keyStr);
         } catch (Exception e) {
             // Already exists or saving failed, we can ignore this safely
-            log.debug("尝试自动将 Prompt [{}] 写入数据库时跳过或失败: {}", keyStr, e.getMessage());
+            log.debug("Prompt auto-initialization skipped: operation=prompt_auto_init, promptKey={}, exceptionType={}",
+                    keyStr, LowSensitivityLogSummary.exceptionType(e));
         }
     }
 

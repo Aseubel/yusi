@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.user.impl;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.pojo.dto.admin.AdminStatsResponse;
 import com.aseubel.yusi.pojo.dto.admin.ScenarioAuditRequest;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
@@ -210,14 +211,16 @@ public class AdminServiceImpl implements AdminService {
             tokenService.deleteRefreshToken(userId);
             tokenService.removeAllDeviceTokens(userId);
         } catch (Exception e) {
-            log.error("Failed to clean up tokens for user {}: {}", userId, e.getMessage());
+            log.error("Admin deregistration cleanup failed: operation=admin_cleanup_tokens, userId={}, exceptionType={}",
+                    userId, LowSensitivityLogSummary.exceptionType(e));
         }
 
         // 2. Clean up LangChain memory cache in Redis
         try {
             redissonService.remove("yusi:langchain:" + userId);
         } catch (Exception e) {
-            log.error("Failed to delete langchain cache for user {}: {}", userId, e.getMessage());
+            log.error("Admin deregistration cleanup failed: operation=admin_cleanup_langchain_cache, userId={}, exceptionType={}",
+                    userId, LowSensitivityLogSummary.exceptionType(e));
         }
 
         // 3. Clean up Milvus embeddings
@@ -227,7 +230,8 @@ public class AdminServiceImpl implements AdminService {
                     .filter("metadata[\"userId\"] == \"" + userId + "\"")
                     .build());
         } catch (Exception e) {
-            log.error("Failed to delete user {} embeddings from Milvus: {}", userId, e.getMessage());
+            log.error("Admin deregistration cleanup failed: operation=admin_cleanup_embeddings, userId={}, exceptionType={}",
+                    userId, LowSensitivityLogSummary.exceptionType(e));
         }
 
         // 4. Clean up Situation Rooms
@@ -254,7 +258,8 @@ public class AdminServiceImpl implements AdminService {
                 }
             }
         } catch (Exception e) {
-            log.error("Failed to clean up situation rooms for user {}: {}", userId, e.getMessage());
+            log.error("Admin deregistration cleanup failed: operation=admin_cleanup_situation_rooms, userId={}, exceptionType={}",
+                    userId, LowSensitivityLogSummary.exceptionType(e));
         }
 
         // 5. Clean up other database tables using native queries
@@ -291,7 +296,8 @@ public class AdminServiceImpl implements AdminService {
             "DELETE FROM user WHERE user_id = ?"
         };
 
-        for (String query : deleteQueries) {
+        for (int statementIndex = 0; statementIndex < deleteQueries.length; statementIndex++) {
+            String query = deleteQueries[statementIndex];
             try {
                 if (query.contains("OR")) {
                     jdbcTemplate.update(query, userId, userId);
@@ -299,7 +305,8 @@ public class AdminServiceImpl implements AdminService {
                     jdbcTemplate.update(query, userId);
                 }
             } catch (Exception e) {
-                log.error("Failed to execute delete query [{}] for user {}: {}", query, userId, e.getMessage());
+                log.error("Admin deregistration cleanup failed: operation=delete_related_data, userId={}, statementIndex={}, exceptionType={}",
+                        userId, statementIndex, LowSensitivityLogSummary.exceptionType(e));
             }
         }
         log.info("Successfully deregistered user {} and cleaned up all associated data", userId);

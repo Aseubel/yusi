@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.ai.model;
 
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.ai.runtime.ModelCallAttemptEvent;
@@ -276,8 +277,15 @@ public class ModelProxyFactory {
                             ModelUsageSnapshot.unavailable(selected.getPriceVersion()), latency, null,
                             attemptIndex, ModelCallStatus.FAILED.code(), normalized.kind().name());
                     lastError = normalized;
-                    log.warn("AI model invocation failed, attempt {}, model: {}, kind: {}, error: {}",
-                            attemptIndex + 1, selected.getModelName(), normalized.kind(), normalized.getMessage());
+                    log.warn("AI model invocation failed: operation=model_invoke, attempt={}, requestId={}, runId={}, provider={}, modelId={}, failureKind={}, fallbackEligible={}, exceptionType={}",
+                            attemptIndex + 1,
+                            context.getRequestId(),
+                            context.getRunId(),
+                            selected.getProvider(),
+                            selected.getId(),
+                            normalized.kind().name(),
+                            normalized.isFallbackEligible(false),
+                            LowSensitivityLogSummary.exceptionType(normalized.getCause()));
                     if (!normalized.isFallbackEligible(false)) {
                         throw normalized;
                     }
@@ -434,8 +442,8 @@ public class ModelProxyFactory {
             try {
                 eventPublisher.publishEvent(event);
             } catch (RuntimeException publishFailure) {
-                log.warn("Failed to publish model attempt event attemptId={}: {}",
-                        event.attemptId(), publishFailure.getMessage());
+                log.warn("Model attempt event publish failed: operation=publish_model_attempt, attemptId={}, exceptionType={}",
+                        event.attemptId(), LowSensitivityLogSummary.exceptionType(publishFailure));
             }
         }
 

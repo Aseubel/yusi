@@ -3,6 +3,7 @@ package com.aseubel.yusi.redis.aspect;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.aseubel.yusi.common.utils.CompressUtils;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.common.utils.SpelResolverHelper;
 import com.aseubel.yusi.redis.service.IRedisService;
 import com.aseubel.yusi.redis.annotation.QueryCache;
@@ -195,7 +196,8 @@ public class CacheAspect {
 
         if (sign.equals(NEED_WAIT)) {
             // 超时未获取到锁，直接查询源数据（兜底），避免大面积 5xx
-            log.warn("Cache fallback: Lock wait timeout for key [{}], querying db directly.", key);
+            log.warn("Cache lock wait timed out: operation=cache_lock_timeout, keyLengthBucket={}",
+                    LowSensitivityLogSummary.lengthBucket(key));
             return joinPoint.proceed();
         }
 
@@ -221,7 +223,8 @@ public class CacheAspect {
                         // 异步刷新的时候由于生成了新的调用对象，最好生成一个新的 owner 继续加锁，或者复用但已不再占用当前请求的主流程
                         queryData(joinPoint, key, effectiveTtl, compress, owner);
                     } catch (Throwable e) {
-                        log.error("Async cache refresh failed for key: {}", key, e);
+                        log.error("Cache async refresh failed: operation=cache_async_refresh, keyLengthBucket={}, exceptionType={}",
+                                LowSensitivityLogSummary.lengthBucket(key), LowSensitivityLogSummary.exceptionType(e));
                     }
                 });
                 if (valueStr == null)
@@ -264,13 +267,15 @@ public class CacheAspect {
             }
             return value;
         } catch (Throwable e) {
-            log.error("Failed to query data for cache key: {}", key, e);
+            log.error("Cache query data failed: operation=cache_query_data, keyLengthBucket={}, exceptionType={}",
+                    LowSensitivityLogSummary.lengthBucket(key), LowSensitivityLogSummary.exceptionType(e));
             // 异常时也要释放锁
             try {
                 redisService.execute(RELEASE_LOCK_SH_SHA, RELEASE_LOCK_SH, RScript.ReturnType.INTEGER, List.of(key),
                         owner);
             } catch (Exception ex) {
-                log.warn("Failed to release lock for key: {}", key, ex);
+                log.warn("Cache lock release failed: operation=cache_release_lock, keyLengthBucket={}, exceptionType={}",
+                        LowSensitivityLogSummary.lengthBucket(key), LowSensitivityLogSummary.exceptionType(ex));
             }
             throw e;
         }

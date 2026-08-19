@@ -1,6 +1,7 @@
 package com.aseubel.yusi.common.exception;
 
 import com.aseubel.yusi.common.Response;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
@@ -83,10 +84,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public Response<String> handleException(Exception e) {
         if (isStreamingResponse()) {
-            log.debug("Ignoring exception after SSE response started: {}", e.getMessage());
+            log.debug("Ignoring exception after SSE response started: operation=sse_after_commit, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             return null;
         }
-        log.error("System error", e);
+        log.error("Unhandled HTTP exception: operation=global_unhandled_exception, status=500, exceptionType={}",
+                LowSensitivityLogSummary.exceptionType(e));
         setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
         return Response.fail("系统内部错误: " + e.getMessage());
     }
