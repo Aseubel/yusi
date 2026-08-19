@@ -3,6 +3,9 @@ package com.aseubel.yusi.common.task.scheduler;
 import com.aseubel.yusi.common.task.DistributedJobRunner;
 import com.aseubel.yusi.common.task.MemoryScheduledTasks;
 import com.aseubel.yusi.monitor.InterfaceUsageMonitor;
+import com.aseubel.yusi.observability.metrics.YusiMetrics;
+import com.aseubel.yusi.observability.task.TaskHealthRegistry;
+import com.aseubel.yusi.observability.trace.TraceIdSupport;
 import com.aseubel.yusi.service.agent.AgentProactiveService;
 import com.aseubel.yusi.service.ai.embedding.EmbeddingBatchService;
 import com.aseubel.yusi.service.ai.model.ModelStateCenter;
@@ -45,6 +48,8 @@ public class YusiScheduledTasks {
     private final MatchService matchService;
     private final TaskExecutionService taskExecutionService;
     private final SecurityAuditService securityAuditService;
+    private final TaskHealthRegistry taskHealthRegistry;
+    private final YusiMetrics metrics;
     private static final long MODEL_STATE_SYNC_INTERVAL_MS = 30_000L;
 
     @Scheduled(cron = "0 0/30 * * * ?")
@@ -74,12 +79,12 @@ public class YusiScheduledTasks {
 
     @Scheduled(fixedDelay = 1000)
     public void processEmbeddingTasks() {
-        embeddingBatchService.processPendingTasks();
+        runTracked("embedding-worker", embeddingBatchService::processPendingTasks);
     }
 
     @Scheduled(fixedDelay = 60000)
     public void recoverEmbeddingTasks() {
-        embeddingBatchService.recoverStaleTasks();
+        runTracked("embedding-worker", embeddingBatchService::recoverStaleTasks);
     }
 
     @Scheduled(fixedDelay = 3600000)
@@ -89,17 +94,17 @@ public class YusiScheduledTasks {
 
     @Scheduled(fixedDelay = MODEL_STATE_SYNC_INTERVAL_MS)
     public void syncModelState() {
-        modelStateCenter.syncToRedis();
+        runTracked("model-state-sync", modelStateCenter::syncToRedis);
     }
 
     @Scheduled(fixedDelay = 2000)
     public void processLifeGraphTasks() {
-        lifeGraphTaskBatchService.processPendingTasks();
+        runTracked("lifegraph-worker", lifeGraphTaskBatchService::processPendingTasks);
     }
 
     @Scheduled(fixedDelay = 60000)
     public void recoverLifeGraphTasks() {
-        lifeGraphTaskBatchService.recoverStaleTasks();
+        runTracked("lifegraph-worker", lifeGraphTaskBatchService::recoverStaleTasks);
     }
 
     @Scheduled(fixedDelay = 3600000)
@@ -133,5 +138,29 @@ public class YusiScheduledTasks {
     @Scheduled(cron = "0 0 20 ? * FRI", zone = "Asia/Shanghai")
     public void runWeeklyMatching() {
         jobRunner.runIfLeader("weekly-match", matchService::runWeeklyMatching);
+    }
+
+    private void runTracked(String taskName, Runnable task) {
+        taskHealthRegistry.recordStart(taskName);
+        try {
+            TraceIdSupport.withTraceId("job_" + taskName, task);
+            taskHealthRegistry.recordSuccess(taskName);
+            metrics.recordTask(taskName, "success");
+        } catch (RuntimeException exception) {
+            taskHealthRegistry.recordFailure(taskName, classify(exception));
+            metrics.recordTask(taskName, "failure");
+            throw exception;
+        }
+    }
+
+    private String classify(RuntimeException exception) {
+        String type = exception.getClass().getSimpleName().toLowerCase(java.util.Locale.ROOT);
+        if (type.contains("timeout")) {
+            return "timeout";
+        }
+        if (type.contains("connect") || type.contains("redis")) {
+            return "connection_failure";
+        }
+        return "unknown";
     }
 }

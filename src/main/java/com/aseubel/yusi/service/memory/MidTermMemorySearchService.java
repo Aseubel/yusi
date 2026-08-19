@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.memory;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
+import com.aseubel.yusi.observability.metrics.YusiMetrics;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.milvus.v2.client.MilvusClientV2;
@@ -12,8 +13,8 @@ import io.milvus.v2.service.vector.request.data.EmbeddedText;
 import io.milvus.v2.service.vector.request.data.FloatVec;
 import io.milvus.v2.service.vector.request.ranker.RRFRanker;
 import io.milvus.v2.service.vector.response.SearchResp;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.Arrays;
@@ -28,12 +29,29 @@ import com.aseubel.yusi.pojo.entity.MidTermMemory;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class MidTermMemorySearchService {
 
     private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
     private final MidTermMemoryRepository midTermMemoryRepository;
+    private final YusiMetrics metrics;
+
+    public MidTermMemorySearchService(MilvusClientV2 milvusClientV2,
+            EmbeddingModel embeddingModel,
+            MidTermMemoryRepository midTermMemoryRepository) {
+        this(milvusClientV2, embeddingModel, midTermMemoryRepository, null);
+    }
+
+    @Autowired
+    public MidTermMemorySearchService(MilvusClientV2 milvusClientV2,
+            EmbeddingModel embeddingModel,
+            MidTermMemoryRepository midTermMemoryRepository,
+            YusiMetrics metrics) {
+        this.milvusClientV2 = milvusClientV2;
+        this.embeddingModel = embeddingModel;
+        this.midTermMemoryRepository = midTermMemoryRepository;
+        this.metrics = metrics;
+    }
 
     /**
      * 搜索中期记忆（向量检索 + 稀疏检索的混合检索）
@@ -46,6 +64,7 @@ public class MidTermMemorySearchService {
     public List<String> searchMidTermMemory(String userId, String query, int topK) {
         log.info("MidTermMemory search started: userId={}, queryLengthBucket={}, topK={}",
                 userId, LowSensitivityLogSummary.lengthBucket(query), topK);
+        long startedAt = System.nanoTime();
 
         try {
             String expr = String.format("metadata[\"userId\"] == '%s'", userId);
@@ -86,11 +105,12 @@ public class MidTermMemorySearchService {
 
             if (searchResults == null || searchResults.isEmpty() || searchResults.get(0).isEmpty()) {
                 log.info("No matching mid-term memory found.");
+                recordSearch("empty", 0, startedAt);
                 return Collections.emptyList();
             }
 
             LocalDateTime now = LocalDateTime.now();
-            return searchResults.get(0).stream()
+            List<String> results = searchResults.get(0).stream()
                     .filter(result -> isAvailable(result, userId, now))
                     .map(result -> {
                         Map<String, Object> entity = result.getEntity();
@@ -99,10 +119,13 @@ public class MidTermMemorySearchService {
                     .filter(text -> !text.isBlank())
                     .limit(topK)
                     .collect(Collectors.toList());
+            recordSearch(results.isEmpty() ? "empty" : "success", results.size(), startedAt);
+            return results;
 
         } catch (Exception e) {
             log.error("MidTermMemory search failed: userId={}, operation=search_mid_term_memory, exceptionType={}",
                     userId, LowSensitivityLogSummary.exceptionType(e));
+            recordSearch("failure", 0, startedAt);
             return Collections.emptyList();
         }
     }
@@ -147,23 +170,48 @@ public class MidTermMemorySearchService {
      */
     public String getRecentMemories(String userId, int limit) {
         log.info("Fetching recent mid-term memories for user: {}, limit: {}", userId, limit);
+        long startedAt = System.nanoTime();
         try {
             List<MidTermMemory> recentMemories = midTermMemoryRepository.findAvailableByUserId(
                     userId, java.time.LocalDateTime.now(), org.springframework.data.domain.PageRequest.of(0, limit));
 
             if (recentMemories.isEmpty()) {
+                recordRecent("empty", 0, startedAt);
                 return "";
             }
 
-            return recentMemories.stream()
+            String result = recentMemories.stream()
                     .map((MidTermMemory mem) -> String.format("- %s (Score: %.2f)", mem.getSummary(),
                             mem.getImportance()))
                     .collect(Collectors.joining("\n"));
+            recordRecent(result.isBlank() ? "empty" : "success", recentMemories.size(), startedAt);
+            return result;
 
         } catch (Exception e) {
             log.error("MidTermMemory recent fetch failed: userId={}, operation=fetch_recent_mid_term_memory, exceptionType={}",
                     userId, LowSensitivityLogSummary.exceptionType(e));
+            recordRecent("failure", 0, startedAt);
             return "";
         }
+    }
+
+    private void recordSearch(String result, int resultCount, long startedAt) {
+        if (metrics == null) {
+            return;
+        }
+        metrics.recordToolSearch("mid_term_memory", "mid_term_memory_search", result,
+                "failure".equals(result) ? "unknown" : "none", elapsedMillis(startedAt), resultCount);
+    }
+
+    private void recordRecent(String result, int resultCount, long startedAt) {
+        if (metrics == null) {
+            return;
+        }
+        metrics.recordToolSearch("mid_term_memory", "fetch_recent_mid_term_memory", result,
+                "failure".equals(result) ? "unknown" : "none", elapsedMillis(startedAt), resultCount);
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
     }
 }

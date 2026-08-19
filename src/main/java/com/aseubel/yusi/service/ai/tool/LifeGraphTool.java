@@ -2,12 +2,13 @@ package com.aseubel.yusi.service.ai.tool;
 
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
+import com.aseubel.yusi.observability.metrics.YusiMetrics;
 import com.aseubel.yusi.service.lifegraph.LifeGraphQueryService;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
 import dev.langchain4j.agent.tool.ToolMemoryId;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,10 +21,20 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class LifeGraphTool {
 
     private final LifeGraphQueryService queryService;
+    private final YusiMetrics metrics;
+
+    public LifeGraphTool(LifeGraphQueryService queryService) {
+        this(queryService, null);
+    }
+
+    @Autowired
+    public LifeGraphTool(LifeGraphQueryService queryService, YusiMetrics metrics) {
+        this.queryService = queryService;
+        this.metrics = metrics;
+    }
 
     @Tool(name = "searchLifeGraph", value = """
             搜索用户的人生知识图谱（Life Graph）。
@@ -50,16 +61,30 @@ public class LifeGraphTool {
 
         // 使用默认的搜索参数：Top 3 实体，每个实体 30 条关系，5 条提及
         // 这些参数在性能和上下文窗口大小之间取得了平衡
+        long startedAt = System.nanoTime();
         try {
             String result = queryService.localSearch(userId, query, 3, 30, 5);
             if (StrUtil.isBlank(result)) {
+                recordSearch("empty", 0, startedAt);
                 return "在人生图谱中未找到关于 '" + query + "' 的相关信息。现在请直接用你的语气回答用户的问题。";
             }
+            recordSearch("success", 1, startedAt);
             return result + "\n\n请根据以上检索到的记忆，用你的语气回答用户的问题。";
         } catch (Exception e) {
             log.error("LifeGraphTool search failed: operation=life_graph_search, exceptionType={}",
                     LowSensitivityLogSummary.exceptionType(e));
+            recordSearch("failure", 0, startedAt);
             return "搜索图谱时发生错误。现在请直接用你的语气回答用户的问题。";
         }
+    }
+
+    private void recordSearch(String result, int resultCount, long startedAt) {
+        if (metrics == null) {
+            return;
+        }
+        metrics.recordToolSearch("life_graph", "life_graph_search", result,
+                "failure".equals(result) ? "unknown" : "none",
+                java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt),
+                resultCount);
     }
 }

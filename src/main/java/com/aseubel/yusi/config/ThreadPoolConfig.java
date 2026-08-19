@@ -50,8 +50,11 @@ public class ThreadPoolConfig {
             Map<String, String> context = MDC.getCopyOfContextMap();
             String userId = UserContext.getUserId();
             return () -> {
+                Map<String, String> previousContext = MDC.getCopyOfContextMap();
                 try {
-                    if (context != null) {
+                    if (context == null || context.isEmpty()) {
+                        MDC.clear();
+                    } else {
                         MDC.setContextMap(context);
                     }
                     if (userId != null) {
@@ -59,7 +62,11 @@ public class ThreadPoolConfig {
                     }
                     runnable.run();
                 } finally {
-                    MDC.clear();
+                    if (previousContext == null || previousContext.isEmpty()) {
+                        MDC.clear();
+                    } else {
+                        MDC.setContextMap(previousContext);
+                    }
                     UserContext.clear();
                 }
             };

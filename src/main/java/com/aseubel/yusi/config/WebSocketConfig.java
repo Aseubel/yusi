@@ -1,5 +1,6 @@
 package com.aseubel.yusi.config;
 
+import com.aseubel.yusi.observability.trace.TraceIdWebSocketInterceptor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
@@ -14,17 +15,20 @@ import org.springframework.util.StringUtils;
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final WebSocketAuthChannelInterceptor authChannelInterceptor;
+    private final TraceIdWebSocketInterceptor traceIdWebSocketInterceptor;
 
     @Value("${yusi.web.allowed-origin:http://localhost:5173}")
     private String allowedOrigin;
 
-    public WebSocketConfig(WebSocketAuthChannelInterceptor authChannelInterceptor) {
+    public WebSocketConfig(WebSocketAuthChannelInterceptor authChannelInterceptor,
+            TraceIdWebSocketInterceptor traceIdWebSocketInterceptor) {
         this.authChannelInterceptor = authChannelInterceptor;
+        this.traceIdWebSocketInterceptor = traceIdWebSocketInterceptor;
     }
 
     @Override
     public void configureClientInboundChannel(org.springframework.messaging.simp.config.ChannelRegistration registration) {
-        registration.interceptors(authChannelInterceptor);
+        registration.interceptors(traceIdWebSocketInterceptor, authChannelInterceptor);
     }
 
     @Override

@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.ChatMessageRole;
 import com.aseubel.yusi.common.constant.DeveloperScope;
 import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
+import com.aseubel.yusi.observability.metrics.YusiMetrics;
 import com.aseubel.yusi.grpc.constant.McpMemoryResultType;
 import com.aseubel.yusi.grpc.mcp.DiaryResult;
 import com.aseubel.yusi.grpc.mcp.McpExtensionServiceGrpc;
@@ -21,8 +22,8 @@ import com.aseubel.yusi.service.diary.DiaryService;
 import com.aseubel.yusi.service.ai.tool.MemorySearchTool;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import io.grpc.stub.StreamObserver;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -40,7 +41,6 @@ import java.util.List;
  */
 @Slf4j
 @GrpcService
-@RequiredArgsConstructor
 public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServiceImplBase {
 
     private final DiaryService diaryService;
@@ -48,6 +48,31 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
     private final MemorySearchTool memorySearchTool;
     private final DeveloperConfigService developerConfigService;
     private final ChatMemoryMessageRepository chatMemoryMessageRepository;
+    private final YusiMetrics metrics;
+
+    public McpGrpcServiceImpl(DiaryService diaryService,
+            DiaryExtensionRepository diaryExtensionRepository,
+            MemorySearchTool memorySearchTool,
+            DeveloperConfigService developerConfigService,
+            ChatMemoryMessageRepository chatMemoryMessageRepository) {
+        this(diaryService, diaryExtensionRepository, memorySearchTool, developerConfigService,
+                chatMemoryMessageRepository, null);
+    }
+
+    @Autowired
+    public McpGrpcServiceImpl(DiaryService diaryService,
+            DiaryExtensionRepository diaryExtensionRepository,
+            MemorySearchTool memorySearchTool,
+            DeveloperConfigService developerConfigService,
+            ChatMemoryMessageRepository chatMemoryMessageRepository,
+            YusiMetrics metrics) {
+        this.diaryService = diaryService;
+        this.diaryExtensionRepository = diaryExtensionRepository;
+        this.memorySearchTool = memorySearchTool;
+        this.developerConfigService = developerConfigService;
+        this.chatMemoryMessageRepository = chatMemoryMessageRepository;
+        this.metrics = metrics;
+    }
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final int DIARY_PAGE_SIZE = 100;
@@ -57,6 +82,7 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
 
     @Override
     public void searchDiary(SearchDiaryRequest request, StreamObserver<SearchDiaryResponse> responseObserver) {
+        long startedAt = System.nanoTime();
         try {
             String apiKey = request.getApiKey();
             String userId = developerConfigService.authorize(apiKey, DeveloperScope.MEMORY_READ.code());
@@ -124,10 +150,12 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
 
             responseObserver.onNext(response);
             responseObserver.onCompleted();
+            recordSearch("mcp_diary_search", results.size(), results.isEmpty() ? "empty" : "success", startedAt);
 
         } catch (Exception e) {
             log.error("MCP diary search failed: operation=mcp_diary_search, exceptionType={}",
                     LowSensitivityLogSummary.exceptionType(e));
+            recordSearch("mcp_diary_search", 0, "failure", startedAt);
             responseObserver.onNext(SearchDiaryResponse.newBuilder()
                     .setErrorMessage(e.getMessage() != null ? e.getMessage() : "Unknown error")
                     .build());
@@ -137,6 +165,7 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
 
     @Override
     public void searchMemory(SearchMemoryRequest request, StreamObserver<SearchMemoryResponse> responseObserver) {
+        long startedAt = System.nanoTime();
         try {
             String apiKey = request.getApiKey();
             String userId = developerConfigService.authorize(apiKey, DeveloperScope.MEMORY_READ.code());
@@ -196,14 +225,25 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
 
             responseObserver.onNext(response);
             responseObserver.onCompleted();
+            recordSearch("mcp_memory_search", results.size(), results.isEmpty() ? "empty" : "success", startedAt);
 
         } catch (Exception e) {
             log.error("MCP memory search failed: operation=mcp_memory_search, exceptionType={}",
                     LowSensitivityLogSummary.exceptionType(e));
+            recordSearch("mcp_memory_search", 0, "failure", startedAt);
             responseObserver.onNext(SearchMemoryResponse.newBuilder()
                     .setErrorMessage(e.getMessage() != null ? e.getMessage() : "Unknown error")
                     .build());
             responseObserver.onCompleted();
         }
+    }
+
+    private void recordSearch(String operation, int resultCount, String result, long startedAt) {
+        if (metrics == null) {
+            return;
+        }
+        metrics.recordToolSearch("mcp", operation, result,
+                "failure".equals(result) ? "unknown" : "none",
+                java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt), resultCount);
     }
 }

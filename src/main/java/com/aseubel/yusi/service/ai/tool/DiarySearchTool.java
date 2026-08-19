@@ -6,6 +6,7 @@ import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.pojo.constant.KeyMode;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.ai.rag.DiaryRetrievalAssembler;
+import com.aseubel.yusi.observability.metrics.YusiMetrics;
 
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
@@ -13,6 +14,7 @@ import dev.langchain4j.agent.tool.ToolMemoryId;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import io.milvus.v2.client.MilvusClientV2;
@@ -49,15 +51,26 @@ public class DiarySearchTool {
     private final EmbeddingModel embeddingModel;
     private final UserRepository userRepository;
     private final DiaryRetrievalAssembler retrievalAssembler;
+    private final YusiMetrics metrics;
 
     public DiarySearchTool(MilvusClientV2 milvusClientV2,
             EmbeddingModel embeddingModel,
             UserRepository userRepository,
             DiaryRetrievalAssembler retrievalAssembler) {
+        this(milvusClientV2, embeddingModel, userRepository, retrievalAssembler, null);
+    }
+
+    @Autowired
+    public DiarySearchTool(MilvusClientV2 milvusClientV2,
+            EmbeddingModel embeddingModel,
+            UserRepository userRepository,
+            DiaryRetrievalAssembler retrievalAssembler,
+            YusiMetrics metrics) {
         this.milvusClientV2 = milvusClientV2;
         this.embeddingModel = embeddingModel;
         this.userRepository = userRepository;
         this.retrievalAssembler = retrievalAssembler;
+        this.metrics = metrics;
     }
 
     /**
@@ -128,6 +141,7 @@ public class DiarySearchTool {
                 currentUserId, LowSensitivityLogSummary.lengthBucket(query),
                 StrUtil.isNotBlank(startDate), StrUtil.isNotBlank(endDate));
 
+        long startedAt = System.nanoTime();
         try {
             // 构建过滤条件字符串 (Milvus expr 格式)
             String expr = buildMilvusExpr(currentUserId, startDate, endDate);
@@ -168,6 +182,7 @@ public class DiarySearchTool {
 
             if (searchResults == null || searchResults.isEmpty() || searchResults.get(0).isEmpty()) {
                 log.info("DiarySearchTool: 未找到匹配的日记内容");
+                recordSearch("empty", 0, startedAt);
                 if (startDate != null || endDate != null) {
                     return List.of("在指定的时间范围内没有找到相关的日记记录。现在请直接用你的语气回答用户的问题。");
                 }
@@ -177,13 +192,28 @@ public class DiarySearchTool {
             List<String> results = retrievalAssembler.assemble(searchResults.get(0), 5);
 
             log.info("DiarySearchTool: 找到 {} 条匹配结果", results.size());
+            recordSearch(results.isEmpty() ? "empty" : "success", results.size(), startedAt);
             return results;
 
         } catch (Exception e) {
             log.error("DiarySearchTool search failed: operation=diary_search, exceptionType={}",
                     LowSensitivityLogSummary.exceptionType(e));
+            recordSearch("failure", 0, startedAt);
             return List.of("搜索日记时遇到了一些问题，请稍后再试。");
         }
+    }
+
+    private void recordSearch(String result, int resultCount, long startedAt) {
+        if (metrics == null) {
+            return;
+        }
+        metrics.recordToolSearch("diary", "diary_search", result,
+                "failure".equals(result) ? "unknown" : "none",
+                elapsedMillis(startedAt), resultCount);
+    }
+
+    private long elapsedMillis(long startedAt) {
+        return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
     }
 
     /**

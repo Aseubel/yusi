@@ -1,10 +1,11 @@
 package com.aseubel.yusi.service.ai.runtime;
 
 import com.aseubel.yusi.pojo.entity.ModelCallTrace;
+import com.aseubel.yusi.observability.metrics.YusiMetrics;
 import com.aseubel.yusi.repository.ModelCallTraceRepository;
 import com.aseubel.yusi.service.ai.model.ModelUsageSnapshot;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
@@ -12,16 +13,29 @@ import java.util.concurrent.atomic.AtomicLong;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ModelCallTraceService {
 
     private final ModelCallTraceRepository traceRepository;
+    private final YusiMetrics metrics;
     private final AtomicLong persistenceFailureCount = new AtomicLong();
+
+    public ModelCallTraceService(ModelCallTraceRepository traceRepository) {
+        this(traceRepository, null);
+    }
+
+    @Autowired
+    public ModelCallTraceService(ModelCallTraceRepository traceRepository, YusiMetrics metrics) {
+        this.traceRepository = traceRepository;
+        this.metrics = metrics;
+    }
 
     @EventListener
     public void persist(ModelCallAttemptEvent event) {
         if (event == null) {
             return;
+        }
+        if (metrics != null) {
+            metrics.recordModelCall(resultLabel(event.status()), failureCategory(event.errorCode()), event.latencyMs());
         }
         try {
             traceRepository.save(toEntity(event));
@@ -34,6 +48,30 @@ public class ModelCallTraceService {
 
     public long persistenceFailureCount() {
         return persistenceFailureCount.get();
+    }
+
+    private String resultLabel(String status) {
+        if ("SUCCESS".equalsIgnoreCase(status)) {
+            return "success";
+        }
+        if ("REJECTED".equalsIgnoreCase(status)) {
+            return "rejected";
+        }
+        return "failure";
+    }
+
+    private String failureCategory(String errorCode) {
+        if (errorCode == null || errorCode.isBlank()) {
+            return "none";
+        }
+        String normalized = errorCode.toLowerCase(java.util.Locale.ROOT);
+        if (normalized.contains("timeout")) {
+            return "timeout";
+        }
+        if (normalized.contains("reject")) {
+            return "rejected";
+        }
+        return "unknown";
     }
 
     private ModelCallTrace toEntity(ModelCallAttemptEvent event) {
