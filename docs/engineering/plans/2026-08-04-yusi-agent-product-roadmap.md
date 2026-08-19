@@ -52,8 +52,11 @@ Yusi 已具备以下基础能力：
    Timeline、Timeline 重建、对话协议与匹配连接共 8 个套件 133 断言，另有统一
    汇总门槛（`quality-gates-aggregate-v1`）锁定套件合同与诚实边界；剩余缺口为
    真实模型语义评分与 `match.viewed` 事件（均以契约字段显式标记不可用）。
-4. 敏感明文仍进入日志：`McpGrpcServiceImpl`、`DiarySearchTool`、`LifeGraphTool`、
-   `MidTermMemorySearchService` 四处日志完整打印用户 query，与低敏 Trace 边界冲突。
+4. 日志安全已收敛：四个搜索组件 query 明文、十一处相邻正文命中与七条延期异常
+   政策项均已处理（`f7b6cd4`、`1af6324`），由 `SensitiveLogSourceAuditTest`
+   静态锁定；残余为范围外的既有技术异常日志与两处客户端响应体 message
+   （`GlobalExceptionHandler` 响应契约、MCP gRPC `errorMessage`），均已归类
+   待后续切片。
 5. 上线工程准备缺失：无统一健康检查与指标暴露（未引入 actuator），无告警通道，
    数据备份与恢复未演练，无上线清单（灰度、回滚、降级）。
 6. 限流与成本准入已存在（注解式 `@RateLimiter`、`model.gateway.admission` Redis 固定
@@ -610,9 +613,12 @@ Agentic Runtime 因无真实消费方移入[上线后扩展 Backlog](2026-08-17-
 主动问候保持现有不活跃判断、冷却、频率和静默时段行为，只作为上线验收对象，不做改造
 （深度改造见扩展 Backlog）。
 
-- [ ] 日志安全收敛：`McpGrpcServiceImpl`、`DiarySearchTool`、`LifeGraphTool`、
+- [x] 日志安全收敛：`McpGrpcServiceImpl`、`DiarySearchTool`、`LifeGraphTool`、
       `MidTermMemorySearchService` 的日志去除用户 query 明文，统一为低敏格式（只保留
       用户 ID、数量、耗时和固定分类）；并对全量日志做一次敏感正文 grep 自检。
+      实际超出条目范围：同步收敛十一处相邻正文命中与五类异常政策（含九处同类
+      伴随日志），由 `SensitiveLogSourceAuditTest` 锁定直接 payload 零容忍与
+      延期 allowlist 为空。
 - [ ] 引入统一健康检查与指标暴露（actuator / Micrometer），覆盖 HTTP、MySQL、Redis、
       Milvus、模型网关和关键后台任务。
 - [ ] 建立最小告警通道：服务不可用、模型调用失败率、后台任务积压和预算准入拒绝都有
