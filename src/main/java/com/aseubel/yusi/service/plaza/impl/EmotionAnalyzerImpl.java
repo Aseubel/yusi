@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.plaza.impl;
 
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.common.constant.EmotionType;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.ai.prompt.PromptSnapshot;
 import com.aseubel.yusi.service.plaza.EmotionAnalyzer;
@@ -62,11 +63,12 @@ public class EmotionAnalyzerImpl implements EmotionAnalyzer {
 
             // 验证返回的情感类别是否有效
             EmotionType emotion = EmotionType.fromModelValue(cleanedResult);
-            log.debug("情感分析结果: {} -> {}", cleanedResult, emotion.code());
+            log.debug("Emotion analysis completed: emotion={}", emotion.code());
             return emotion.code();
 
         } catch (Exception e) {
-            log.error("情感分析失败，使用默认值Neutral: {}", e.getMessage());
+            log.error("Emotion analysis failed: operation=analyze_emotion, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             return EmotionType.NEUTRAL.code();
         }
     }

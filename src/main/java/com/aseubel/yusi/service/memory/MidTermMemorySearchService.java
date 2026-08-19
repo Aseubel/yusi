@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.memory;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.milvus.v2.client.MilvusClientV2;
@@ -43,7 +44,8 @@ public class MidTermMemorySearchService {
      * @return 匹配的记忆文本列表
      */
     public List<String> searchMidTermMemory(String userId, String query, int topK) {
-        log.info("Searching mid-term memory for user: {}, query: {}", userId, query);
+        log.info("MidTermMemory search started: userId={}, queryLengthBucket={}, topK={}",
+                userId, LowSensitivityLogSummary.lengthBucket(query), topK);
 
         try {
             String expr = String.format("metadata[\"userId\"] == '%s'", userId);
@@ -99,7 +101,8 @@ public class MidTermMemorySearchService {
                     .collect(Collectors.toList());
 
         } catch (Exception e) {
-            log.error("Error searching mid-term memory for user: {}", userId, e);
+            log.error("MidTermMemory search failed: userId={}, operation=search_mid_term_memory, exceptionType={}",
+                    userId, LowSensitivityLogSummary.exceptionType(e));
             return Collections.emptyList();
         }
     }
@@ -158,7 +161,8 @@ public class MidTermMemorySearchService {
                     .collect(Collectors.joining("\n"));
 
         } catch (Exception e) {
-            log.error("Error fetching recent mid-term memories for user: {}", userId, e);
+            log.error("MidTermMemory recent fetch failed: userId={}, operation=fetch_recent_mid_term_memory, exceptionType={}",
+                    userId, LowSensitivityLogSummary.exceptionType(e));
             return "";
         }
     }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aseubel.yusi.common.constant.PromptKey;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.pojo.dto.situation.SituationReport;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
@@ -56,7 +57,8 @@ public class SituationReportService {
             }
 
             String jsonReport = future.get();
-            log.info("AI Analysis Result: {}", jsonReport);
+            log.info("SituationReport analysis output: scenarioId={}, status=received, outputLengthBucket={}",
+                    room.getScenarioId(), LowSensitivityLogSummary.lengthBucket(jsonReport));
 
             String cleanJson = extractValidJson(jsonReport);
 
@@ -70,7 +72,8 @@ public class SituationReportService {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("AI Analysis failed", e);
+            log.error("SituationReport analysis failed: operation=situation_report_analyze, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             throw new BusinessException(ErrorCode.OPERATION_FAILED, "AI分析失败，请稍后重试");
         }
     }
@@ -101,14 +104,14 @@ public class SituationReportService {
                 objectMapper.readTree(possibleJson);
                 return possibleJson;
             } catch (Exception e) {
-                log.warn("Extracted JSON candidate is invalid: {}",
-                        possibleJson.substring(0, Math.min(100, possibleJson.length())));
+                log.warn("SituationReport JSON candidate invalid: operation=extract_json, category=invalid_json, exceptionType={}",
+                        LowSensitivityLogSummary.exceptionType(e));
             }
         }
 
         if (trimmed.contains("Thinking Process:") || trimmed.contains("```")) {
-            log.error("AI returned thinking process or markdown instead of pure JSON: {}",
-                    trimmed.substring(0, Math.min(500, trimmed.length())));
+            log.error("SituationReport model format invalid: operation=extract_json, category=thinking_or_markdown, outputLengthBucket={}",
+                    LowSensitivityLogSummary.lengthBucket(trimmed));
             throw new BusinessException(ErrorCode.OPERATION_FAILED, "AI返回格式错误，请稍后重试");
         }
 

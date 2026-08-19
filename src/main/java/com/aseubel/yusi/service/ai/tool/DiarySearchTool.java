@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai.tool;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.pojo.constant.KeyMode;
 import com.aseubel.yusi.repository.UserRepository;
@@ -123,8 +124,9 @@ public class DiarySearchTool {
             return List.of("您当前使用的是最高隐私模式（自定义密钥且未开启云端备份），日记搜索功能不可用。如需使用此功能，请在设置中开启云端密钥备份。");
         }
 
-        log.info("DiarySearchTool: 用户 {} 发起搜索，query='{}', startDate='{}', endDate='{}'",
-                currentUserId, query, startDate, endDate);
+        log.info("DiarySearchTool search started: userId={}, queryLengthBucket={}, startDatePresent={}, endDatePresent={}",
+                currentUserId, LowSensitivityLogSummary.lengthBucket(query),
+                StrUtil.isNotBlank(startDate), StrUtil.isNotBlank(endDate));
 
         try {
             // 构建过滤条件字符串 (Milvus expr 格式)
@@ -178,7 +180,8 @@ public class DiarySearchTool {
             return results;
 
         } catch (Exception e) {
-            log.error("DiarySearchTool: 搜索过程中发生错误", e);
+            log.error("DiarySearchTool search failed: operation=diary_search, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             return List.of("搜索日记时遇到了一些问题，请稍后再试。");
         }
     }
@@ -199,7 +202,8 @@ public class DiarySearchTool {
             expr.append(String.format(" and metadata[\"entryDate\"] <= '%s'", endDate));
         }
 
-        log.debug("DiarySearchTool: 构建过滤条件 expr={}", expr.toString());
+        log.debug("DiarySearchTool filter built: userId={}, dateFilterPresent={}",
+                userId, StrUtil.isNotBlank(startDate) || StrUtil.isNotBlank(endDate));
         return expr.toString();
     }
 }

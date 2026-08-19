@@ -1,6 +1,7 @@
 package com.aseubel.yusi.redis.aspect;
 
 import com.aseubel.yusi.redis.annotation.SpelResolver;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -52,13 +53,12 @@ public class SpelResolverAspect {
 
         try {
             Object resolvedValue = parser.parseExpression(spelExpression).getValue(context);
-            logger.info("SpEL Expression: '{}' resolved to: '{}' [Type: {}]",
-                    spelExpression,
-                    resolvedValue,
+            logger.info("SpEL resolution completed: operation=spel_resolve, resolvedType={}",
                     resolvedValue != null ? resolvedValue.getClass().getSimpleName() : "null");
 
         } catch (Exception e) {
-            logger.error("Failed to resolve SpEL expression: '{}'", spelExpression, e);
+            logger.error("SpEL resolution failed: operation=spel_resolve, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
         }
 
         return joinPoint.proceed();

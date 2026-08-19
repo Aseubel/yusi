@@ -55,8 +55,13 @@ public class UserPersonaTool {
                         return "无法验证用户身份，操作失败。";
                 }
 
-                log.info("Updating user persona for user {}: name={}, loc={}, interests={}, tone={}, custom={}",
-                                userId, preferredName, location, interests, tone, customInstructions);
+                int updatedFieldCount = (StrUtil.isNotBlank(preferredName) ? 1 : 0)
+                                + (StrUtil.isNotBlank(location) ? 1 : 0)
+                                + (StrUtil.isNotBlank(interests) ? 1 : 0)
+                                + (StrUtil.isNotBlank(tone) ? 1 : 0)
+                                + (StrUtil.isNotBlank(customInstructions) ? 1 : 0);
+                log.info("User persona update: userId={}, operation=update_persona, updatedFieldCount={}",
+                                userId, updatedFieldCount);
 
                 UserPersona update = UserPersona.builder()
                                 .preferredName(preferredName)

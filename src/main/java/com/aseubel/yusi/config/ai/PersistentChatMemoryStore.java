@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.aseubel.yusi.common.event.MessageSavedEvent;
 import com.aseubel.yusi.common.constant.ChatMessageRole;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.pojo.entity.ChatMemoryMessage;
 import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.service.ai.chat.ContextBuilderService;
@@ -64,7 +65,8 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
                 messages.addFirst(contextBuilderService.buildSystemMessage(memoryId));
                 return messages;
             } catch (Exception e) {
-                log.warn("Failed to parse chat memory from Redis: {}", e.getMessage());
+                log.warn("Chat memory Redis parse failed: operation=load_messages, exceptionType={}",
+                        LowSensitivityLogSummary.exceptionType(e));
             }
         }
 
@@ -196,7 +198,8 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
                 return msg;
             }
         } catch (Exception e) {
-            log.warn("Failed to deserialize message, falling back to simple text: {}", e.getMessage());
+            log.warn("Chat memory message deserialize failed: operation=deserialize_message, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
         }
 
         ChatMessageRole role = ChatMessageRole.fromCode(entity.getRole());
@@ -307,7 +310,8 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
                     .map(url -> ImageContent.from(URI.create(url)))
                     .collect(Collectors.toList());
         } catch (Exception e) {
-            log.warn("Failed to parse images: {}", imagesJson, e);
+            log.warn("Chat memory image payload invalid: operation=parse_images, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             return Collections.emptyList();
         }
     }

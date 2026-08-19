@@ -45,7 +45,15 @@ public class UserLocationServiceImpl implements UserLocationService {
         location.setCreateTime(LocalDateTime.now());
         location.setUpdateTime(LocalDateTime.now());
 
-        log.info("Adding new location for user {}: {}", request.getUserId(), request.getName());
+        int populatedFieldCount = (request.getName() != null ? 1 : 0)
+                + (request.getLatitude() != null ? 1 : 0)
+                + (request.getLongitude() != null ? 1 : 0)
+                + (request.getAddress() != null ? 1 : 0)
+                + (request.getPlaceId() != null ? 1 : 0)
+                + (request.getLocationType() != null ? 1 : 0)
+                + (request.getIcon() != null ? 1 : 0);
+        log.info("Location created: userId={}, operation=add_location, locationType={}, fieldCount={}",
+                request.getUserId(), request.getLocationType(), populatedFieldCount);
         return userLocationRepository.save(location);
     }
 

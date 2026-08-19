@@ -44,13 +44,12 @@ public class SpelResolverHelper {
 
         try {
             Object resolvedValue = parser.parseExpression(spelExpression).getValue(context);
-            log.debug("SpEL Expression: '{}' resolved to: '{}' [Type: {}]",
-                    spelExpression,
-                    resolvedValue,
-                    resolvedValue != null ? resolvedValue.getClass().getSimpleName() : "null");
+            String resolvedType = resolvedValue != null ? resolvedValue.getClass().getSimpleName() : "null";
+            log.debug("SpEL resolution completed: operation=spel_resolve, resolvedType={}", resolvedType);
             return resolvedValue;
         } catch (Exception e) {
-            log.error("Failed to resolve SpEL expression: '{}'", spelExpression, e);
+            log.error("SpEL resolution failed: operation=spel_resolve, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             throw new IllegalArgumentException("Failed to resolve SpEL expression: " + spelExpression, e);
         }
     }

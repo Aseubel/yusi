@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.cognition;
 
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.service.cognition.constant.MidMemoryConflictAction;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
 import com.aseubel.yusi.pojo.entity.User;
@@ -67,13 +68,15 @@ public class MidMemoryFusionService {
                     int merged = fuseUserMemories(user.getUserId());
                     if (merged > 0) { processed++; totalMerged += merged; }
                 } catch (Exception e) {
-                    log.warn("用户 {} 记忆融合失败", user.getUserId(), e);
+                    log.warn("Mid-memory fusion failed: userId={}, operation=fuse_user_memories, exceptionType={}",
+                            user.getUserId(), LowSensitivityLogSummary.exceptionType(e));
                 }
             }
 
             log.info("跨源记忆融合完成: 处理{}人, 合并{}对", processed, totalMerged);
         } catch (Exception e) {
-            log.error("跨源记忆融合批量异常", e);
+            log.error("Mid-memory fusion batch failed: operation=run_fusion, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
         }
     }
 
@@ -162,14 +165,15 @@ public class MidMemoryFusionService {
                     b.setValidUntil(LocalDateTime.now());
                     b.setMergedIntoId(a.getId());
                     memoryRepository.save(b);
-                    log.info("记忆冲突覆写完成: userId={}, 新记忆(保留)={}, 旧记忆(失效)={}, 原因={}",
-                            userId, a.getId(), b.getId(), result.has("reason") ? result.get("reason").asText() : "");
+                    log.info("Mid-memory conflict overwrite: userId={}, keeperMemoryId={}, expiredMemoryId={}, conflictAction=OVERWRITE_B",
+                            userId, a.getId(), b.getId());
                     return true;
                 }
             }
 
         } catch (Exception e) {
-            log.warn("记忆融合/冲突处理 LLM 调用失败: userId={}", userId, e);
+            log.warn("Mid-memory conflict handling failed: userId={}, operation=try_merge, exceptionType={}",
+                    userId, LowSensitivityLogSummary.exceptionType(e));
         }
         return false;
     }

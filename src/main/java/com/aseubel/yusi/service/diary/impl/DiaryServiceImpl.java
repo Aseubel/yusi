@@ -10,6 +10,7 @@ import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.config.security.CryptoService;
 import com.aseubel.yusi.common.utils.AesGcmCryptoUtils;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.pojo.dto.cognition.CognitionIngestCommand;
 import com.aseubel.yusi.pojo.constant.KeyMode;
 import com.aseubel.yusi.pojo.constant.DiaryAttachmentAnchorKind;
@@ -191,10 +192,11 @@ public class DiaryServiceImpl implements DiaryService {
             if (!deletedImages.isEmpty()) {
                 // Async deletion would be better, but we do it synchronously for simplicity
                 ossService.deleteOwnedImages(deletedImages, userId);
-                log.info("Deleted orphaned images from OSS: {}", deletedImages);
+            log.info("Deleted orphaned images from OSS: count={}", deletedImages.size());
             }
         } catch (Exception e) {
-            log.error("Failed to delete removed images from OSS during diary edit", e);
+            log.error("Diary image cleanup failed: operation=delete_removed_images, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
         }
     }
 
@@ -355,7 +357,8 @@ public class DiaryServiceImpl implements DiaryService {
         try {
             objectKeys = JSONUtil.toList(imagesJson, String.class);
         } catch (RuntimeException e) {
-            log.warn("日记图片字段不是有效 JSON: {}", imagesJson, e);
+            log.warn("Diary image payload invalid: operation=convert_images, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             throw new BusinessException(ErrorCode.PARAM_ERROR, "日记图片数据不合法");
         }
         return JSONUtil.toJsonStr(ossService.generateOwnedUrls(objectKeys, userId));

@@ -3,6 +3,7 @@ package com.aseubel.yusi.grpc;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.ChatMessageRole;
 import com.aseubel.yusi.common.constant.DeveloperScope;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.grpc.constant.McpMemoryResultType;
 import com.aseubel.yusi.grpc.mcp.DiaryResult;
 import com.aseubel.yusi.grpc.mcp.McpExtensionServiceGrpc;
@@ -67,8 +68,9 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
             String startTimeStr = request.getStartTime();
             String endTimeStr = request.getEndTime();
 
-            log.info("MCP Ext: Searching diary for user {}, keyword: '{}', time: {} - {}",
-                    userId, keyword, startTimeStr, endTimeStr);
+            log.info("MCP diary search started: userId={}, keywordLengthBucket={}, startTimePresent={}, endTimePresent={}",
+                    userId, LowSensitivityLogSummary.lengthBucket(keyword),
+                    StrUtil.isNotBlank(startTimeStr), StrUtil.isNotBlank(endTimeStr));
 
             Specification<Diary> spec = (root, query, cb) -> {
                 List<Predicate> predicates = new ArrayList<>();
@@ -124,7 +126,8 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
             responseObserver.onCompleted();
 
         } catch (Exception e) {
-            log.error("MCP Ext: Error searching diary", e);
+            log.error("MCP diary search failed: operation=mcp_diary_search, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             responseObserver.onNext(SearchDiaryResponse.newBuilder()
                     .setErrorMessage(e.getMessage() != null ? e.getMessage() : "Unknown error")
                     .build());
@@ -145,7 +148,8 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
             int requestedResults = request.getMaxResults() > 0 ? request.getMaxResults() : 10;
             int maxResults = Math.min(Math.max(requestedResults, 1), MAX_MEMORY_RESULTS);
 
-            log.info("MCP Ext: Searching memory for user {}, query: '{}', maxResults: {}", userId, query, maxResults);
+            log.info("MCP memory search started: userId={}, queryLengthBucket={}, maxResults={}",
+                    userId, LowSensitivityLogSummary.lengthBucket(query), maxResults);
 
             List<MemoryResult> results = new ArrayList<>();
 
@@ -194,7 +198,8 @@ public class McpGrpcServiceImpl extends McpExtensionServiceGrpc.McpExtensionServ
             responseObserver.onCompleted();
 
         } catch (Exception e) {
-            log.error("MCP Ext: Error searching memory", e);
+            log.error("MCP memory search failed: operation=mcp_memory_search, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             responseObserver.onNext(SearchMemoryResponse.newBuilder()
                     .setErrorMessage(e.getMessage() != null ? e.getMessage() : "Unknown error")
                     .build());

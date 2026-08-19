@@ -2,6 +2,7 @@ package com.aseubel.yusi.service.cognition;
 
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.pojo.entity.CognitiveConflict;
 import com.aseubel.yusi.pojo.entity.UserPersona;
 import com.aseubel.yusi.repository.CognitiveConflictRepository;
@@ -108,10 +109,11 @@ public class CognitiveConflictDetector {
                         .resolved(false)
                         .build());
 
-                log.info("检测到认知冲突: userId={}, desc={}", userId, description);
+                log.info("Cognitive conflict detected: userId={}, conflictDetected=true", userId);
             }
         } catch (Exception e) {
-            log.warn("认知冲突检测失败: userId={}", userId, e);
+            log.warn("Cognitive conflict check failed: userId={}, operation=cognitive_conflict_check, exceptionType={}",
+                    userId, LowSensitivityLogSummary.exceptionType(e));
         }
     }
 

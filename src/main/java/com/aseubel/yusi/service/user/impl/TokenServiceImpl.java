@@ -94,7 +94,7 @@ public class TokenServiceImpl implements TokenService {
         deviceSet.add(score, accessToken);
         // Set expiration same as access token
         deviceSet.expire(java.time.Duration.ofMillis(jwtProperties.getAccessTokenExpiration()));
-        log.debug("Added device token for user {}, device info: {}", userId, deviceInfo);
+        log.debug("Device token added: userId={}, deviceInfoPresent={}", userId, deviceInfo != null);
     }
 
     @Override

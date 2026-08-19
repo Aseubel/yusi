@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai.tool;
 
 import cn.hutool.core.util.StrUtil;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.service.lifegraph.LifeGraphQueryService;
 import dev.langchain4j.agent.tool.P;
 import dev.langchain4j.agent.tool.Tool;
@@ -44,7 +45,8 @@ public class LifeGraphTool {
             return "查询词不能为空。";
         }
 
-        log.info("LifeGraphTool: 用户 {} 搜索图谱, query='{}'", userId, query);
+        log.info("LifeGraphTool search started: userId={}, queryLengthBucket={}",
+                userId, LowSensitivityLogSummary.lengthBucket(query));
 
         // 使用默认的搜索参数：Top 3 实体，每个实体 30 条关系，5 条提及
         // 这些参数在性能和上下文窗口大小之间取得了平衡
@@ -55,7 +57,8 @@ public class LifeGraphTool {
             }
             return result + "\n\n请根据以上检索到的记忆，用你的语气回答用户的问题。";
         } catch (Exception e) {
-            log.error("LifeGraphTool: 搜索出错", e);
+            log.error("LifeGraphTool search failed: operation=life_graph_search, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             return "搜索图谱时发生错误。现在请直接用你的语气回答用户的问题。";
         }
     }

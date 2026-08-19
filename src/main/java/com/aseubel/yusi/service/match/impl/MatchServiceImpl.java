@@ -15,6 +15,7 @@ import com.aseubel.yusi.pojo.constant.TaskExecutionSourceType;
 import com.aseubel.yusi.pojo.constant.TaskExecutionType;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.pojo.dto.match.MatchRecommendationResponse;
 import com.aseubel.yusi.pojo.dto.match.MatchRerankResult;
 import com.aseubel.yusi.pojo.dto.match.MatchStatusResponse;
@@ -226,7 +227,7 @@ public class MatchServiceImpl implements MatchService {
 
     private void createMatch(User userA, User userB, MatchProfile profileA, MatchProfile profileB,
             MatchRerankResult rerankResult, String generationRunId) {
-        log.info("Creating match for {} and {}", userA.getUserName(), userB.getUserName());
+        log.info("Creating match: userAId={}, userBId={}", userA.getUserId(), userB.getUserId());
         CompletableFuture<String> futureA = generateLetter(userA.getUserId(),
                 buildStructuredProfileForMatching(profileA),
                 buildStructuredProfileForMatching(profileB),
@@ -276,7 +277,8 @@ public class MatchServiceImpl implements MatchService {
             saved.setRecommendationEventId(event.getEventId());
             soulMatchRepository.save(saved);
         } catch (Exception e) {
-            log.error("Failed to create match", e);
+            log.error("Match creation failed: operation=create_match, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
         }
     }
 
@@ -317,7 +319,8 @@ public class MatchServiceImpl implements MatchService {
                 AiMessage aiMessage = chatModel.chat(UserMessage.from(prompt)).aiMessage();
                 return aiMessage.text();
             } catch (Exception e) {
-                log.error("Failed to generate recommendation letter for user {}", userId, e);
+                log.error("Recommendation letter failed: userId={}, operation=generate_letter, exceptionType={}",
+                        userId, LowSensitivityLogSummary.exceptionType(e));
                 return buildFallbackLetter(rerankResult);
             } finally {
                 ModelRouteContextHolder.clear();
@@ -419,7 +422,8 @@ public class MatchServiceImpl implements MatchService {
             }
             return recalled;
         } catch (Exception e) {
-            log.warn("Milvus 召回匹配候选失败, userId={}", userId, e);
+            log.warn("Match candidate recall failed: userId={}, operation=recall_candidates, exceptionType={}",
+                    userId, LowSensitivityLogSummary.exceptionType(e));
             return List.of();
         }
     }
@@ -699,8 +703,8 @@ public class MatchServiceImpl implements MatchService {
             String raw = aiMessage.text();
             return objectMapper.readValue(extractJsonObject(raw), MatchRerankResult.class);
         } catch (Exception e) {
-            log.warn("匹配精排失败: targetUserId={}, candidateUserId={}",
-                    targetProfile.getUserId(), candidateProfile.getUserId(), e);
+            log.warn("Match rerank failed: targetUserId={}, candidateUserId={}, operation=rerank, exceptionType={}",
+                    targetProfile.getUserId(), candidateProfile.getUserId(), LowSensitivityLogSummary.exceptionType(e));
             return null;
         }
     }
@@ -978,7 +982,8 @@ public class MatchServiceImpl implements MatchService {
             iceBreakers = connectionGuideService.generateIceBreakers(myProfile, counterpartProfile, rerankResult);
             suggestedScenario = connectionGuideService.suggestScenario(myProfile, counterpartProfile);
         } catch (Exception e) {
-            log.debug("生成匹配引导失败: matchId={}, userId={}", match.getId(), currentUserId, e);
+            log.debug("Match guide generation failed: matchId={}, userId={}, operation=generate_guide, exceptionType={}",
+                    match.getId(), currentUserId, LowSensitivityLogSummary.exceptionType(e));
         }
 
         return MatchRecommendationResponse.builder()
