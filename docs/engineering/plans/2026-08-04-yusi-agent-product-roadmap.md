@@ -48,8 +48,10 @@ Yusi 已具备以下基础能力：
    基线尚未建立。
 2. Phase 2 事件关联、Phase 3 的 Trace、超时、取消、重试和幂等账本均已落地；仅剩
    写操作用户确认这一防御性边界。持久化 Agentic Runtime 因无真实消费方移入扩展 Backlog。
-3. Phase 4 评测已完成 LifeGraph / Timeline 和中期记忆生命周期两条回放基线；对话、
-   Timeline 重建、匹配评测集和关键指标回归门槛尚未建立。
+3. Phase 4 评测已建立全部回放基线：LifeGraph promotion、中期记忆生命周期、
+   Timeline、Timeline 重建、对话协议与匹配连接共 8 个套件 133 断言，另有统一
+   汇总门槛（`quality-gates-aggregate-v1`）锁定套件合同与诚实边界；剩余缺口为
+   真实模型语义评分与 `match.viewed` 事件（均以契约字段显式标记不可用）。
 4. 敏感明文仍进入日志：`McpGrpcServiceImpl`、`DiarySearchTool`、`LifeGraphTool`、
    `MidTermMemorySearchService` 四处日志完整打印用户 query，与低敏 Trace 边界冲突。
 5. 上线工程准备缺失：无统一健康检查与指标暴露（未引入 actuator），无告警通道，
@@ -371,7 +373,9 @@ Invocation Context 中的调用 ID 和账本 key。只有能力目录明确声�
 1. **认知逻辑闭环**：LifeGraph“固定抽取结果 + 真实 H2 promotion 回放”基线评测、
    `importance` 匹配画像决策消费、记忆中心人物关系投影（关系事实 + 确认来源 +
    importance 透明展示）均已完成；后续视基线结果评估人物字段改造是否独立切片。
-2. **质量门槛收尾**：对话、Timeline 重建、匹配评测集与关键指标回归门槛。
+2. **质量门槛收尾（已完成）**：对话（`chat-quality-v1`）、Timeline 重建
+   （`lifegraph-timeline-rebuild-v1`）、匹配（`match-quality-v1`）评测集与统一
+   回归门槛（`quality-gates-aggregate-v1`）均已落地。
 3. **上线工程准备**：日志安全收敛、可观测与告警、备份恢复演练、安全与隐私自检、
    上线运维（见 Phase 5）。
 4. **上线验收**：端到端验收与 GO/NO-GO 判定（见 Phase 6），随后首次上线。
@@ -572,11 +576,16 @@ Agentic Runtime 因无真实消费方移入[上线后扩展 Backlog](2026-08-17-
       确认来源和 `importance`；关系事实每次读取从 `life_graph_relation` 当前行投影，
       不落地缓存字段，配套真实 H2 回放（`lifegraph-memory-relation-v1`）。
 
-- [ ] 建立对话评测集：记忆引用正确性、语气一致性、幻觉、隐私边界和工具使用边界。
+- [x] 建立对话评测集：记忆引用正确性、语气一致性、幻觉、隐私边界和工具使用边界。
+      配套 `chat-quality-v1`（4 case、10 断言）；真实模型语义评分缺口以
+      `semanticModelScoreAvailable=false` 显式标记。
 - [ ] 建立记忆评测集：实体/关系抽取、LifeGraph 升级、来源撤销、去重、冲突识别、
       有效期和删除生效。
-- [ ] 建立 Timeline 评测集：事件资格、时间证据、来源安全性和修改/删除后的重建结果。
-- [ ] 建立匹配评测集：召回覆盖、精排理由、双向共鸣、接受率、持续互动和强负面排除。
+- [x] 建立 Timeline 评测集：事件资格、时间证据、来源安全性和修改/删除后的重建结果。
+      配套 `lifegraph-timeline-v1` 与 `lifegraph-timeline-rebuild-v1`（五表残留全扫描）。
+- [x] 建立匹配评测集：召回覆盖、精排理由、双向共鸣、接受率、持续互动和强负面排除。
+      配套 `match-quality-v1`；生产缺 `match.viewed` 事件，接受率以
+      `acceptanceRateAvailable=false`、`viewedCount=0` 诚实标记，禁止用推荐数冒充分母。
 - [ ] ~~建立主动性评测集：触发是否合理、活动判断是否准确、内容是否重复、是否造成打扰。~~
       已移入[上线后扩展 Backlog](2026-08-17-yusi-post-release-expansion-backlog.md)：
       主动问候保持现有行为上线，评测深化随体验改造一起取回。
@@ -584,8 +593,10 @@ Agentic Runtime 因无真实消费方移入[上线后扩展 Backlog](2026-08-17-
 - [ ] ~~将用户反馈转成脱敏、可标注的数据，不直接把所有反馈写回画像或训练数据。~~
       已移入[上线后扩展 Backlog](2026-08-17-yusi-post-release-expansion-backlog.md)：
       属于训练与数据工厂方向，非上线必需。
-- [ ] 为关键指标设置回归门槛，任何质量提升都不能以隐私、安全、删除生效或来源正确性
-      下降为代价。
+- [x] 为关键指标设置回归门槛，任何质量提升都不能以隐私、安全、删除生效或来源正确性
+      下降为代价。配套 `QualityGatePolicy`（SuiteContract 锁定 case 集合与最小断言数）
+      与 `quality-gates-aggregate-v1` 汇总门槛（诚实边界 `AGGREGATE_HONEST_BOUNDARY`
+      防缺口被悄悄补齐）。
 
 **验收标准：**
 
