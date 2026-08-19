@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 1,
+  "suiteId": "match-quality-v1",
+  "cases": [
+    {
+      "caseId": "EVAL-MATCH-001",
+      "scenarios": [
+        {
+          "scenarioId": "EVAL-MATCH-001-A",
+          "userId": "fixture-user-match-recall",
+          "participantUserIds": [],
+          "recallCandidates": [
+            "fixture-user-match-target",
+            "fixture-user-match-secondary"
+          ],
+          "targetProfileKey": "fixture-user-match-target",
+          "expectedReasonCount": 3,
+          "actions": [],
+          "negativeFeedbackAction": null,
+          "expectedSubsequentRecommendationCount": 0,
+          "acceptanceRateAvailable": false
+        },
+        {
+          "scenarioId": "EVAL-MATCH-001-B",
+          "userId": "fixture-user-match-lifecycle-a",
+          "participantUserIds": [
+            "fixture-user-match-lifecycle-a",
+            "fixture-user-match-lifecycle-b"
+          ],
+          "recallCandidates": [],
+          "targetProfileKey": null,
+          "expectedReasonCount": 0,
+          "actions": [
+            "ACCEPT",
+            "ACCEPT",
+            "DEEP_INTERACTION",
+            "DEEP_INTERACTION"
+          ],
+          "negativeFeedbackAction": null,
+          "expectedSubsequentRecommendationCount": 0,
+          "acceptanceRateAvailable": false
+        },
+        {
+          "scenarioId": "EVAL-MATCH-001-C",
+          "userId": "fixture-user-match-negative-a",
+          "participantUserIds": [
+            "fixture-user-match-negative-a",
+            "fixture-user-match-negative-b"
+          ],
+          "recallCandidates": [],
+          "targetProfileKey": null,
+          "expectedReasonCount": 0,
+          "actions": [],
+          "negativeFeedbackAction": "REPORT",
+          "expectedSubsequentRecommendationCount": 0,
+          "acceptanceRateAvailable": false
+        }
+      ]
+    }
+  ]
+}
