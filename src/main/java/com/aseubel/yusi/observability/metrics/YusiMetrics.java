@@ -2,6 +2,7 @@ package com.aseubel.yusi.observability.metrics;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Component;
@@ -9,7 +10,10 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Low-cardinality metrics facade. Every public method normalizes labels before
@@ -28,14 +32,25 @@ public class YusiMetrics {
             "usage-sync", "memory-scan", "room-cleanup", "memory-fusion", "proactive-greeting",
             "embedding-cleanup", "lifegraph-cleanup", "task-execution-recovery",
             "security-audit-cleanup", "lifegraph-merge-suggestion", "weekly-report", "weekly-match",
-            "embedding-worker", "lifegraph-worker", "model-state-sync");
+            "embedding-worker", "lifegraph-worker", "model-state-sync", "readiness", "db", "redis",
+            "milvus", "model_gateway", "tasks", "model_admission");
     private static final Set<String> RESULTS = Set.of(
-            "success", "empty", "failure", "rejected", "unavailable", "unknown");
+            "success", "empty", "failure", "rejected", "unavailable", "unknown", "denied");
+    private static final Set<String> DEPENDENCY_RESULTS = Set.of("up", "down", "unknown");
+    private static final Set<String> TASK_RESULTS = Set.of(
+            "running", "overdue", "on_time", "not_running", "unknown");
+    private static final Set<String> TASK_OPERATIONS = Set.of(
+            "usage-sync", "memory-scan", "room-cleanup", "memory-fusion", "proactive-greeting",
+            "embedding-cleanup", "lifegraph-cleanup", "task-execution-recovery",
+            "security-audit-cleanup", "lifegraph-merge-suggestion", "weekly-report", "weekly-match",
+            "embedding-worker", "lifegraph-worker", "model-state-sync");
     private static final Set<String> FAILURE_CATEGORIES = Set.of(
             "none", "timeout", "connection_failure", "unavailable", "validation", "rejected",
-            "dependency", "unknown");
+            "dependency", "admission_store_unavailable", "reservation_conflict", "limit_exceeded",
+            "unknown");
 
     private final MeterRegistry registry;
+    private final Map<String, AtomicReference<Double>> gaugeValues = new ConcurrentHashMap<>();
 
     public YusiMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -115,6 +130,54 @@ public class YusiMetrics {
         }
     }
 
+    public void recordDependencyHealth(String dependency, String result, String failureCategory,
+            boolean available) {
+        try {
+            String normalizedDependency = normalizeDependency(dependency);
+            String normalizedResult = normalize(result, DEPENDENCY_RESULTS);
+            if ("unknown".equals(normalizedResult)) {
+                normalizedResult = available ? "up" : "down";
+            }
+            String normalizedFailure = normalizeFailure(failureCategory);
+            recordGauge("dependency_health",
+                    tags("system", normalizedDependency, normalizedResult, normalizedFailure),
+                    available && "up".equals(normalizedResult) ? 1D : 0D, null);
+        } catch (RuntimeException ignored) {
+            // Metrics are best effort.
+        }
+    }
+
+    public void recordTaskBacklog(String taskName, double dueGapMinutes, double lagMinutes,
+            String result, String failureCategory) {
+        try {
+            String normalizedTask = normalize(operationForTask(taskName), OPERATIONS);
+            String normalizedResult = normalize(result, TASK_RESULTS);
+            if (!TASK_OPERATIONS.contains(normalizedTask) || "unknown".equals(normalizedResult)
+                    || !Double.isFinite(dueGapMinutes) || !Double.isFinite(lagMinutes)) {
+                return;
+            }
+            String normalizedFailure = normalizeFailure(failureCategory);
+            String[] tags = tags("task", normalizedTask, normalizedResult, normalizedFailure);
+            recordGauge("task_due_gap", tags, finiteNonNegative(dueGapMinutes), "minutes");
+            recordGauge("task_lag", tags, finiteNonNegative(lagMinutes), "minutes");
+        } catch (RuntimeException ignored) {
+            // Metrics are best effort.
+        }
+    }
+
+    public void recordBudgetDenied(String reason) {
+        try {
+            String normalizedFailure = normalizeBudgetReason(reason);
+            Counter counter = Counter.builder("budget_denied_total")
+                    .description("Denied model budget admissions")
+                    .tags(tags("system", "model_admission", "denied", normalizedFailure))
+                    .register(registry);
+            counter.increment();
+        } catch (RuntimeException ignored) {
+            // Metrics are best effort.
+        }
+    }
+
     private String operationForTask(String taskName) {
         if (taskName == null) {
             return "unknown";
@@ -123,8 +186,40 @@ public class YusiMetrics {
         return OPERATIONS.contains(normalized) ? normalized : "unknown";
     }
 
+    private String normalizeDependency(String dependency) {
+        if (dependency == null || dependency.isBlank()) {
+            return "unknown";
+        }
+        String normalized = dependency.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "mysql", "database" -> "db";
+            case "modelgateway", "model-gateway" -> "model_gateway";
+            default -> normalize(normalized, OPERATIONS);
+        };
+    }
+
     private String normalizeFailure(String value) {
         return normalize(value, FAILURE_CATEGORIES);
+    }
+
+    public static String normalizeBudgetReason(String value) {
+        if (value == null || value.isBlank()) {
+            return "unknown";
+        }
+        String normalized = value.trim().toUpperCase(Locale.ROOT);
+        if ("ADMISSION_STORE_UNAVAILABLE".equals(normalized)
+                || "ADMISSION_STORE_UNAVAILABLE".equals(value.trim())) {
+            return "admission_store_unavailable";
+        }
+        if ("RESERVATION_CONFLICT".equals(normalized)
+                || "RESERVATION_CONFLICT".equals(value.trim())) {
+            return "reservation_conflict";
+        }
+        if ("LIMIT_EXCEEDED".equals(normalized)
+                || normalized.startsWith("LIMIT_EXCEEDED:")) {
+            return "limit_exceeded";
+        }
+        return "unknown";
     }
 
     private String normalize(String value, Set<String> allowed) {
@@ -142,5 +237,22 @@ public class YusiMetrics {
                 "result", result,
                 "failure_category", failureCategory
         };
+    }
+
+    private void recordGauge(String name, String[] tags, double value, String baseUnit) {
+        String key = name + "|" + String.join("|", tags);
+        AtomicReference<Double> reference = gaugeValues.computeIfAbsent(key,
+                ignored -> new AtomicReference<>(value));
+        reference.set(value);
+        Gauge.Builder<AtomicReference<Double>> builder = Gauge.builder(name, reference,
+                current -> current.get()).tags(tags);
+        if (baseUnit != null) {
+            builder.baseUnit(baseUnit);
+        }
+        builder.register(registry);
+    }
+
+    private double finiteNonNegative(double value) {
+        return Double.isFinite(value) ? Math.max(0D, value) : 0D;
     }
 }

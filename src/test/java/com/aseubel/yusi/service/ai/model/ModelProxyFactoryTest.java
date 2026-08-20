@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai.model;
 
 import com.aseubel.yusi.config.ai.properties.ModelGatewayAdmissionProperties;
+import com.aseubel.yusi.observability.metrics.YusiMetrics;
 import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.ai.runtime.ModelCallAttemptEvent;
@@ -22,6 +23,7 @@ import dev.langchain4j.model.chat.response.PartialToolCallContext;
 import dev.langchain4j.model.chat.response.StreamingChatResponseHandler;
 import dev.langchain4j.model.chat.response.StreamingHandle;
 import dev.langchain4j.model.output.TokenUsage;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -151,9 +153,11 @@ class ModelProxyFactoryTest {
         when(script.eval(any(RScript.Mode.class), anyString(), eq(RScript.ReturnType.INTEGER),
                 any(), any(Object[].class))).thenReturn(0L);
         ModelBudgetAdmission admission = new ModelBudgetAdmission(properties, redissonClient);
+        SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+        YusiMetrics metrics = new YusiMetrics(meterRegistry);
 
         ModelProxyFactory factory = new ModelProxyFactory(router, stateCenter, maskService, publisher,
-                new ModelUsageExtractor(), new ModelTokenEstimator(), admission);
+                new ModelUsageExtractor(), new ModelTokenEstimator(), admission, metrics);
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> factory.createChatProxy("chat")
                 .chat(ChatRequest.builder().messages(List.of(UserMessage.from("hello"))).build()))
@@ -163,6 +167,10 @@ class ModelProxyFactoryTest {
         var eventCaptor = org.mockito.ArgumentCaptor.forClass(ModelCallAttemptEvent.class);
         verify(publisher).publishEvent(eventCaptor.capture());
         assertEquals("REJECTED", eventCaptor.getValue().status());
+        assertThat(meterRegistry.find("budget_denied_total").counter()).isNotNull();
+        assertThat(meterRegistry.find("budget_denied_total").counter().count()).isEqualTo(1D);
+        assertThat(meterRegistry.find("budget_denied_total").counter().getId().getTag("failure_category"))
+                .isEqualTo("limit_exceeded");
     }
 
     @Test

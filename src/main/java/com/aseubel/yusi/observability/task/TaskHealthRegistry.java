@@ -1,6 +1,7 @@
 package com.aseubel.yusi.observability.task;
 
-
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -47,11 +48,15 @@ public class TaskHealthRegistry {
     }
 
     public void recordStart(String taskName) {
+        recordStart(taskName, Instant.now());
+    }
+
+    public void recordStart(String taskName, Instant startedAt) {
         String normalizedName = normalizeTaskName(taskName);
-        if (normalizedName == null) {
+        if (normalizedName == null || startedAt == null) {
             return;
         }
-        long now = System.currentTimeMillis();
+        long now = startedAt.toEpochMilli();
         states.compute(normalizedName, (ignored, previous) -> new TaskState(
                 normalizedName,
                 "RUNNING",
@@ -61,11 +66,15 @@ public class TaskHealthRegistry {
     }
 
     public void recordSuccess(String taskName) {
+        recordSuccess(taskName, Instant.now());
+    }
+
+    public void recordSuccess(String taskName, Instant completedAt) {
         String normalizedName = normalizeTaskName(taskName);
-        if (normalizedName == null) {
+        if (normalizedName == null || completedAt == null) {
             return;
         }
-        long now = System.currentTimeMillis();
+        long now = completedAt.toEpochMilli();
         states.compute(normalizedName, (ignored, previous) -> new TaskState(
                 normalizedName,
                 "SUCCESS",
@@ -75,11 +84,15 @@ public class TaskHealthRegistry {
     }
 
     public void recordFailure(String taskName, String category) {
+        recordFailure(taskName, category, Instant.now());
+    }
+
+    public void recordFailure(String taskName, String category, Instant failedAt) {
         String normalizedName = normalizeTaskName(taskName);
-        if (normalizedName == null) {
+        if (normalizedName == null || failedAt == null) {
             return;
         }
-        long now = System.currentTimeMillis();
+        long now = failedAt.toEpochMilli();
         states.compute(normalizedName, (ignored, previous) -> new TaskState(
                 normalizedName,
                 "FAILED",
@@ -96,6 +109,38 @@ public class TaskHealthRegistry {
             snapshot.put(name, states.get(name));
         }
         return Map.copyOf(snapshot);
+    }
+
+    public Map<String, TaskTiming> timingSnapshot(Instant now, TaskScheduleCatalog catalog) {
+        if (now == null || catalog == null) {
+            return Map.of();
+        }
+        Map<String, TaskTiming> result = new LinkedHashMap<>();
+        for (String taskName : allowedTaskNames()) {
+            TaskState state = states.get(taskName);
+            Duration interval = catalog.expectedInterval(taskName);
+            if (state == null || interval == null) {
+                result.put(taskName, TaskTiming.unknown(taskName));
+                continue;
+            }
+            double lagMinutes = 0D;
+            double dueGapMinutes = 0D;
+            String resultLabel;
+            if ("RUNNING".equals(state.status())) {
+                lagMinutes = minutesBetween(state.startedAt(), now.toEpochMilli());
+                resultLabel = "running";
+            } else if (state.lastSuccessAt() <= 0L) {
+                result.put(taskName, TaskTiming.unknown(taskName));
+                continue;
+            } else {
+                long dueAt = state.lastSuccessAt() + interval.toMillis();
+                dueGapMinutes = Math.max(0D, minutesBetween(dueAt, now.toEpochMilli()));
+                resultLabel = dueGapMinutes > 0D ? "overdue" : "on_time";
+            }
+            result.put(taskName, new TaskTiming(taskName, true, dueGapMinutes, lagMinutes,
+                    resultLabel, state.failureCategory()));
+        }
+        return Map.copyOf(result);
     }
 
     public static String normalizeTaskName(String taskName) {
@@ -120,5 +165,23 @@ public class TaskHealthRegistry {
             long startedAt,
             long lastSuccessAt,
             String failureCategory) {
+    }
+
+    public record TaskTiming(
+            String taskName,
+            boolean sampleAvailable,
+            double dueGapMinutes,
+            double lagMinutes,
+            String result,
+            String failureCategory) {
+
+        private static TaskTiming unknown(String taskName) {
+            return new TaskTiming(taskName, false, Double.NaN, Double.NaN,
+                    "unknown", "unknown");
+        }
+    }
+
+    private static double minutesBetween(long earlierMillis, long laterMillis) {
+        return Math.max(0D, (laterMillis - earlierMillis) / 60000D);
     }
 }

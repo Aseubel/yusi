@@ -24,6 +24,10 @@ yusi:
     image-folder: ${OSS_IMAGE_FOLDER:yusi/images/}
     access-key-id: ${OSS_ACCESS_KEY_ID:}
     access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
+  alert:
+    feishu:
+      enabled: ${YUSI_ALERT_FEISHU_ENABLED:false}
+      interval-ms: ${YUSI_ALERT_FEISHU_INTERVAL_MS:30000}
 
 management:
   endpoints:

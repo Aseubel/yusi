@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai.model;
 
 import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
+import com.aseubel.yusi.observability.metrics.YusiMetrics;
 import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.ai.runtime.ModelCallAttemptEvent;
@@ -46,32 +47,41 @@ public class ModelProxyFactory {
     private final ModelUsageExtractor usageExtractor;
     private final ModelTokenEstimator tokenEstimator;
     private final ModelBudgetAdmission budgetAdmission;
+    private final YusiMetrics metrics;
 
     public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
             SensitiveDataMaskService maskService) {
         this(modelRouterService, modelStateCenter, maskService, new NoopEventPublisher(),
-                new ModelUsageExtractor(), new ModelTokenEstimator(), new ModelBudgetAdmission());
+                new ModelUsageExtractor(), new ModelTokenEstimator(), new ModelBudgetAdmission(), null);
     }
 
     public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
             SensitiveDataMaskService maskService, ApplicationEventPublisher eventPublisher,
             ModelUsageExtractor usageExtractor) {
         this(modelRouterService, modelStateCenter, maskService, eventPublisher, usageExtractor,
-                new ModelTokenEstimator(), new ModelBudgetAdmission());
+                new ModelTokenEstimator(), new ModelBudgetAdmission(), null);
     }
 
     public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
             SensitiveDataMaskService maskService, ApplicationEventPublisher eventPublisher,
             ModelUsageExtractor usageExtractor, ModelTokenEstimator tokenEstimator) {
         this(modelRouterService, modelStateCenter, maskService, eventPublisher, usageExtractor,
-                tokenEstimator, new ModelBudgetAdmission());
+                tokenEstimator, new ModelBudgetAdmission(), null);
+    }
+
+    public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
+            SensitiveDataMaskService maskService, ApplicationEventPublisher eventPublisher,
+            ModelUsageExtractor usageExtractor, ModelTokenEstimator tokenEstimator,
+            ModelBudgetAdmission budgetAdmission) {
+        this(modelRouterService, modelStateCenter, maskService, eventPublisher, usageExtractor,
+                tokenEstimator, budgetAdmission, null);
     }
 
     @Autowired
     public ModelProxyFactory(ModelRouterService modelRouterService, ModelStateCenter modelStateCenter,
             SensitiveDataMaskService maskService, ApplicationEventPublisher eventPublisher,
             ModelUsageExtractor usageExtractor, ModelTokenEstimator tokenEstimator,
-            ModelBudgetAdmission budgetAdmission) {
+            ModelBudgetAdmission budgetAdmission, YusiMetrics metrics) {
         this.modelRouterService = modelRouterService;
         this.modelStateCenter = modelStateCenter;
         this.maskService = maskService;
@@ -79,6 +89,7 @@ public class ModelProxyFactory {
         this.usageExtractor = usageExtractor;
         this.tokenEstimator = tokenEstimator;
         this.budgetAdmission = budgetAdmission;
+        this.metrics = metrics;
     }
 
     public ChatModel createChatProxy(String defaultScene) {
@@ -248,6 +259,7 @@ public class ModelProxyFactory {
                 ModelBudgetPermit permit = budgetAdmission.reserve(context, candidate,
                         tokenBudget(context, decision.routeParameters()));
                 if (!permit.granted()) {
+                    recordBudgetDenied(permit);
                     publishAttempt(decision, context, candidate, null, 0L, null,
                             attemptIndex, ModelCallStatus.REJECTED.code(), permit.reservationKey());
                     lastError = new ModelAdmissionDeniedException(candidate.provider(), candidate.modelId(),
@@ -315,6 +327,7 @@ public class ModelProxyFactory {
             ModelBudgetPermit permit = budgetAdmission.reserve(context, candidate,
                     tokenBudget(context, decision.routeParameters()));
             if (!permit.granted()) {
+                recordBudgetDenied(permit);
                 publishAttempt(decision, context, candidate, null, 0L, null,
                             attemptIndex, ModelCallStatus.REJECTED.code(), permit.reservationKey());
                 if (candidateIndex + 1 < candidates.size()) {
@@ -362,6 +375,12 @@ public class ModelProxyFactory {
                 handleStreamingFailure(decision, context, candidate, candidates, candidateIndex,
                         attemptIndex, start, emitted.get(), firstOutputAt.get(), method, args,
                         throwable, downstream, permit);
+            }
+        }
+
+        private void recordBudgetDenied(ModelBudgetPermit permit) {
+            if (metrics != null && permit != null) {
+                metrics.recordBudgetDenied(YusiMetrics.normalizeBudgetReason(permit.reservationKey()));
             }
         }
 

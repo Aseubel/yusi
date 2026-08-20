@@ -48,4 +48,42 @@ class YusiMetricsTest {
                     .noneMatch(tag -> FORBIDDEN_VALUES.contains(tag.getValue()));
         }
     }
+
+    @Test
+    void exposesFourAlertSignalsWithOnlyTheExistingFourTagKeys() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        YusiMetrics metrics = new YusiMetrics(registry);
+
+        metrics.recordDependencyHealth("redis", "down", "connection_failure", false);
+        metrics.recordTaskBacklog("weekly-match", 15D, 20D, "overdue", "dependency");
+        metrics.recordTaskBacklog("fixture-query-alert", 0D, 0D, "unknown", "fixture-content-alert");
+        metrics.recordBudgetDenied("LIMIT_EXCEEDED:fixture-user-alert");
+
+        assertThat(registry.find("dependency_health").gauge()).isNotNull();
+        assertThat(registry.find("dependency_health").gauge().value()).isZero();
+        assertThat(registry.find("task_due_gap").gauge()).isNotNull();
+        assertThat(registry.find("task_lag").gauge()).isNotNull();
+        assertThat(registry.find("budget_denied_total").counter()).isNotNull();
+        assertThat(registry.find("budget_denied_total").counter().count()).isEqualTo(1D);
+        assertThat(registry.find("budget_denied_total").counter().getId().getTag("failure_category"))
+                .isEqualTo("limit_exceeded");
+        assertThat(registry.toString()).doesNotContain(
+                "fixture-user-alert", "fixture-query-alert", "fixture-content-alert");
+
+        for (Meter meter : registry.getMeters()) {
+            assertThat(meter.getId().getTags())
+                    .allMatch(tag -> YusiMetrics.allowedSearchTags().contains(tag.getKey()));
+        }
+    }
+
+    @Test
+    void unknownTaskBacklogDoesNotCreateAFakeZeroGauge() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        YusiMetrics metrics = new YusiMetrics(registry);
+
+        metrics.recordTaskBacklog("fixture-query-alert", 0D, 0D, "unknown", "unknown");
+
+        assertThat(registry.find("task_due_gap").gauge()).isNull();
+        assertThat(registry.find("task_lag").gauge()).isNull();
+    }
 }

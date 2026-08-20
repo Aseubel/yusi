@@ -12,6 +12,12 @@ server:
     accept-count: 100 # 等待队列长度
     max-connections: 500 # 最大连接数
 
+yusi:
+  alert:
+    feishu:
+      enabled: ${YUSI_ALERT_FEISHU_ENABLED:false}
+      interval-ms: ${YUSI_ALERT_FEISHU_INTERVAL_MS:30000}
+
 management:
   server:
     port: ${MANAGEMENT_SERVER_PORT:20611}
