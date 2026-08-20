@@ -642,12 +642,15 @@ Agentic Runtime 因无真实消费方移入[上线后扩展 Backlog](2026-08-17-
       真实 Milvus/Redis/OSS/worker/备份副本的 deployment-only 证据与 API 鉴权越权
       回归、Trace 边界复查两项子项待完成）。
 - [ ] 限流与成本准入复核：`@RateLimiter` 场景覆盖面与 `model.gateway.admission` 阈值按
-      上线标准复核，补齐无限流的写接口。（c778137 已交付 90 写映射覆盖 manifest、
-      74 个新增注解、HMAC subject fail-closed、固定低敏 429 与 bounded local
-      fallback；验收驳回：YusiMetrics 两处归一化白名单对调——recordRateLimited 误用
-      OPERATIONS 使 rate_limited_total 的 operation 全部坍缩为 unknown，
-      recordToolSearch 误切 RATE_LIMIT_OPERATIONS 使既有 tool_search 系列指标
-      operation 维度回归为 unknown；待追加修复提交并复验。）
+      上线标准复核，补齐无限流的写接口。（本地门控已就绪：c778137 交付 90 写映射
+      覆盖 manifest、96 个注解（22 既有 + 74 新增）、HMAC subject fail-closed、固定
+      低敏 429、bounded local fallback 与 admission 四分类一致性；验收发现的指标
+      白名单对调缺陷已由 bef48267 修复并补 operation 标签值透传断言，全量 468
+      tests 通过；本地证据为 application-invariant-only/mock-contract-only。待完成
+      （deployment-only）：YUSI_RATE_LIMIT_HMAC_SECRET 生产注入（未注入时 subject
+      维度限流 fail-closed，为硬性前置）、真实并发/SSE/Multipart 压测、网关字节与
+      并发限流、Redis 多副本与故障演练、供应商配额校准与阈值调优、20611
+      allowlist、WebSocket/gRPC 入口验证。）
 - [ ] 上线运维准备：灰度与回滚方案、模型网关与关键依赖降级策略、上线清单与应急流程。
 
 **验收标准：**
