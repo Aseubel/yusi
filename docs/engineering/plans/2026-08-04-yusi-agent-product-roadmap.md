@@ -619,10 +619,15 @@ Agentic Runtime 因无真实消费方移入[上线后扩展 Backlog](2026-08-17-
       实际超出条目范围：同步收敛十一处相邻正文命中与五类异常政策（含九处同类
       伴随日志），由 `SensitiveLogSourceAuditTest` 锁定直接 payload 零容忍与
       延期 allowlist 为空。
-- [ ] 引入统一健康检查与指标暴露（actuator / Micrometer），覆盖 HTTP、MySQL、Redis、
-      Milvus、模型网关和关键后台任务。
+- [x] 引入统一健康检查与指标暴露（actuator / Micrometer），覆盖 HTTP、MySQL、Redis、
+      Milvus、模型网关和关键后台任务（提交 f1335d8f：liveness/readiness 组契约、
+      独立管理端口只暴露 health/prometheus 且 show-details=never、四标签白名单指标、
+      traceId 五入口传播与复用前清理；配套日志安全已由 f7b6cd4/1af6324 完成。
+      部署验收项待生产完成：管理端口网络隔离、Prometheus 真实抓取、真实依赖连通性）。
 - [ ] 建立最小告警通道：服务不可用、模型调用失败率、后台任务积压和预算准入拒绝都有
-      告警阈值和接收人。
+      告警阈值和接收人（前置已就绪：f1335d8f 已暴露 readiness 组、dependency_health、
+      model_call_failure_total、task_due_gap/lag、budget_denied_total 等可被告警规则
+      直接消费的指标；待完成：告警规则阈值、接收人与生产环境接入）。
 - [ ] 制定并演练数据备份与恢复：MySQL、Milvus、Redis 和对象存储都有备份周期与恢复步骤，
       至少完成一次真实恢复演练并记录 RTO。
 - [ ] 安全与隐私自检：账号注销与数据删除全路径验证（含向量副本、派生认知与审计保留
