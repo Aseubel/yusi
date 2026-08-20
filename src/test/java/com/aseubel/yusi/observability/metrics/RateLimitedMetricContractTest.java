@@ -57,4 +57,20 @@ class RateLimitedMetricContractTest {
                 "fixture-user-rate", "fixture-query-rate", "fixture-content-rate",
                 "fixture-token-rate", "fixture-object-key-rate");
     }
+
+    @Test
+    void rateLimitedCounterPreservesKnownRateLimitOperations() throws Exception {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        YusiMetrics metrics = new YusiMetrics(registry);
+        Method method = YusiMetrics.class.getMethod(
+                "recordRateLimited", String.class, String.class);
+
+        method.invoke(metrics, "plaza-submit", "limit_exceeded");
+        method.invoke(metrics, "admin-embeddings-full-sync", "limit_exceeded");
+
+        assertThat(registry.getMeters())
+                .filteredOn(meter -> "rate_limited_total".equals(meter.getId().getName()))
+                .extracting(meter -> meter.getId().getTag("operation"))
+                .containsExactlyInAnyOrder("plaza-submit", "admin-embeddings-full-sync");
+    }
 }

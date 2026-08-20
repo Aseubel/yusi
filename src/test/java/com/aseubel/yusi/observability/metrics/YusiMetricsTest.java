@@ -50,6 +50,31 @@ class YusiMetricsTest {
     }
 
     @Test
+    void searchCountersPreserveKnownToolAndTaskOperations() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        YusiMetrics metrics = new YusiMetrics(registry);
+
+        metrics.recordToolSearch("diary", "diary_search", "success", "none", 1L, 1);
+        metrics.recordToolSearch("task", "weekly-match", "running", "none", 0L, 0);
+
+        assertThat(registry.getMeters())
+                .filteredOn(meter -> "tool_search_total".equals(meter.getId().getName()))
+                .extracting(meter -> meter.getId().getTag("operation"))
+                .containsExactlyInAnyOrder("diary_search", "weekly-match");
+    }
+
+    @Test
+    void recordTaskPreservesKnownTaskOperation() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        YusiMetrics metrics = new YusiMetrics(registry);
+
+        metrics.recordTask("weekly-match", "running");
+
+        assertThat(registry.find("tool_search_total").counter().getId().getTag("operation"))
+                .isEqualTo("weekly-match");
+    }
+
+    @Test
     void exposesFourAlertSignalsWithOnlyTheExistingFourTagKeys() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         YusiMetrics metrics = new YusiMetrics(registry);

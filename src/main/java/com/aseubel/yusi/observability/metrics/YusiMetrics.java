@@ -90,7 +90,7 @@ public class YusiMetrics {
             String failureCategory, long durationMs, int resultCount) {
         try {
             String normalizedTool = normalize(tool, TOOLS);
-            String normalizedOperation = normalize(operation, RATE_LIMIT_OPERATIONS);
+            String normalizedOperation = normalize(operation, OPERATIONS);
             String normalizedResult = normalize(result, RESULTS);
             String normalizedFailure = normalizeFailure(failureCategory);
             String[] tags = tags(normalizedTool, normalizedOperation, normalizedResult, normalizedFailure);
@@ -206,7 +206,7 @@ public class YusiMetrics {
 
     public void recordRateLimited(String operation, String failureCategory) {
         try {
-            String normalizedOperation = normalize(operation, OPERATIONS);
+            String normalizedOperation = normalize(operation, RATE_LIMIT_OPERATIONS);
             String normalizedFailure = normalizeRateLimitFailure(failureCategory);
             Counter counter = Counter.builder("rate_limited_total")
                     .description("Rejected rate-limited operations")
