@@ -4,6 +4,7 @@ import com.aseubel.yusi.config.oss.OssProperties;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.common.utils.ImageUtils;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.common.utils.UuidUtils;
 import com.aseubel.yusi.pojo.entity.ImageFile;
 import com.aseubel.yusi.repository.ImageFileRepository;
@@ -72,7 +73,7 @@ public class OssService {
             if (existingFile.isPresent()) {
                 String existObjectKey = existingFile.get().getObjectKey();
                 if (objectKeyExists(existObjectKey)) {
-                    log.info("Skip upload - file already exists with MD5: {}, objectKey: {}", fileMd5, existObjectKey);
+                    log.info("OSS upload skipped: operation=oss_upload, category=image, reason=existing_object");
                     saveImageFileAsync(existObjectKey, fileMd5, userId, originalFilename, (long) compressed.length,
                             file.getContentType());
                     return existObjectKey;
@@ -87,8 +88,7 @@ public class OssService {
                     .build();
 
             ossClient.putObject(request);
-            log.info("Image uploaded successfully: {}, original size: {}, compressed size: {}",
-                    objectKey, bytes.length, compressed.length);
+            log.info("OSS upload completed: operation=oss_upload, category=image, outcome=success");
 
             cacheMd5ForSkipUpload(objectKey, fileMd5, userId);
 
@@ -97,7 +97,8 @@ public class OssService {
 
             return objectKey;
         } catch (IOException e) {
-            log.error("Failed to upload image: {}", objectKey, e);
+            log.error("OSS upload failed: operation=oss_upload, category=image, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片上传失败");
         }
     }
@@ -141,7 +142,8 @@ public class OssService {
             ossClient.putObject(request);
             return objectKey;
         } catch (IOException e) {
-            log.error("Failed to upload audio: {}", objectKey, e);
+            log.error("OSS upload failed: operation=oss_upload, category=audio, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "音频上传失败");
         }
     }
@@ -165,10 +167,11 @@ public class OssService {
             String url = ossClient.presign(request, PresignOptions.newBuilder()
                     .expiration(Duration.ofSeconds(expireSeconds))
                     .build()).url();
-            log.debug("Generated URL for: {}", objectKey);
+            log.debug("OSS presign completed: operation=oss_presign, category=object, outcome=success");
             return url;
         } catch (Exception e) {
-            log.error("Failed to generate URL for: {}", objectKey, e);
+            log.error("OSS presign failed: operation=oss_presign, category=object, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "生成图片访问链接失败");
         }
     }
@@ -210,6 +213,11 @@ public class OssService {
         deleteObject(objectKey);
     }
 
+    public void deleteOwnedChunkObject(String objectKey, String userId) {
+        validateOwnedChunkObjectKey(objectKey, userId);
+        deleteObject(objectKey);
+    }
+
     public void deleteOwnedImages(List<String> objectKeys, String userId) {
         if (objectKeys == null || objectKeys.size() > 100) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "图片数量超出限制");
@@ -224,7 +232,7 @@ public class OssService {
                 .build();
 
         ossClient.deleteObject(request);
-        log.info("Object deleted: {}", objectKey);
+        log.info("Object deleted: operation=oss_delete, category=owned_object");
     }
 
     private void deleteImages(List<String> objectKeys) {
@@ -250,7 +258,7 @@ public class OssService {
         if (imageFile.isPresent()) {
             String objectKey = imageFile.get().getObjectKey();
             if (objectKeyExists(objectKey)) {
-                log.info("Skip upload - found in database, MD5: {}, objectKey: {}", fileMd5, objectKey);
+                log.info("OSS upload skipped: operation=oss_upload, category=image, reason=database_reference");
                 return objectKey;
             }
         }
@@ -258,7 +266,7 @@ public class OssService {
         String cacheKey = MD5_CACHE_KEY_PREFIX + userId + ":" + fileMd5;
         String cachedObjectKey = redisTemplate.opsForValue().get(cacheKey);
         if (cachedObjectKey != null && objectKeyExists(cachedObjectKey)) {
-            log.info("Skip upload - found in cache, MD5: {}, objectKey: {}", fileMd5, cachedObjectKey);
+            log.info("OSS upload skipped: operation=oss_upload, category=image, reason=cache_reference");
             return cachedObjectKey;
         }
 
@@ -285,7 +293,7 @@ public class OssService {
 
         String chunkKey = chunkKey(fileMd5, userId, chunkIndex);
         if (Boolean.TRUE.equals(redisTemplate.hasKey(chunkKey))) {
-            log.info("Chunk {} already uploaded for MD5: {}", chunkIndex, fileMd5);
+            log.info("OSS chunk upload skipped: operation=oss_chunk_upload, category=chunk_exists");
             return uploadId;
         }
 
@@ -330,13 +338,14 @@ public class OssService {
 
             updateChunkProgress(fileMd5, userId);
 
-            log.info("Chunk {} uploaded for MD5: {}", chunkIndex, fileMd5);
+            log.info("OSS chunk upload completed: operation=oss_chunk_upload, category=chunk, outcome=success");
             return uploadId;
         } catch (IOException e) {
             if (bytesCounted) {
                 redisTemplate.opsForValue().increment(bytesKey, -chunkSize);
             }
-            log.error("Failed to upload chunk {} for MD5: {}", chunkIndex, fileMd5, e);
+            log.error("OSS chunk upload failed: operation=oss_chunk_upload, category=chunk, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "分片上传失败");
         } catch (RuntimeException e) {
             if (bytesCounted) {
@@ -466,13 +475,13 @@ public class OssService {
             cleanupChunks(fileMd5, totalChunks, userId);
             cleanupUploadId(fileMd5, userId);
 
-            log.info("Image merged successfully: {}, total chunks: {}, original size: {}, compressed size: {}",
-                    finalObjectKey, totalChunks, mergedSize, compressedBytes.length);
+            log.info("OSS chunk merge completed: operation=oss_chunk_merge, category=image, outcome=success");
             return finalObjectKey;
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("Failed to merge chunks for MD5: {}", fileMd5, e);
+            log.error("OSS chunk merge failed: operation=oss_chunk_merge, category=image, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "分片合并失败");
         } finally {
             if (tempDir != null) {
@@ -484,7 +493,8 @@ public class OssService {
                             .forEach(File::delete);
                     }
                 } catch (IOException e) {
-                    log.warn("Failed to cleanup temp directory: {}", tempDir);
+                    log.warn("OSS temp cleanup failed: operation=oss_temp_cleanup, category=local_directory, exceptionType={}",
+                            LowSensitivityLogSummary.exceptionType(e));
                 }
             }
         }
@@ -521,7 +531,8 @@ public class OssService {
                 try {
                     deleteImage(chunkObjectKey);
                 } catch (Exception e) {
-                    log.warn("Failed to delete chunk object: {}", chunkObjectKey, e);
+                    log.warn("OSS chunk cleanup failed: operation=oss_chunk_cleanup, category=object, exceptionType={}",
+                            LowSensitivityLogSummary.exceptionType(e));
                 }
             }
             redisTemplate.delete(chunkKey);
@@ -543,7 +554,7 @@ public class OssService {
             Long fileSize, String contentType) {
         try {
             if (imageFileRepository.existsByFileMd5AndUserId(fileMd5, userId)) {
-                log.debug("ImageFile already exists for MD5: {}", fileMd5);
+                log.debug("Image metadata save skipped: operation=oss_image_metadata, category=duplicate");
                 return;
             }
 
@@ -558,16 +569,17 @@ public class OssService {
                     .build();
 
             imageFileRepository.save(imageFile);
-            log.debug("ImageFile saved asynchronously: objectKey={}, MD5={}", objectKey, fileMd5);
+            log.debug("Image metadata saved: operation=oss_image_metadata, category=image, outcome=success");
         } catch (Exception e) {
-            log.error("Failed to save ImageFile asynchronously: objectKey={}, MD5={}", objectKey, fileMd5, e);
+            log.error("Image metadata save failed: operation=oss_image_metadata, category=image, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
         }
     }
 
     private void cacheMd5ForSkipUpload(String objectKey, String md5, String userId) {
         String cacheKey = MD5_CACHE_KEY_PREFIX + userId + ":" + md5;
         redisTemplate.opsForValue().set(cacheKey, objectKey, MD5_CACHE_EXPIRE_DAYS, TimeUnit.DAYS);
-        log.debug("Cached MD5 {} for objectKey {}", md5, objectKey);
+        log.debug("OSS upload cache updated: operation=oss_upload_cache, category=md5_reference");
     }
 
     private String calculateMd5(byte[] data) {
@@ -684,6 +696,17 @@ public class OssService {
         String ownerPrefix = ossProperties.getImageFolder() + userId + "/";
         if (!objectKey.startsWith(ownerPrefix)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该图片");
+        }
+    }
+
+    private void validateOwnedChunkObjectKey(String objectKey, String userId) {
+        if (objectKey == null || userId == null || userId.isBlank()
+                || objectKey.contains("..") || objectKey.contains("\\")) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "无效的分片路径");
+        }
+        String ownerPrefix = ossProperties.getImageFolder() + "chunks/" + userId + "/";
+        if (!objectKey.startsWith(ownerPrefix)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该分片");
         }
     }
 

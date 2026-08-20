@@ -25,10 +25,11 @@ import com.aseubel.yusi.repository.InterfaceDailyUsageRepository;
 import com.aseubel.yusi.service.user.AdminService;
 import com.aseubel.yusi.service.user.TokenService;
 import com.aseubel.yusi.service.security.SecurityAuditService;
+import com.aseubel.yusi.service.privacy.AccountDeletionCoordinator;
+import com.aseubel.yusi.service.privacy.DefaultAccountDeletionExternalPort;
+import com.aseubel.yusi.service.privacy.DeletionResult;
 import com.aseubel.yusi.redis.service.IRedisService;
 import io.milvus.v2.client.MilvusClientV2;
-import io.milvus.v2.service.vector.request.DeleteReq;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -42,7 +43,6 @@ import java.time.LocalDate;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AdminServiceImpl implements AdminService {
 
     private final UserRepository userRepository;
@@ -56,6 +56,43 @@ public class AdminServiceImpl implements AdminService {
     private final IRedisService redissonService;
     private final MilvusClientV2 milvusClientV2;
     private final SecurityAuditService securityAuditService;
+    private final AccountDeletionCoordinator accountDeletionCoordinator;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public AdminServiceImpl(UserRepository userRepository, DiaryRepository diaryRepository,
+            SituationRoomRepository situationRoomRepository, SituationScenarioRepository situationScenarioRepository,
+            SuggestionRepository suggestionRepository, InterfaceDailyUsageRepository interfaceDailyUsageRepository,
+            JdbcTemplate jdbcTemplate, TokenService tokenService, IRedisService redissonService,
+            io.milvus.v2.client.MilvusClientV2 milvusClientV2, SecurityAuditService securityAuditService,
+            AccountDeletionCoordinator accountDeletionCoordinator) {
+        this.userRepository = userRepository;
+        this.diaryRepository = diaryRepository;
+        this.situationRoomRepository = situationRoomRepository;
+        this.situationScenarioRepository = situationScenarioRepository;
+        this.suggestionRepository = suggestionRepository;
+        this.interfaceDailyUsageRepository = interfaceDailyUsageRepository;
+        this.jdbcTemplate = jdbcTemplate;
+        this.tokenService = tokenService;
+        this.redissonService = redissonService;
+        this.milvusClientV2 = milvusClientV2;
+        this.securityAuditService = securityAuditService;
+        this.accountDeletionCoordinator = accountDeletionCoordinator;
+    }
+
+    /** Compatibility constructor for focused unit tests that do not load Spring. */
+    public AdminServiceImpl(UserRepository userRepository, DiaryRepository diaryRepository,
+            SituationRoomRepository situationRoomRepository, SituationScenarioRepository situationScenarioRepository,
+            SuggestionRepository suggestionRepository, InterfaceDailyUsageRepository interfaceDailyUsageRepository,
+            JdbcTemplate jdbcTemplate, TokenService tokenService, IRedisService redissonService,
+            io.milvus.v2.client.MilvusClientV2 milvusClientV2, SecurityAuditService securityAuditService) {
+        this(userRepository, diaryRepository, situationRoomRepository, situationScenarioRepository,
+                suggestionRepository, interfaceDailyUsageRepository, jdbcTemplate, tokenService,
+                redissonService, milvusClientV2, securityAuditService,
+                new AccountDeletionCoordinator(jdbcTemplate,
+                        new DefaultAccountDeletionExternalPort(milvusClientV2, redissonService, tokenService,
+                                (com.aseubel.yusi.service.oss.OssService) null),
+                        securityAuditService));
+    }
 
     @Override
     public AdminStatsResponse getStats() {
@@ -204,117 +241,11 @@ public class AdminServiceImpl implements AdminService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "Cannot deregister users with equal or higher permission level");
         }
 
-        log.info("Super admin {} is deregistering user {} and deleting all associated data", currentUserId, userId);
-
-        // 1. Clean up active sessions and access tokens
-        try {
-            tokenService.deleteRefreshToken(userId);
-            tokenService.removeAllDeviceTokens(userId);
-        } catch (Exception e) {
-            log.error("Admin deregistration cleanup failed: operation=admin_cleanup_tokens, userId={}, exceptionType={}",
-                    userId, LowSensitivityLogSummary.exceptionType(e));
+        DeletionResult result = accountDeletionCoordinator.requestDeletion(userId, currentUserId);
+        if (!result.success()) {
+            log.warn("Admin deregistration pending retry: operation=account_delete, failureCategory={}",
+                    result.failureCategory());
         }
-
-        // 2. Clean up LangChain memory cache in Redis
-        try {
-            redissonService.remove("yusi:langchain:" + userId);
-        } catch (Exception e) {
-            log.error("Admin deregistration cleanup failed: operation=admin_cleanup_langchain_cache, userId={}, exceptionType={}",
-                    userId, LowSensitivityLogSummary.exceptionType(e));
-        }
-
-        // 3. Clean up Milvus embeddings
-        try {
-            milvusClientV2.delete(DeleteReq.builder()
-                    .collectionName("yusi_embedding_collection")
-                    .filter("metadata[\"userId\"] == \"" + userId + "\"")
-                    .build());
-        } catch (Exception e) {
-            log.error("Admin deregistration cleanup failed: operation=admin_cleanup_embeddings, userId={}, exceptionType={}",
-                    userId, LowSensitivityLogSummary.exceptionType(e));
-        }
-
-        // 4. Clean up Situation Rooms
-        try {
-            List<SituationRoom> rooms = situationRoomRepository.findByMembersContainingOrderByCreatedAtDesc(userId);
-            for (SituationRoom room : rooms) {
-                if (userId.equals(room.getOwnerId()) || room.getMembers() == null || room.getMembers().size() <= 2) {
-                    // Delete room messages and room itself
-                    jdbcTemplate.update("DELETE FROM room_message WHERE room_code = ?", room.getCode());
-                    situationRoomRepository.delete(room);
-                } else {
-                    // Remove user from members list
-                    room.getMembers().remove(userId);
-                    if (room.getSubmissions() != null) {
-                        room.getSubmissions().remove(userId);
-                    }
-                    if (room.getSubmissionVisibility() != null) {
-                        room.getSubmissionVisibility().remove(userId);
-                    }
-                    if (room.getCancelVotes() != null) {
-                        room.getCancelVotes().remove(userId);
-                    }
-                    situationRoomRepository.save(room);
-                }
-            }
-        } catch (Exception e) {
-            log.error("Admin deregistration cleanup failed: operation=admin_cleanup_situation_rooms, userId={}, exceptionType={}",
-                    userId, LowSensitivityLogSummary.exceptionType(e));
-        }
-
-        // 5. Clean up other database tables using native queries
-        String[] deleteQueries = {
-            "DELETE FROM user_location WHERE user_id = ?",
-            "DELETE FROM user_notification WHERE user_id = ?",
-            "DELETE FROM user_persona WHERE user_id = ?",
-            "DELETE FROM agent_persona_config WHERE user_id = ?",
-            "DELETE FROM chat_memory_message WHERE memory_id = ?",
-            "DELETE FROM cognitive_conflict WHERE user_id = ?",
-            "DELETE FROM developer_config WHERE user_id = ?",
-            "DELETE FROM diary WHERE user_id = ?",
-            "DELETE FROM embedding_task WHERE user_id = ?",
-            "DELETE FROM image_file WHERE user_id = ?",
-            "DELETE FROM interface_daily_usage WHERE user_id = ?",
-            "DELETE FROM life_graph_entity WHERE user_id = ?",
-            "DELETE FROM life_graph_entity_alias WHERE user_id = ?",
-            "DELETE FROM life_graph_mention WHERE user_id = ?",
-            "DELETE FROM life_graph_merge_judgment WHERE user_id = ?",
-            "DELETE FROM life_graph_relation_evidence WHERE user_id = ?",
-            "DELETE FROM life_graph_relation WHERE user_id = ?",
-            "DELETE FROM life_graph_task WHERE user_id = ?",
-            "DELETE FROM match_feedback WHERE user_id = ?",
-            "DELETE FROM match_profile WHERE user_id = ?",
-            "DELETE FROM mid_term_memory WHERE user_id = ?",
-            "DELETE FROM resonance_signal WHERE from_user_id = ? OR to_user_id = ?",
-            "DELETE FROM room_message WHERE sender_id = ?",
-            "DELETE FROM soul_card WHERE user_id = ?",
-            "DELETE FROM soul_match WHERE user_a_id = ? OR user_b_id = ?",
-            "DELETE FROM soul_message WHERE sender_id = ? OR receiver_id = ?",
-            "DELETE FROM soul_report WHERE user_id = ?",
-            "DELETE FROM soul_resonance WHERE user_id = ?",
-            "DELETE FROM situation_scenario WHERE submitter_id = ?",
-            "DELETE FROM user WHERE user_id = ?"
-        };
-
-        for (int statementIndex = 0; statementIndex < deleteQueries.length; statementIndex++) {
-            String query = deleteQueries[statementIndex];
-            try {
-                if (query.contains("OR")) {
-                    jdbcTemplate.update(query, userId, userId);
-                } else {
-                    jdbcTemplate.update(query, userId);
-                }
-            } catch (Exception e) {
-                log.error("Admin deregistration cleanup failed: operation=delete_related_data, userId={}, statementIndex={}, exceptionType={}",
-                        userId, statementIndex, LowSensitivityLogSummary.exceptionType(e));
-            }
-        }
-        log.info("Successfully deregistered user {} and cleaned up all associated data", userId);
-        recordAdminAudit(SecurityAuditAction.ADMIN_USER_DEREGISTERED, currentUserId, userId,
-                SecurityAuditResourceType.USER, userId, SecurityAuditOutcome.SUCCESS,
-                SecurityAuditReasonCode.ADMIN_MUTATION,
-                Map.of(com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys.OPERATION,
-                        SecurityAuditOperation.DEREGISTER.name()));
     }
 
     private void recordAdminDenied(SecurityAuditAction action, String adminUserId, String subjectUserId,

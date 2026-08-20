@@ -231,8 +231,6 @@ class SensitiveExceptionLogSafetyTest {
                 .thenReturn(com.aseubel.yusi.pojo.entity.User.builder().userId("fixture-admin-id")
                         .permissionLevel(5).build());
         doThrow(new IllegalStateException(ADMIN_ERROR)).when(tokenService).deleteRefreshToken("fixture-target-id");
-        when(jdbcTemplate.update(anyString(), any(Object[].class)))
-                .thenThrow(new IllegalStateException(ADMIN_ERROR));
         ListAppender<ILoggingEvent> appender = attach(AdminServiceImpl.class);
 
         AdminService service = new AdminServiceImpl(userRepository, diaryRepository, situationRoomRepository,

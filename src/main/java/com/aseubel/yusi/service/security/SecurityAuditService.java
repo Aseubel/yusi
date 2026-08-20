@@ -36,6 +36,8 @@ import java.util.Set;
 @Service
 public class SecurityAuditService {
 
+    private static final String REQUEST_ID_DETAIL_KEY = "requestId";
+
     private static final Set<String> ALLOWED_DETAIL_KEYS = Set.of(
             SecurityAuditDetailKeys.FROM_STATUS,
             SecurityAuditDetailKeys.TO_STATUS,
@@ -48,7 +50,8 @@ public class SecurityAuditService {
             SecurityAuditDetailKeys.SOURCE_TYPE,
             SecurityAuditDetailKeys.VERSION,
             SecurityAuditDetailKeys.COUNT,
-            SecurityAuditDetailKeys.AUDIENCE);
+            SecurityAuditDetailKeys.AUDIENCE,
+            REQUEST_ID_DETAIL_KEY);
     private static final String SAFE_DETAIL_VALUE = "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$";
 
     private final SecurityAuditEventRepository eventRepository;
