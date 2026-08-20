@@ -632,7 +632,11 @@ Agentic Runtime 因无真实消费方移入[上线后扩展 Backlog](2026-08-17-
 - [ ] 制定并演练数据备份与恢复：MySQL、Milvus、Redis 和对象存储都有备份周期与恢复步骤，
       至少完成一次真实恢复演练并记录 RTO。
 - [ ] 安全与隐私自检：账号注销与数据删除全路径验证（含向量副本、派生认知与审计保留
-      边界）、API 鉴权与越权回归、低敏 Trace 边界全量复查。
+      边界）、API 鉴权与越权回归、低敏 Trace 边界全量复查（注销删除协调器已由
+      739e1ae7 落地：失败闭锁、三 collection/Redis 分族/OSS inventory 契约、去标识化
+      审计与 orphan 门槛；本地证据为 application-invariant-only/mock-contract-only，
+      真实 Milvus/Redis/OSS/worker/备份副本的 deployment-only 证据与 API 鉴权越权
+      回归、Trace 边界复查两项子项待完成）。
 - [ ] 限流与成本准入复核：`@RateLimiter` 场景覆盖面与 `model.gateway.admission` 阈值按
       上线标准复核，补齐无限流的写接口。
 - [ ] 上线运维准备：灰度与回滚方案、模型网关与关键依赖降级策略、上线清单与应急流程。
