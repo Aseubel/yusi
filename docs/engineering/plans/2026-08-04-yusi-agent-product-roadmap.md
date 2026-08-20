@@ -628,8 +628,11 @@ Agentic Runtime 因无真实消费方移入[上线后扩展 Backlog](2026-08-17-
       告警阈值和接收人（接收通道决策：优先采用飞书告警机器人，用户指定。前置事实
       更正：f1335d8f 实际暴露的可消费信号仅为 readiness 组、tool_search 系列与
       model_call_total/failure_total/latency；dependency_health、task_due_gap/task_lag、
-      budget_denied_total 四项当时未实现，需随告警切片补齐，见 2026-08-20 告警通道
-      设计文档；待完成：四类阈值规则、缺失指标补齐、接收人与生产环境接入）。
+      budget_denied_total 四项已随 e1435711 补齐，见 2026-08-20 告警通道设计文档；
+      应用内 AlertEvaluator + FeishuAlertNotifier 与四类阈值规则、跨实例去重、低敏
+      消息契约已落地（本地证据 mock-contract-only，默认开关关闭）；待完成：真实
+      Secret 注入与飞书送达、双副本去重与生产阈值调优等 deployment-only 验收及
+      轮值接收人确认）。
 - [ ] 制定并演练数据备份与恢复：MySQL、Milvus、Redis 和对象存储都有备份周期与恢复步骤，
       至少完成一次真实恢复演练并记录 RTO。
 - [ ] 安全与隐私自检：账号注销与数据删除全路径验证（含向量副本、派生认知与审计保留
