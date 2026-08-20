@@ -642,7 +642,12 @@ Agentic Runtime 因无真实消费方移入[上线后扩展 Backlog](2026-08-17-
       真实 Milvus/Redis/OSS/worker/备份副本的 deployment-only 证据与 API 鉴权越权
       回归、Trace 边界复查两项子项待完成）。
 - [ ] 限流与成本准入复核：`@RateLimiter` 场景覆盖面与 `model.gateway.admission` 阈值按
-      上线标准复核，补齐无限流的写接口。
+      上线标准复核，补齐无限流的写接口。（c778137 已交付 90 写映射覆盖 manifest、
+      74 个新增注解、HMAC subject fail-closed、固定低敏 429 与 bounded local
+      fallback；验收驳回：YusiMetrics 两处归一化白名单对调——recordRateLimited 误用
+      OPERATIONS 使 rate_limited_total 的 operation 全部坍缩为 unknown，
+      recordToolSearch 误切 RATE_LIMIT_OPERATIONS 使既有 tool_search 系列指标
+      operation 维度回归为 unknown；待追加修复提交并复验。）
 - [ ] 上线运维准备：灰度与回滚方案、模型网关与关键依赖降级策略、上线清单与应急流程。
 
 **验收标准：**
