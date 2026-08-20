@@ -34,6 +34,7 @@ public class SoulPlazaController {
 
     @Auth
     @PostMapping("/submit")
+    @RateLimiter(key = "plaza-submit", time = 60, count = 10, limitType = LimitType.USER)
     public Response<SoulCard> submit(@RequestBody SubmitCardRequest request) {
         // 检查消息是否包含敏感词
         if (SensitiveWordHelper.contains(request.getContent())) {
@@ -72,6 +73,7 @@ public class SoulPlazaController {
 
     @Auth
     @PutMapping("/{cardId}")
+    @RateLimiter(key = "plaza-update", time = 60, count = 20, limitType = LimitType.USER)
     public Response<SoulCard> updateCard(
             @PathVariable Long cardId,
             @RequestBody UpdateCardRequest request) {
@@ -80,6 +82,7 @@ public class SoulPlazaController {
 
     @Auth
     @DeleteMapping("/{cardId}")
+    @RateLimiter(key = "plaza-delete", time = 60, count = 20, limitType = LimitType.USER)
     public Response<Void> deleteCard(@PathVariable Long cardId) {
         plazaService.deleteCard(UserContext.getUserId(), cardId);
         return Response.success(null);
@@ -87,6 +90,7 @@ public class SoulPlazaController {
 
     @Auth
     @PostMapping("/{cardId}/resonate")
+    @RateLimiter(key = "plaza-resonate", time = 60, count = 30, limitType = LimitType.USER)
     public Response<SoulResonance> resonate(
             @PathVariable Long cardId,
             @RequestBody ResonateRequest request) {
@@ -100,6 +104,7 @@ public class SoulPlazaController {
 
     @Auth
     @PostMapping("/signal")
+    @RateLimiter(key = "plaza-signal", time = 60, count = 10, limitType = LimitType.USER)
     public Response<ResonanceSignal> sendSignal(@RequestBody SendSignalRequest request) {
         String userId = UserContext.getUserId();
         return Response.success(resonanceSignalService.sendSignal(
@@ -124,6 +129,7 @@ public class SoulPlazaController {
 
     @Auth
     @PostMapping("/signals/{signalId}/read")
+    @RateLimiter(key = "plaza-signal-read", time = 60, count = 60, limitType = LimitType.USER)
     public Response<Void> markSignalRead(@PathVariable Long signalId) {
         resonanceSignalService.markAsRead(signalId, UserContext.getUserId());
         return Response.success();

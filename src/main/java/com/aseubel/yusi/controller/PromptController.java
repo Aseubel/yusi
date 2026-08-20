@@ -5,6 +5,8 @@ import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.dto.prompt.PromptResponse;
 import com.aseubel.yusi.pojo.dto.prompt.PromptSaveRequest;
 import com.aseubel.yusi.pojo.dto.prompt.PromptUpdateRequest;
@@ -67,6 +69,7 @@ public class PromptController {
     }
 
     @PostMapping("/save")
+    @RateLimiter(key = "prompt-save", time = 60, count = 20, limitType = LimitType.USER)
     public Response<PromptResponse> savePrompt(@Valid @RequestBody PromptSaveRequest request) {
         checkAdmin();
         String userId = UserContext.getUserId();
@@ -75,6 +78,7 @@ public class PromptController {
     }
 
     @PutMapping("/{id}")
+    @RateLimiter(key = "prompt-update", time = 60, count = 20, limitType = LimitType.USER)
     public Response<PromptResponse> updatePrompt(@PathVariable Long id,
             @Valid @RequestBody PromptUpdateRequest request) {
         checkAdmin();
@@ -87,6 +91,7 @@ public class PromptController {
     }
 
     @PostMapping("/{id}/activate")
+    @RateLimiter(key = "prompt-activate", time = 60, count = 10, limitType = LimitType.USER)
     public Response<Void> activatePrompt(@PathVariable Long id) {
         checkAdmin();
         String userId = UserContext.getUserId();
@@ -95,6 +100,7 @@ public class PromptController {
     }
 
     @DeleteMapping("/{id}")
+    @RateLimiter(key = "prompt-delete", time = 60, count = 10, limitType = LimitType.USER)
     public Response<Void> deletePrompt(@PathVariable Long id) {
         checkAdmin();
         promptService.deletePrompt(id, UserContext.getUserId());

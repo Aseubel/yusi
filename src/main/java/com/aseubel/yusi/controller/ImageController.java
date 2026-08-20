@@ -159,18 +159,21 @@ public class ImageController {
     }
 
     @PostMapping("/urls")
+    @RateLimiter(key = "image-urls", time = 60, count = 60, limitType = LimitType.USER)
     public Response<List<String>> getPresignedUrls(@RequestBody List<String> objectKeys) {
         List<String> urls = ossService.generateOwnedUrls(objectKeys, UserContext.getUserId());
         return Response.success(urls);
     }
 
     @DeleteMapping
+    @RateLimiter(key = "image-delete", time = 60, count = 30, limitType = LimitType.USER)
     public Response<Void> deleteImage(@RequestParam("objectKey") String objectKey) {
         ossService.deleteOwnedImage(objectKey, UserContext.getUserId());
         return Response.success();
     }
 
     @DeleteMapping("/batch")
+    @RateLimiter(key = "image-delete-batch", time = 60, count = 5, limitType = LimitType.USER)
     public Response<Void> deleteImages(@RequestBody List<String> objectKeys) {
         ossService.deleteOwnedImages(objectKeys, UserContext.getUserId());
         return Response.success();

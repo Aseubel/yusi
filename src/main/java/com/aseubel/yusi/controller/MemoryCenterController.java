@@ -3,6 +3,8 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.dto.memory.MemoryCenterItem;
 import com.aseubel.yusi.pojo.dto.memory.MemoryCenterResponse;
 import com.aseubel.yusi.pojo.dto.memory.LifeGraphMemoryItem;
@@ -45,6 +47,7 @@ public class MemoryCenterController {
     }
 
     @PatchMapping("/center/{id}")
+    @RateLimiter(key = "memory-center-update", time = 60, count = 20, limitType = LimitType.USER)
     public Response<MemoryCenterItem> update(
             @PathVariable Long id,
             @Valid @RequestBody UpdateMemoryRequest request) {
@@ -52,6 +55,7 @@ public class MemoryCenterController {
     }
 
     @DeleteMapping("/center/{id}")
+    @RateLimiter(key = "memory-center-delete", time = 60, count = 20, limitType = LimitType.USER)
     public Response<Void> delete(@PathVariable Long id) {
         lifecycleService.delete(UserContext.getUserId(), id);
         return Response.success();
@@ -63,12 +67,14 @@ public class MemoryCenterController {
     }
 
     @PatchMapping("/persona")
+    @RateLimiter(key = "memory-persona-update", time = 60, count = 20, limitType = LimitType.USER)
     public Response<PersonaMemoryItem> updatePersona(
             @Valid @RequestBody UpdatePersonaMemoryRequest request) {
         return Response.success(personaLifecycleService.update(UserContext.getUserId(), request));
     }
 
     @DeleteMapping("/persona")
+    @RateLimiter(key = "memory-persona-delete", time = 60, count = 20, limitType = LimitType.USER)
     public Response<Void> deletePersona() {
         personaLifecycleService.delete(UserContext.getUserId());
         return Response.success();
@@ -81,6 +87,7 @@ public class MemoryCenterController {
     }
 
     @PatchMapping("/life-graph/{id}")
+    @RateLimiter(key = "memory-life-graph-update", time = 60, count = 20, limitType = LimitType.USER)
     public Response<LifeGraphMemoryItem> updateLifeGraph(
             @PathVariable Long id,
             @Valid @RequestBody UpdateLifeGraphMemoryRequest request) {
@@ -88,6 +95,7 @@ public class MemoryCenterController {
     }
 
     @DeleteMapping("/life-graph/{id}")
+    @RateLimiter(key = "memory-life-graph-delete", time = 60, count = 20, limitType = LimitType.USER)
     public Response<Void> deleteLifeGraph(@PathVariable Long id) {
         lifeGraphLifecycleService.delete(UserContext.getUserId(), id);
         return Response.success();

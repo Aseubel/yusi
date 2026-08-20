@@ -3,6 +3,7 @@ package com.aseubel.yusi.common.ratelimit;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.RateLimitException;
 import com.aseubel.yusi.common.web.ClientIpResolver;
+import com.aseubel.yusi.observability.metrics.YusiMetrics;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.Aspect;
@@ -36,6 +37,12 @@ public class RateLimiterAspect {
     @Autowired
     private ClientIpResolver clientIpResolver;
 
+    @Autowired(required = false)
+    private YusiMetrics metrics;
+
+    @Autowired(required = false)
+    private RateLimiterSubjectEncoder subjectEncoder = RateLimiterSubjectEncoder.fromEnvironment();
+
     // 本地 Guava RateLimiter 缓存，用于 Redis 故障时降级
     private final ConcurrentHashMap<String, com.google.common.util.concurrent.RateLimiter> localRateLimiters = new ConcurrentHashMap<>();
 
@@ -50,19 +57,28 @@ public class RateLimiterAspect {
 
     @Before("@annotation(rateLimiter)")
     public void doBefore(JoinPoint point, RateLimiter rateLimiterAnnotation) {
+        if (requiresSubject(rateLimiterAnnotation.limitType()) && !subjectEncoder.isConfigured()) {
+            recordRateLimited(rateLimiterAnnotation.key(), "dependency");
+            throw new RateLimitException();
+        }
+
         // 检查是否需要重新探测 Redis 状态
         checkRedisAvailability();
 
+        boolean allowed;
+        String failureCategory;
         if (redisAvailable) {
             // 优先使用 Redis 分布式限流
-            if (!tryRedisRateLimit(rateLimiterAnnotation, point)) {
-                throw new RateLimitException("访问过于频繁，请稍后再试");
-            }
+            allowed = tryRedisRateLimit(rateLimiterAnnotation, point);
+            failureCategory = redisAvailable ? "limit_exceeded" : "dependency";
         } else {
-            // Redis 不可用，降级到本地 Guava RateLimiter
-            if (!tryLocalRateLimit(rateLimiterAnnotation, point)) {
-                throw new RateLimitException("访问过于频繁，请稍后再试 (本地限流)");
-            }
+            // Redis 不可用时只使用有界本地桶，不能无限放行。
+            allowed = tryLocalRateLimit(rateLimiterAnnotation, point);
+            failureCategory = "dependency";
+        }
+        if (!allowed) {
+            recordRateLimited(rateLimiterAnnotation.key(), failureCategory);
+            throw new RateLimitException();
         }
     }
 
@@ -83,13 +99,13 @@ public class RateLimiterAspect {
             rRateLimiter.expire(java.time.Duration.ofSeconds(time + 10));
 
             boolean acquired = rRateLimiter.tryAcquire();
-            
+
             // 成功访问 Redis，标记为可用
             redisAvailable = true;
             return acquired;
-            
+
         } catch (Exception e) {
-            log.error("Redis 限流失败，降级到本地限流", e);
+            log.warn("Rate limit backend unavailable: operation=rate_limit, failure_category=dependency, fallback=bounded_local");
             redisAvailable = false;
             lastRedisFailureTime = System.currentTimeMillis();
             // 降级到本地限流
@@ -110,7 +126,7 @@ public class RateLimiterAspect {
             double permitsPerSecond = (double) count / time;
 
             // 获取或创建本地 RateLimiter
-            com.google.common.util.concurrent.RateLimiter localLimiter = localRateLimiters.computeIfAbsent(combineKey, 
+            com.google.common.util.concurrent.RateLimiter localLimiter = localRateLimiters.computeIfAbsent(combineKey,
                 k -> com.google.common.util.concurrent.RateLimiter.create(permitsPerSecond));
 
             // 动态调整速率（如果配置变化）
@@ -118,9 +134,9 @@ public class RateLimiterAspect {
             // 如果需要精确控制，可以考虑重新创建或使用其他库
 
             return localLimiter.tryAcquire();
-            
+
         } catch (Exception e) {
-            log.error("本地限流失败", e);
+            log.warn("Local rate limit failed: operation=rate_limit, failure_category=dependency");
             // 限流失败时，为了安全起见，默认拒绝
             return false;
         }
@@ -131,6 +147,10 @@ public class RateLimiterAspect {
      * 定期探测 Redis 是否恢复
      */
     private void checkRedisAvailability() {
+        if (redissonClient == null) {
+            redisAvailable = false;
+            return;
+        }
         if (!redisAvailable) {
             long currentTime = System.currentTimeMillis();
             // 每隔 REDIS_CHECK_INTERVAL 秒尝试探测一次
@@ -141,10 +161,10 @@ public class RateLimiterAspect {
                     testLimiter.trySetRate(RateType.OVERALL, 1, 1, RateIntervalUnit.SECONDS);
                     testLimiter.expire(java.time.Duration.ofSeconds(1));
                     redisAvailable = true;
-                    log.info("Redis 连接已恢复");
+                    log.info("Rate limit backend recovered: operation=rate_limit");
                 } catch (Exception e) {
                     // 仍然不可用
-                    log.debug("Redis 仍然不可用，继续使用本地限流");
+                    log.debug("Rate limit backend remains unavailable: operation=rate_limit, fallback=bounded_local");
                 }
             }
         }
@@ -155,12 +175,13 @@ public class RateLimiterAspect {
         stringBuffer.append(rateLimiterAnnotation.key()).append(":");
 
         if (rateLimiterAnnotation.limitType() == LimitType.IP) {
-            stringBuffer.append(getIpAddress()).append(":");
+            stringBuffer.append("ip:")
+                    .append(subjectEncoder.encode("ip:" + getIpAddress())).append(":");
         } else if (rateLimiterAnnotation.limitType() == LimitType.USER) {
             String userId = UserContext.getUserId();
-            if (userId != null) {
-                stringBuffer.append(userId).append(":");
-            }
+            stringBuffer.append("u:")
+                    .append(subjectEncoder.encode("user:" + (userId == null ? "unknown" : userId)))
+                    .append(":");
         }
 
         MethodSignature signature = (MethodSignature) point.getSignature();
@@ -179,8 +200,18 @@ public class RateLimiterAspect {
                 return clientIpResolver.resolve(attributes.getRequest());
             }
         } catch (Exception e) {
-            log.error("获取IP地址失败", e);
+            log.warn("Client subject resolution failed: operation=rate_limit, failure_category=dependency");
         }
         return "unknown";
+    }
+
+    private boolean requiresSubject(LimitType limitType) {
+        return limitType == LimitType.USER || limitType == LimitType.IP;
+    }
+
+    private void recordRateLimited(String operation, String failureCategory) {
+        if (metrics != null) {
+            metrics.recordRateLimited(operation, failureCategory);
+        }
     }
 }

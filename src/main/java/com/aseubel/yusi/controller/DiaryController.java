@@ -8,6 +8,8 @@ import com.aseubel.yusi.pojo.dto.diary.EditDiaryRequest;
 import com.aseubel.yusi.pojo.dto.diary.WriteDiaryRequest;
 import com.aseubel.yusi.pojo.entity.Diary;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.service.diary.DiaryService;
 import jakarta.annotation.Resource;
 
@@ -49,6 +51,7 @@ public class DiaryController {
     }
 
     @PostMapping
+    @RateLimiter(key = "diary-create", time = 60, count = 30, limitType = LimitType.USER)
     public Response<?> writeDiary(@RequestBody WriteDiaryRequest request) {
         Diary diary = request.toDiary();
         diary.setUserId(UserContext.getUserId());
@@ -57,6 +60,7 @@ public class DiaryController {
     }
 
     @PutMapping
+    @RateLimiter(key = "diary-update", time = 60, count = 30, limitType = LimitType.USER)
     public Response<?> editDiary(@RequestBody EditDiaryRequest request) {
         Diary diary = request.toDiary();
         diary.setUserId(UserContext.getUserId());
@@ -72,6 +76,7 @@ public class DiaryController {
     }
 
     @PostMapping("/chat")
+    @RateLimiter(key = "diary-chat-deprecated", time = 60, count = 5, limitType = LimitType.USER)
     public Response<String> chat(@RequestBody DiaryChatRequest request) {
         // This endpoint is deprecated in favor of /api/ai/chat/stream
         return Response.fail("Please use /api/ai/chat/stream for chat interaction");

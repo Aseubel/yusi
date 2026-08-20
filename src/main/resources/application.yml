@@ -7,6 +7,8 @@ spring:
 yusi:
   web:
     trusted-proxy-addresses: ${YUSI_TRUSTED_PROXY_ADDRESSES:}
+  rate-limit:
+    hmac-secret: ${YUSI_RATE_LIMIT_HMAC_SECRET:}
   memory:
     # 上下文记忆窗口大小（短期记忆的消息条数）
     context-window-size: 20

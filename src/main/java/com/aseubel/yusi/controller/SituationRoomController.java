@@ -2,6 +2,8 @@ package com.aseubel.yusi.controller;
 
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.dto.situation.*;
 import com.aseubel.yusi.pojo.entity.SituationRoom;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
@@ -23,6 +25,7 @@ public class SituationRoomController {
     private SituationRoomService situationRoomService;
 
     @PostMapping("/create")
+    @RateLimiter(key = "room-create", time = 60, count = 10, limitType = LimitType.USER)
     public Response<SituationRoom> create(@RequestBody CreateRoomRequest request) {
         SituationRoom room = situationRoomService.createRoom(UserContext.getUserId(),
                 Math.max(2, Math.min(8, request.getMaxMembers())));
@@ -30,12 +33,14 @@ public class SituationRoomController {
     }
 
     @PostMapping("/join")
+    @RateLimiter(key = "room-join", time = 60, count = 10, limitType = LimitType.USER)
     public Response<SituationRoom> join(@RequestBody JoinRoomRequest request) {
         SituationRoom room = situationRoomService.joinRoom(request.getCode(), UserContext.getUserId());
         return Response.success(safeRoom(room));
     }
 
     @PostMapping("/start")
+    @RateLimiter(key = "room-start", time = 60, count = 10, limitType = LimitType.USER)
     public Response<SituationRoom> startRoom(@RequestBody StartRoomRequest request) {
         SituationRoom room = situationRoomService.startRoom(request.getCode(), request.getScenarioId(),
                 UserContext.getUserId());
@@ -43,6 +48,7 @@ public class SituationRoomController {
     }
 
     @PostMapping("/scenarios/submit")
+    @RateLimiter(key = "room-scenario-submit", time = 60, count = 10, limitType = LimitType.USER)
     public Response<SituationScenario> submitScenario(@RequestBody SubmitScenarioRequest request) {
         return Response.success(situationRoomService.submitScenario(UserContext.getUserId(), request.getTitle(), request.getDescription()));
     }
@@ -53,17 +59,20 @@ public class SituationRoomController {
     }
 
     @PutMapping("/scenarios/{id}")
+    @RateLimiter(key = "room-scenario-update", time = 60, count = 10, limitType = LimitType.USER)
     public Response<SituationScenario> updateScenario(@PathVariable("id") String scenarioId, @RequestBody SubmitScenarioRequest request) {
         return Response.success(situationRoomService.updateScenario(UserContext.getUserId(), scenarioId, request.getTitle(), request.getDescription()));
     }
 
     @DeleteMapping("/scenarios/{id}")
+    @RateLimiter(key = "room-scenario-delete", time = 60, count = 10, limitType = LimitType.USER)
     public Response<?> deleteScenario(@PathVariable("id") String scenarioId) {
         situationRoomService.deleteScenario(UserContext.getUserId(), scenarioId);
         return Response.success();
     }
 
     @PostMapping("/scenarios/{id}/resubmit")
+    @RateLimiter(key = "room-scenario-resubmit", time = 60, count = 10, limitType = LimitType.USER)
     public Response<SituationScenario> resubmitScenario(@PathVariable("id") String scenarioId) {
         return Response.success(situationRoomService.resubmitScenario(UserContext.getUserId(), scenarioId));
     }
@@ -79,6 +88,7 @@ public class SituationRoomController {
     }
 
     @PostMapping("/cancel")
+    @RateLimiter(key = "room-cancel", time = 60, count = 10, limitType = LimitType.USER)
     public Response<?> cancelRoom(@RequestBody JoinRoomRequest request) {
         // Reusing JoinRoomRequest for code + userId
         situationRoomService.cancelRoom(request.getCode(), UserContext.getUserId());
@@ -86,12 +96,14 @@ public class SituationRoomController {
     }
 
     @PostMapping("/vote-cancel")
+    @RateLimiter(key = "room-vote-cancel", time = 60, count = 10, limitType = LimitType.USER)
     public Response<SituationRoom> voteCancel(@RequestBody JoinRoomRequest request) {
         SituationRoom room = situationRoomService.voteCancel(request.getCode(), UserContext.getUserId());
         return Response.success(safeRoom(room));
     }
 
     @PostMapping("/submit")
+    @RateLimiter(key = "room-submit", time = 600, count = 3, limitType = LimitType.USER)
     public Response<SituationRoom> submitNarrative(@RequestBody SubmitNarrativeRequest request) {
         SituationRoom room = situationRoomService.submit(request.getCode(), UserContext.getUserId(),
                 request.getNarrative(), request.getIsPublic());

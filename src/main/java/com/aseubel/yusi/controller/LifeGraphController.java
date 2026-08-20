@@ -3,6 +3,8 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.entity.LifeGraphEntity;
 import com.aseubel.yusi.pojo.entity.LifeGraphRelation;
 import com.aseubel.yusi.service.lifegraph.CommunityInsightService;
@@ -93,12 +95,14 @@ public class LifeGraphController {
     }
 
     @PostMapping("/merge-suggestions/{judgmentId}/accept")
+    @RateLimiter(key = "lifegraph-merge-accept", time = 60, count = 20, limitType = LimitType.USER)
     public Response<Void> acceptMerge(@PathVariable Long judgmentId) {
         mergeSuggestionService.acceptMerge(UserContext.getUserId(), judgmentId);
         return Response.success(null);
     }
 
     @PostMapping("/merge-suggestions/{judgmentId}/reject")
+    @RateLimiter(key = "lifegraph-merge-reject", time = 60, count = 20, limitType = LimitType.USER)
     public Response<Void> rejectMerge(@PathVariable Long judgmentId) {
         mergeSuggestionService.rejectMerge(UserContext.getUserId(), judgmentId);
         return Response.success(null);
@@ -133,6 +137,7 @@ public class LifeGraphController {
      * 创建节点
      */
     @PostMapping("/entities")
+    @RateLimiter(key = "lifegraph-entity-create", time = 60, count = 30, limitType = LimitType.USER)
     public Response<LifeGraphEntity> createEntity(@RequestBody Map<String, String> body) {
         String userId = UserContext.getUserId();
         LifeGraphEntity entity = dataService.createEntity(userId,
@@ -146,6 +151,7 @@ public class LifeGraphController {
      * 更新节点（支持乐观锁版本校验）
      */
     @PutMapping("/entities/{id}")
+    @RateLimiter(key = "lifegraph-entity-update", time = 60, count = 30, limitType = LimitType.USER)
     public Response<LifeGraphEntity> updateEntity(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         String userId = UserContext.getUserId();
         try {
@@ -166,6 +172,7 @@ public class LifeGraphController {
      * 删除节点
      */
     @DeleteMapping("/entities/{id}")
+    @RateLimiter(key = "lifegraph-entity-delete", time = 60, count = 30, limitType = LimitType.USER)
     public Response<Void> deleteEntity(@PathVariable Long id) {
         String userId = UserContext.getUserId();
         dataService.deleteEntity(userId, id);
@@ -176,6 +183,7 @@ public class LifeGraphController {
      * 创建关系
      */
     @PostMapping("/relations")
+    @RateLimiter(key = "lifegraph-relation-create", time = 60, count = 30, limitType = LimitType.USER)
     public Response<LifeGraphRelation> createRelation(@RequestBody Map<String, Object> body) {
         String userId = UserContext.getUserId();
         BigDecimal confidence = body.get("confidence") != null ?
@@ -194,6 +202,7 @@ public class LifeGraphController {
      * 更新关系（支持乐观锁版本校验）
      */
     @PutMapping("/relations/{id}")
+    @RateLimiter(key = "lifegraph-relation-update", time = 60, count = 30, limitType = LimitType.USER)
     public Response<LifeGraphRelation> updateRelation(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         String userId = UserContext.getUserId();
         try {
@@ -214,6 +223,7 @@ public class LifeGraphController {
      * 删除关系
      */
     @DeleteMapping("/relations/{id}")
+    @RateLimiter(key = "lifegraph-relation-delete", time = 60, count = 30, limitType = LimitType.USER)
     public Response<Void> deleteRelation(@PathVariable Long id) {
         String userId = UserContext.getUserId();
         dataService.deleteRelation(userId, id);

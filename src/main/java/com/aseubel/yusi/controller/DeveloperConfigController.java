@@ -3,6 +3,8 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.auth.Auth;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.dto.developer.DeveloperConfigVO;
 import com.aseubel.yusi.pojo.dto.developer.DeveloperScopeUpdateRequest;
 import com.aseubel.yusi.service.developer.DeveloperConfigService;
@@ -34,6 +36,7 @@ public class DeveloperConfigController {
     }
 
     @PostMapping("/api-key")
+    @RateLimiter(key = "developer-api-key-rotate", time = 60, count = 5, limitType = LimitType.USER)
     public Response<DeveloperConfigVO> rotateApiKey() {
         String userId = UserContext.getUserId();
         if (userId == null) {
@@ -43,12 +46,14 @@ public class DeveloperConfigController {
     }
 
     @PutMapping("/api-key/scopes")
+    @RateLimiter(key = "developer-api-key-scopes", time = 60, count = 10, limitType = LimitType.USER)
     public Response<DeveloperConfigVO> updateScopes(@RequestBody DeveloperScopeUpdateRequest request) {
         return Response.success(developerConfigService.updateScopes(
                 UserContext.getUserId(), request.getScopes()));
     }
 
     @DeleteMapping("/api-key")
+    @RateLimiter(key = "developer-api-key-revoke", time = 60, count = 5, limitType = LimitType.USER)
     public Response<Void> revokeApiKey() {
         developerConfigService.revokeApiKey(UserContext.getUserId());
         return Response.success();

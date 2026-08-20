@@ -3,6 +3,8 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.model.ModelCallTraceItem;
@@ -47,6 +49,7 @@ public class ModelManagementController {
     }
 
     @PutMapping("/console")
+    @RateLimiter(key = "model-console-update", time = 60, count = 10, limitType = LimitType.USER)
     public Response<Map<String, Object>> updateConsole(@Valid @RequestBody ModelGovernanceUpdateRequest request) {
         checkAdmin();
         long version = modelManagementService.updateGovernance(request, UserContext.getUserId());
@@ -54,6 +57,7 @@ public class ModelManagementController {
     }
 
     @PostMapping("/routes/preview")
+    @RateLimiter(key = "model-route-preview", time = 60, count = 5, limitType = LimitType.USER)
     public Response<ModelRoutePreviewResponse> previewRoute(@Valid @RequestBody ModelRoutePreviewRequest request) {
         checkAdmin();
         return Response.success(modelManagementService.previewRoute(request));

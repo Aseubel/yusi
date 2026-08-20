@@ -3,6 +3,8 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.entity.UserNotification;
 import com.aseubel.yusi.service.notification.NotificationService;
 import lombok.RequiredArgsConstructor;
@@ -53,6 +55,7 @@ public class NotificationController {
      * 标记消息为已读
      */
     @PostMapping("/{notificationId}/read")
+    @RateLimiter(key = "notification-read", time = 60, count = 60, limitType = LimitType.USER)
     public Response<Boolean> markAsRead(@PathVariable Long notificationId) {
         String userId = UserContext.getUserId();
         return Response.success(notificationService.markAsRead(userId, notificationId));
@@ -62,6 +65,7 @@ public class NotificationController {
      * 标记所有消息为已读
      */
     @PostMapping("/read-all")
+    @RateLimiter(key = "notification-read-all", time = 60, count = 10, limitType = LimitType.USER)
     public Response<Integer> markAllAsRead() {
         String userId = UserContext.getUserId();
         return Response.success(notificationService.markAllAsRead(userId));
@@ -71,6 +75,7 @@ public class NotificationController {
      * 删除消息
      */
     @DeleteMapping("/{notificationId}")
+    @RateLimiter(key = "notification-delete", time = 60, count = 30, limitType = LimitType.USER)
     public Response<Void> deleteNotification(@PathVariable Long notificationId) {
         String userId = UserContext.getUserId();
         notificationService.deleteNotification(userId, notificationId);

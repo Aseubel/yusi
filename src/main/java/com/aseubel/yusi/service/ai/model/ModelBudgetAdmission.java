@@ -1,6 +1,7 @@
 package com.aseubel.yusi.service.ai.model;
 
 import com.aseubel.yusi.config.ai.properties.ModelGatewayAdmissionProperties;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RScript;
 import org.redisson.api.RedissonClient;
@@ -40,7 +41,7 @@ public class ModelBudgetAdmission {
               local amount = tonumber(ARGV[argumentIndex + 1])
               local current = tonumber(redis.call('GET', KEYS[index]) or '0')
               if limit > 0 and current + amount > limit then
-                return index - 1
+                return index
               end
               argumentIndex = argumentIndex + 2
             end
@@ -133,16 +134,17 @@ public class ModelBudgetAdmission {
             if (result == null || result == -2L) {
                 return ModelBudgetPermit.denied("RESERVATION_CONFLICT");
             }
-            if (result <= 0L) {
-                int index = Math.max(0, result.intValue() - 1);
-                String dimension = index < charges.size() ? charges.get(index).key() : "unknown";
-                return ModelBudgetPermit.denied("LIMIT_EXCEEDED:" + dimension);
+            if (result != 1L) {
+                // The charge key is an internal Redis detail. Keep it out of
+                // the denial reason, model exception, event, and telemetry.
+                return ModelBudgetPermit.denied("LIMIT_EXCEEDED");
             }
             return new ModelBudgetPermit(reservationKey, charges, safeBudget.estimatedInputTokens(),
                     safeBudget.reservedOutputTokens(), true);
         } catch (RuntimeException exception) {
-            log.warn("Model admission store failed for model={}: {}",
-                    candidate == null ? null : candidate.modelId(), exception.getMessage());
+            log.warn("Model admission store failed: operation=model_admission, "
+                    + "failure_category=admission_store_unavailable, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(exception));
             return ModelBudgetPermit.denied("ADMISSION_STORE_UNAVAILABLE");
         }
     }
@@ -194,8 +196,9 @@ public class ModelBudgetAdmission {
         } catch (RuntimeException exception) {
             // The reservation TTL remains the last-resort protection against a
             // process crash. Reconciliation can be retried by a caller later.
-            log.warn("Failed to reconcile model admission reservation={}: {}",
-                    permit.reservationKey(), exception.getMessage());
+            log.warn("Model admission reconciliation failed: operation=model_admission_reconcile, "
+                    + "failure_category=dependency, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(exception));
         }
     }
 

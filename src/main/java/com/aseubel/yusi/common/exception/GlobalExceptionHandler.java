@@ -74,11 +74,15 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(RateLimitException.class)
     public Response<String> handleRateLimitException(RateLimitException e) {
-        if (isStreamingResponse()) {
+        HttpServletResponse response = currentResponse();
+        if (response != null && response.isCommitted()) {
             return null;
         }
         setStatus(ErrorCode.RATE_LIMIT_EXCEEDED.getHttpStatus());
-        return Response.<String>builder().code(ErrorCode.RATE_LIMIT_EXCEEDED.getCode()).info(e.getMessage()).build();
+        return Response.<String>builder()
+                .code(ErrorCode.RATE_LIMIT_EXCEEDED.getCode())
+                .info(ErrorCode.RATE_LIMIT_EXCEEDED.getMsg())
+                .build();
     }
 
     @ExceptionHandler(Exception.class)

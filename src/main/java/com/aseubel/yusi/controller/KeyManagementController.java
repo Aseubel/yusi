@@ -47,6 +47,7 @@ public class KeyManagementController {
      * 注意：仅用于新用户首次设置，或者不带日记的模式切换
      */
     @PostMapping("/settings")
+    @RateLimiter(key = "key-settings-update", time = 60, count = 5, limitType = LimitType.USER)
     public Response<Void> updateKeyMode(@RequestBody KeyModeUpdateRequest request) {
         String userId = UserContext.getUserId();
         keyManagementService.updateKeyMode(userId, request);
@@ -69,6 +70,7 @@ public class KeyManagementController {
      * 密钥更换流程第2步：前端使用旧密钥解密、新密钥加密后，调用此接口批量更新
      */
     @PostMapping("/reencrypt-diaries")
+    @RateLimiter(key = "key-reencrypt-diaries", time = 600, count = 2, limitType = LimitType.USER)
     public Response<Void> batchUpdateReEncryptedDiaries(@RequestBody DiaryReEncryptRequest request) {
         String userId = UserContext.getUserId();
         keyManagementService.batchUpdateReEncryptedDiaries(userId, request);

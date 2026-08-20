@@ -138,6 +138,7 @@ public class SoulChatController {
     }
 
     @PostMapping("/read")
+    @RateLimiter(key = "soul-chat-read", time = 60, count = 60, limitType = LimitType.USER)
     public Response<Void> markAsRead(@RequestBody SendMessageRequest request) {
         String userId = UserContext.getUserId();
         messageRepository.markAsRead(request.getMatchId(), userId);

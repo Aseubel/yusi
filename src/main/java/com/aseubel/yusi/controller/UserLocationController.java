@@ -5,6 +5,8 @@ import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.AuthorizationException;
 import com.aseubel.yusi.common.exception.ErrorCode;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.dto.location.AddLocationRequest;
 import com.aseubel.yusi.pojo.dto.location.UpdateLocationRequest;
 import com.aseubel.yusi.pojo.entity.UserLocation;
@@ -52,6 +54,7 @@ public class UserLocationController {
      * 添加新地点
      */
     @PostMapping
+    @RateLimiter(key = "location-create", time = 60, count = 20, limitType = LimitType.USER)
     public Response<UserLocation> addLocation(@RequestBody AddLocationRequest request) {
         request.setUserId(UserContext.getUserId());
         UserLocation location = userLocationService.addLocation(request);
@@ -62,6 +65,7 @@ public class UserLocationController {
      * 更新地点
      */
     @PutMapping
+    @RateLimiter(key = "location-update", time = 60, count = 20, limitType = LimitType.USER)
     public Response<UserLocation> updateLocation(@RequestBody UpdateLocationRequest request) {
         request.setUserId(UserContext.getUserId());
         UserLocation location = userLocationService.updateLocation(request);
@@ -72,6 +76,7 @@ public class UserLocationController {
      * 删除地点
      */
     @DeleteMapping("/{locationId}")
+    @RateLimiter(key = "location-delete", time = 60, count = 20, limitType = LimitType.USER)
     public Response<?> deleteLocation(
             @RequestParam String userId,
             @PathVariable String locationId) {

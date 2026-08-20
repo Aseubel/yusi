@@ -557,6 +557,7 @@ public class AiController {
     }
 
     @Auth
+    @RateLimiter(key = "chat-cancel", time = 60, count = 30, limitType = LimitType.USER)
     @PostMapping("/chat/cancel")
     public Response<Void> cancelChat(@RequestBody ChatCancelRequest request) {
         if (request == null || StrUtil.isBlank(request.getRequestId())) {
@@ -680,6 +681,7 @@ public class AiController {
     }
 
     @Auth
+    @RateLimiter(key = "persona-config-update", time = 60, count = 10, limitType = LimitType.USER)
     @PutMapping("/persona-config")
     public Response<AgentPersonaConfig> updatePersonaConfig(@RequestBody AgentPersonaConfigRequest request) {
         String userId = UserContext.getUserId();
@@ -724,6 +726,7 @@ public class AiController {
     }
 
     @Auth
+    @RateLimiter(key = "cognitive-conflict-resolve", time = 60, count = 10, limitType = LimitType.USER)
     @PostMapping("/cognitive-conflicts/{id}/resolve")
     public Response<Void> resolveConflict(@PathVariable Long id) {
         conflictRepository.findById(id).ifPresent(conflict -> {
@@ -738,6 +741,7 @@ public class AiController {
     // ──────────────── 跨源记忆融合（F11.4）────────────────
 
     @Auth
+    @RateLimiter(key = "memory-fusion-run", time = 600, count = 2, limitType = LimitType.USER)
     @PostMapping("/memory-fusion/run")
     public Response<Integer> runMemoryFusion() {
         return Response.success(fusionService.fuseUserMemories(UserContext.getUserId()));
@@ -746,6 +750,7 @@ public class AiController {
     // ──────────────── 聊天气泡主动问候注入 ────────────────
 
     @Auth
+    @RateLimiter(key = "chat-inject-greeting", time = 60, count = 10, limitType = LimitType.USER)
     @PostMapping("/chat/inject-greeting")
     @Transactional
     public Response<Void> injectGreeting(@RequestParam Long notificationId) {

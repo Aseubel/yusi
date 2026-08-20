@@ -34,6 +34,32 @@ public class YusiMetrics {
             "security-audit-cleanup", "lifegraph-merge-suggestion", "weekly-report", "weekly-match",
             "embedding-worker", "lifegraph-worker", "model-state-sync", "readiness", "db", "redis",
             "milvus", "model_gateway", "tasks", "model_admission");
+    private static final Set<String> RATE_LIMIT_OPERATIONS = Set.of(
+            "admin-user-permission", "admin-scenario-audit", "admin-suggestion-reply",
+            "admin-suggestion-status", "admin-announcement-publish", "admin-embeddings-full-sync",
+            "admin-user-deregister", "chatstream", "chat-cancel", "persona-config-update",
+            "cognitive-conflict-resolve", "memory-fusion-run", "chat-inject-greeting",
+            "developer-api-key-rotate", "developer-api-key-scopes", "developer-api-key-revoke",
+            "diary-create", "diary-update", "diary-chat-deprecated", "image-upload",
+            "image-upload-batch", "image-upload-check", "image-chunk-upload", "image-chunk-merge",
+            "image-chunk-progress", "image-urls", "image-delete", "image-delete-batch",
+            "key-settings-update", "key-reencrypt-diaries", "key-recovery-code", "key-recovery",
+            "lifegraph-merge-accept", "lifegraph-merge-reject", "lifegraph-entity-create",
+            "lifegraph-entity-update", "lifegraph-entity-delete", "lifegraph-relation-create",
+            "lifegraph-relation-update", "lifegraph-relation-delete", "match-settings", "match-action",
+            "match-feedback", "match-end", "match-report", "match-block", "memory-center-update",
+            "memory-center-delete", "memory-persona-update", "memory-persona-delete",
+            "memory-life-graph-update", "memory-life-graph-delete", "model-console-update",
+            "model-route-preview", "notification-read", "notification-read-all", "notification-delete",
+            "prompt-save", "prompt-update", "prompt-activate", "prompt-delete", "room-chat-send",
+            "room-create", "room-join", "room-start", "room-scenario-submit", "room-scenario-update",
+            "room-scenario-delete", "room-scenario-resubmit", "room-cancel", "room-vote-cancel",
+            "room-submit", "soul-chat-send", "soul-chat-read", "plaza-submit", "plaza-feed",
+            "plaza-update", "plaza-delete", "plaza-resonate", "plaza-signal", "plaza-signal-read",
+            "suggestion-create", "user-register", "register-code", "login", "refresh",
+            "forgot-password-code", "forgot-password-reset", "user-update", "user-logout",
+            "location-create", "location-update", "location-delete", "geo-search", "geo-reverse",
+            "platform-stats");
     private static final Set<String> RESULTS = Set.of(
             "success", "empty", "failure", "rejected", "unavailable", "unknown", "denied");
     private static final Set<String> DEPENDENCY_RESULTS = Set.of("up", "down", "unknown");
@@ -64,7 +90,7 @@ public class YusiMetrics {
             String failureCategory, long durationMs, int resultCount) {
         try {
             String normalizedTool = normalize(tool, TOOLS);
-            String normalizedOperation = normalize(operation, OPERATIONS);
+            String normalizedOperation = normalize(operation, RATE_LIMIT_OPERATIONS);
             String normalizedResult = normalize(result, RESULTS);
             String normalizedFailure = normalizeFailure(failureCategory);
             String[] tags = tags(normalizedTool, normalizedOperation, normalizedResult, normalizedFailure);
@@ -178,6 +204,20 @@ public class YusiMetrics {
         }
     }
 
+    public void recordRateLimited(String operation, String failureCategory) {
+        try {
+            String normalizedOperation = normalize(operation, OPERATIONS);
+            String normalizedFailure = normalizeRateLimitFailure(failureCategory);
+            Counter counter = Counter.builder("rate_limited_total")
+                    .description("Rejected rate-limited operations")
+                    .tags(tags("system", normalizedOperation, "rejected", normalizedFailure))
+                    .register(registry);
+            counter.increment();
+        } catch (RuntimeException ignored) {
+            // Metrics are best effort and must not affect a rejection response.
+        }
+    }
+
     private String operationForTask(String taskName) {
         if (taskName == null) {
             return "unknown";
@@ -200,6 +240,17 @@ public class YusiMetrics {
 
     private String normalizeFailure(String value) {
         return normalize(value, FAILURE_CATEGORIES);
+    }
+
+    private String normalizeRateLimitFailure(String value) {
+        if (value == null || value.isBlank()) {
+            return "unknown";
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "limit_exceeded", "dependency" -> normalized;
+            default -> "unknown";
+        };
     }
 
     public static String normalizeBudgetReason(String value) {

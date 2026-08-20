@@ -89,6 +89,7 @@ public class UserController {
     }
 
     @PostMapping("/update")
+    @RateLimiter(key = "user-update", time = 60, count = 10, limitType = LimitType.USER)
     public Response<UserResponse> update(@Valid @RequestBody UpdateUserRequest request) {
         String userId = UserContext.getUserId();
         return Response.success(UserResponse.from(
@@ -96,6 +97,7 @@ public class UserController {
     }
 
     @PostMapping("/logout")
+    @RateLimiter(key = "user-logout", time = 60, count = 30, limitType = LimitType.USER)
     public Response<Void> logout(HttpServletRequest request) {
         String token = request.getHeader("Authorization");
         if (StringUtils.hasText(token) && token.startsWith("Bearer ")) {

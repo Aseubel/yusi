@@ -24,6 +24,8 @@ import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.dto.notification.AnnouncementResponse;
 import com.aseubel.yusi.pojo.dto.notification.PublishAnnouncementRequest;
 import com.aseubel.yusi.common.Response;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.entity.SituationScenario;
 import com.aseubel.yusi.pojo.entity.Suggestion;
 import com.aseubel.yusi.pojo.entity.User;
@@ -129,6 +131,7 @@ public class AdminController {
     }
 
     @PostMapping("/users/{userId}/permission")
+    @RateLimiter(key = "admin-user-permission", time = 60, count = 10, limitType = LimitType.USER)
     public Response<Void> updateUserPermission(@PathVariable String userId, @RequestBody Map<String, Integer> payload) {
         checkAdminPermission();
         String currentUserId = UserContext.getUserId();
@@ -163,6 +166,7 @@ public class AdminController {
     }
 
     @PostMapping("/scenarios/{scenarioId}/audit")
+    @RateLimiter(key = "admin-scenario-audit", time = 60, count = 20, limitType = LimitType.USER)
     public Response<Void> auditScenario(@PathVariable String scenarioId, @RequestBody ScenarioAuditRequest request) {
         checkAdminPermission();
         adminService.auditScenario(scenarioId, request);
@@ -185,6 +189,7 @@ public class AdminController {
     }
 
     @PostMapping("/suggestions/{suggestionId}/reply")
+    @RateLimiter(key = "admin-suggestion-reply", time = 60, count = 10, limitType = LimitType.USER)
     public Response<Void> replySuggestion(@PathVariable String suggestionId, @RequestBody Map<String, String> payload) {
         checkAdminPermission();
         String reply = payload.get("reply");
@@ -197,6 +202,7 @@ public class AdminController {
     }
 
     @PostMapping("/suggestions/{suggestionId}/status")
+    @RateLimiter(key = "admin-suggestion-status", time = 60, count = 20, limitType = LimitType.USER)
     public Response<Void> updateSuggestionStatus(@PathVariable String suggestionId,
             @RequestBody Map<String, String> payload) {
         checkAdminPermission();
@@ -233,6 +239,7 @@ public class AdminController {
     }
 
     @PostMapping("/announcements")
+    @RateLimiter(key = "admin-announcement-publish", time = 60, count = 5, limitType = LimitType.USER)
     public Response<AnnouncementResponse> publishAnnouncement(
             @Valid @RequestBody PublishAnnouncementRequest request) {
         checkAdminPermission();
@@ -240,6 +247,7 @@ public class AdminController {
     }
 
     @PostMapping("/embeddings/full-sync")
+    @RateLimiter(key = "admin-embeddings-full-sync", time = 3600, count = 1, limitType = LimitType.USER)
     public Response<Integer> fullSyncEmbeddings() {
         checkSuperAdminPermission();
         int count = embeddingBatchService.fullSync();
@@ -252,6 +260,7 @@ public class AdminController {
     }
 
     @PostMapping("/users/{userId}/deregister")
+    @RateLimiter(key = "admin-user-deregister", time = 600, count = 2, limitType = LimitType.USER)
     public Response<Void> deregisterUser(@PathVariable String userId) {
         checkSuperAdminPermission();
         adminService.deregisterUser(userId);

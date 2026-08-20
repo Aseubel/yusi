@@ -3,6 +3,8 @@ package com.aseubel.yusi.controller;
 import com.aseubel.yusi.common.Response;
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.ratelimit.LimitType;
+import com.aseubel.yusi.common.ratelimit.RateLimiter;
 import com.aseubel.yusi.pojo.dto.match.MatchActionRequest;
 import com.aseubel.yusi.pojo.dto.match.ConnectionActionRequest;
 import com.aseubel.yusi.pojo.dto.match.ConnectionFeedbackRequest;
@@ -38,6 +40,7 @@ public class MatchController {
     private UserService userService;
 
     @PostMapping("/settings")
+    @RateLimiter(key = "match-settings", time = 60, count = 10, limitType = LimitType.USER)
     public Response<UserResponse> updateSettings(@RequestBody MatchSettingsRequest request) {
         String userId = UserContext.getUserId();
         return Response.success(UserResponse.from(
@@ -51,6 +54,7 @@ public class MatchController {
     }
 
     @PostMapping("/{matchId}/action")
+    @RateLimiter(key = "match-action", time = 60, count = 30, limitType = LimitType.USER)
     public Response<MatchRecommendationResponse> handleAction(@PathVariable Long matchId,
             @RequestBody MatchActionRequest request) {
         String userId = UserContext.getUserId();
@@ -58,6 +62,7 @@ public class MatchController {
     }
 
     @PostMapping("/{matchId}/feedback")
+    @RateLimiter(key = "match-feedback", time = 60, count = 10, limitType = LimitType.USER)
     public Response<MatchRecommendationResponse> submitFeedback(@PathVariable Long matchId,
             @RequestBody ConnectionFeedbackRequest request) {
         return Response.success(matchService.submitConnectionFeedback(UserContext.getUserId(), matchId,
@@ -65,6 +70,7 @@ public class MatchController {
     }
 
     @PostMapping("/{matchId}/end")
+    @RateLimiter(key = "match-end", time = 60, count = 10, limitType = LimitType.USER)
     public Response<MatchRecommendationResponse> endConnection(@PathVariable Long matchId,
             @RequestBody(required = false) ConnectionActionRequest request) {
         String reasonCategory = request != null ? request.getReasonCategory() : null;
@@ -72,6 +78,7 @@ public class MatchController {
     }
 
     @PostMapping("/{matchId}/report")
+    @RateLimiter(key = "match-report", time = 600, count = 3, limitType = LimitType.USER)
     public Response<MatchRecommendationResponse> reportConnection(@PathVariable Long matchId,
             @RequestBody(required = false) ConnectionActionRequest request) {
         String reasonCategory = request != null ? request.getReasonCategory() : null;
@@ -79,6 +86,7 @@ public class MatchController {
     }
 
     @PostMapping("/{matchId}/block")
+    @RateLimiter(key = "match-block", time = 600, count = 3, limitType = LimitType.USER)
     public Response<MatchRecommendationResponse> blockConnection(@PathVariable Long matchId,
             @RequestBody(required = false) ConnectionActionRequest request) {
         String reasonCategory = request != null ? request.getReasonCategory() : null;
