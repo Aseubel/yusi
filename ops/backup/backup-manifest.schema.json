@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yusi.invalid/schemas/backup-manifest-v1.schema.json",
+  "title": "Yusi backup manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "backupId",
+    "component",
+    "sourceDataTimestampUtc",
+    "createdAtUtc",
+    "artifactSha256",
+    "artifactBytes",
+    "schemaVersion",
+    "toolVersion",
+    "counts",
+    "retentionClass",
+    "restorePoint"
+  ],
+  "properties": {
+    "backupId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]*$"
+    },
+    "component": {
+      "type": "string",
+      "enum": ["mysql", "milvus", "redis", "oss"]
+    },
+    "sourceDataTimestampUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "createdAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "artifactSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-fA-F]{64}$"
+    },
+    "artifactBytes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "schemaVersion": {
+      "const": "v1"
+    },
+    "toolVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "propertyNames": {
+        "pattern": "^[a-z][A-Za-z0-9_]*$"
+      }
+    },
+    "retentionClass": {
+      "type": "string",
+      "enum": ["short", "standard", "long"]
+    },
+    "restorePoint": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}
