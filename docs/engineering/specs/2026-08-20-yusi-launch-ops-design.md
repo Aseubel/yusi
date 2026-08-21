@@ -6,16 +6,22 @@
 >
 > 低敏边界：本文只记录固定组件名、版本引用、状态、计数、时间窗口和操作类别。凭据只以环境变量名引用；不记录 webhook 地址、密钥、内网地址、用户标识、请求正文、模型响应、完整对象 key 或异常 message/stack。
 
+## 部署形态决策订正（2026-08-22）
+
+- 实际生产唯一采用单机 Compose 路径：`.github/workflows/build_deploy.yml` 手动触发，在部署机执行 `rebuild.sh` 的 `docker compose up -d --force-recreate`。该决策已登记于 roadmap 订正提交 `b1b55dd`，对应 roadmap `:654-660`。
+- K8s/GitOps 路径已验证可用，但因服务器配置不足暂时搁置；K8s、灰度、蓝绿、多副本和镜像回滚内容在本文中降格为搁置蓝图，不作为本轮生产能力或验收证据。
+- 本轮不做灰度、不做多副本，也不宣称具备镜像切回能力。单机发布采用重建完成后的观察窗口；当前缺少回滚能力是已登记的运行风险，不得表述为“无回滚风险”。
+
 ## 1. 结论摘要
 
-当前部署能力不是一个已经验证的灰度/蓝绿平台：
+当前生产部署形态是单机 Compose，而不是灰度或蓝绿平台：
 
-- 旧的 SSH 部署 workflow 只允许手动触发，进入部署机执行 `bash rebuild.sh`，见 `.github/workflows/build_deploy.yml:1-27`。该路径使用本地 Compose 的 `yusi:latest`，见 `docker-compose.yml:4-18`，没有灰度、蓝绿、rollout 或 rollback 步骤。
-- 当前 GitOps workflow 在合并到 `main` 后先执行后端和前端验证，构建并推送 backend/frontend/MCP 的 commit SHA 镜像，同时推送 `latest`，见 `.github/workflows/deploy_k8s.yml:3-6,29-58,90-122`；随后只把 SHA 写入外部 `yusi-infra/overlays/prod` 并提交回该仓库，见 `.github/workflows/deploy_k8s.yml:124-151`。
-- 本仓库不包含 `yusi-infra` 的实际 Deployment、Service、Ingress、ArgoCD Application 或 rollout 参数，因此无法从代码独立证明当前生产存在 canary、蓝绿、`maxUnavailable`、`maxSurge` 或自动回滚。`docs/devops/gitops_proposal.md:9-18,149-232,442-454` 是目标架构建议，不是当前部署证据。
-- 最小可落地方案是保留不可变 commit SHA 作为发布和回滚引用，在外部 GitOps overlay 中先完成单副本/小流量观察，再逐步放量；在实际 rollout 资源未被部署方提供和验证前，灰度、双副本一致性、真实 readiness 放量和回滚均标 `deployment-only`。
+- 手动触发的 `build_deploy.yml` 进入部署机执行 `bash rebuild.sh`，见 `.github/workflows/build_deploy.yml:1-27`；实际生产路径使用本地 Compose 的 `yusi:latest`，见 `docker-compose.yml:4-18`。
+- `rebuild.sh:148-183` 执行 `docker compose up -d --force-recreate --remove-orphans`，因此本轮发布以重建完成后的观察窗口替代流量灰度。单机物理形态不支持并行副本、流量权重或无损切换。
+- GitOps workflow 及外部 overlay 事实仍保留在 §2，K8s/GitOps 已验证可用但当前搁置；相关 rollout、灰度、蓝绿和多副本内容只作为后续蓝图，不改变本轮生产路径。
+- 当前单机脚本存在旧镜像清理与无切回命令的边界，见 `rebuild.sh:69,179-181`。发布记录应保存源码 commit、构建/镜像身份和配置版本，但不能伪造上一镜像可回退能力。
 
-Phase 5 的本地门槛已经提供应用层合同，但没有替代真实部署证据：健康与指标的部署验收仍待完成，见 roadmap `docs/engineering/plans/2026-08-04-yusi-agent-product-roadmap.md:622-626`；告警默认关闭且真实 Secret、送达、双副本去重和调优待完成，见 roadmap `:627-635`；备份恢复真实 RTO 待完成，见 roadmap `:636-637`；注销删除外部副本确认、鉴权越权和 Trace 复查待完成，见 roadmap `:638-643`；限流的生产 Secret、压测、Redis 多副本、供应商配额和管理端口 allowlist 待完成，见 roadmap `:644-653`。
+Phase 5 的本地门槛已经提供应用层合同，但没有替代真实部署证据：健康与指标的部署验收仍待完成，见 roadmap `docs/engineering/plans/2026-08-04-yusi-agent-product-roadmap.md:622-626`；告警默认关闭且真实 Secret、送达、单实例抑制和调优待完成，见 roadmap `:627-635`；备份恢复真实 RTO 待完成，见 roadmap `:636-637`；注销删除外部副本确认、鉴权越权和 Trace 复查待完成，见 roadmap `:638-643`；限流的生产 Secret、压测、单机 Redis 故障行为、供应商配额和管理端口 allowlist 待完成，见 roadmap `:644-653`。roadmap 中与多副本相关的原验收表述按 `:655-660` 的部署形态订正降格为搁置蓝图。
 
 ## 2. 部署链路现状
 
@@ -35,7 +41,7 @@ Phase 5 的本地门槛已经提供应用层合同，但没有替代真实部署
 - `Dockerfile:1-27` 从 `target/*.jar` 构建 Java 21 runtime image，最终只复制分层并执行 JarLauncher；没有 `HEALTHCHECK`、版本标签、回滚脚本或流量切分指令。
 - `docker-compose.yml:4-18` 使用本地 build 和 `image: yusi:latest`，容器 `restart: on-failure`，发布端口为应用端口；`:21-34` 只有日志卷和 external bridge network，没有副本、readiness、滚动更新或旧版本服务定义。
 - `rebuild.sh:7-17` 固定 Compose project/service/image 为 `yusi`、`yusi`、`yusi:latest`；`:98-146` 默认 `git pull --ff-only`、安装/选择 JDK 并执行 `./mvnw clean package -DskipTests`；`:148-176` 构建后执行 `docker compose up -d --force-recreate --remove-orphans`；`:178-183` 新容器启动后尝试删除旧 image ID。
-- 因此本地 Compose 路径的旧镜像通常在切换后被清理，且脚本没有“切回旧 image ID”的命令。设计上的最低要求是在 deployment-only 发布前保存旧 SHA/image digest 并暂缓清理，不能把当前脚本描述成已具备回滚。
+- 因此本地 Compose 路径的旧镜像通常在切换后被清理，且脚本没有“切回旧 image ID”的命令。发布前保留上一镜像并暂缓清理是可选未来增强，本轮不实施，不能把当前脚本描述成已具备回滚。
 
 ### 2.3 前端 Docker/Compose 路径
 
@@ -100,59 +106,63 @@ Phase 5 的本地门槛已经提供应用层合同，但没有替代真实部署
 | 模型供应商/模型网关 | route candidate 按 state 和 admission 选择；模型调用失败在未产生输出且允许时继续 fallback，见 `ModelProxyFactory.java:245-310,313-422`；所有 candidate 不可用时请求失败。 | `ModelGatewayHealthIndicator.java:39-81` 的本地路由/state 探针、`model_call_failure_total`、readiness 和 AlertEvaluator；健康探针不发真实模型请求。 | 已有 candidate failover、circuit DOWN/HALF_OPEN/UP，见 `ModelStateCenter.java:77-135`。无供应商账户切换、配额购买或凭据自动轮换；供应商 quota calibration 是 deployment-only，见 rate runbook `:58-63`。 |
 | 飞书 webhook | 默认开关关闭；启用且配置完整时告警异步发送，缺配置直接跳过，失败最多三次指数 backoff，见 `FeishuAlertProperties.java:13-33`、`FeishuAlertNotifier.java:37-79`。 | 没有 readiness contributor；发送失败只写固定分类日志，AlertScheduler 本身捕获 evaluator 异常，见 `AlertScheduler.java:72-103`。 | 当前只有同一进程内最多三次重试和下一个 30 秒调度周期；无本地送达确认、备用接收端或自动切换。真实送达与轮值确认待 deployment-only，见 roadmap `:633-635`。 |
 
-## 5. 灰度与回滚设计
+## 5. 单机发布观察与回滚边界
 
-### 5.1 发布对象和最小灰度
+### 5.1 发布对象与发布后观察窗口
 
-发布单必须绑定以下不可变对象：backend SHA/digest、frontend SHA/digest、MCP SHA/digest、源码 commit、配置/Secret 版本引用、数据库 schema/migration 台账和旧版本回滚引用。workflow 已有 SHA tag 和外部 overlay 写回点，见 `.github/workflows/deploy_k8s.yml:93-151`；`latest` 只能作为兼容性发布标签，不能作为审计或回滚对象。
+单机发布记录绑定源码 commit、Compose/rebuild 操作引用、构建或镜像身份（若部署记录可提供）、配置/Secret 版本引用和数据库 schema/migration 台账。`deploy_k8s.yml` 的 SHA 镜像和外部 overlay 写回点仍是搁置蓝图事实，见 `.github/workflows/deploy_k8s.yml:93-151`；当前 Compose 的 `latest` 不能被写成可回滚对象。
 
-当前仓库缺少实际 K8s 资源，因此采用两级方案：
+实际生产流程只有一条：手动触发 `.github/workflows/build_deploy.yml:1-27`，在部署机运行 `rebuild.sh`，由 `docker compose up -d --force-recreate --remove-orphans` 完成单实例重建，见 `rebuild.sh:148-183`。单机物理形态不提供流量权重、并行副本或无损切换，因此本轮不做灰度。
 
-1. **当前可由 GitOps 链路承载的最小方案：受控滚动放量。** 在外部 `yusi-infra` 先把 release SHA 写入非生产/隔离环境，执行 readiness、只读 smoke、模型路由状态和关键指标观察；再在生产 overlay 以一个受控批次更新，要求新 Pod readiness 通过后才减少旧 Pod。具体 Deployment 的 `replicas`、`maxUnavailable`、`maxSurge`、probe 和 Service selector 必须由平台 owner 在外部仓库核验，不能用 proposal 文档替代。
-2. **真正用户灰度/蓝绿：deployment-only。** 如果外部 Ingress/Service 支持按权重或 header 将固定小比例流量送到新 SHA，则先放 1 个观察单元，再按预先记录的阶段扩大；否则只能做滚动更新，不能声称有 canary/blue-green。现仓库没有流量权重、双 Service 或回滚控制器证据。
+重建完成后进入“发布后观察窗口”，至少完成以下检查：
+
+1. readiness 为 UP，并记录低敏状态和观察时间。
+2. 检查 `dependency_health` 以及 MySQL、Redis、Milvus、模型网关和关键任务的固定分类状态。
+3. 执行关键只读 smoke，记录组件、操作、计数和状态，不记录响应正文或内部地址。
+4. 覆盖一个完整告警评估窗口：调度周期为 30 秒，使用 `AlertPolicy.java:20-32` 的 readiness、模型失败、任务积压和预算拒绝初始阈值；这些阈值全部标记“初始值，待生产调优”。
 
 ### 5.2 发布前门槛
 
-- CI verification 通过：backend `./mvnw test` 和 frontend `pnpm test`/`tsc -b`，证据来源 `.github/workflows/deploy_k8s.yml:29-58`。
-- 三个镜像均可按 release SHA 定位，且保留旧 SHA/digest；不要只保留 `latest`。
+- CI verification 通过：backend `./mvnw test` 和 frontend `pnpm test`/`tsc -b`，证据来源 `.github/workflows/deploy_k8s.yml:29-58`；workflow 通过不替代单机发布后的真实观察。
+- release record 保存源码 commit、Compose 构建/镜像身份、配置/Secret 版本和 schema/migration 状态；上一版本可以作为历史记录，但本轮不把它登记为可切回镜像。
 - `YUSI_RATE_LIMIT_HMAC_SECRET` 已由 Secret 注入；缺失时 subject-scoped 限流 fail-closed，见 `RateLimiterSubjectEncoder.java:17-58` 和 roadmap `:650-651`。
 - 飞书开关、URL、签名 secret 只通过 `YUSI_ALERT_FEISHU_ENABLED`、`YUSI_ALERT_FEISHU_WEBHOOK_URL`、`YUSI_ALERT_FEISHU_SIGNING_SECRET` 注入；默认开关仍为 false，真实送达尚未由本地证据证明。
-- 管理端口 `20611` 的网络 allowlist、Prometheus 抓取、真实 MySQL/Redis/Milvus/模型连通性、备份 RTO、外部删除残留检查和压测全部有 deployment-only 记录后才可放量，清单见第 7 节。
+- 管理端口 `20611` 的网络 allowlist、Prometheus 抓取、真实 MySQL/Redis/Milvus/模型连通性、备份 RTO、外部删除残留检查和压测全部有 deployment-only 记录后才可完成上线验收，清单见第 7 节。
 
-### 5.3 回滚触发条件
+### 5.3 观察窗口阻断条件
 
-以下条件任一满足即停止继续放量并进入回滚/阻断评估：
+以下条件任一满足即停止继续发布或重建，并进入单机前向修复/停机维护评估；它们不是自动镜像回滚触发器：
 
-- 新版本 readiness 在发布观察窗口内持续 DOWN；应用初始告警阈值为 DOWN 2 分钟，见 `AlertPolicy.java:20-24`。
+- readiness 在发布观察窗口内持续 DOWN；应用初始阈值为 DOWN 2 分钟，见 `AlertPolicy.java:20-24`。
 - 模型调用失败率在 5 分钟窗口达到 20% 且调用数至少 20，或所有可用 route tier 均进入 DOWN；阈值和状态转移见 `AlertPolicy.java:23-25`、`ModelStateCenter.java:77-135`。
 - 任务 due gap/lag 达到 warning 15 分钟或 critical 60 分钟并持续 5 分钟，或出现未登记的任务恢复/重复执行；初始值见 `AlertPolicy.java:26-29`。
 - 预算拒绝 5 分钟达到 10 次，或 admission store unavailable 导致模型请求无法按预算准入；初始值见 `AlertPolicy.java:29-30`、`ModelBudgetAdmission.java:111-148`。
 - MySQL/Redis/Milvus readiness DOWN、数据完整性/orphan 检查异常、外部删除副本残留、Secret 缺失，或限流/网关 deployment-only 约束未满足。
 
-阈值全部标记“初始值，待生产调优”。真实调优必须记录 before/after 窗口、release SHA、操作者和回滚引用，不能用本地测试计数代替。
+阈值全部标记“初始值，待生产调优”。真实调优必须记录 before/after 窗口、release SHA、操作者和处置引用，不能用本地测试计数代替。
 
-### 5.4 回滚步骤
+### 5.4 单机故障处置（当前不具备镜像切回）
 
-1. On-call 以低敏 incident ref 记录分类、开始时间、当前 release SHA、旧 SHA、受影响组件和触发信号；不得记录用户/请求/模型正文。
-2. 暂停继续放量，冻结新的 GitOps promotion；若是外部 Ingress 灰度，先把新版本权重降为 0，再处理部署版本。
-3. 将外部 `yusi-infra` production overlay 的 backend/frontend/MCP image tag 恢复到已验证的旧 SHA/digest，提交带 incident ref 的回退变更；必要时使用平台既有 rollout undo，但不得使用 `latest` 猜测版本。
-4. 等待旧版本 Pod readiness 通过，再执行只读 smoke、`dependency_health`、model failure、task lag 和 budget denial 观察；健康恢复不等于数据恢复。
-5. 对 MySQL、Redis、Milvus、OSS 做只读完整性检查。发现 schema、对象、向量或异步任务不一致时阻断流量，转入备份/恢复 runbook；不得把应用回滚当作数据回滚。
-6. 发布记录包含旧/新 SHA、GitOps commit、rollout 状态、告警状态和恢复时间。真实 K8s 命令、平台权限和结果是 deployment-only。
+1. On-call 以低敏 incident ref 记录分类、开始时间、当前 release/build 引用、受影响组件和触发信号；不得记录用户/请求/模型正文。
+2. 停止继续发布或重建，必要时进入停机维护；当前单机路径没有可验证的旧镜像切回命令。`rebuild.sh:69` 会清理悬空镜像，`:179-181` 会尝试删除旧 `yusi` 镜像，因此不能把旧 image ID 当作现成回滚能力。
+3. 本轮可选的未来增强是“发布前保留上一镜像并暂不清理”，但本轮不实施、不修改 `rebuild.sh`，也不生成回滚 PASS。
+4. 恢复只能选择已批准的前向修复并重新执行单机重建，或由运维进入停机维护；不得用 `latest` 猜测版本、虚构镜像切换或把重建写成回滚。
+5. 对 MySQL、Redis、Milvus、OSS 做只读完整性检查。发现 schema、对象、向量或异步任务不一致时保持阻断，转入备份/恢复 runbook；应用重建不能恢复已写数据。
+6. 发布记录包含新旧源码/build 引用（若可得）、观察状态、告警状态、处置动作和恢复时间，并明确 `rollback_result=not_available_single_machine`。
 
 ### 5.5 数据迁移不可逆边界
 
 - 生产 `spring.jpa.hibernate.ddl-auto` 为 `none`，见 `application-prod.yml:313-321`；仓库虽然有 `src/main/resources/db/migration` SQL，但 backup 设计已核实没有 Flyway runtime wiring，见 `docs/engineering/specs/2026-08-20-yusi-backup-restore-design.md:40-43,265`。
-- 因此不能假设“发布旧镜像就自动回滚已应用 migration”。涉及 schema 的发布必须采用 expand/contract：先增加向后兼容结构，再发布读写兼容代码，观察后再执行清理型变更。
-- 已应用的破坏性 migration 不允许直接反向执行；处理顺序是停止放量、校验 backup/checksum、在隔离环境恢复演练、由 DBA 决定前滚修复或按批准的备份恢复。任何恢复 MySQL 的操作都属于 deployment-only，并必须产生 RTO 记录。
-- backend/frontend/MCP 版本也有协议边界：前端 Nginx 代理 API/WebSocket，见 `frontend/nginx.conf:32-65`；回滚时三端必须按兼容矩阵成组处理。
+- 因此不能假设“单机重建或使用旧镜像就自动回滚已应用 migration”。涉及 schema 的发布必须采用 expand/contract：先增加向后兼容结构，再发布读写兼容代码，观察后再执行清理型变更。
+- 已应用的破坏性 migration 不允许直接反向执行；处理顺序是停止发布、校验 backup/checksum、在隔离环境恢复演练、由 DBA 决定前向修复或按批准的备份恢复。任何恢复 MySQL 的操作都属于 deployment-only，并必须产生 RTO 记录。
+- backend/frontend/MCP 版本仍有协议边界：前端 Nginx 代理 API/WebSocket，见 `frontend/nginx.conf:32-65`；单机重建时三端必须按兼容矩阵成组检查，不能只替换其中一端。
 
 ## 6. 降级策略矩阵（设计目标与现状边界）
 
 | 依赖 | 检测信号 | 自动降级行为 | 人工动作 | 恢复确认 |
 | --- | --- | --- | --- | --- |
 | MySQL | readiness `db` DOWN、连接测试失败、业务错误计数；现有 `db` 路径见 `application.yml:44-48` 和 `AlertScheduler.java:174-185`。 | 不新增“静默写入”或内存伪持久化；停止高风险写入口，保留能明确安全的只读/健康响应。当前代码无统一 DB failover，故默认阻断而非虚报成功。 | DBA 检查实例、连接池、锁和备份；必要时冻结流量，执行隔离 restore rehearsal。 | `db` readiness UP、关键只读查询和应用级 orphan/invariant 为零；真实数据库恢复/RTO 记录 PASS 才能放量。 |
-| Redis | `RedisHealthIndicator` 固定探针、`dependency_health{operation=redis}`、限流 backend failure；见 `RedisHealthIndicator.java:23-48`、`RateLimiterAspect.java:107-168`。 | 限流使用 bounded local fallback，不能无限放行；subject HMAC 缺失 fail-closed；model admission Redis 缺失返回 `admission_store_unavailable`，不绕过预算。 | 检查 Redis 多副本、连接/租约、RDB/AOF 和 key family；按业务决定冻结模型/高风险写入，不清理未知 key。 | Redis probe UP、两副本限流窗口一致、admission reservation/settle 正常、模型 state map/topic 恢复；真实多副本证据 deployment-only。 |
+| Redis | `RedisHealthIndicator` 固定探针、`dependency_health{operation=redis}`、限流 backend failure；见 `RedisHealthIndicator.java:23-48`、`RateLimiterAspect.java:107-168`。 | 限流使用 bounded local fallback，不能无限放行；subject HMAC 缺失 fail-closed；model admission Redis 缺失返回 `admission_store_unavailable`，不绕过预算。单机 fallback 不宣称跨实例一致性。 | 检查单机 Redis 连接/租约、RDB/AOF 和 key family；按业务决定冻结模型/高风险写入，不清理未知 key。 | Redis probe UP、单实例限流和 admission reservation/settle 恢复、模型 state map/topic 可用；RDB/AOF 恢复证据属于 deployment-only。 |
 | Milvus | 固定 collection existence/health、readiness `milvus`、`dependency_health`；见 `MilvusHealthIndicator.java:23-50`。 | 不用空 collection 或 mock 结果冒充检索恢复；检索/embedding 相关入口返回已有低敏失败分类或暂时阻断，是否允许 DB-only 功能由发布 runbook决定。 | 核对 collection schema/dimension/index/load，必要时按备份 runbook 做 export/import 或 derived rebuild；先保护 MySQL source of truth。 | collection schema/index/load、计数和关键只读检索验证通过；真实向量一致性属于 deployment-only。 |
 | OSS | 上传/删除调用异常、业务失败日志；当前 readiness 列表没有 OSS，见 `application.yml:44-48`。 | 不把 object 写入成功伪造为成功；保留 DB 引用不变或将业务请求标为可重试，避免盲删/盲重传造成孤儿对象。当前无统一 OSS health gate。 | 检查 provider bucket/versioning/inventory/ACL，按对象引用和共享引用策略处理；必要时停止媒体写入。 | HEAD/list、版本/delete marker、引用对账和跨区域复制检查通过；`oss-inventory.ps1` 的 deployment-only 证据必须完成。 |
 | 模型供应商 | modelGateway readiness、candidate phase、`model_call_failure_total`、AlertEvaluator 5 分钟失败率；见 `ModelGatewayHealthIndicator.java:39-81`、`AlertPolicy.java:23-25`。 | 由 ModelStateCenter 将失败 candidate 置 DOWN、到 probe 时间 HALF_OPEN；ModelProxy 在未输出前切换到可用 fallback；预算拒绝仍保持拒绝。 | 确认供应商状态、配额、凭据和 route tier；调整权重/启用备用供应商必须有配置版本和回滚引用，不能在事故中绕过 admission 或 Secret 红线。 | 连续成功达到配置 threshold、phase 回到 UP、失败率回落并通过只读模型 smoke；真实供应商配额校准与端到端调用是 deployment-only。 |
@@ -160,24 +170,29 @@ Phase 5 的本地门槛已经提供应用层合同，但没有替代真实部署
 
 ## 7. 上线前置聚合清单
 
-责任槽位使用角色而不是个人姓名；每项必须在 release record 中填入实际 operator/reviewer 和低敏证据引用。
+责任槽位使用角色而不是个人姓名；每项必须在 release record 中填入实际 operator/reviewer 和低敏证据引用。单机项目不要求不存在的灰度或镜像回滚证据，但必须把当前能力边界和运行风险写入记录。
 
 | ID | 前置项 | 责任槽位 | 证据/完成条件 | 来源 |
 | --- | --- | --- | --- | --- |
-| OPS-01 | 发布 SHA 与回滚 SHA/digest 成组登记，三端兼容矩阵确认 | Release operator + platform owner | backend/frontend/MCP SHA、GitOps commit、旧版本引用齐全；不使用 latest 作为唯一标识 | `.github/workflows/deploy_k8s.yml:93-151`; 本文 §5.1 |
-| OPS-02 | K8s/Ingress 灰度或滚动参数核验 | Platform/SRE | 外部 `yusi-infra` 的 replicas、probe、`maxUnavailable/maxSurge`、selector/权重和 rollout status；若缺失则只能滚动放量并标阻断 | `.github/workflows/deploy_k8s.yml:124-151`; `docs/devops/gitops_proposal.md:154-232`（仅建议） |
-| OPS-03 | HMAC secret 注入 | Security owner + platform owner | `YUSI_RATE_LIMIT_HMAC_SECRET` 已注入且 subject-scoped 限流不因缺失而放行 | `application.yml:10-11`; `RateLimiterSubjectEncoder.java:17-58`; roadmap `:650-651` |
-| OPS-04 | 管理端口网络隔离与 Prometheus 抓取 | Platform/SRE | `MANAGEMENT_SERVER_PORT`/`MANAGEMENT_SERVER_ADDRESS` 按部署策略绑定；只暴露 health/prometheus；真实 scraper 连通性和 allowlist 记录 | `application.yml:34-48`; `application-prod.yml:21-24`; roadmap `:622-626,650-653` |
-| OPS-05 | MySQL 备份与恢复 RTO 演练 | DBA + backup owner | dump checksum、隔离目标库恢复、orphan/invariant、开始/完成时间和 RTO；未完成不得宣称备份恢复 PASS | backup runbook `:8-12,33-45`; roadmap `:636-637` |
-| OPS-06 | Milvus/Redis/OSS 真实恢复与数据对账 | Data platform owner + DBA | 三 collection、Redis key-family、OSS version/inventory/引用对账均有真实记录；wrapper 的 `DEPLOYMENT-ONLY` 不能替代 | `ops/backup/milvus-backup.ps1:8-19`; `redis-backup.ps1:8-23`; `oss-inventory.ps1:8-15`; backup runbook `:35-41` |
-| OPS-07 | 账号删除外部副本与 worker 竞态演练 | Privacy owner + data platform owner | 真实 Milvus/Redis/OSS 残留为零或按共享引用策略解释，worker 不重建，备份副本保留期有合规结论 | privacy runbook `:30-74`; roadmap `:638-643` |
-| OPS-08 | 限流与成本准入 deployment-only 验证 | SRE + model platform owner | HMAC、HTTP/SSE/multipart/gateway 压测、Redis 多副本/故障、供应商 quota 校准、20611 allowlist、WebSocket/gRPC 均有记录 | rate runbook `:45-63`; roadmap `:644-653` |
-| OPS-09 | 告警 Secret、真实飞书送达和轮值确认 | On-call owner + security owner | 只通过 `YUSI_ALERT_FEISHU_ENABLED`、`YUSI_ALERT_FEISHU_WEBHOOK_URL`、`YUSI_ALERT_FEISHU_SIGNING_SECRET` 注入；四类告警真实送达、去重、恢复和接收人确认 | `application-prod.yml:15-19`; alert plan `:208-215`; roadmap `:627-635` |
-| OPS-10 | 模型/关键依赖故障演练 | Model platform owner + SRE | MySQL、Redis、Milvus、供应商故障下的 readiness、降级、恢复和告警记录；模型探针不以 mock 当端到端证据 | `ModelGatewayHealthIndicator.java:19-25`; alert plan `:212-215`; 本文 §6 |
-| OPS-11 | migration 不可逆边界确认 | DBA + release operator | 已应用 schema 版本、expand/contract 顺序、兼容旧 SHA 的证明；破坏性变更有 backup/forward-fix 方案 | `application-prod.yml:313-321`; backup design `:40-43,265` |
-| OPS-12 | 应急联系人、回滚权限和 incident 记录模板 | On-call owner + release reviewer | 低敏 incident ref、发布/回滚权限、旧 SHA、告警分类、RTO/恢复确认字段和复盘 reviewer 已确认 | roadmap `:627-635,636-653`; backup runbook `:43-45`; rate runbook `:65-85` |
+| OPS-01 | 单机 Compose 发布与观察窗口 | Release operator + platform owner | 手动 workflow、`rebuild.sh` force-recreate 完成；readiness、`dependency_health`、关键只读 smoke 和一个 30 秒告警评估窗口均有低敏记录 | `.github/workflows/build_deploy.yml:1-27`; `rebuild.sh:148-183`; `application.yml:29-48`; `AlertPolicy.java:20-32`; 本文 §5.1 |
+| OPS-02 | HMAC secret 注入 | Security owner + platform owner | `YUSI_RATE_LIMIT_HMAC_SECRET` 已注入且 subject-scoped 限流不因缺失而放行 | `application.yml:10-11`; `RateLimiterSubjectEncoder.java:17-58`; roadmap `:650-651` |
+| OPS-03 | 管理端口网络隔离与 Prometheus 抓取 | Platform/SRE | `MANAGEMENT_SERVER_PORT`/`MANAGEMENT_SERVER_ADDRESS` 按部署策略绑定；只暴露 health/prometheus；真实 scraper 连通性和 allowlist 记录 | `application.yml:34-48`; `application-prod.yml:21-24`; roadmap `:622-626,650-653` |
+| OPS-04 | MySQL 备份与恢复 RTO 演练 | DBA + backup owner | dump checksum、隔离目标库恢复、orphan/invariant、开始/完成时间和 RTO；未完成不得宣称备份恢复 PASS | backup runbook `:8-12,33-45`; roadmap `:636-637` |
+| OPS-05 | Milvus/Redis/OSS 真实恢复与数据对账 | Data platform owner + DBA | collection、单机 Redis key-family、OSS version/inventory/引用对账均有真实记录；wrapper 的 `DEPLOYMENT-ONLY` 不能替代 | `ops/backup/milvus-backup.ps1:8-19`; `redis-backup.ps1:8-23`; `oss-inventory.ps1:8-15`; backup runbook `:35-41` |
+| OPS-06 | 账号删除外部副本与 worker 竞态演练 | Privacy owner + data platform owner | 真实 Milvus/Redis/OSS 残留为零或按共享引用策略解释，worker 不重建，备份副本保留期有合规结论 | privacy runbook `:30-74`; roadmap `:638-643` |
+| OPS-07 | 限流与成本准入 deployment-only 验证 | SRE + model platform owner | HMAC、HTTP/SSE/multipart/gateway 压测、单机 Redis 故障与 bounded fallback、供应商 quota 校准、20611 allowlist、WebSocket/gRPC 均有记录 | rate runbook `:45-63`; roadmap `:644-653` |
+| OPS-08 | 告警 Secret、真实飞书送达和轮值确认 | On-call owner + security owner | 只通过 `YUSI_ALERT_FEISHU_ENABLED`、`YUSI_ALERT_FEISHU_WEBHOOK_URL`、`YUSI_ALERT_FEISHU_SIGNING_SECRET` 注入；四类告警真实送达、单实例抑制/恢复和接收人确认 | `application-prod.yml:15-19`; `FeishuAlertNotifier.java:37-79`; roadmap `:627-635` |
+| OPS-09 | 模型/关键依赖故障演练 | Model platform owner + SRE | MySQL、Redis、Milvus、供应商故障下的 readiness、降级、恢复和告警记录；模型探针不以 mock 当端到端证据 | `ModelGatewayHealthIndicator.java:19-25`; `AlertScheduler.java:169-185`; 本文 §6 |
+| OPS-10 | migration 不可逆边界确认 | DBA + release operator | 已应用 schema 版本、expand/contract 顺序、单机前向修复或备份恢复方案；当前不具备镜像切回能力必须保留为残余风险 | `application-prod.yml:313-321`; backup design `:40-43,265`; 本文 §5.4-5.5 |
+| OPS-11 | 应急联系人、处置权限和 incident 记录模板 | On-call owner + release reviewer | 低敏 incident ref、单机停机维护/前向修复权限、告警分类、RTO/恢复确认字段和复盘 reviewer 已确认 | roadmap `:627-635,636-653`; backup runbook `:43-45`; rate runbook `:65-85`; 本文 §8-9 |
 
-上述清单中没有本地真实环境证据的项目全部为 `deployment-only`。本地 Maven、H2、Mockito、空 collection、静态配置读取和 workflow YAML 检查只能证明合同或静态边界，不得将清单项改写为生产 PASS。
+上述清单中没有单机真实环境证据的项目全部为 `deployment-only`。本地 Maven、H2、Mockito、空 collection、静态配置读取和 workflow YAML 检查只能证明合同或静态边界，不得将清单项改写为生产 PASS。当前单机没有镜像切回能力，不得把该缺口改写为 PASS 或“无回滚风险”。
+
+### 搁置蓝图（不纳入本轮生产验收）
+
+| ID | 蓝图项 | 责任槽位 | 状态与边界 | 来源 |
+| --- | --- | --- | --- | --- |
+| BLUEPRINT-01 | K8s/GitOps rollout、灰度/蓝绿、多副本和镜像回滚参数核验 | Platform/SRE | 搁置蓝图；服务器配置不足，本轮不执行、不计入单机上线 PASS，未来恢复该路径时另行验收 `replicas`、probe、`maxUnavailable/maxSurge`、流量权重和回滚权限 | `.github/workflows/deploy_k8s.yml:124-151`; `docs/devops/gitops_proposal.md:154-232`; roadmap `:655-660` |
 
 ## 8. 应急流程与低敏证据
 
@@ -189,11 +204,11 @@ Phase 5 的本地门槛已经提供应用层合同，但没有替代真实部署
 
 ### 8.2 处置顺序
 
-1. 先判断是否继续放量；满足 §5.3 任一条件即停止 promotion。
+1. 先判断是否继续发布或重建；满足 §5.3 任一条件即停止 promotion。
 2. 模型问题先确认 candidate failover/phase 和 admission 是否仍在生效；不得通过关闭预算、清空 state 或放开 Secret 绕过保护。
 3. Redis 问题确认限流 bounded local 和 admission denied 的实际状态；不得把本地 fallback 描述成多副本一致。
 4. 数据层问题冻结写入并转入备份/恢复或删除隐私演练；只回滚镜像不能恢复已写数据。
-5. 使用 §5.4 回滚步骤回到已验证 SHA；回滚结束后做 readiness、只读 smoke 和依赖完整性确认。
+5. 使用 §5.4 的单机前向修复或停机维护步骤；处置结束后重新做 readiness、只读 smoke 和依赖完整性确认，不把重建写成镜像回滚。
 6. 飞书不可达时按固定分类重试/人工升级；notifier 故障不能阻塞 readiness。真实接收人和备用通信路径由 on-call 在 deployment-only 记录中确认。
 
 ### 8.3 告警通道开关与凭据
@@ -206,11 +221,12 @@ Phase 5 的本地门槛已经提供应用层合同，但没有替代真实部署
 
 ```text
 release_sha=<immutable-commit-sha>
-previous_release_sha=<verified-previous-sha>
-gitops_change_ref=<low-sensitivity-change-reference>
+previous_release_sha=<historical-reference-or-empty>
+gitops_change_ref=<not_applicable_single_machine|low-sensitivity-change-reference>
 incident_ref=<opaque-reference-or-empty>
 deployment_status=<NOT_RUN|PASS|BLOCKED>
-rollout_mode=<rolling|canary|blue-green|NOT_RUN>
+rollout_mode=<single_machine_observation|rolling|canary|blue-green|NOT_RUN>
+release_observation=<readiness-dependency-smoke-alert-window|NOT_RUN>
 readiness_result=<UP|DOWN|NOT_RUN>
 dependency_result=<classified-counts-only>
 model_failure_window=<fixed-window-or-NOT_RUN>
@@ -219,10 +235,12 @@ budget_denial_result=<classified-counts-only>
 feishu_delivery_result=<mock-contract-only|deployment-only|NOT_RUN>
 backup_restore_rto=<elapsed-or-NOT_RUN>
 data_integrity_result=<PASS|BLOCKED|NOT_RUN>
-rollback_result=<PASS|NOT_RUN|NOT_REQUIRED>
+rollback_result=<not_available_single_machine|PASS|NOT_RUN|NOT_REQUIRED>
 operator_role=<role>
 reviewer_role=<role>
 observed_at_utc=<timestamp>
 ```
 
-只有外部部署、数据平台、Secret、轮值和真实恢复证据齐全时，才能把 roadmap L654 对应的上线运维准备标为完成。本文不修改 roadmap；评审方在验收后决定是否更新。
+`single_machine_observation` 表示 Compose `force-recreate` 后的 readiness、依赖、只读 smoke 和完整告警窗口；`rolling`、`canary`、`blue-green` 仅供搁置的 K8s/GitOps 蓝图使用。单机本轮应记录 `rollback_result=not_available_single_machine`，不填写虚构的回滚 PASS。
+
+只有单机部署、数据平台、Secret、轮值和真实恢复证据齐全时，才能把 roadmap L654 对应的上线运维准备标为完成；K8s/灰度蓝图不构成本轮完成条件。本文不修改 roadmap；评审方在验收后决定是否更新。
