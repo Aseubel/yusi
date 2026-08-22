@@ -210,6 +210,10 @@ model:
         primary-tier: vision
         priority: 100
 yusi:
+  alert:
+    feishu:
+      enabled: ${YUSI_ALERT_FEISHU_ENABLED:false}
+      interval-ms: ${YUSI_ALERT_FEISHU_INTERVAL_MS:30000}
   web:
     trusted-proxy-addresses: ${YUSI_TRUSTED_PROXY_ADDRESSES:}
   diary:
