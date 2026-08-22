@@ -639,8 +639,12 @@ Agentic Runtime 因无真实消费方移入[上线后扩展 Backlog](2026-08-17-
       边界）、API 鉴权与越权回归、低敏 Trace 边界全量复查（注销删除协调器已由
       739e1ae7 落地：失败闭锁、三 collection/Redis 分族/OSS inventory 契约、去标识化
       审计与 orphan 门槛；本地证据为 application-invariant-only/mock-contract-only，
-      真实 Milvus/Redis/OSS/worker/备份副本的 deployment-only 证据与 API 鉴权越权
-      回归、Trace 边界复查两项子项待完成）。
+      真实 Milvus/Redis/OSS/worker/备份副本的 deployment-only 证据待完成；API 鉴权越权
+      回归与 Trace 边界复查两项子项的设计已批准（42f2859）：鉴权矩阵 22 Controller/
+      158 映射（90 写/68 读）独立复核吻合，确认缺陷 AUTHZ-001（PromptController
+      getPrompt 缺 checkAdmin，非管理员可读 prompt 模板）与候选 AUTHZ-CANDIDATE-001
+      （共鸣信号 cardId/toUserId 归属未校验，待业务确认）已登记；下一轮按 7-Task 计划
+      执行，AUTHZ-001 先红后绿修复，候选项只观察不擅自修复）。
 - [ ] 限流与成本准入复核：`@RateLimiter` 场景覆盖面与 `model.gateway.admission` 阈值按
       上线标准复核，补齐无限流的写接口。（本地门控已就绪：c778137 交付 90 写映射
       覆盖 manifest、96 个注解（22 既有 + 74 新增）、HMAC subject fail-closed、固定
