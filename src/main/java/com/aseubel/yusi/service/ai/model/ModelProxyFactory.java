@@ -289,13 +289,14 @@ public class ModelProxyFactory {
                             ModelUsageSnapshot.unavailable(selected.getPriceVersion()), latency, null,
                             attemptIndex, ModelCallStatus.FAILED.code(), normalized.kind().name());
                     lastError = normalized;
-                    log.warn("AI model invocation failed: operation=model_invoke, attempt={}, requestId={}, runId={}, provider={}, modelId={}, failureKind={}, fallbackEligible={}, exceptionType={}",
+                    log.warn("AI model invocation failed: operation=model_invoke, attempt={}, requestId={}, runId={}, provider={}, modelId={}, failureKind={}, httpStatus={}, fallbackEligible={}, exceptionType={}",
                             attemptIndex + 1,
                             context.getRequestId(),
                             context.getRunId(),
                             selected.getProvider(),
                             selected.getId(),
                             normalized.kind().name(),
+                            normalized.httpStatus(),
                             normalized.isFallbackEligible(false),
                             LowSensitivityLogSummary.exceptionType(normalized.getCause()));
                     if (!normalized.isFallbackEligible(false)) {
@@ -405,6 +406,16 @@ public class ModelProxyFactory {
             budgetAdmission.reconcile(permit, null);
             long latency = System.currentTimeMillis() - start;
             modelStateCenter.recordFailure(candidate.modelId(), candidate.modelName(), latency, normalized);
+            log.warn("AI model streaming failed: operation=model_stream, attempt={}, requestId={}, runId={}, provider={}, modelId={}, failureKind={}, httpStatus={}, fallbackEligible={}, exceptionType={}",
+                    attemptIndex + 1,
+                    context.getRequestId(),
+                    context.getRunId(),
+                    candidate.provider(),
+                    candidate.modelId(),
+                    normalized.kind().name(),
+                    normalized.httpStatus(),
+                    normalized.isFallbackEligible(emitted),
+                    LowSensitivityLogSummary.exceptionType(normalized.getCause()));
             publishAttempt(decision, context, candidate,
                     ModelUsageSnapshot.unavailable(candidate.instance().getPriceVersion()), latency,
                     firstOutputAt < 0 ? null : firstOutputAt - start, attemptIndex, ModelCallStatus.FAILED.code(),

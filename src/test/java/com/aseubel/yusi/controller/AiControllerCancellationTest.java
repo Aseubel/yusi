@@ -13,6 +13,8 @@ import com.aseubel.yusi.service.ai.runtime.AgentToolTraceService;
 import com.aseubel.yusi.service.ai.tool.constant.AgentToolAccessMode;
 import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
 import com.aseubel.yusi.service.ai.runtime.ChatStreamCancellationRegistry;
+import com.aseubel.yusi.service.ai.model.ModelFailureKind;
+import com.aseubel.yusi.service.ai.model.ModelInvocationException;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.oss.OssService;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -235,6 +237,28 @@ class AiControllerCancellationTest {
         errorCaptor.getValue().accept(new IllegalStateException("provider failed"));
 
         verify(agentRunTraceService).fail("user-1", "request-response-failed", "agent_error", 7L);
+    }
+
+    @Test
+    void normalizedProviderFailureKindIsPersistedToRunTrace() {
+        TokenStream tokenStream = tokenStream();
+        when(diaryAssistant.chatWithMessage(eq("user-1"), anyString(), anyList())).thenReturn(tokenStream);
+
+        controller.chatStream(ChatRequest.builder()
+                .requestId("request-auth-failed")
+                .message("hello")
+                .build());
+        submittedTask.get().run();
+        UserContext.setUserId("user-1");
+
+        ArgumentCaptor<Consumer<Throwable>> errorCaptor = ArgumentCaptor.forClass(Consumer.class);
+        verify(tokenStream).onError(errorCaptor.capture());
+
+        errorCaptor.getValue().accept(new ModelInvocationException(
+                ModelFailureKind.AUTHENTICATION, "provider", "model", null,
+                new IllegalStateException("provider failed")));
+
+        verify(agentRunTraceService).fail("user-1", "request-auth-failed", "AUTHENTICATION", 0L);
     }
 
     @Test

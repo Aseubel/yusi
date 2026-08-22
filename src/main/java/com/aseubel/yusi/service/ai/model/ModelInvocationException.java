@@ -9,14 +9,21 @@ public class ModelInvocationException extends RuntimeException {
     private final String provider;
     private final String modelId;
     private final Long retryAfterMs;
+    private final Integer httpStatus;
 
     public ModelInvocationException(ModelFailureKind kind, String provider, String modelId,
             Long retryAfterMs, Throwable cause) {
+        this(kind, provider, modelId, retryAfterMs, null, cause);
+    }
+
+    public ModelInvocationException(ModelFailureKind kind, String provider, String modelId,
+            Long retryAfterMs, Integer httpStatus, Throwable cause) {
         super(buildMessage(kind, provider, modelId, cause), cause);
         this.kind = kind == null ? ModelFailureKind.UNKNOWN : kind;
         this.provider = provider;
         this.modelId = modelId;
         this.retryAfterMs = retryAfterMs;
+        this.httpStatus = httpStatus;
     }
 
     public boolean isFallbackEligible(boolean outputEmitted) {
@@ -43,6 +50,10 @@ public class ModelInvocationException extends RuntimeException {
 
     public Long retryAfterMs() {
         return retryAfterMs;
+    }
+
+    public Integer httpStatus() {
+        return httpStatus;
     }
 
     private static String buildMessage(ModelFailureKind kind, String provider, String modelId, Throwable cause) {

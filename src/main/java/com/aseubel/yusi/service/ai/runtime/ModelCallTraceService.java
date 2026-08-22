@@ -64,14 +64,21 @@ public class ModelCallTraceService {
         if (errorCode == null || errorCode.isBlank()) {
             return "none";
         }
-        String normalized = errorCode.toLowerCase(java.util.Locale.ROOT);
-        if (normalized.contains("timeout")) {
-            return "timeout";
-        }
-        if (normalized.contains("reject")) {
-            return "rejected";
-        }
-        return "unknown";
+        return switch (errorCode.trim().toUpperCase(java.util.Locale.ROOT)) {
+            case "TRANSIENT_NETWORK" -> "connection_failure";
+            case "TIMEOUT" -> "timeout";
+            case "RATE_LIMITED" -> "rate_limited";
+            case "SERVER_ERROR" -> "server_error";
+            case "AUTHENTICATION" -> "authentication";
+            case "MODEL_NOT_FOUND" -> "model_not_found";
+            case "CONTEXT_LIMIT" -> "context_limit";
+            case "INVALID_REQUEST" -> "validation";
+            case "SAFETY_REFUSAL" -> "safety_refusal";
+            case "STRUCTURED_OUTPUT" -> "structured_output";
+            case "CANCELLED" -> "cancelled";
+            case "REJECTED" -> "rejected";
+            default -> "unknown";
+        };
     }
 
     private ModelCallTrace toEntity(ModelCallAttemptEvent event) {

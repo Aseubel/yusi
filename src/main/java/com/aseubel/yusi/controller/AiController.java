@@ -440,14 +440,14 @@ public class AiController {
                             session.complete();
                         })
                         .onError(error -> {
-                            traceRunFailed(userId, requestId, "agent_error", responseCharCount.get());
+                            traceRunFailed(userId, requestId, modelFailureCategory(error), responseCharCount.get());
                             sendAgentEvent(emitter, session, AgentStreamEvent.runFailed(requestId));
                             session.complete();
                         })
                         .start();
             } catch (Exception e) {
                 log.error("Error during AI chat stream", e);
-                traceRunFailed(userId, requestId, "agent_error", responseCharCount.get());
+                traceRunFailed(userId, requestId, modelFailureCategory(e), responseCharCount.get());
                 sendAgentEvent(emitter, session, AgentStreamEvent.runFailed(requestId));
                 session.complete();
             } finally {
@@ -669,6 +669,13 @@ public class AiController {
                     return ImageContent.from(URI.create(url));
                 })
                 .collect(Collectors.toList());
+    }
+
+    private String modelFailureCategory(Throwable error) {
+        if (error instanceof com.aseubel.yusi.service.ai.model.ModelInvocationException modelError) {
+            return modelError.kind().name();
+        }
+        return "agent_error";
     }
 
     // ──────────────── Agent 人格配置 ────────────────

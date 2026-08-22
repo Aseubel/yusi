@@ -72,8 +72,9 @@ public class YusiMetrics {
             "embedding-worker", "lifegraph-worker", "model-state-sync");
     private static final Set<String> FAILURE_CATEGORIES = Set.of(
             "none", "timeout", "connection_failure", "unavailable", "validation", "rejected",
-            "dependency", "admission_store_unavailable", "reservation_conflict", "limit_exceeded",
-            "unknown");
+            "authentication", "model_not_found", "rate_limited", "server_error", "context_limit",
+            "safety_refusal", "structured_output", "cancelled", "dependency", "admission_store_unavailable",
+            "reservation_conflict", "limit_exceeded", "unknown");
 
     private final MeterRegistry registry;
     private final Map<String, AtomicReference<Double>> gaugeValues = new ConcurrentHashMap<>();
