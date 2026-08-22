@@ -70,6 +70,8 @@ public class ModelInstanceRegistry {
                     .provider(clients.provider())
                     .protocol(ModelProtocol.normalize(definition.getProtocol()))
                     .baseUrl(definition.getBaseurl())
+                    .enabled(definition.isEnabled())
+                    .registered(true)
                     .weight(definition.getWeight() == null ? 100 : definition.getWeight())
                     .priority(definition.getPriority() == null ? 100 : definition.getPriority())
                     .scenes(normalize(definition.getScenes()))

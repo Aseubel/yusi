@@ -14,7 +14,8 @@ public record ModelRouteDecision(
         List<String> fallbackTiers,
         List<ModelRouteCandidate> candidates,
         String routeReason,
-        ModelRouteParameters routeParameters) {
+        ModelRouteParameters routeParameters,
+        RouteReason routeReasonDetails) {
 
     public ModelRouteDecision {
         fallbackTiers = fallbackTiers == null ? List.of() : List.copyOf(fallbackTiers);
@@ -22,6 +23,9 @@ public record ModelRouteDecision(
         routeParameters = routeParameters == null
                 ? new ModelRouteParameters(null, null, null, null, null, Map.of())
                 : routeParameters;
+        routeReasonDetails = routeReasonDetails == null
+                ? new RouteReason(policyId, 0, 0, 0, primaryTier, fallbackTiers, List.of())
+                : routeReasonDetails;
     }
 
     public ModelRouteDecision(String requestId, String policyId, long policyVersion,
@@ -29,6 +33,13 @@ public record ModelRouteDecision(
             String routeReason) {
         this(requestId, policyId, policyVersion, primaryTier, fallbackTiers, candidates,
                 routeReason, null);
+    }
+
+    public ModelRouteDecision(String requestId, String policyId, long policyVersion,
+            String primaryTier, List<String> fallbackTiers, List<ModelRouteCandidate> candidates,
+            String routeReason, ModelRouteParameters routeParameters) {
+        this(requestId, policyId, policyVersion, primaryTier, fallbackTiers, candidates,
+                routeReason, routeParameters, null);
     }
 
     public List<ModelRouteCandidate> attemptCandidates() {
@@ -51,5 +62,20 @@ public record ModelRouteDecision(
         result.addAll(first);
         result.addAll(second);
         return List.copyOf(result);
+    }
+
+    public record RouteReason(
+            String routeId,
+            int sceneMatchLevel,
+            int riskMatchLevel,
+            int routePriority,
+            String primaryTier,
+            List<String> fallbackTierOrder,
+            List<String> strategyOrder) {
+
+        public RouteReason {
+            fallbackTierOrder = fallbackTierOrder == null ? List.of() : List.copyOf(fallbackTierOrder);
+            strategyOrder = strategyOrder == null ? List.of() : List.copyOf(strategyOrder);
+        }
     }
 }

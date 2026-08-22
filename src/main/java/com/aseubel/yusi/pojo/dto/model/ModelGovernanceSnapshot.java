@@ -42,9 +42,16 @@ public class ModelGovernanceSnapshot {
     private RoutePolicyDefinition defaultRoute;
 
     @Builder.Default
+    private List<ModelGovernanceRoute> routeProjections = new ArrayList<>();
+
+    @Builder.Default
     private List<ModelRuntimeState> runtimeStates = new ArrayList<>();
 
     private ModelMetricSummary summary;
+
+    private ModelRuntimeSummary runtimeSummary;
+
+    private long lastRefreshedAt;
 
     @Data
     @Builder
@@ -71,6 +78,18 @@ public class ModelGovernanceSnapshot {
         @Builder.Default
         private List<String> scenes = new ArrayList<>();
         private boolean enabled;
+        private String runtimeStatus;
+        private String phase;
+        private boolean available;
+        private int consecutiveFailures;
+        private double avgLatencyMs;
+        private double errorRate;
+        private String lastError;
+        private long lastUpdatedAt;
+        @Builder.Default
+        private List<String> tierIds = new ArrayList<>();
+        @Builder.Default
+        private List<String> routeIds = new ArrayList<>();
     }
 
     @Data
@@ -90,5 +109,64 @@ public class ModelGovernanceSnapshot {
         private int healthyMemberCount;
         private int degradedMemberCount;
         private int downMemberCount;
+        private int unknownMemberCount;
+        private int memberCount;
+        @Builder.Default
+        private List<ModelGovernanceTierMember> memberDetails = new ArrayList<>();
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ModelGovernanceTierMember {
+        private String modelId;
+        private int priority;
+        private int weight;
+        private String runtimeStatus;
+        private String phase;
+        private boolean available;
+        private double avgLatencyMs;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ModelGovernanceRoute {
+        private String id;
+        private String scene;
+        private String riskLevel;
+        private int priority;
+        private boolean enabled;
+        private String primaryTier;
+        private ModelSelectionStrategyType primaryStrategy;
+        @Builder.Default
+        private List<ModelGovernanceTierReference> fallbackTiers = new ArrayList<>();
+        private boolean available;
+        private String runtimeStatus;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ModelGovernanceTierReference {
+        private String id;
+        private ModelSelectionStrategyType strategy;
+        private boolean available;
+        private String runtimeStatus;
+    }
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class ModelRuntimeSummary {
+        private int upCount;
+        private int unknownCount;
+        private int halfOpenCount;
+        private int downCount;
+        private int noAvailableRouteCount;
     }
 }

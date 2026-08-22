@@ -16,6 +16,10 @@ public class ModelInstance {
     String provider;
     ModelProtocol protocol;
     String baseUrl;
+    @Builder.Default
+    boolean enabled = true;
+    @Builder.Default
+    boolean registered = true;
     int weight;
     int priority;
     Set<String> scenes;

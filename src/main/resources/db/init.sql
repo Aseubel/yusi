@@ -918,7 +918,9 @@ CREATE TABLE `model_call_trace` (
     KEY `idx_model_call_trace_status_created` (`status`, `created_at`),
     KEY `idx_model_call_trace_fallback_created` (`fallback_used`, `created_at`),
     KEY `idx_model_call_trace_prompt_version` (`prompt_key`, `prompt_version`, `created_at`),
-    KEY `idx_model_call_trace_user_run_created` (`user_id`, `run_id`, `created_at`)
+    KEY `idx_model_call_trace_user_run_created` (`user_id`, `run_id`, `created_at`),
+    KEY `idx_model_call_trace_model_created` (`model_id`, `created_at`),
+    KEY `idx_model_call_trace_scene_model_created` (`scene`, `model_id`, `created_at`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT '低敏 LLM 调用轨迹';
 -- Mid-Term Memory - AI 中期记忆压缩存储
 -- 存储对话的压缩摘要，用于给 AI 提供长期上下文

@@ -40,15 +40,15 @@ class AuthzCoverageContractTest {
     void locksExactRouteAndAuthenticationBaseline() throws IOException {
         List<Mapping> mappings = scanMappings();
 
-        assertThat(mappings).hasSize(158);
+        assertThat(mappings).hasSize(160);
         assertThat(mappings.stream().filter(mapping -> WRITE_METHODS.contains(mapping.httpMethod())).count())
-                .isEqualTo(90);
+                .isEqualTo(92);
         assertThat(mappings.stream().filter(mapping -> !WRITE_METHODS.contains(mapping.httpMethod())).count())
                 .isEqualTo(68);
         assertThat(mappings).noneMatch(mapping -> mapping.endpoint().equals("POST /api/match/run"));
 
-        assertThat(mappings.stream().filter(Mapping::requiredAuth).count()).isEqualTo(146);
-        assertThat(mappings.stream().filter(Mapping::hasExplicitAuthContract).count()).isEqualTo(154);
+        assertThat(mappings.stream().filter(Mapping::requiredAuth).count()).isEqualTo(148);
+        assertThat(mappings.stream().filter(Mapping::hasExplicitAuthContract).count()).isEqualTo(156);
         assertThat(mappings.stream().filter(mapping -> !mapping.hasExplicitAuthContract())
                 .map(Mapping::endpoint))
                 .containsExactlyInAnyOrder(
@@ -74,7 +74,7 @@ class AuthzCoverageContractTest {
                 Map.entry("LifeGraphController", 16L),
                 Map.entry("MatchController", 8L),
                 Map.entry("MemoryCenterController", 9L),
-                Map.entry("ModelManagementController", 6L),
+                Map.entry("ModelManagementController", 8L),
                 Map.entry("NotificationController", 6L),
                 Map.entry("PingController", 1L),
                 Map.entry("PromptController", 6L),

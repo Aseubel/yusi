@@ -18,6 +18,7 @@ public class ModelRoutePreviewResponse {
     @Builder.Default
     private List<Candidate> candidates = new ArrayList<>();
     private String routeReason;
+    private ModelRouteReason routeReasonDetails;
     @Builder.Default
     private List<String> warnings = new ArrayList<>();
 
@@ -32,5 +33,14 @@ public class ModelRoutePreviewResponse {
         private String modelName;
         private boolean available;
         private String excludedReason;
+        private String exclusionExplanation;
+        private int rank;
+        private boolean fallback;
+        private String strategy;
+        private int priority;
+        private int weight;
+        private double avgLatencyMs;
+        private String phase;
+        private boolean attemptable;
     }
 }

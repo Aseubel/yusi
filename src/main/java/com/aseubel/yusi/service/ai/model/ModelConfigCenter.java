@@ -157,6 +157,7 @@ public class ModelConfigCenter {
         }
 
         ModelRoutingProperties merged = mergeSecrets(request, current);
+        validateStableModelIds(current, merged);
         validate(merged);
         merged.setVersion(current.getVersion() + 1);
 
@@ -331,6 +332,11 @@ public class ModelConfigCenter {
             if (model == null || model.getId() == null || model.getId().isBlank()) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "model.id 不能为空");
             }
+            String normalizedId = model.getId().trim();
+            if (!normalizedId.equals(model.getId())) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR,
+                        "models[" + model.getId() + "].id 必须去除首尾空格");
+            }
             validateModel(model);
             if (!modelIds.add(model.getId())) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "model.id 重复: " + model.getId());
@@ -365,6 +371,11 @@ public class ModelConfigCenter {
                             "tier[" + tierId + "] 的 capabilities 与模型[" + member + "] 不匹配");
                 }
             }
+            if (definition.getStrategy() == ModelSelectionStrategyType.WEIGHTED_RANDOM
+                    && !hasPositiveWeightedMember(config, definition)) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR,
+                        "tier[" + tierId + "] 使用 WEIGHTED_RANDOM 时至少需要一个启用且 weight > 0 的成员");
+            }
         }
 
         if (config.getDefaultTier() != null && !config.getDefaultTier().isBlank()
@@ -389,9 +400,9 @@ public class ModelConfigCenter {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "model[" + model.getId() + "] 的 provider 不能为空");
         }
-        if (model.getWeight() == null || model.getWeight() <= 0) {
+        if (model.getWeight() == null || model.getWeight() < 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
-                    "model[" + model.getId() + "] 的 weight 必须为正数");
+                    "model[" + model.getId() + "].weight 不能为负数");
         }
         if (model.getPriority() == null || model.getPriority() < 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
@@ -462,6 +473,12 @@ public class ModelConfigCenter {
         if (route.getScene() == null || route.getScene().isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "route[" + route.getId() + "] 的 scene 不能为空");
         }
+        String riskLevel = route.getRiskLevel() == null ? "LOW" : route.getRiskLevel().trim().toUpperCase(Locale.ROOT);
+        if (!Set.of("LOW", "MEDIUM", "HIGH", "*").contains(riskLevel)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "routes[" + route.getId() + "].riskLevel 只能是 LOW、MEDIUM、HIGH 或 *");
+        }
+        route.setRiskLevel(riskLevel);
         if (route.getPrimaryTier() == null || route.getPrimaryTier().isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "route[" + route.getId() + "] 的 primary-tier 不能为空");
@@ -479,7 +496,7 @@ public class ModelConfigCenter {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "route[" + route.getId() + "] 的 primary-tier 已禁用: " + route.getPrimaryTier());
         }
-        if (!hasEnabledModelForScene(config, primary, route.getScene())) {
+        if (!hasEligibleModelForScene(config, primary, route.getScene())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "route[" + route.getId() + "] 的 primary-tier 没有启用的 "
                             + ModelCapabilityPolicy.requiredCapabilityLabel(route.getScene())
@@ -509,7 +526,7 @@ public class ModelConfigCenter {
                     throw new BusinessException(ErrorCode.PARAM_ERROR,
                             "route[" + route.getId() + "] 的 fallback-tier 已禁用: " + fallback);
                 }
-                if (!hasEnabledModelForScene(config, config.getTiers().get(fallback), route.getScene())) {
+                if (!hasEligibleModelForScene(config, config.getTiers().get(fallback), route.getScene())) {
                     throw new BusinessException(ErrorCode.PARAM_ERROR,
                             "route[" + route.getId() + "] 的 fallback-tier 没有启用的 "
                                     + ModelCapabilityPolicy.requiredCapabilityLabel(route.getScene())
@@ -548,6 +565,56 @@ public class ModelConfigCenter {
                         && supportsTierCapabilities(tier, model)
                         && ModelCapabilityPolicy.supportsScene(model, scene)
                         && declaresScene(model, scene));
+    }
+
+    private boolean hasEligibleModelForScene(ModelRoutingProperties config, ModelTierDefinition tier, String scene) {
+        if (!hasEnabledModelForScene(config, tier, scene)) {
+            return false;
+        }
+        if (tier.getStrategy() != ModelSelectionStrategyType.WEIGHTED_RANDOM) {
+            return true;
+        }
+        return tier.getMembers().stream()
+                .map(memberId -> config.getModels().stream()
+                        .filter(model -> Objects.equals(model.getId(), memberId))
+                        .findFirst().orElse(null))
+                .anyMatch(model -> model != null && model.isEnabled() && model.getWeight() != null
+                        && model.getWeight() > 0
+                        && supportsTierCapabilities(tier, model)
+                        && ModelCapabilityPolicy.supportsScene(model, scene)
+                        && declaresScene(model, scene));
+    }
+
+    private boolean hasPositiveWeightedMember(ModelRoutingProperties config, ModelTierDefinition tier) {
+        if (tier == null || tier.getMembers() == null) {
+            return false;
+        }
+        return tier.getMembers().stream()
+                .map(memberId -> config.getModels().stream()
+                        .filter(model -> Objects.equals(model.getId(), memberId))
+                        .findFirst().orElse(null))
+                .anyMatch(model -> model != null && model.isEnabled() && model.getWeight() != null
+                        && model.getWeight() > 0 && supportsTierCapabilities(tier, model));
+    }
+
+    private void validateStableModelIds(ModelRoutingProperties current, ModelRoutingProperties incoming) {
+        if (current == null || current.getModels() == null || incoming == null || incoming.getModels() == null) {
+            return;
+        }
+        Set<String> incomingIds = incoming.getModels().stream()
+                .filter(Objects::nonNull)
+                .map(ModelRoutingProperties.ModelDefinition::getId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        current.getModels().stream()
+                .map(ModelRoutingProperties.ModelDefinition::getId)
+                .filter(Objects::nonNull)
+                .filter(id -> !incomingIds.contains(id))
+                .findFirst()
+                .ifPresent(id -> {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR,
+                            "models[" + id + "].id 不可通过普通更新删除或改名；请先停用模型");
+                });
     }
 
     private boolean declaresScene(ModelRoutingProperties.ModelDefinition model, String scene) {

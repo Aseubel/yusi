@@ -14,6 +14,7 @@ import com.aseubel.yusi.pojo.dto.model.ModelGovernanceUpdateRequest;
 import com.aseubel.yusi.pojo.dto.model.ModelMetricSummary;
 import com.aseubel.yusi.pojo.dto.model.ModelRoutePreviewRequest;
 import com.aseubel.yusi.pojo.dto.model.ModelRoutePreviewResponse;
+import com.aseubel.yusi.pojo.dto.model.ModelRuntimeResetResponse;
 import com.aseubel.yusi.service.ai.model.ModelManagementService;
 import com.aseubel.yusi.service.ai.model.ModelRuntimeState;
 import com.aseubel.yusi.service.user.UserService;
@@ -40,6 +41,20 @@ public class ModelManagementController {
     public Response<List<ModelRuntimeState>> states() {
         checkAdmin();
         return Response.success(modelManagementService.listModelStates());
+    }
+
+    @PostMapping("/states/{modelId}/reset")
+    @RateLimiter(key = "model-state-reset", time = 60, count = 30, limitType = LimitType.USER)
+    public Response<ModelRuntimeResetResponse> resetState(@PathVariable String modelId) {
+        checkAdmin();
+        return Response.success(modelManagementService.resetModelState(modelId, UserContext.getUserId()));
+    }
+
+    @PostMapping("/states/reset")
+    @RateLimiter(key = "model-state-reset-all", time = 60, count = 5, limitType = LimitType.USER)
+    public Response<ModelRuntimeResetResponse> resetAllStates() {
+        checkAdmin();
+        return Response.success(modelManagementService.resetAllModelStates(UserContext.getUserId()));
     }
 
     @GetMapping("/console")

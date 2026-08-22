@@ -51,6 +51,7 @@ public class SecurityAuditService {
             SecurityAuditDetailKeys.VERSION,
             SecurityAuditDetailKeys.COUNT,
             SecurityAuditDetailKeys.AUDIENCE,
+            SecurityAuditDetailKeys.SCOPE,
             REQUEST_ID_DETAIL_KEY);
     private static final String SAFE_DETAIL_VALUE = "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,63}$";
 

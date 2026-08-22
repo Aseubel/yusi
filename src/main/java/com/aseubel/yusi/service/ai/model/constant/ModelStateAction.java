@@ -2,7 +2,8 @@ package com.aseubel.yusi.service.ai.model.constant;
 
 /** Model runtime state event actions. */
 public enum ModelStateAction {
-    PHASE_CHANGE("PHASE_CHANGE");
+    PHASE_CHANGE("PHASE_CHANGE"),
+    RESET("RESET");
 
     private final String code;
 

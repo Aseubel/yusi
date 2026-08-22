@@ -42,8 +42,7 @@ public class WeightedRandomSelectionStrategy implements ModelSelectionStrategy {
             }
         }
         candidates.stream()
-                .filter(candidate -> !isAvailable(states.get(candidate.getId())))
-                .filter(candidate -> candidate.getWeight() > 0)
+                .filter(candidate -> !ordered.contains(candidate))
                 .sorted(Comparator.comparing(ModelInstance::getId))
                 .forEach(ordered::add);
         return List.copyOf(ordered);

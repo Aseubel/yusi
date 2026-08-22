@@ -7,6 +7,7 @@ public final class SecurityAuditReasonCode {
     public static final String SYSTEM_INITIALIZATION = "SYSTEM_INITIALIZATION";
     public static final String ADMIN_POLICY_DENIED = "ADMIN_POLICY_DENIED";
     public static final String TARGET_NOT_FOUND = "TARGET_NOT_FOUND";
+    public static final String MODEL_STATE_RESET_FAILED = "MODEL_STATE_RESET_FAILED";
     /** Retained for historical audit records; no new events use it. */
     @Deprecated
     public static final String SENSITIVE_ACCESS = "SENSITIVE_ACCESS";

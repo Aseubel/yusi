@@ -15,6 +15,7 @@ public final class SecurityAuditDetailKeys {
     public static final String VERSION = "version";
     public static final String COUNT = "count";
     public static final String AUDIENCE = "audience";
+    public static final String SCOPE = "scope";
 
     private SecurityAuditDetailKeys() {
     }

@@ -13,8 +13,10 @@ import org.springframework.stereotype.Component;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -53,6 +55,8 @@ public class ModelStateCenter {
                 return;
             }
             putIfNewer(message.getInstanceId(), message.getState());
+            LocalWindow window = localWindows.computeIfAbsent(message.getInstanceId(), id -> new LocalWindow());
+            mergeIntoLocalWindow(message.getInstanceId(), message.getState(), window);
         });
 
         RMap<String, ModelRuntimeState> stateMap = redissonClient.getMap(properties.getInstanceStateMapKey());
@@ -180,6 +184,60 @@ public class ModelStateCenter {
         return states.values().stream().toList();
     }
 
+    public ModelRuntimeState reset(String instanceId) {
+        return resetWithOutcome(instanceId).state();
+    }
+
+    public ResetResult resetWithOutcome(String instanceId) {
+        String normalizedId = normalizeInstanceId(instanceId);
+        RMap<String, ModelRuntimeState> stateMap = redissonClient.getMap(properties.getInstanceStateMapKey());
+        LocalWindow existingWindow = localWindows.get(normalizedId);
+        ModelRuntimeState previous = latest(remoteStateCache.get(normalizedId), stateMap.get(normalizedId));
+        if (existingWindow != null) {
+            previous = latest(previous, toState(normalizedId, "", existingWindow));
+        }
+        ModelRuntimeState resetState = resetState(normalizedId, previous);
+
+        try {
+            stateMap.put(normalizedId, resetState);
+        } catch (RuntimeException exception) {
+            log.warn("Model state reset storage failed: operation=model_state_reset, modelId={}, exceptionType={}",
+                    normalizedId, com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
+            throw new ModelStateResetException("Redis 写入模型运行态失败", exception);
+        }
+
+        remoteStateCache.put(normalizedId, resetState);
+        LocalWindow window = localWindows.computeIfAbsent(normalizedId, id -> new LocalWindow());
+        mergeIntoLocalWindow(normalizedId, resetState, window);
+        boolean convergencePending = publishReset(normalizedId, resetState);
+        return new ResetResult(resetState, 1, convergencePending);
+    }
+
+    public int resetAll(Collection<String> instanceIds) {
+        return resetAllWithOutcome(instanceIds).count();
+    }
+
+    public ResetResult resetAllWithOutcome(Collection<String> instanceIds) {
+        Set<String> targets = knownStateIds();
+        if (instanceIds != null) {
+            instanceIds.stream().filter(value -> value != null && !value.isBlank())
+                    .map(String::trim).forEach(targets::add);
+        }
+        int count = 0;
+        boolean convergencePending = false;
+        for (String instanceId : targets) {
+            RMap<String, ModelRuntimeState> stateMap = redissonClient.getMap(properties.getInstanceStateMapKey());
+            if (stateMap.get(instanceId) == null && remoteStateCache.get(instanceId) == null
+                    && !localWindows.containsKey(instanceId)) {
+                continue;
+            }
+            ResetResult result = resetWithOutcome(instanceId);
+            count += result.count();
+            convergencePending |= result.convergencePending();
+        }
+        return new ResetResult(null, count, convergencePending);
+    }
+
     public void syncToRedis() {
         RMap<String, ModelRuntimeState> stateMap = redissonClient.getMap(properties.getInstanceStateMapKey());
         for (Map.Entry<String, LocalWindow> entry : localWindows.entrySet()) {
@@ -217,6 +275,74 @@ public class ModelStateCenter {
                     instanceId, action,
                     com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
         }
+    }
+
+    private boolean publishReset(String instanceId, ModelRuntimeState state) {
+        try {
+            ModelStateEvent event = ModelStateEvent.builder()
+                    .instanceId(instanceId)
+                    .action(ModelStateAction.RESET.code())
+                    .timestamp(state.getLastUpdatedAt())
+                    .state(state)
+                    .build();
+            redissonClient.getTopic(properties.getStateChannel()).publish(event);
+            return false;
+        } catch (RuntimeException exception) {
+            log.warn("Model state reset publish pending: operation=model_state_reset_publish, modelId={}, "
+                            + "exceptionType={}", instanceId,
+                    com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
+            return true;
+        }
+    }
+
+    private Set<String> knownStateIds() {
+        Set<String> ids = new HashSet<>(localWindows.keySet());
+        ids.addAll(remoteStateCache.keySet());
+        ids.addAll(redissonClient.<String, ModelRuntimeState>getMap(properties.getInstanceStateMapKey())
+                .readAllKeySet());
+        return ids;
+    }
+
+    private ModelRuntimeState resetState(String instanceId, ModelRuntimeState previous) {
+        long now = System.currentTimeMillis();
+        long lastUpdatedAt = Math.max(now, previous == null ? 0L : previous.getLastUpdatedAt() + 1L);
+        String modelName = previous == null ? configuredModelName(instanceId) : previous.getModelName();
+        return ModelRuntimeState.builder()
+                .instanceId(instanceId)
+                .modelName(modelName)
+                .available(true)
+                .healthScore(1D)
+                .qps(0D)
+                .avgLatencyMs(0D)
+                .errorRate(0D)
+                .totalRequests(0L)
+                .successRequests(0L)
+                .failureRequests(0L)
+                .consecutiveFailures(0)
+                .consecutiveSuccesses(0)
+                .lastUpdatedAt(lastUpdatedAt)
+                .nextProbeAt(0L)
+                .phase(ModelHealthPhase.UP.code())
+                .lastError(null)
+                .build();
+    }
+
+    private String configuredModelName(String instanceId) {
+        List<ModelRoutingProperties.ModelDefinition> models = modelConfigCenter.getEffectiveConfig().getModels();
+        if (models == null) {
+            return null;
+        }
+        return models.stream()
+                .filter(model -> instanceId.equals(model.getId()))
+                .map(ModelRoutingProperties.ModelDefinition::getModel)
+                .findFirst().orElse(null);
+    }
+
+    private String normalizeInstanceId(String instanceId) {
+        if (instanceId == null || instanceId.isBlank()) {
+            throw new IllegalArgumentException("模型 ID 不能为空");
+        }
+        return instanceId.trim();
     }
 
     private ModelRuntimeState toState(String instanceId, String modelName, LocalWindow window) {
@@ -279,6 +405,10 @@ public class ModelStateCenter {
             window.previousPhase = window.phase;
             window.nextProbeAt = remote.getNextProbeAt();
             window.lastError = remote.getLastError();
+            if (remote.getTotalRequests() == 0L && remote.getSuccessRequests() == 0L
+                    && remote.getFailureRequests() == 0L && remote.getLastError() == null) {
+                window.firstRequestAt = System.currentTimeMillis();
+            }
             window.probing.set(false);
         }
     }
@@ -302,5 +432,14 @@ public class ModelStateCenter {
             return modelError.errorSummary();
         }
         return ModelErrorSummary.summarize(throwable, null);
+    }
+
+    public record ResetResult(ModelRuntimeState state, int count, boolean convergencePending) {
+    }
+
+    public static class ModelStateResetException extends RuntimeException {
+        public ModelStateResetException(String message, Throwable cause) {
+            super(message, cause);
+        }
     }
 }

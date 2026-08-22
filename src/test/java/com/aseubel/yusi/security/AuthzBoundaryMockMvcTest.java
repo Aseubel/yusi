@@ -351,10 +351,10 @@ class AuthzBoundaryMockMvcTest {
     void retainsIndependentRouteStatisticsContract() throws Exception {
         var mappings = AuthzCoverageContractTest.scanMappings();
 
-        assertThat(mappings).hasSize(158);
+        assertThat(mappings).hasSize(160);
         assertThat(mappings.stream()
                 .filter(mapping -> AuthzCoverageContractTest.WRITE_METHODS.contains(mapping.httpMethod()))
-                .count()).isEqualTo(90);
+                .count()).isEqualTo(92);
         assertThat(mappings.stream()
                 .filter(mapping -> !AuthzCoverageContractTest.WRITE_METHODS.contains(mapping.httpMethod()))
                 .count()).isEqualTo(68);

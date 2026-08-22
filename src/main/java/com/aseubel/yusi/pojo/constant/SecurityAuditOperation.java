@@ -14,5 +14,6 @@ public enum SecurityAuditOperation {
     PUBLISH,
     FULL_SYNC,
     DEREGISTER,
-    PARTICIPANT_CHECK
+    PARTICIPANT_CHECK,
+    RESET
 }

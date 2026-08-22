@@ -1,107 +1,137 @@
 package com.aseubel.yusi.service.ai.model;
 
 import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
-import com.aseubel.yusi.config.ai.properties.ModelTierDefinition;
-import com.aseubel.yusi.config.ai.properties.RoutePolicyDefinition;
-import com.aseubel.yusi.service.ai.model.constant.ModelHealthPhase;
-import com.aseubel.yusi.service.ai.model.constant.ModelRouteExclusionReason;
-import com.aseubel.yusi.service.ai.model.strategy.ModelSelectionStrategy;
-import jakarta.annotation.PostConstruct;
-import lombok.RequiredArgsConstructor;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class ModelRouterService {
 
     private final ModelConfigCenter modelConfigCenter;
     private final ModelInstanceRegistry modelInstanceRegistry;
-    private final ModelStrategyRegistry modelStrategyRegistry;
     private final ModelStateCenter modelStateCenter;
+    private final ModelRoutePlanner modelRoutePlanner;
 
-    private final ModelRoutePolicyMatcher routePolicyMatcher = new ModelRoutePolicyMatcher();
-    private Map<ModelSelectionStrategyType, ModelSelectionStrategy> strategies = Map.of();
+    @Autowired
+    public ModelRouterService(ModelConfigCenter modelConfigCenter,
+            ModelInstanceRegistry modelInstanceRegistry, ModelStateCenter modelStateCenter,
+            ModelRoutePlanner modelRoutePlanner) {
+        this.modelConfigCenter = modelConfigCenter;
+        this.modelInstanceRegistry = modelInstanceRegistry;
+        this.modelStateCenter = modelStateCenter;
+        this.modelRoutePlanner = modelRoutePlanner;
+    }
 
-    @PostConstruct
+    /** Constructor retained for existing focused tests. */
+    public ModelRouterService(ModelConfigCenter modelConfigCenter,
+            ModelInstanceRegistry modelInstanceRegistry, ModelStrategyRegistry strategyRegistry,
+            ModelStateCenter modelStateCenter) {
+        this(modelConfigCenter, modelInstanceRegistry, modelStateCenter,
+                new ModelRoutePlanner(strategyRegistry, modelStateCenter));
+    }
+
     public void init() {
-        this.strategies = modelStrategyRegistry.build();
+        // The planner obtains the current strategy map at planning time.
     }
 
     public ModelRouteDecision plan(ModelRouteContext context) {
         ModelRoutingProperties properties = modelConfigCenter.getEffectiveConfig();
-        ModelRouteContext normalizedContext = normalizeContext(context, properties);
-        RoutePolicyDefinition policy = routePolicyMatcher.match(properties, normalizedContext);
-        if (policy == null || policy.getPrimaryTier() == null || policy.getPrimaryTier().isBlank()) {
-            throw new IllegalStateException("No model route configured for scene: "
-                    + normalizedContext.getScene());
-        }
-        ModelRouteContext budgetContext = applyRouteBudget(normalizedContext, policy);
-
-        List<String> fallbackTiers = policy.getFallbackTiers() == null
-                ? List.of() : policy.getFallbackTiers().stream()
-                .filter(Objects::nonNull)
-                .map(this::normalize)
-                .filter(tier -> !tier.isBlank())
-                .toList();
-        String primaryTier = policy.getPrimaryTier();
-        List<String> tierOrder = new ArrayList<>();
-        tierOrder.add(primaryTier);
-        fallbackTiers.stream().filter(tier -> !tier.equals(primaryTier)).forEach(tierOrder::add);
-
-        List<String> modelIds = tierOrder.stream()
-                .flatMap(tier -> modelInstanceRegistry.getTierMembers(tier).stream())
-                .map(ModelInstance::getId)
-                .filter(Objects::nonNull)
-                .toList();
-        Map<String, ModelRuntimeState> states = snapshotStates(modelIds);
-
-        List<ModelRouteCandidate> candidates = new ArrayList<>();
-        Set<String> healthReasons = new LinkedHashSet<>();
-        for (int index = 0; index < tierOrder.size(); index++) {
-            String tierId = tierOrder.get(index);
-            boolean fallback = index > 0;
-            List<ModelRouteCandidate> tierCandidates = routeTier(
-                    properties, tierId, policy, budgetContext, states, fallback);
-            candidates.addAll(tierCandidates);
-            tierCandidates.stream()
-                    .map(ModelRouteCandidate::excludedReason)
-                    .filter(Objects::nonNull)
-                    .filter(reason -> !ModelRouteExclusionReason.FALLBACK_TIER.code().equals(reason))
-                    .forEach(healthReasons::add);
-        }
-
-        ModelTierDefinition primaryDefinition = properties.getTiers().get(primaryTier);
-        ModelSelectionStrategyType strategy = primaryDefinition == null || primaryDefinition.getStrategy() == null
-                ? ModelSelectionStrategyType.ROUND_ROBIN : primaryDefinition.getStrategy();
-        String routeReason = "policy=" + safe(policy.getId(), "default")
-                + ";policy-version=" + properties.getVersion()
-                + ";scene=" + normalizedContext.getScene()
-                + ";risk=" + safe(normalizedContext.getRiskLevel(), policy.getRiskLevel())
-                + ";estimated-input-tokens=" + numberOrUnknown(budgetContext.getEstimatedInputTokens())
-                + ";reserved-output-tokens=" + numberOrUnknown(budgetContext.getReservedOutputTokens())
-                + ";primary-tier=" + primaryTier
-                + ";strategy=" + strategy.name()
-                + ";tier-strategies=" + tierOrder.stream()
-                        .map(tier -> tier + "=" + strategyType(properties.getTiers().get(tier)).name())
-                        .collect(java.util.stream.Collectors.joining(","))
-                + ";fallback-tiers=" + String.join(",", fallbackTiers)
-                + ";health-filter=" + (healthReasons.isEmpty() ? "none" : String.join(",", healthReasons));
-        return new ModelRouteDecision(budgetContext.getRequestId(), policy.getId(),
-                properties.getVersion(), primaryTier, fallbackTiers, candidates, routeReason,
-                ModelRouteParameters.from(policy));
+        Map<String, java.util.List<ModelInstance>> tierMembers = tierMembersFor(properties);
+        Map<String, ModelRuntimeState> states = snapshotStates(tierMembers.values().stream()
+                .flatMap(java.util.Collection::stream).map(ModelInstance::getId).toList());
+        return plan(properties, context, tierMembers, states);
     }
 
-    private Map<String, ModelRuntimeState> snapshotStates(List<String> modelIds) {
+    public ModelRouteDecision plan(ModelRoutingProperties properties, ModelRouteContext context,
+            Map<String, List<ModelInstance>> tierMembers, Map<String, ModelRuntimeState> states) {
+        return modelRoutePlanner.plan(properties, context, tierMembers, states);
+    }
+
+    private Map<String, java.util.List<ModelInstance>> tierMembersFor(ModelRoutingProperties properties) {
+        Map<String, java.util.List<ModelInstance>> tierMembers = new LinkedHashMap<>();
+        if (properties.getTiers() == null) {
+            return tierMembers;
+        }
+        Map<String, ModelRoutingProperties.ModelDefinition> definitions = properties.getModels() == null
+                ? Map.of()
+                : properties.getModels().stream()
+                        .filter(definition -> definition != null && definition.getId() != null)
+                        .collect(Collectors.toMap(ModelRoutingProperties.ModelDefinition::getId,
+                                definition -> definition, (first, ignored) -> first));
+        properties.getTiers().forEach((tierId, tier) -> {
+            List<ModelInstance> members = new ArrayList<>();
+            List<ModelInstance> registeredMembers = modelInstanceRegistry.getTierMembers(tierId);
+            Map<String, ModelInstance> registeredById = registeredMembers == null ? Map.of()
+                    : registeredMembers.stream()
+                            .filter(Objects::nonNull)
+                            .filter(instance -> instance.getId() != null)
+                            .collect(Collectors.toMap(ModelInstance::getId, instance -> instance,
+                                    (first, ignored) -> first));
+            if (tier != null && tier.getMembers() != null) {
+                for (String memberId : tier.getMembers()) {
+                    if (memberId == null) {
+                        continue;
+                    }
+                    ModelInstance registered = registeredById.get(memberId);
+                    if (registered != null) {
+                        members.add(registered);
+                    } else if (definitions.containsKey(memberId)) {
+                        members.add(metadataInstance(memberId, definitions.get(memberId)));
+                    }
+                }
+            }
+            if (members.isEmpty() && registeredMembers != null) {
+                members.addAll(registeredMembers);
+            }
+            tierMembers.put(tierId, members);
+        });
+        return tierMembers;
+    }
+
+    private ModelInstance metadataInstance(String memberId,
+            ModelRoutingProperties.ModelDefinition definition) {
+        if (definition == null) {
+            return ModelInstance.builder().id(memberId).registered(false).enabled(false).build();
+        }
+        ModelRoutingProperties.PricingDefinition pricing = definition.getPricing();
+        Set<String> scenes = definition.getScenes() == null ? Set.of()
+                : definition.getScenes().stream().filter(Objects::nonNull)
+                        .map(value -> value.trim().toLowerCase(java.util.Locale.ROOT)).collect(Collectors.toSet());
+        Set<ModelCapability> capabilities = definition.getCapabilities() == null
+                || definition.getCapabilities().isEmpty()
+                ? Set.of(ModelCapability.CHAT, ModelCapability.STREAMING_CHAT)
+                : Set.copyOf(definition.getCapabilities());
+        return ModelInstance.builder()
+                .id(definition.getId())
+                .modelName(definition.getModel())
+                .provider(definition.getProvider())
+                .protocol(ModelProtocol.normalize(definition.getProtocol()))
+                .baseUrl(definition.getBaseurl())
+                .enabled(definition.isEnabled())
+                .registered(false)
+                .weight(definition.getWeight() == null ? 100 : definition.getWeight())
+                .priority(definition.getPriority() == null ? 100 : definition.getPriority())
+                .scenes(scenes)
+                .capabilities(capabilities)
+                .contextWindowTokens(definition.getContextWindowTokens())
+                .inputPricePerMillion(pricing == null ? null : pricing.getInputPerMillion())
+                .outputPricePerMillion(pricing == null ? null : pricing.getOutputPerMillion())
+                .priceVersion(pricing == null ? null : pricing.getPriceVersion())
+                .build();
+    }
+
+    private Map<String, ModelRuntimeState> snapshotStates(java.util.Collection<String> modelIds) {
         if (modelIds.isEmpty()) {
             return Map.of();
         }
@@ -109,184 +139,8 @@ public class ModelRouterService {
             return modelStateCenter.snapshot(modelIds);
         } catch (RuntimeException exception) {
             log.warn("Model state snapshot unavailable: operation=model_state_snapshot, modelCount={}, "
-                            + "exceptionType={}",
-                    modelIds.size(),
-                    com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
+                            + "exceptionType={}", modelIds.size(), LowSensitivityLogSummary.exceptionType(exception));
             return Map.of();
         }
-    }
-
-    private List<ModelRouteCandidate> routeTier(ModelRoutingProperties properties, String tierId,
-            RoutePolicyDefinition policy, ModelRouteContext context,
-            Map<String, ModelRuntimeState> states, boolean fallback) {
-        ModelTierDefinition tier = properties.getTiers().get(tierId);
-        List<ModelInstance> members = modelInstanceRegistry.getTierMembers(tierId);
-        ModelSelectionStrategy strategy = strategies.getOrDefault(
-                tier == null || tier.getStrategy() == null
-                        ? ModelSelectionStrategyType.ROUND_ROBIN : tier.getStrategy(),
-                strategies.get(ModelSelectionStrategyType.ROUND_ROBIN));
-        if (strategy == null) {
-            return List.of();
-        }
-        ModelSelectionStrategyType strategyType = strategyType(tier);
-        List<ModelInstance> strategyMembers = members.stream()
-                .filter(instance -> isStrategyEligible(tier, instance, context))
-                .toList();
-        List<ModelInstance> ordered = new ArrayList<>(strategy.order(tierId, strategyMembers, states));
-        Set<String> orderedIds = ordered.stream()
-                .map(ModelInstance::getId)
-                .filter(Objects::nonNull)
-                .collect(java.util.stream.Collectors.toSet());
-        members.stream()
-                .filter(instance -> !orderedIds.contains(instance.getId()))
-                .forEach(ordered::add);
-        List<ModelRouteCandidate> result = new ArrayList<>(ordered.size());
-        for (ModelInstance instance : ordered) {
-            String excludedReason = exclusionReason(policy, tier, instance, context,
-                    states.get(instance.getId()), strategyType);
-            boolean available = excludedReason == null;
-            if (fallback && available) {
-                excludedReason = ModelRouteExclusionReason.FALLBACK_TIER.code();
-            }
-            result.add(new ModelRouteCandidate(tierId, instance, available, excludedReason, strategyType));
-        }
-        return List.copyOf(result);
-    }
-
-    private boolean isStrategyEligible(ModelTierDefinition tier, ModelInstance instance,
-            ModelRouteContext context) {
-        return tier != null
-                && tier.isEnabled()
-                && supportsTierCapabilities(tier, instance)
-                && ModelCapabilityPolicy.supportsScene(instance, context.getScene())
-                && supportsValue(instance.getScenes(), context.getScene());
-    }
-
-    private boolean supportsTierCapabilities(ModelTierDefinition tier, ModelInstance instance) {
-        if (tier == null || instance == null || tier.getCapabilities() == null
-                || tier.getCapabilities().isEmpty()) {
-            return true;
-        }
-        Set<ModelCapability> capabilities = instance.getCapabilities();
-        return tier.getCapabilities().stream()
-                .allMatch(capability -> capabilities != null && capabilities.contains(capability));
-    }
-
-    private String exclusionReason(RoutePolicyDefinition policy, ModelTierDefinition tier, ModelInstance instance,
-            ModelRouteContext context, ModelRuntimeState state, ModelSelectionStrategyType strategyType) {
-        if (tier != null && !tier.isEnabled()) {
-            return ModelRouteExclusionReason.TIER_DISABLED.code();
-        }
-        if (!supportsTierCapabilities(tier, instance)) {
-            return ModelRouteExclusionReason.TIER_CAPABILITY_MISMATCH.code();
-        }
-        if (!ModelCapabilityPolicy.supportsScene(instance, context.getScene())) {
-            return ModelRouteExclusionReason.UNSUPPORTED_CAPABILITY.code();
-        }
-        if (!supportsValue(instance.getScenes(), context.getScene())) {
-            return ModelRouteExclusionReason.SCENE_MISMATCH.code();
-        }
-        if (strategyType == ModelSelectionStrategyType.WEIGHTED_RANDOM && instance.getWeight() <= 0) {
-            return ModelRouteExclusionReason.ZERO_WEIGHT.code();
-        }
-        Integer estimatedInputTokens = context.getEstimatedInputTokens();
-        if (estimatedInputTokens != null && policy.getMaxInputTokens() != null
-                && estimatedInputTokens > policy.getMaxInputTokens()) {
-            return ModelRouteExclusionReason.INPUT_TOKEN_LIMIT_EXCEEDED.code();
-        }
-        if (estimatedInputTokens != null && instance.getContextWindowTokens() != null) {
-            long reservedOutputTokens = context.getReservedOutputTokens() == null
-                    ? 0L : Math.max(0L, context.getReservedOutputTokens());
-            long requestedTokens = (long) estimatedInputTokens + reservedOutputTokens;
-            if (requestedTokens > instance.getContextWindowTokens()) {
-                return ModelRouteExclusionReason.CONTEXT_WINDOW_EXCEEDED.code();
-            }
-        }
-        if (state != null && !state.isAvailable()
-                && !ModelHealthPhase.HALF_OPEN.code().equalsIgnoreCase(state.getPhase())
-                && !modelStateCenter.isProbeDue(state)) {
-            return state.getPhase() == null || state.getPhase().isBlank()
-                    ? "DOWN" : state.getPhase().toUpperCase(Locale.ROOT);
-        }
-        return null;
-    }
-
-    private ModelSelectionStrategyType strategyType(ModelTierDefinition tier) {
-        return tier == null || tier.getStrategy() == null
-                ? ModelSelectionStrategyType.ROUND_ROBIN : tier.getStrategy();
-    }
-
-    private boolean supportsValue(Set<String> values, String expected) {
-        return values == null || values.isEmpty() || values.contains(normalize(expected));
-    }
-
-    private ModelRouteContext normalizeContext(ModelRouteContext context, ModelRoutingProperties properties) {
-        return ModelRouteContext.builder()
-                .requestId(context == null ? null : context.getRequestId())
-                .runId(context == null ? null : context.getRunId())
-                .userId(context == null ? null : context.getUserId())
-                .scene(normalize(valueOrDefault(context == null ? null : context.getScene(),
-                        properties.getDefaultScene())))
-                .promptKey(context == null ? null : context.getPromptKey())
-                .promptVersion(context == null ? null : context.getPromptVersion())
-                .promptLocale(context == null ? null : context.getPromptLocale())
-                .riskLevel(context == null ? null : context.getRiskLevel())
-                .estimatedInputTokens(context == null ? null : context.getEstimatedInputTokens())
-                .reservedOutputTokens(context == null ? null : context.getReservedOutputTokens())
-                .maskSensitiveData(context == null || context.isMaskSensitiveData())
-                .build();
-    }
-
-    private ModelRouteContext applyRouteBudget(ModelRouteContext context, RoutePolicyDefinition policy) {
-        Integer routeOutputTokens = smallerPositive(policy.getMaxOutputTokens(), policy.getMaxCompletionTokens());
-        if (routeOutputTokens == null) {
-            routeOutputTokens = ModelRouteParameters.DEFAULT_OUTPUT_TOKENS;
-        }
-        Integer requestedOutputTokens = context.getReservedOutputTokens();
-        Integer reservedOutputTokens;
-        if (requestedOutputTokens == null) {
-            reservedOutputTokens = routeOutputTokens;
-        } else {
-            reservedOutputTokens = Math.min(requestedOutputTokens, routeOutputTokens);
-        }
-        return ModelRouteContext.builder()
-                .requestId(context.getRequestId())
-                .runId(context.getRunId())
-                .userId(context.getUserId())
-                .scene(context.getScene())
-                .promptKey(context.getPromptKey())
-                .promptVersion(context.getPromptVersion())
-                .promptLocale(context.getPromptLocale())
-                .riskLevel(context.getRiskLevel())
-                .estimatedInputTokens(context.getEstimatedInputTokens())
-                .reservedOutputTokens(reservedOutputTokens)
-                .maskSensitiveData(context.isMaskSensitiveData())
-                .build();
-    }
-
-    private Integer smallerPositive(Integer first, Integer second) {
-        if (first == null || first <= 0) {
-            return second == null || second <= 0 ? null : second;
-        }
-        if (second == null || second <= 0) {
-            return first;
-        }
-        return Math.min(first, second);
-    }
-
-    private String valueOrDefault(String value, String defaultValue) {
-        return value == null || value.isBlank() ? defaultValue : value;
-    }
-
-    private String normalize(String value) {
-        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private String safe(String value, String fallback) {
-        return value == null || value.isBlank() ? safe(fallback, "") : value;
-    }
-
-    private String numberOrUnknown(Integer value) {
-        return value == null ? "unknown" : value.toString();
     }
 }

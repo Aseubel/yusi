@@ -23,6 +23,7 @@ public enum SecurityAuditAction {
     PROMPT_ACTIVATED("prompt.activated"),
     PROMPT_DELETED("prompt.deleted"),
     MODEL_GOVERNANCE_UPDATED("model.governance.updated"),
+    MODEL_RUNTIME_STATE_RESET("model.runtime_state.reset"),
     /**
      * Retained so historical JPA audit rows remain readable; no new events use it.
      */
