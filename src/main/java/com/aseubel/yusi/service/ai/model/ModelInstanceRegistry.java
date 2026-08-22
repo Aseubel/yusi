@@ -6,6 +6,7 @@ import com.aseubel.yusi.service.ai.model.provider.ChatModelProviderAdapter;
 import com.aseubel.yusi.service.ai.model.provider.ChatModelProviderRegistry;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import org.springframework.context.event.EventListener;
@@ -20,7 +21,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import java.net.URI;
+import java.net.URISyntaxException;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ModelInstanceRegistry {
@@ -65,6 +69,7 @@ public class ModelInstanceRegistry {
                     .modelName(definition.getModel())
                     .provider(clients.provider())
                     .protocol(ModelProtocol.normalize(definition.getProtocol()))
+                    .baseUrl(definition.getBaseurl())
                     .weight(definition.getWeight() == null ? 100 : definition.getWeight())
                     .priority(definition.getPriority() == null ? 100 : definition.getPriority())
                     .scenes(normalize(definition.getScenes()))
@@ -77,8 +82,37 @@ public class ModelInstanceRegistry {
                     .streamingChatModel(clients.streamingChatModel())
                     .build();
             next.put(instance.getId(), instance);
+            log.info("Model instance loaded: modelId={}, provider={}, modelName={}, protocol={}, endpoint={}, "
+                            + "chatClient={}, streamingClient={}, capabilities={}, priority={}, weight={}",
+                    instance.getId(),
+                    instance.getProvider(),
+                    instance.getModelName(),
+                    instance.getProtocol(),
+                    sanitizeEndpoint(instance.getProtocol().resolveEndpoint(instance.getBaseUrl())),
+                    clientType(instance.getChatModel()),
+                    clientType(instance.getStreamingChatModel()),
+                    instance.getCapabilities(),
+                    instance.getPriority(),
+                    instance.getWeight());
         }
         instances.set(Map.copyOf(next));
+        if (config.getTiers() != null) {
+            config.getTiers().forEach((tierId, tier) -> {
+                List<String> members = tier == null || tier.getMembers() == null
+                        ? List.of() : List.copyOf(tier.getMembers());
+                List<String> activeMembers = members.stream()
+                        .filter(next::containsKey)
+                        .toList();
+                log.info("Model tier loaded: tierId={}, enabled={}, strategy={}, capabilities={}, "
+                                + "members={}, activeMembers={}",
+                        tierId,
+                        tier != null && tier.isEnabled(),
+                        tier == null || tier.getStrategy() == null ? "ROUND_ROBIN" : tier.getStrategy(),
+                        tier == null ? List.of() : tier.getCapabilities(),
+                        members,
+                        activeMembers);
+            });
+        }
     }
 
     public Optional<ModelInstance> getById(String modelId) {
@@ -128,5 +162,35 @@ public class ModelInstanceRegistry {
             }
         }
         return members;
+    }
+
+    private String clientType(Object client) {
+        return client == null ? "none" : client.getClass().getSimpleName();
+    }
+
+    private String sanitizeEndpoint(String endpoint) {
+        if (endpoint == null || endpoint.isBlank()) {
+            return "unknown";
+        }
+        try {
+            URI uri = new URI(endpoint);
+            if (uri.getHost() == null) {
+                return "configured";
+            }
+            StringBuilder sanitized = new StringBuilder();
+            if (uri.getScheme() != null) {
+                sanitized.append(uri.getScheme()).append("://");
+            }
+            sanitized.append(uri.getHost());
+            if (uri.getPort() > 0) {
+                sanitized.append(':').append(uri.getPort());
+            }
+            if (uri.getPath() != null && !uri.getPath().isBlank()) {
+                sanitized.append(uri.getPath());
+            }
+            return sanitized.toString();
+        } catch (URISyntaxException exception) {
+            return "configured";
+        }
     }
 }

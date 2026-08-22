@@ -12,7 +12,7 @@ import java.util.Set;
  */
 public final class ModelCapabilityPolicy {
 
-    private static final String IMAGE_UNDERSTANDING_SCENE = "image-understanding";
+    public static final String IMAGE_UNDERSTANDING_SCENE = "image-understanding";
     private static final Set<ModelCapability> DEFAULT_TEXT_CAPABILITIES =
             Set.of(ModelCapability.CHAT, ModelCapability.STREAMING_CHAT);
 

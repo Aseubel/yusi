@@ -4,7 +4,13 @@ public record ModelRouteCandidate(
         String tierId,
         ModelInstance instance,
         boolean available,
-        String excludedReason) {
+        String excludedReason,
+        ModelSelectionStrategyType strategy) {
+
+    public ModelRouteCandidate(String tierId, ModelInstance instance, boolean available,
+            String excludedReason) {
+        this(tierId, instance, available, excludedReason, null);
+    }
 
     public String modelId() {
         return instance == null ? null : instance.getId();

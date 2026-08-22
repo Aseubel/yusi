@@ -30,6 +30,8 @@ import com.aseubel.yusi.service.agent.AgentPersonaConfigService;
 import com.aseubel.yusi.service.agent.AgentGrowthService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
+import com.aseubel.yusi.service.ai.model.ModelErrorSummary;
+import com.aseubel.yusi.service.ai.model.ModelInvocationException;
 import com.aseubel.yusi.service.ai.runtime.AgentRunTraceService;
 import com.aseubel.yusi.service.ai.runtime.AgentToolExecutionAttemptRegistry;
 import com.aseubel.yusi.service.ai.runtime.AgentToolTraceCorrelation;
@@ -321,7 +323,9 @@ public class AiController {
                         .requestId(requestId)
                         .runId(requestId)
                         .userId(userId)
-                        .scene(PromptKey.CHAT.getKey())
+                        .scene(imageContents.isEmpty()
+                                ? PromptKey.CHAT.getKey()
+                                : PromptKey.IMAGE_UNDERSTANDING.getKey())
                         .cancellationToken(session.cancellationToken())
                         .build());
 
@@ -440,13 +444,24 @@ public class AiController {
                             session.complete();
                         })
                         .onError(error -> {
+                            log.error("AI chat stream failed: operation=ai_chat_stream_callback, requestId={}, "
+                                            + "exceptionType={}, failureKind={}, errorSummary={}",
+                                    requestId,
+                                    com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(error),
+                                    modelFailureCategory(error),
+                                    modelFailureSummary(error));
                             traceRunFailed(userId, requestId, modelFailureCategory(error), responseCharCount.get());
                             sendAgentEvent(emitter, session, AgentStreamEvent.runFailed(requestId));
                             session.complete();
                         })
                         .start();
             } catch (Exception e) {
-                log.error("Error during AI chat stream", e);
+                log.error("AI chat stream failed: operation=ai_chat_stream, requestId={}, exceptionType={}, "
+                                + "failureKind={}, errorSummary={}",
+                        requestId,
+                        com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(e),
+                        modelFailureCategory(e),
+                        modelFailureSummary(e));
                 traceRunFailed(userId, requestId, modelFailureCategory(e), responseCharCount.get());
                 sendAgentEvent(emitter, session, AgentStreamEvent.runFailed(requestId));
                 session.complete();
@@ -672,10 +687,24 @@ public class AiController {
     }
 
     private String modelFailureCategory(Throwable error) {
-        if (error instanceof com.aseubel.yusi.service.ai.model.ModelInvocationException modelError) {
+        ModelInvocationException modelError = findModelInvocationException(error);
+        if (modelError != null) {
             return modelError.kind().name();
         }
         return "agent_error";
+    }
+
+    private String modelFailureSummary(Throwable error) {
+        ModelInvocationException modelError = findModelInvocationException(error);
+        if (modelError != null) {
+            return modelError.errorSummary();
+        }
+        return ModelErrorSummary.summarize(error, null);
+    }
+
+    private ModelInvocationException findModelInvocationException(Throwable error) {
+        return com.aseubel.yusi.service.ai.model.ModelInvocationErrorClassifier
+                .findModelInvocationException(error);
     }
 
     // ──────────────── Agent 人格配置 ────────────────

@@ -65,14 +65,15 @@ model:
         scenes: [chat, logic, graphrag-extract, graphrag-merge-suggest, memory-extract, soul-match, soul-match-letter, emotion-analysis, cognition-routing, soul-weekly-report, cognitive-conflict, memory-fusion, agent-persona, agent-proactive-greeting, image-understanding]
       - id: deepseek
         provider: deepseek
-        protocol: CHAT_COMPLETIONS
+        # DeepSeek V4 Vision exposes the Responses endpoint; the client appends /responses.
+        protocol: RESPONSES
         baseurl: ${DEEPSEEK_BASEURL:https://api.deepseek.com}
         apikey: ${DEEPSEEK_APIKEY}
-        model: ${DEEPSEEK_MODEL:deepseek-v4-flash}
-        capabilities: [CHAT, STREAMING_CHAT]
-        weight: 0
+        model: ${DEEPSEEK_MODEL:deepseek-v4-flash-vision-exp}
+        capabilities: [CHAT, STREAMING_CHAT, VLM]
+        weight: 100
         priority: 1
-        scenes: [chat, logic, graphrag-extract, graphrag-merge-suggest, memory-extract, soul-match, soul-match-letter, emotion-analysis, cognition-routing, soul-weekly-report, cognitive-conflict, memory-fusion, agent-persona, agent-proactive-greeting]
+        scenes: [chat, logic, graphrag-extract, graphrag-merge-suggest, memory-extract, soul-match, soul-match-letter, emotion-analysis, cognition-routing, soul-weekly-report, cognitive-conflict, memory-fusion, agent-persona, agent-proactive-greeting, image-understanding]
       - id: dashscope-asr
         enabled: ${DASHSCOPE_ASR_ENABLED:false}
         provider: dashscope
@@ -92,7 +93,7 @@ model:
         display-name: Vision language models
         description: Image understanding and visual cognition
         strategy: FAIL_OVER
-        members: [qwen]
+        members: [deepseek, qwen]
         capabilities: [VLM]
       logic:
         display-name: Logic analysis

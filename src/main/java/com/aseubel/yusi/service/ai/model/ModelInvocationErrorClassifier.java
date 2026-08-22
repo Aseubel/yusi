@@ -7,6 +7,7 @@ import dev.langchain4j.exception.InternalServerException;
 import dev.langchain4j.exception.InvalidRequestException;
 import dev.langchain4j.exception.ModelNotFoundException;
 import dev.langchain4j.exception.RateLimitException;
+import dev.langchain4j.exception.UnsupportedFeatureException;
 
 import java.io.IOException;
 import java.net.ConnectException;
@@ -23,19 +24,22 @@ public final class ModelInvocationErrorClassifier {
     }
 
     public static ModelInvocationException classify(Throwable error, String provider, String modelId) {
-        Throwable root = unwrap(error);
+        ModelInvocationException existing = findModelInvocationException(error);
+        if (existing != null) {
+            return existing;
+        }
         Integer httpStatus = findHttpStatus(error);
         ModelFailureKind kind = classifyKind(error, httpStatus);
-        return new ModelInvocationException(kind, provider, modelId, retryAfterMillis(error), httpStatus, root);
+        return new ModelInvocationException(kind, provider, modelId, retryAfterMillis(error), httpStatus, error);
     }
 
-    private static Throwable unwrap(Throwable error) {
-        Throwable current = error == null ? new IllegalStateException("Unknown model invocation failure") : error;
-        Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
-        while (current.getCause() != null && seen.add(current)) {
-            current = current.getCause();
+    public static ModelInvocationException findModelInvocationException(Throwable error) {
+        for (Throwable current : causes(error)) {
+            if (current instanceof ModelInvocationException modelError) {
+                return modelError;
+            }
         }
-        return current;
+        return null;
     }
 
     private static ModelFailureKind classifyKind(Throwable error, Integer httpStatus) {
@@ -55,6 +59,9 @@ public final class ModelInvocationErrorClassifier {
             return ModelFailureKind.SAFETY_REFUSAL;
         }
         if (containsType(error, InvalidRequestException.class)) {
+            return ModelFailureKind.INVALID_REQUEST;
+        }
+        if (containsType(error, UnsupportedFeatureException.class)) {
             return ModelFailureKind.INVALID_REQUEST;
         }
         if (containsType(error, RateLimitException.class)) {
@@ -161,10 +168,22 @@ public final class ModelInvocationErrorClassifier {
     private static Iterable<Throwable> causes(Throwable error) {
         Set<Throwable> seen = Collections.newSetFromMap(new IdentityHashMap<>());
         java.util.List<Throwable> causes = new java.util.ArrayList<>();
-        Throwable current = error == null ? new IllegalStateException("Unknown model invocation failure") : error;
-        while (current != null && seen.add(current)) {
+        java.util.ArrayDeque<Throwable> pending = new java.util.ArrayDeque<>();
+        pending.add(error == null ? new IllegalStateException("Unknown model invocation failure") : error);
+        while (!pending.isEmpty()) {
+            Throwable current = pending.removeFirst();
+            if (!seen.add(current)) {
+                continue;
+            }
             causes.add(current);
-            current = current.getCause();
+            if (current.getCause() != null) {
+                pending.addLast(current.getCause());
+            }
+            for (Throwable suppressed : current.getSuppressed()) {
+                if (suppressed != null) {
+                    pending.addLast(suppressed);
+                }
+            }
         }
         return causes;
     }

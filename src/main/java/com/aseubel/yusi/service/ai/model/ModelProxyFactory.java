@@ -7,10 +7,14 @@ import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.ai.runtime.ModelCallAttemptEvent;
 import com.aseubel.yusi.common.constant.ModelCallStatus;
 import dev.langchain4j.data.message.*;
+import dev.langchain4j.model.ModelProvider;
+import dev.langchain4j.model.chat.Capability;
 import dev.langchain4j.model.chat.ChatModel;
+import dev.langchain4j.model.chat.ChatRequestOptions;
 import dev.langchain4j.model.chat.StreamingChatModel;
 import dev.langchain4j.model.chat.request.ChatRequest;
 import dev.langchain4j.model.chat.request.ChatRequestParameters;
+import dev.langchain4j.model.chat.request.DefaultChatRequestParameters;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.chat.response.CompleteToolCall;
 import dev.langchain4j.model.chat.response.PartialResponse;
@@ -28,6 +32,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
@@ -111,13 +117,38 @@ public class ModelProxyFactory {
     }
 
     private static List<ChatMessage> normalizeMessages(List<ChatMessage> messages) {
+        return normalizeMessages(ModelProtocol.CHAT_COMPLETIONS, messages);
+    }
+
+    private static List<ChatMessage> normalizeMessages(ModelProtocol protocol, List<ChatMessage> messages) {
         if (messages == null || messages.isEmpty()) {
             return messages == null ? List.of() : messages;
         }
+        ModelProtocol effectiveProtocol = ModelProtocol.normalize(protocol);
         return messages.stream()
-                .map(message -> message instanceof AiMessage aiMessage
-                        ? normalizeAssistantMessage(aiMessage) : message)
+                .map(message -> {
+                    if (!(message instanceof AiMessage aiMessage)) {
+                        return message;
+                    }
+                    return effectiveProtocol == ModelProtocol.RESPONSES
+                            ? normalizeResponsesAssistantMessage(aiMessage)
+                            : normalizeAssistantMessage(aiMessage);
+                })
                 .toList();
+    }
+
+    private static AiMessage normalizeResponsesAssistantMessage(AiMessage message) {
+        if (message == null) {
+            return null;
+        }
+        Map<String, Object> attributes = message.attributes() == null
+                ? Map.of()
+                : new LinkedHashMap<>(message.attributes());
+        attributes.remove("encrypted_reasoning");
+        return normalizeAssistantMessage(message.toBuilder()
+                .thinking(null)
+                .attributes(attributes)
+                .build());
     }
 
     static ChatRequest adaptChatRequest(ModelProtocol protocol, ChatRequest request,
@@ -128,7 +159,7 @@ public class ModelProxyFactory {
         ChatRequestParameters parameters = buildProtocolParameters(
                 ModelProtocol.normalize(protocol), request.parameters(), routeParameters);
         return request.toBuilder()
-                .messages(normalizeMessages(request.messages()))
+                .messages(normalizeMessages(ModelProtocol.normalize(protocol), request.messages()))
                 .parameters(parameters)
                 .build();
     }
@@ -176,7 +207,7 @@ public class ModelProxyFactory {
             case RESPONSES -> {
                 OpenAiResponsesChatRequestParameters.Builder builder = OpenAiResponsesChatRequestParameters.builder();
                 if (base != null) {
-                    builder.overrideWith(base);
+                    copyResponsesCompatibleParameters(base, builder);
                 }
                 Integer effectiveMaxOutputTokens = smallerPositive(requestMaxOutputTokens, maxOutputTokens);
                 if (effectiveMaxOutputTokens != null) {
@@ -210,6 +241,31 @@ public class ModelProxyFactory {
         };
     }
 
+    private static void copyResponsesCompatibleParameters(ChatRequestParameters base,
+            OpenAiResponsesChatRequestParameters.Builder builder) {
+        if (base.modelName() != null) {
+            builder.modelName(base.modelName());
+        }
+        if (base.temperature() != null) {
+            builder.temperature(base.temperature());
+        }
+        if (base.topP() != null) {
+            builder.topP(base.topP());
+        }
+        if (base.maxOutputTokens() != null) {
+            builder.maxOutputTokens(base.maxOutputTokens());
+        }
+        if (base.toolSpecifications() != null && !base.toolSpecifications().isEmpty()) {
+            builder.toolSpecifications(base.toolSpecifications());
+        }
+        if (base.toolChoice() != null) {
+            builder.toolChoice(base.toolChoice());
+        }
+        if (base.responseFormat() != null) {
+            builder.responseFormat(base.responseFormat());
+        }
+    }
+
     private static Integer smallerPositive(Integer first, Integer second) {
         if (first == null || first <= 0) {
             return second == null || second <= 0 ? null : second;
@@ -234,7 +290,11 @@ public class ModelProxyFactory {
             if (method.getDeclaringClass() == Object.class) {
                 return method.invoke(this, args);
             }
-            ModelRouteContext context = resolveContext(findChatRequest(args));
+            if (isMetadataMethod(method)) {
+                return invokeMetadata(method, args);
+            }
+            ChatRequest request = findChatRequest(args);
+            ModelRouteContext context = resolveContext(request);
             ModelRouteDecision decision = modelRouterService.plan(context);
             List<ModelRouteCandidate> candidates = decision.attemptCandidates();
             if (candidates.isEmpty()) {
@@ -276,29 +336,23 @@ public class ModelProxyFactory {
                     ModelUsageSnapshot usage = usageExtractor.extract(response, selected);
                     budgetAdmission.reconcile(permit, usage);
                     long latency = System.currentTimeMillis() - start;
-                    modelStateCenter.recordSuccess(selected.getId(), selected.getModelName(), latency);
+                    recordStateSuccess(selected, latency);
                     publishAttempt(decision, context, candidate, usage, latency, null,
                             attemptIndex, ModelCallStatus.SUCCESS.code(), null);
+                    logAttempt("model_invoke", "completed", decision, context, candidate,
+                            attemptIndex, request, latency, null, false);
                     return result;
                 } catch (Throwable throwable) {
                     ModelInvocationException normalized = normalize(throwable, selected);
                     budgetAdmission.reconcile(permit, null);
                     long latency = System.currentTimeMillis() - start;
-                    modelStateCenter.recordFailure(selected.getId(), selected.getModelName(), latency, normalized);
+                    recordStateFailure(selected, latency, normalized);
                     publishAttempt(decision, context, candidate,
                             ModelUsageSnapshot.unavailable(selected.getPriceVersion()), latency, null,
                             attemptIndex, ModelCallStatus.FAILED.code(), normalized.kind().name());
                     lastError = normalized;
-                    log.warn("AI model invocation failed: operation=model_invoke, attempt={}, requestId={}, runId={}, provider={}, modelId={}, failureKind={}, httpStatus={}, fallbackEligible={}, exceptionType={}",
-                            attemptIndex + 1,
-                            context.getRequestId(),
-                            context.getRunId(),
-                            selected.getProvider(),
-                            selected.getId(),
-                            normalized.kind().name(),
-                            normalized.httpStatus(),
-                            normalized.isFallbackEligible(false),
-                            LowSensitivityLogSummary.exceptionType(normalized.getCause()));
+                    logAttempt("model_invoke", "failed", decision, context, candidate,
+                            attemptIndex, request, latency, normalized, false);
                     if (!normalized.isFallbackEligible(false)) {
                         throw normalized;
                     }
@@ -309,6 +363,38 @@ public class ModelProxyFactory {
                 throw lastError;
             }
             throw new IllegalStateException("No available model instance for scene: " + context.getScene());
+        }
+
+        private boolean isMetadataMethod(Method method) {
+            String name = method.getName();
+            return "defaultRequestParameters".equals(name)
+                    || "listeners".equals(name)
+                    || "provider".equals(name)
+                    || "supportedCapabilities".equals(name);
+        }
+
+        private Object invokeMetadata(Method method, Object[] args) throws Throwable {
+            ModelRouteDecision decision = modelRouterService.plan(resolveContext(null));
+            ModelRouteCandidate candidate = decision.attemptCandidates().stream()
+                    .findFirst()
+                    .orElseGet(() -> decision.candidates().stream().findFirst().orElse(null));
+            if (candidate == null || candidate.instance() == null) {
+                return neutralMetadata(method.getName());
+            }
+            Object delegate = chatMode
+                    ? candidate.instance().getChatModel()
+                    : candidate.instance().getStreamingChatModel();
+            return delegate == null ? neutralMetadata(method.getName()) : method.invoke(delegate, args);
+        }
+
+        private Object neutralMetadata(String methodName) {
+            return switch (methodName) {
+                case "defaultRequestParameters" -> DefaultChatRequestParameters.EMPTY;
+                case "listeners" -> List.of();
+                case "provider" -> ModelProvider.OTHER;
+                case "supportedCapabilities" -> Set.<Capability>of();
+                default -> null;
+            };
         }
 
         private void invokeStreamingAttempt(ModelRouteDecision decision, ModelRouteContext context,
@@ -342,13 +428,32 @@ public class ModelProxyFactory {
 
             StreamingChatResponseHandler downstream = findStreamingHandler(args);
             if (downstream == null) {
+                long start = System.currentTimeMillis();
                 try {
                     invokeWithRouteParameters(selected, selected.getStreamingChatModel(), method, args,
                             context, decision.routeParameters());
                     budgetAdmission.reconcile(permit, null);
+                    long latency = System.currentTimeMillis() - start;
+                    recordStateSuccess(selected, latency);
+                    publishAttempt(decision, context, candidate, null, latency, null,
+                            attemptIndex, ModelCallStatus.SUCCESS.code(), null);
+                    logAttempt("model_stream", "completed", decision, context, candidate,
+                            attemptIndex, findChatRequest(args), latency, null, false);
                 } catch (Throwable throwable) {
                     budgetAdmission.reconcile(permit, null);
-                    throw throwable;
+                    ModelInvocationException normalized = normalize(throwable, selected);
+                    long latency = System.currentTimeMillis() - start;
+                    recordStateFailure(selected, latency, normalized);
+                    publishAttempt(decision, context, candidate,
+                            ModelUsageSnapshot.unavailable(selected.getPriceVersion()), latency, null,
+                            attemptIndex, ModelCallStatus.FAILED.code(), normalized.kind().name());
+                    logAttempt("model_stream", "failed", decision, context, candidate,
+                            attemptIndex, findChatRequest(args), latency, normalized, false);
+                    if (!normalized.isFallbackEligible(false) || candidateIndex + 1 >= candidates.size()) {
+                        throw normalized;
+                    }
+                    invokeStreamingAttempt(decision, context, method, args, candidates,
+                            candidateIndex + 1, attemptIndex + 1);
                 }
                 return;
             }
@@ -385,6 +490,25 @@ public class ModelProxyFactory {
             }
         }
 
+        private void recordStateSuccess(ModelInstance instance, long latencyMs) {
+            try {
+                modelStateCenter.recordSuccess(instance.getId(), instance.getModelName(), latencyMs);
+            } catch (RuntimeException exception) {
+                log.warn("Model state update failed: operation=model_state_success, modelId={}, exceptionType={}",
+                        instance.getId(), LowSensitivityLogSummary.exceptionType(exception));
+            }
+        }
+
+        private void recordStateFailure(ModelInstance instance, long latencyMs,
+                ModelInvocationException failure) {
+            try {
+                modelStateCenter.recordFailure(instance.getId(), instance.getModelName(), latencyMs, failure);
+            } catch (RuntimeException exception) {
+                log.warn("Model state update failed: operation=model_state_failure, modelId={}, exceptionType={}",
+                        instance.getId(), LowSensitivityLogSummary.exceptionType(exception));
+            }
+        }
+
         private StreamingChatResponseHandler findStreamingHandler(Object[] args) {
             if (args == null) {
                 return null;
@@ -405,17 +529,9 @@ public class ModelProxyFactory {
             ModelInvocationException normalized = normalize(throwable, candidate.instance());
             budgetAdmission.reconcile(permit, null);
             long latency = System.currentTimeMillis() - start;
-            modelStateCenter.recordFailure(candidate.modelId(), candidate.modelName(), latency, normalized);
-            log.warn("AI model streaming failed: operation=model_stream, attempt={}, requestId={}, runId={}, provider={}, modelId={}, failureKind={}, httpStatus={}, fallbackEligible={}, exceptionType={}",
-                    attemptIndex + 1,
-                    context.getRequestId(),
-                    context.getRunId(),
-                    candidate.provider(),
-                    candidate.modelId(),
-                    normalized.kind().name(),
-                    normalized.httpStatus(),
-                    normalized.isFallbackEligible(emitted),
-                    LowSensitivityLogSummary.exceptionType(normalized.getCause()));
+            recordStateFailure(candidate.instance(), latency, normalized);
+            logAttempt("model_stream", "failed", decision, context, candidate,
+                    attemptIndex, findChatRequest(args), latency, normalized, emitted);
             publishAttempt(decision, context, candidate,
                     ModelUsageSnapshot.unavailable(candidate.instance().getPriceVersion()), latency,
                     firstOutputAt < 0 ? null : firstOutputAt - start, attemptIndex, ModelCallStatus.FAILED.code(),
@@ -432,9 +548,58 @@ public class ModelProxyFactory {
             downstream.onError(normalized);
         }
 
+        private void logAttempt(String operation, String status, ModelRouteDecision decision,
+                ModelRouteContext context, ModelRouteCandidate candidate, int attemptIndex,
+                ChatRequest request, long latencyMs, ModelInvocationException failure,
+                boolean outputEmitted) {
+            ModelInstance instance = candidate.instance();
+            RequestShape shape = RequestShape.from(request);
+            String strategy = candidate.strategy() == null ? "unknown" : candidate.strategy().name();
+            String failureKind = failure == null ? "none" : failure.kind().name();
+            String errorSummary = failure == null ? "none" : failure.errorSummary();
+            String exceptionType = failure == null
+                    ? "none" : LowSensitivityLogSummary.exceptionType(failure.getCause());
+            boolean fallbackEligible = failure != null && failure.isFallbackEligible(outputEmitted);
+            String message = "AI model attempt: operation={}, status={}, attempt={}, requestId={}, runId={}, "
+                    + "policyId={}, provider={}, modelId={}, modelName={}, protocol={}, endpoint={}, tier={}, "
+                    + "strategy={}, messageCount={}, imageCount={}, toolCount={}, latencyMs={}, failureKind={}, "
+                    + "httpStatus={}, fallbackEligible={}, exceptionType={}, errorSummary={}";
+            Object[] values = {
+                    operation,
+                    status,
+                    attemptIndex + 1,
+                    context.getRequestId(),
+                    context.getRunId(),
+                    decision.policyId(),
+                    instance.getProvider(),
+                    instance.getId(),
+                    instance.getModelName(),
+                    ModelProtocol.normalize(instance.getProtocol()),
+                    sanitizeEndpoint(ModelProtocol.normalize(instance.getProtocol())
+                            .resolveEndpoint(instance.getBaseUrl())),
+                    candidate.tierId(),
+                    strategy,
+                    shape.messageCount(),
+                    shape.imageCount(),
+                    shape.toolCount(),
+                    latencyMs,
+                    failureKind,
+                    failure == null ? null : failure.httpStatus(),
+                    fallbackEligible,
+                    exceptionType,
+                    errorSummary
+            };
+            if (failure == null) {
+                log.info(message, values);
+            } else {
+                log.warn(message, values);
+            }
+        }
+
         private ModelInvocationException normalize(Throwable throwable, ModelInstance selected) {
-            if (throwable instanceof ModelInvocationException normalized) {
-                return normalized;
+            ModelInvocationException existing = ModelInvocationErrorClassifier.findModelInvocationException(throwable);
+            if (existing != null) {
+                return existing;
             }
             return ModelInvocationErrorClassifier.classify(throwable, selected.getProvider(), selected.getId());
         }
@@ -577,10 +742,12 @@ public class ModelProxyFactory {
                     long latency = System.currentTimeMillis() - start;
                     ModelUsageSnapshot usage = usageExtractor.extract(completeResponse, candidate.instance());
                     budgetAdmission.reconcile(permit, usage);
-                    modelStateCenter.recordSuccess(candidate.modelId(), candidate.modelName(), latency);
+                    recordStateSuccess(candidate.instance(), latency);
                     publishAttempt(decision, context, candidate, usage, latency,
                             firstOutputAt.get() < 0 ? null : firstOutputAt.get() - start,
                             attemptIndex, ModelCallStatus.SUCCESS.code(), null);
+                    logAttempt("model_stream", "completed", decision, context, candidate,
+                            attemptIndex, findChatRequest(args), latency, null, emitted.get());
                 }
                 downstream.onCompleteResponse(completeResponse);
             }
@@ -627,13 +794,79 @@ public class ModelProxyFactory {
 
         private Object invokeWithRouteParameters(ModelInstance selected, Object delegate, Method method,
                 Object[] args, ModelRouteContext context, ModelRouteParameters routeParameters) throws Throwable {
-            if (args != null && args.length > 0 && args[0] instanceof ChatRequest chatRequest) {
-                ChatRequest adaptedRequest = adaptChatRequest(selected.getProtocol(), chatRequest, routeParameters);
-                Object[] adaptedArgs = args.clone();
+            CanonicalInvocation invocation = canonicalInvocation(method, args);
+            if (invocation != null) {
+                ModelProtocol protocol = ModelProtocol.normalize(selected.getProtocol());
+                ChatRequest adaptedRequest = adaptChatRequest(protocol, invocation.request(), routeParameters);
+                Object[] adaptedArgs = invocation.args().clone();
                 adaptedArgs[0] = adaptedRequest;
-                return invokeWithMasking(context, delegate, method, adaptedArgs);
+                Object result = invokeWithMasking(context, protocol, delegate, invocation.method(), adaptedArgs);
+                return invocation.returnsText() ? textResult(result) : result;
             }
-            return invokeWithMasking(context, delegate, method, args);
+            return invokeWithMasking(context, ModelProtocol.CHAT_COMPLETIONS, delegate, method, args);
+        }
+
+        private CanonicalInvocation canonicalInvocation(Method method, Object[] args) throws NoSuchMethodException {
+            ChatRequest request = requestFromArguments(args);
+            if (request == null) {
+                return null;
+            }
+            if (args != null && args.length > 0 && args[0] instanceof ChatRequest) {
+                return new CanonicalInvocation(method, args, request, false);
+            }
+            if (method == null || !"chat".equals(method.getName())) {
+                return null;
+            }
+
+            boolean hasOptions = hasParameter(method, ChatRequestOptions.class);
+            if (chatMode) {
+                Method canonicalMethod = hasOptions
+                        ? ChatModel.class.getMethod("chat", ChatRequest.class, ChatRequestOptions.class)
+                        : ChatModel.class.getMethod("chat", ChatRequest.class);
+                Object[] canonicalArgs = hasOptions
+                        ? new Object[] { request, findChatRequestOptions(args) }
+                        : new Object[] { request };
+                boolean returnsText = method.getParameterTypes().length == 1
+                        && method.getParameterTypes()[0] == String.class;
+                return new CanonicalInvocation(canonicalMethod, canonicalArgs, request, returnsText);
+            }
+
+            StreamingChatResponseHandler handler = findStreamingHandler(args);
+            if (handler == null) {
+                return null;
+            }
+            Method canonicalMethod = hasOptions
+                    ? StreamingChatModel.class.getMethod("chat", ChatRequest.class,
+                            ChatRequestOptions.class, StreamingChatResponseHandler.class)
+                    : StreamingChatModel.class.getMethod("chat", ChatRequest.class,
+                            StreamingChatResponseHandler.class);
+            Object[] canonicalArgs = hasOptions
+                    ? new Object[] { request, findChatRequestOptions(args), handler }
+                    : new Object[] { request, handler };
+            return new CanonicalInvocation(canonicalMethod, canonicalArgs, request, false);
+        }
+
+        private boolean hasParameter(Method method, Class<?> parameterType) {
+            return Arrays.stream(method.getParameterTypes()).anyMatch(parameterType::equals);
+        }
+
+        private ChatRequestOptions findChatRequestOptions(Object[] args) {
+            if (args == null) {
+                return null;
+            }
+            for (Object arg : args) {
+                if (arg instanceof ChatRequestOptions options) {
+                    return options;
+                }
+            }
+            return null;
+        }
+
+        private Object textResult(Object result) {
+            if (!(result instanceof ChatResponse response) || response.aiMessage() == null) {
+                return null;
+            }
+            return response.aiMessage().text();
         }
 
         // ── 脱敏核心逻辑 ──────────────────────────────────────
@@ -646,7 +879,8 @@ public class ModelProxyFactory {
          * 1. 语义一致性 — SystemPrompt、聊天历史、用户消息、Tool 结果全部统一脱敏
          * 2. 无线程问题 — 拦截发生在最终 HTTP 调用前
          */
-        private Object invokeWithMasking(ModelRouteContext context, Object delegate, Method method, Object[] args) throws Throwable {
+        private Object invokeWithMasking(ModelRouteContext context, ModelProtocol protocol,
+                Object delegate, Method method, Object[] args) throws Throwable {
             if (!context.isMaskSensitiveData()) {
                 return method.invoke(delegate, args);
             }
@@ -657,7 +891,7 @@ public class ModelProxyFactory {
 
             // 1. 规范化消息并拼接所有文本，统一脱敏
             List<ChatMessage> originalMessages = chatRequest.messages();
-            List<ChatMessage> normalizedMessages = normalizeMessages(originalMessages);
+            List<ChatMessage> normalizedMessages = normalizeMessages(protocol, originalMessages);
             ChatRequest normalizedRequest = chatRequest.toBuilder()
                     .messages(normalizedMessages)
                     .build();
@@ -666,7 +900,7 @@ public class ModelProxyFactory {
             String allText = extractAllText(normalizedMessages);
             MaskResult maskResult = maskService.mask(allText);
 
-            if (!maskResult.isHasMasked()) {
+            if (maskResult == null || !maskResult.isHasMasked()) {
                 return method.invoke(delegate, normalizedArgs);
             }
 
@@ -674,26 +908,24 @@ public class ModelProxyFactory {
             log.debug("脱敏拦截: 映射表大小={}", mapping.size());
 
             // 2. 构建脱敏后的 ChatRequest
-            List<ChatMessage> maskedMessages = maskMessages(normalizedMessages, mapping);
+            List<ChatMessage> maskedMessages = maskMessages(normalizedMessages, mapping, protocol);
             ChatRequest maskedRequest = chatRequest.toBuilder()
                     .messages(maskedMessages)
                     .build();
-            Object[] maskedArgs = new Object[args.length];
+            Object[] maskedArgs = args.clone();
             maskedArgs[0] = maskedRequest;
 
             // 3. 处理流式响应（包装 handler 进行 unmask）
-            if (!chatMode && args.length > 1 && args[1] instanceof StreamingChatResponseHandler originalHandler) {
-                maskedArgs[1] = wrapStreamingHandler(originalHandler, mapping);
-                for (int i = 2; i < args.length; i++) {
-                    maskedArgs[i] = args[i];
+            if (!chatMode) {
+                int handlerIndex = findStreamingHandlerIndex(args);
+                if (handlerIndex >= 0) {
+                    StreamingChatResponseHandler originalHandler = (StreamingChatResponseHandler) args[handlerIndex];
+                    maskedArgs[handlerIndex] = wrapStreamingHandler(originalHandler, mapping);
+                    return method.invoke(delegate, maskedArgs);
                 }
-                return method.invoke(delegate, maskedArgs);
             }
 
             // 4. 同步响应：调用后 unmask
-            for (int i = 1; i < args.length; i++) {
-                maskedArgs[i] = args[i];
-            }
             Object result = method.invoke(delegate, maskedArgs);
             if (result instanceof ChatResponse chatResponse) {
                 return unmaskChatResponse(chatResponse, mapping);
@@ -734,17 +966,21 @@ public class ModelProxyFactory {
         /**
          * 对每条消息的文本内容应用脱敏替换
          */
-        private List<ChatMessage> maskMessages(List<ChatMessage> messages, Map<String, String> mapping) {
+        private List<ChatMessage> maskMessages(List<ChatMessage> messages, Map<String, String> mapping,
+                ModelProtocol protocol) {
             // 反转映射表：原始值 → 占位符
             Map<String, String> reverseMapping = new HashMap<>();
             for (Map.Entry<String, String> entry : mapping.entrySet()) {
                 reverseMapping.put(entry.getValue(), entry.getKey());
             }
 
-            return messages.stream().map(msg -> maskSingleMessage(msg, reverseMapping)).collect(Collectors.toList());
+            return messages.stream()
+                    .map(msg -> maskSingleMessage(msg, reverseMapping, protocol))
+                    .collect(Collectors.toList());
         }
 
-        private ChatMessage maskSingleMessage(ChatMessage msg, Map<String, String> reverseMapping) {
+        private ChatMessage maskSingleMessage(ChatMessage msg, Map<String, String> reverseMapping,
+                ModelProtocol protocol) {
             if (msg instanceof SystemMessage sm) {
                 return SystemMessage.from(replaceAll(sm.text(), reverseMapping));
             } else if (msg instanceof UserMessage um) {
@@ -757,7 +993,7 @@ public class ModelProxyFactory {
                 }).collect(Collectors.toList());
                 return UserMessage.from(um.name(), maskedContents);
             } else if (msg instanceof AiMessage am) {
-                AiMessage normalized = normalizeAssistantMessage(am);
+                AiMessage normalized = protocolAwareAssistantMessage(am, protocol);
                 AiMessage.Builder builder = normalized.toBuilder();
                 if (normalized.text() != null) {
                     builder.text(replaceAll(normalized.text(), reverseMapping));
@@ -771,6 +1007,12 @@ public class ModelProxyFactory {
                         replaceAll(tm.text(), reverseMapping));
             }
             return msg;
+        }
+
+        private AiMessage protocolAwareAssistantMessage(AiMessage message, ModelProtocol protocol) {
+            return ModelProtocol.normalize(protocol) == ModelProtocol.RESPONSES
+                    ? normalizeResponsesAssistantMessage(message)
+                    : normalizeAssistantMessage(message);
         }
 
         /**
@@ -867,6 +1109,10 @@ public class ModelProxyFactory {
         }
 
         private ChatRequest findChatRequest(Object[] args) {
+            return requestFromArguments(args);
+        }
+
+        private ChatRequest requestFromArguments(Object[] args) {
             if (args == null) {
                 return null;
             }
@@ -875,13 +1121,51 @@ public class ModelProxyFactory {
                     return chatRequest;
                 }
             }
+            if (args.length == 0 || args[0] == null) {
+                return null;
+            }
+            Object first = args[0];
+            if (first instanceof String text) {
+                return ChatRequest.builder()
+                        .messages(UserMessage.from(text))
+                        .build();
+            }
+            if (first instanceof ChatMessage[] messages) {
+                return ChatRequest.builder().messages(messages).build();
+            }
+            if (first instanceof List<?> values) {
+                List<ChatMessage> messages = new ArrayList<>(values.size());
+                for (Object value : values) {
+                    if (!(value instanceof ChatMessage chatMessage)) {
+                        return null;
+                    }
+                    messages.add(chatMessage);
+                }
+                return ChatRequest.builder().messages(messages).build();
+            }
             return null;
+        }
+
+        private int findStreamingHandlerIndex(Object[] args) {
+            if (args == null) {
+                return -1;
+            }
+            for (int index = 0; index < args.length; index++) {
+                if (args[index] instanceof StreamingChatResponseHandler) {
+                    return index;
+                }
+            }
+            return -1;
         }
 
         private ModelRouteContext resolveContext(ChatRequest request) {
             ModelRouteContext context = ModelRouteContextHolder.getEffective();
             String scene = context == null ? null : context.getScene();
             String resolvedScene = Objects.requireNonNullElse(scene, defaultScene);
+            if (containsImage(request) && (scene == null || scene.isBlank()
+                    || "chat".equalsIgnoreCase(resolvedScene))) {
+                resolvedScene = ModelCapabilityPolicy.IMAGE_UNDERSTANDING_SCENE;
+            }
             Integer estimatedInputTokens = context == null ? null : context.getEstimatedInputTokens();
             if (estimatedInputTokens == null && request != null) {
                 estimatedInputTokens = tokenEstimator.estimate(request);
@@ -904,6 +1188,71 @@ public class ModelProxyFactory {
                     .maskSensitiveData(context == null || context.isMaskSensitiveData())
                     .build();
         }
+
+        private boolean containsImage(ChatRequest request) {
+            if (request == null || request.messages() == null) {
+                return false;
+            }
+            return request.messages().stream()
+                    .filter(UserMessage.class::isInstance)
+                    .map(UserMessage.class::cast)
+                    .anyMatch(userMessage -> userMessage.contents() != null
+                            && userMessage.contents().stream().anyMatch(ImageContent.class::isInstance));
+        }
+    }
+
+    private static String sanitizeEndpoint(String baseUrl) {
+        if (baseUrl == null || baseUrl.isBlank()) {
+            return "unknown";
+        }
+        try {
+            URI uri = new URI(baseUrl);
+            if (uri.getHost() == null) {
+                return "configured";
+            }
+            StringBuilder endpoint = new StringBuilder();
+            if (uri.getScheme() != null) {
+                endpoint.append(uri.getScheme()).append("://");
+            }
+            endpoint.append(uri.getHost());
+            if (uri.getPort() > 0) {
+                endpoint.append(':').append(uri.getPort());
+            }
+            if (uri.getPath() != null && !uri.getPath().isBlank()) {
+                endpoint.append(uri.getPath());
+            }
+            return endpoint.toString();
+        } catch (URISyntaxException exception) {
+            return "configured";
+        }
+    }
+
+    private record RequestShape(int messageCount, int imageCount, int toolCount) {
+        private static RequestShape from(ChatRequest request) {
+            if (request == null) {
+                return new RequestShape(0, 0, 0);
+            }
+            int imageCount = 0;
+            int toolCount = request.toolSpecifications() == null ? 0 : request.toolSpecifications().size();
+            List<ChatMessage> messages = request.messages() == null ? List.of() : request.messages();
+            for (ChatMessage message : messages) {
+                if (message instanceof UserMessage userMessage && userMessage.contents() != null) {
+                    imageCount += (int) userMessage.contents().stream()
+                            .filter(content -> content instanceof ImageContent)
+                            .count();
+                }
+                if (message instanceof AiMessage aiMessage && aiMessage.toolExecutionRequests() != null) {
+                    toolCount += aiMessage.toolExecutionRequests().size();
+                } else if (message instanceof ToolExecutionResultMessage) {
+                    toolCount++;
+                }
+            }
+            return new RequestShape(messages.size(), imageCount, toolCount);
+        }
+    }
+
+    private record CanonicalInvocation(Method method, Object[] args, ChatRequest request,
+            boolean returnsText) {
     }
 
     private static final class NoopEventPublisher implements ApplicationEventPublisher {

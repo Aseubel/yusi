@@ -25,6 +25,8 @@ public class ModelStateCenter {
 
     private static class LocalWindow {
         private volatile long firstRequestAt = System.currentTimeMillis();
+        private volatile long lastUpdatedAt;
+        private volatile String modelName;
         private volatile long totalRequests;
         private volatile long successRequests;
         private volatile long failureRequests;
@@ -50,14 +52,17 @@ public class ModelStateCenter {
             if (message == null || message.getInstanceId() == null) {
                 return;
             }
-            remoteStateCache.put(message.getInstanceId(), message.getState());
+            putIfNewer(message.getInstanceId(), message.getState());
         });
 
         RMap<String, ModelRuntimeState> stateMap = redissonClient.getMap(properties.getInstanceStateMapKey());
         for (Map.Entry<String, ModelRuntimeState> entry : stateMap.readAllMap().entrySet()) {
             ModelRuntimeState state = entry.getValue();
             if (state != null && state.getInstanceId() != null) {
+                remoteStateCache.put(entry.getKey(), state);
                 LocalWindow window = localWindows.computeIfAbsent(entry.getKey(), id -> new LocalWindow());
+                window.lastUpdatedAt = state.getLastUpdatedAt();
+                window.modelName = state.getModelName();
                 window.totalRequests = state.getTotalRequests();
                 window.successRequests = state.getSuccessRequests();
                 window.failureRequests = state.getFailureRequests();
@@ -76,6 +81,7 @@ public class ModelStateCenter {
 
     public boolean allowRequest(String instanceId) {
         LocalWindow window = localWindows.computeIfAbsent(instanceId, id -> new LocalWindow());
+        mergeIntoLocalWindow(instanceId, remoteStateCache.get(instanceId), window);
         long now = System.currentTimeMillis();
         if (window.phase == ModelHealthPhase.UP) {
             return true;
@@ -84,6 +90,7 @@ public class ModelStateCenter {
             if (window.probing.compareAndSet(false, true)) {
                 window.previousPhase = window.phase;
                 window.phase = ModelHealthPhase.HALF_OPEN;
+                window.lastUpdatedAt = nextUpdateAt(window);
                 publishState(instanceId, "", window, ModelStateAction.PHASE_CHANGE.code());
                 return true;
             }
@@ -98,6 +105,8 @@ public class ModelStateCenter {
     public void recordSuccess(String instanceId, String modelName, long latencyMs) {
         LocalWindow window = localWindows.computeIfAbsent(instanceId, id -> new LocalWindow());
         synchronized (window) {
+            window.modelName = modelName;
+            window.lastUpdatedAt = nextUpdateAt(window);
             window.totalRequests++;
             window.successRequests++;
             window.consecutiveFailures = 0;
@@ -117,12 +126,14 @@ public class ModelStateCenter {
     public void recordFailure(String instanceId, String modelName, long latencyMs, Throwable throwable) {
         LocalWindow window = localWindows.computeIfAbsent(instanceId, id -> new LocalWindow());
         synchronized (window) {
+            window.modelName = modelName;
+            window.lastUpdatedAt = nextUpdateAt(window);
             window.totalRequests++;
             window.failureRequests++;
             window.consecutiveFailures++;
             window.consecutiveSuccesses = 0;
             window.avgLatencyMs = window.avgLatencyMs == 0 ? latencyMs : (window.avgLatencyMs * 0.8 + latencyMs * 0.2);
-            window.lastError = throwable == null ? "" : throwable.getMessage();
+            window.lastError = errorSummary(throwable);
             if (window.phase == ModelHealthPhase.HALF_OPEN
                     || window.consecutiveFailures >= modelConfigCenter.getEffectiveConfig().getFailureThreshold()) {
                 window.previousPhase = window.phase;
@@ -140,29 +151,33 @@ public class ModelStateCenter {
         Map<String, ModelRuntimeState> result = new HashMap<>();
         for (String instanceId : instanceIds) {
             ModelRuntimeState cached = remoteStateCache.get(instanceId);
-            if (cached != null) {
-                result.put(instanceId, cached);
-                continue;
-            }
             ModelRuntimeState state = stateMap.get(instanceId);
-            if (state != null) {
-                result.put(instanceId, state);
-                continue;
-            }
             LocalWindow window = localWindows.get(instanceId);
-            if (window != null) {
-                result.put(instanceId, toState(instanceId, "", window));
+            ModelRuntimeState local = window == null ? null : toState(instanceId, "", window);
+            ModelRuntimeState latest = latest(latest(cached, state), local);
+            if (latest != null) {
+                putIfNewer(instanceId, latest);
+                mergeIntoLocalWindow(instanceId, latest, window);
+                result.put(instanceId, latest);
             }
         }
         return result;
     }
 
+    public boolean isProbeDue(ModelRuntimeState state) {
+        return state != null
+                && ModelHealthPhase.DOWN.code().equalsIgnoreCase(state.getPhase())
+                && state.getNextProbeAt() > 0L
+                && System.currentTimeMillis() >= state.getNextProbeAt();
+    }
+
     public List<ModelRuntimeState> listStates() {
-        return redissonClient.<String, ModelRuntimeState>getMap(properties.getInstanceStateMapKey())
-                .readAllMap()
-                .values()
-                .stream()
-                .toList();
+        Map<String, ModelRuntimeState> states = new HashMap<>(redissonClient
+                .<String, ModelRuntimeState>getMap(properties.getInstanceStateMapKey()).readAllMap());
+        remoteStateCache.forEach((instanceId, state) -> states.merge(instanceId, state, this::latest));
+        localWindows.forEach((instanceId, window) -> states.merge(instanceId,
+                toState(instanceId, "", window), this::latest));
+        return states.values().stream().toList();
     }
 
     public void syncToRedis() {
@@ -170,22 +185,38 @@ public class ModelStateCenter {
         for (Map.Entry<String, LocalWindow> entry : localWindows.entrySet()) {
             LocalWindow window = entry.getValue();
             ModelRuntimeState state = toState(entry.getKey(), "", window);
-            stateMap.put(entry.getKey(), state);
+            ModelRuntimeState remote = stateMap.get(entry.getKey());
+            ModelRuntimeState latest = latest(remote, state);
+            if (latest == state) {
+                stateMap.put(entry.getKey(), state);
+            }
         }
         log.debug("Synced {} model states to Redis", localWindows.size());
     }
 
     private void publishState(String instanceId, String modelName, LocalWindow window, String action) {
         ModelRuntimeState state = toState(instanceId, modelName, window);
-        redissonClient.<String, ModelRuntimeState>getMap(properties.getInstanceStateMapKey()).put(instanceId, state);
-        ModelStateEvent event = ModelStateEvent.builder()
-                .instanceId(instanceId)
-                .action(action)
-                .timestamp(System.currentTimeMillis())
-                .state(state)
-                .build();
-        RTopic topic = redissonClient.getTopic(properties.getStateChannel());
-        topic.publish(event);
+        putIfNewer(instanceId, state);
+        try {
+            RMap<String, ModelRuntimeState> stateMap = redissonClient.getMap(properties.getInstanceStateMapKey());
+            ModelRuntimeState remote = stateMap.get(instanceId);
+            if (latest(remote, state) == state) {
+                stateMap.put(instanceId, state);
+            }
+            ModelStateEvent event = ModelStateEvent.builder()
+                    .instanceId(instanceId)
+                    .action(action)
+                    .timestamp(System.currentTimeMillis())
+                    .state(state)
+                    .build();
+            RTopic topic = redissonClient.getTopic(properties.getStateChannel());
+            topic.publish(event);
+        } catch (RuntimeException exception) {
+            log.warn("Model state publish failed: operation=model_state_publish, instanceId={}, action={}, "
+                            + "exceptionType={}",
+                    instanceId, action,
+                    com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
+        }
     }
 
     private ModelRuntimeState toState(String instanceId, String modelName, LocalWindow window) {
@@ -198,7 +229,7 @@ public class ModelStateCenter {
         }
         return ModelRuntimeState.builder()
                 .instanceId(instanceId)
-                .modelName(modelName)
+                .modelName(modelName == null || modelName.isBlank() ? window.modelName : modelName)
                 .available(window.phase != ModelHealthPhase.DOWN)
                 .healthScore(healthScore)
                 .qps(qps)
@@ -209,7 +240,7 @@ public class ModelStateCenter {
                 .failureRequests(window.failureRequests)
                 .consecutiveFailures(window.consecutiveFailures)
                 .consecutiveSuccesses(window.consecutiveSuccesses)
-                .lastUpdatedAt(System.currentTimeMillis())
+                .lastUpdatedAt(window.lastUpdatedAt)
                 .nextProbeAt(window.nextProbeAt)
                 .phase(window.phase.code())
                 .lastError(window.lastError)
@@ -219,5 +250,57 @@ public class ModelStateCenter {
     private ModelHealthPhase phaseOrDefault(String value) {
         ModelHealthPhase phase = ModelHealthPhase.fromCode(value);
         return phase == null ? ModelHealthPhase.UP : phase;
+    }
+
+    private void putIfNewer(String instanceId, ModelRuntimeState state) {
+        if (state == null) {
+            return;
+        }
+        remoteStateCache.merge(instanceId, state, this::latest);
+    }
+
+    private void mergeIntoLocalWindow(String instanceId, ModelRuntimeState remote, LocalWindow window) {
+        if (remote == null || window == null) {
+            return;
+        }
+        synchronized (window) {
+            if (remote.getLastUpdatedAt() <= window.lastUpdatedAt) {
+                return;
+            }
+            window.lastUpdatedAt = remote.getLastUpdatedAt();
+            window.modelName = remote.getModelName();
+            window.totalRequests = remote.getTotalRequests();
+            window.successRequests = remote.getSuccessRequests();
+            window.failureRequests = remote.getFailureRequests();
+            window.avgLatencyMs = remote.getAvgLatencyMs();
+            window.consecutiveFailures = remote.getConsecutiveFailures();
+            window.consecutiveSuccesses = remote.getConsecutiveSuccesses();
+            window.phase = phaseOrDefault(remote.getPhase());
+            window.previousPhase = window.phase;
+            window.nextProbeAt = remote.getNextProbeAt();
+            window.lastError = remote.getLastError();
+            window.probing.set(false);
+        }
+    }
+
+    private ModelRuntimeState latest(ModelRuntimeState first, ModelRuntimeState second) {
+        if (first == null) {
+            return second;
+        }
+        if (second == null) {
+            return first;
+        }
+        return second.getLastUpdatedAt() >= first.getLastUpdatedAt() ? second : first;
+    }
+
+    private long nextUpdateAt(LocalWindow window) {
+        return Math.max(System.currentTimeMillis(), window.lastUpdatedAt + 1L);
+    }
+
+    private String errorSummary(Throwable throwable) {
+        if (throwable instanceof ModelInvocationException modelError) {
+            return modelError.errorSummary();
+        }
+        return ModelErrorSummary.summarize(throwable, null);
     }
 }

@@ -15,6 +15,7 @@ public class ModelInstance {
     String modelName;
     String provider;
     ModelProtocol protocol;
+    String baseUrl;
     int weight;
     int priority;
     Set<String> scenes;

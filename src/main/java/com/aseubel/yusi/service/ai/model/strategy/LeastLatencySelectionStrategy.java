@@ -7,7 +7,6 @@ import com.aseubel.yusi.service.ai.model.constant.ModelHealthPhase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.Comparator;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -24,7 +23,8 @@ public class LeastLatencySelectionStrategy implements ModelSelectionStrategy {
             Map<String, ModelRuntimeState> states) {
         List<ModelInstance> available = candidates.stream()
                 .filter(candidate -> isAvailable(states.get(candidate.getId())))
-                .sorted(Comparator.<ModelInstance>comparingDouble(candidate -> latency(states.get(candidate.getId())))
+                .sorted(Comparator.<ModelInstance>comparingInt(candidate -> sampled(states.get(candidate.getId())))
+                        .thenComparingDouble(candidate -> latency(states.get(candidate.getId())))
                         .thenComparing(ModelInstance::getId))
                 .toList();
         List<ModelInstance> unavailable = candidates.stream()
@@ -44,5 +44,9 @@ public class LeastLatencySelectionStrategy implements ModelSelectionStrategy {
 
     private double latency(ModelRuntimeState state) {
         return state == null || state.getAvgLatencyMs() <= 0 ? Double.MAX_VALUE : state.getAvgLatencyMs();
+    }
+
+    private int sampled(ModelRuntimeState state) {
+        return state != null && state.getTotalRequests() > 0 && state.getAvgLatencyMs() > 0 ? 1 : 0;
     }
 }

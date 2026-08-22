@@ -10,6 +10,7 @@ public class ModelInvocationException extends RuntimeException {
     private final String modelId;
     private final Long retryAfterMs;
     private final Integer httpStatus;
+    private final String errorSummary;
 
     public ModelInvocationException(ModelFailureKind kind, String provider, String modelId,
             Long retryAfterMs, Throwable cause) {
@@ -18,12 +19,13 @@ public class ModelInvocationException extends RuntimeException {
 
     public ModelInvocationException(ModelFailureKind kind, String provider, String modelId,
             Long retryAfterMs, Integer httpStatus, Throwable cause) {
-        super(buildMessage(kind, provider, modelId, cause), cause);
+        super(buildMessage(kind, provider, modelId, cause, httpStatus), cause);
         this.kind = kind == null ? ModelFailureKind.UNKNOWN : kind;
         this.provider = provider;
         this.modelId = modelId;
         this.retryAfterMs = retryAfterMs;
         this.httpStatus = httpStatus;
+        this.errorSummary = ModelErrorSummary.summarize(cause, httpStatus);
     }
 
     public boolean isFallbackEligible(boolean outputEmitted) {
@@ -56,8 +58,13 @@ public class ModelInvocationException extends RuntimeException {
         return httpStatus;
     }
 
-    private static String buildMessage(ModelFailureKind kind, String provider, String modelId, Throwable cause) {
-        String detail = cause == null ? "" : cause.getMessage();
+    public String errorSummary() {
+        return errorSummary;
+    }
+
+    private static String buildMessage(ModelFailureKind kind, String provider, String modelId,
+            Throwable cause, Integer httpStatus) {
+        String detail = ModelErrorSummary.summarize(cause, httpStatus);
         return "Model invocation failed: kind=" + (kind == null ? ModelFailureKind.UNKNOWN : kind)
                 + ", provider=" + provider + ", model=" + modelId
                 + (detail == null || detail.isBlank() ? "" : ", detail=" + detail);

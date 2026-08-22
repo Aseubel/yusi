@@ -24,15 +24,16 @@ public class WeightedRandomSelectionStrategy implements ModelSelectionStrategy {
             Map<String, ModelRuntimeState> states) {
         List<ModelInstance> remaining = new ArrayList<>(candidates.stream()
                 .filter(candidate -> isAvailable(states.get(candidate.getId())))
+                .filter(candidate -> candidate.getWeight() > 0)
                 .toList());
-        List<ModelInstance> ordered = new ArrayList<>(remaining.size());
+        List<ModelInstance> ordered = new ArrayList<>(candidates.size());
         while (!remaining.isEmpty()) {
-            int totalWeight = remaining.stream().mapToInt(candidate -> Math.max(1, candidate.getWeight())).sum();
-            int point = ThreadLocalRandom.current().nextInt(totalWeight);
-            int cursor = 0;
+            long totalWeight = remaining.stream().mapToLong(ModelInstance::getWeight).sum();
+            long point = ThreadLocalRandom.current().nextLong(totalWeight);
+            long cursor = 0;
             for (int i = 0; i < remaining.size(); i++) {
                 ModelInstance candidate = remaining.get(i);
-                cursor += Math.max(1, candidate.getWeight());
+                cursor += candidate.getWeight();
                 if (point < cursor) {
                     ordered.add(candidate);
                     remaining.remove(i);
@@ -42,6 +43,7 @@ public class WeightedRandomSelectionStrategy implements ModelSelectionStrategy {
         }
         candidates.stream()
                 .filter(candidate -> !isAvailable(states.get(candidate.getId())))
+                .filter(candidate -> candidate.getWeight() > 0)
                 .sorted(Comparator.comparing(ModelInstance::getId))
                 .forEach(ordered::add);
         return List.copyOf(ordered);

@@ -5,7 +5,8 @@ import java.util.Set;
 
 /** Model provider aliases and their adapter identifiers. */
 public enum ModelProviderType {
-    OPENAI_COMPATIBLE("openai-compatible", Set.of("openai", "openai-compatible", "deepseek", "dashscope")),
+    OPENAI_COMPATIBLE("openai-compatible", Set.of(
+            "openai", "openai-compatible", "deepseek", "dashscope", "glm", "zhipuai", "bigmodel")),
     ANTHROPIC("anthropic", Set.of("anthropic"));
 
     private final String canonicalCode;

@@ -8,6 +8,7 @@ import com.aseubel.yusi.service.ai.model.constant.ModelRouteExclusionReason;
 import com.aseubel.yusi.service.ai.model.strategy.ModelSelectionStrategy;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -20,6 +21,7 @@ import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ModelRouterService {
 
     private final ModelConfigCenter modelConfigCenter;
@@ -61,8 +63,7 @@ public class ModelRouterService {
                 .map(ModelInstance::getId)
                 .filter(Objects::nonNull)
                 .toList();
-        Map<String, ModelRuntimeState> states = modelIds.isEmpty()
-                ? Map.of() : modelStateCenter.snapshot(modelIds);
+        Map<String, ModelRuntimeState> states = snapshotStates(modelIds);
 
         List<ModelRouteCandidate> candidates = new ArrayList<>();
         Set<String> healthReasons = new LinkedHashSet<>();
@@ -90,11 +91,29 @@ public class ModelRouterService {
                 + ";reserved-output-tokens=" + numberOrUnknown(budgetContext.getReservedOutputTokens())
                 + ";primary-tier=" + primaryTier
                 + ";strategy=" + strategy.name()
+                + ";tier-strategies=" + tierOrder.stream()
+                        .map(tier -> tier + "=" + strategyType(properties.getTiers().get(tier)).name())
+                        .collect(java.util.stream.Collectors.joining(","))
                 + ";fallback-tiers=" + String.join(",", fallbackTiers)
                 + ";health-filter=" + (healthReasons.isEmpty() ? "none" : String.join(",", healthReasons));
         return new ModelRouteDecision(budgetContext.getRequestId(), policy.getId(),
                 properties.getVersion(), primaryTier, fallbackTiers, candidates, routeReason,
                 ModelRouteParameters.from(policy));
+    }
+
+    private Map<String, ModelRuntimeState> snapshotStates(List<String> modelIds) {
+        if (modelIds.isEmpty()) {
+            return Map.of();
+        }
+        try {
+            return modelStateCenter.snapshot(modelIds);
+        } catch (RuntimeException exception) {
+            log.warn("Model state snapshot unavailable: operation=model_state_snapshot, modelCount={}, "
+                            + "exceptionType={}",
+                    modelIds.size(),
+                    com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
+            return Map.of();
+        }
     }
 
     private List<ModelRouteCandidate> routeTier(ModelRoutingProperties properties, String tierId,
@@ -109,29 +128,66 @@ public class ModelRouterService {
         if (strategy == null) {
             return List.of();
         }
-        List<ModelInstance> ordered = strategy.order(tierId, members, states);
+        ModelSelectionStrategyType strategyType = strategyType(tier);
+        List<ModelInstance> strategyMembers = members.stream()
+                .filter(instance -> isStrategyEligible(tier, instance, context))
+                .toList();
+        List<ModelInstance> ordered = new ArrayList<>(strategy.order(tierId, strategyMembers, states));
+        Set<String> orderedIds = ordered.stream()
+                .map(ModelInstance::getId)
+                .filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        members.stream()
+                .filter(instance -> !orderedIds.contains(instance.getId()))
+                .forEach(ordered::add);
         List<ModelRouteCandidate> result = new ArrayList<>(ordered.size());
         for (ModelInstance instance : ordered) {
-            String excludedReason = exclusionReason(policy, tier, instance, context, states.get(instance.getId()));
+            String excludedReason = exclusionReason(policy, tier, instance, context,
+                    states.get(instance.getId()), strategyType);
             boolean available = excludedReason == null;
             if (fallback && available) {
                 excludedReason = ModelRouteExclusionReason.FALLBACK_TIER.code();
             }
-            result.add(new ModelRouteCandidate(tierId, instance, available, excludedReason));
+            result.add(new ModelRouteCandidate(tierId, instance, available, excludedReason, strategyType));
         }
         return List.copyOf(result);
     }
 
+    private boolean isStrategyEligible(ModelTierDefinition tier, ModelInstance instance,
+            ModelRouteContext context) {
+        return tier != null
+                && tier.isEnabled()
+                && supportsTierCapabilities(tier, instance)
+                && ModelCapabilityPolicy.supportsScene(instance, context.getScene())
+                && supportsValue(instance.getScenes(), context.getScene());
+    }
+
+    private boolean supportsTierCapabilities(ModelTierDefinition tier, ModelInstance instance) {
+        if (tier == null || instance == null || tier.getCapabilities() == null
+                || tier.getCapabilities().isEmpty()) {
+            return true;
+        }
+        Set<ModelCapability> capabilities = instance.getCapabilities();
+        return tier.getCapabilities().stream()
+                .allMatch(capability -> capabilities != null && capabilities.contains(capability));
+    }
+
     private String exclusionReason(RoutePolicyDefinition policy, ModelTierDefinition tier, ModelInstance instance,
-            ModelRouteContext context, ModelRuntimeState state) {
+            ModelRouteContext context, ModelRuntimeState state, ModelSelectionStrategyType strategyType) {
         if (tier != null && !tier.isEnabled()) {
             return ModelRouteExclusionReason.TIER_DISABLED.code();
+        }
+        if (!supportsTierCapabilities(tier, instance)) {
+            return ModelRouteExclusionReason.TIER_CAPABILITY_MISMATCH.code();
         }
         if (!ModelCapabilityPolicy.supportsScene(instance, context.getScene())) {
             return ModelRouteExclusionReason.UNSUPPORTED_CAPABILITY.code();
         }
         if (!supportsValue(instance.getScenes(), context.getScene())) {
             return ModelRouteExclusionReason.SCENE_MISMATCH.code();
+        }
+        if (strategyType == ModelSelectionStrategyType.WEIGHTED_RANDOM && instance.getWeight() <= 0) {
+            return ModelRouteExclusionReason.ZERO_WEIGHT.code();
         }
         Integer estimatedInputTokens = context.getEstimatedInputTokens();
         if (estimatedInputTokens != null && policy.getMaxInputTokens() != null
@@ -147,11 +203,17 @@ public class ModelRouterService {
             }
         }
         if (state != null && !state.isAvailable()
-                && !ModelHealthPhase.HALF_OPEN.code().equalsIgnoreCase(state.getPhase())) {
+                && !ModelHealthPhase.HALF_OPEN.code().equalsIgnoreCase(state.getPhase())
+                && !modelStateCenter.isProbeDue(state)) {
             return state.getPhase() == null || state.getPhase().isBlank()
                     ? "DOWN" : state.getPhase().toUpperCase(Locale.ROOT);
         }
         return null;
+    }
+
+    private ModelSelectionStrategyType strategyType(ModelTierDefinition tier) {
+        return tier == null || tier.getStrategy() == null
+                ? ModelSelectionStrategyType.ROUND_ROBIN : tier.getStrategy();
     }
 
     private boolean supportsValue(Set<String> values, String expected) {

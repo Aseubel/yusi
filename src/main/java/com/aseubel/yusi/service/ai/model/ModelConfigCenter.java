@@ -21,7 +21,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -72,6 +74,7 @@ public class ModelConfigCenter {
     @PostConstruct
     public void init() {
         ModelRoutingProperties initial = cloneConfig(bootstrapProperties);
+        String configSource = "yaml";
         boolean loaded = false;
 
         if (runtimeConfigRepository != null) {
@@ -80,6 +83,7 @@ public class ModelConfigCenter {
                 if (snapshot.isPresent() && snapshot.get().getConfigJson() != null) {
                     initial = readRuntimeConfig(snapshot.get().getConfigJson(), snapshot.get().getVersion());
                     loaded = true;
+                    configSource = "mysql";
                     log.info("Loaded runtime model config from MySQL, version={}", initial.getVersion());
                 }
             } catch (RuntimeException exception) {
@@ -93,6 +97,7 @@ public class ModelConfigCenter {
                 try {
                     initial = readRuntimeConfig(raw, null);
                     log.info("Loaded runtime model config from Redis, version={}", initial.getVersion());
+                    configSource = "redis";
                 } catch (RuntimeException exception) {
                     log.warn("Failed to load canonical v2 model config from Redis: {}", exception.getMessage());
                 }
@@ -101,6 +106,7 @@ public class ModelConfigCenter {
 
         validate(initial);
         applyLocal(initial);
+        logEffectiveConfig(configSource, initial);
         if (redissonClient == null) {
             return;
         }
@@ -109,7 +115,10 @@ public class ModelConfigCenter {
                 return;
             }
             try {
-                applyLocal(readRuntimeConfig(message, null));
+                ModelRoutingProperties updated = readRuntimeConfig(message, null);
+                if (applyIfNewer(updated, "redis-pubsub")) {
+                    logEffectiveConfig("redis-pubsub", updated);
+                }
             } catch (RuntimeException exception) {
                 log.warn("Failed to consume canonical v2 model config event: {}", exception.getMessage());
             }
@@ -304,10 +313,20 @@ public class ModelConfigCenter {
         if (config == null || config.getSchemaVersion() != 2) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "模型治理配置必须使用 schema-version: 2");
         }
+        if (config.getFailureThreshold() <= 0 || config.getRecoverySuccessThreshold() <= 0
+                || config.getRecoveryProbeIntervalMs() <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "模型健康阈值和恢复探测间隔必须为正数");
+        }
+        if (config.getHalfOpenProbeRatio() < 0 || config.getHalfOpenProbeRatio() > 1) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "half-open-probe-ratio 必须在 0 到 1 之间");
+        }
         if (config.getModels() == null || config.getModels().isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "models 不能为空");
         }
         Set<String> modelIds = new HashSet<>();
+        Map<String, ModelRoutingProperties.ModelDefinition> modelsById = new HashMap<>();
         config.getModels().forEach(model -> {
             if (model == null || model.getId() == null || model.getId().isBlank()) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "model.id 不能为空");
@@ -316,23 +335,37 @@ public class ModelConfigCenter {
             if (!modelIds.add(model.getId())) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "model.id 重复: " + model.getId());
             }
+            modelsById.put(model.getId(), model);
         });
 
         if (config.getTiers() == null || config.getTiers().isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "tiers 不能为空");
         }
-        config.getTiers().forEach((tierId, definition) -> {
+        for (Map.Entry<String, ModelTierDefinition> entry : config.getTiers().entrySet()) {
+            String tierId = entry.getKey();
+            ModelTierDefinition definition = entry.getValue();
             if (tierId == null || tierId.isBlank()
                     || definition == null || definition.getMembers() == null || definition.getMembers().isEmpty()) {
                 throw new BusinessException(ErrorCode.PARAM_ERROR, "tier[" + tierId + "] 必须至少包含一个成员");
             }
-            definition.getMembers().forEach(member -> {
+            validateCapabilities("tier[" + tierId + "]", definition.getCapabilities());
+            Set<String> tierMembers = new HashSet<>();
+            for (String member : definition.getMembers()) {
+                if (member == null || member.isBlank() || !tierMembers.add(member)) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR,
+                            "tier[" + tierId + "] 的 members 不能重复或为空: " + member);
+                }
                 if (member == null || !modelIds.contains(member)) {
                     throw new BusinessException(ErrorCode.PARAM_ERROR,
                             "tier[" + tierId + "] 引用了不存在的模型: " + member);
                 }
-            });
-        });
+                ModelRoutingProperties.ModelDefinition model = modelsById.get(member);
+                if (!supportsTierCapabilities(definition, model)) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR,
+                            "tier[" + tierId + "] 的 capabilities 与模型[" + member + "] 不匹配");
+                }
+            }
+        }
 
         if (config.getDefaultTier() != null && !config.getDefaultTier().isBlank()
                 && !config.getTiers().containsKey(config.getDefaultTier())) {
@@ -346,7 +379,7 @@ public class ModelConfigCenter {
         Set<String> routeIds = new HashSet<>();
         config.getRoutes().forEach(route -> validateRoute(config, route, routeIds));
         if (config.getDefaultRoute() != null) {
-            validateRoute(config, config.getDefaultRoute(), new HashSet<>());
+            validateRoute(config, config.getDefaultRoute(), routeIds);
         }
 
     }
@@ -356,6 +389,23 @@ public class ModelConfigCenter {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "model[" + model.getId() + "] 的 provider 不能为空");
         }
+        if (model.getWeight() == null || model.getWeight() <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "model[" + model.getId() + "] 的 weight 必须为正数");
+        }
+        if (model.getPriority() == null || model.getPriority() < 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "model[" + model.getId() + "] 的 priority 不能为负数");
+        }
+        if (model.getTimeoutSeconds() == null || model.getTimeoutSeconds() <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "model[" + model.getId() + "] 的 timeout-seconds 必须为正数");
+        }
+        if (model.getContextWindowTokens() != null && model.getContextWindowTokens() <= 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "model[" + model.getId() + "] 的 context-window-tokens 必须为正数");
+        }
+        validateCapabilities("model[" + model.getId() + "]", model.getCapabilities());
         boolean chatCompatibleModel = model.supports(ModelCapability.CHAT)
                 || model.supports(ModelCapability.STREAMING_CHAT)
                 || model.supports(ModelCapability.VLM);
@@ -375,8 +425,30 @@ public class ModelConfigCenter {
                 || (anthropicProvider && model.getProtocol() == ModelProtocol.ANTHROPIC_MESSAGES))) {
             throw new BusinessException(ErrorCode.PARAM_ERROR,
                     "model[" + model.getId() + "] 的 provider 与 protocol 不匹配: "
-                            + model.getProvider() + "/" + model.getProtocol());
+                + model.getProvider() + "/" + model.getProtocol());
         }
+    }
+
+    private void validateCapabilities(String owner, List<ModelCapability> capabilities) {
+        if (capabilities == null) {
+            return;
+        }
+        Set<ModelCapability> unique = new LinkedHashSet<>();
+        for (ModelCapability capability : capabilities) {
+            if (capability == null || !unique.add(capability)) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR,
+                        owner + " 的 capabilities 不能重复或为空");
+            }
+        }
+    }
+
+    private boolean supportsTierCapabilities(ModelTierDefinition tier,
+            ModelRoutingProperties.ModelDefinition model) {
+        if (tier == null || model == null || tier.getCapabilities() == null
+                || tier.getCapabilities().isEmpty()) {
+            return true;
+        }
+        return tier.getCapabilities().stream().allMatch(model::supports);
     }
 
     private void validateRoute(ModelRoutingProperties config, RoutePolicyDefinition route,
@@ -389,6 +461,14 @@ public class ModelConfigCenter {
         }
         if (route.getScene() == null || route.getScene().isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "route[" + route.getId() + "] 的 scene 不能为空");
+        }
+        if (route.getPrimaryTier() == null || route.getPrimaryTier().isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "route[" + route.getId() + "] 的 primary-tier 不能为空");
+        }
+        if (route.getPriority() < 0) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "route[" + route.getId() + "] 的 priority 不能为负数");
         }
         ModelTierDefinition primary = config.getTiers().get(route.getPrimaryTier());
         if (primary == null) {
@@ -409,13 +489,25 @@ public class ModelConfigCenter {
         Set<String> fallbackIds = new HashSet<>();
         if (route.getFallbackTiers() != null) {
             route.getFallbackTiers().forEach(fallback -> {
+                if (fallback == null || fallback.isBlank()) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR,
+                            "route[" + route.getId() + "] 的 fallback-tier 不能为空");
+                }
                 if (!fallbackIds.add(fallback)) {
                     throw new BusinessException(ErrorCode.PARAM_ERROR,
                             "route[" + route.getId() + "] 的 fallback-tier 重复: " + fallback);
                 }
+                if (fallback.equals(route.getPrimaryTier())) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR,
+                            "route[" + route.getId() + "] 的 fallback-tier 不能与 primary-tier 相同: " + fallback);
+                }
                 if (!config.getTiers().containsKey(fallback)) {
                     throw new BusinessException(ErrorCode.PARAM_ERROR,
                             "route[" + route.getId() + "] 的 fallback-tier 不存在: " + fallback);
+                }
+                if (!config.getTiers().get(fallback).isEnabled()) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR,
+                            "route[" + route.getId() + "] 的 fallback-tier 已禁用: " + fallback);
                 }
                 if (!hasEnabledModelForScene(config, config.getTiers().get(fallback), route.getScene())) {
                     throw new BusinessException(ErrorCode.PARAM_ERROR,
@@ -443,16 +535,17 @@ public class ModelConfigCenter {
     }
 
     private boolean hasEnabledModelForScene(ModelRoutingProperties config, ModelTierDefinition tier, String scene) {
-        if (tier.getMembers() == null) {
+        if (tier == null || !tier.isEnabled() || tier.getMembers() == null) {
             return false;
         }
         return tier.getMembers().stream()
                 .map(memberId -> config.getModels().stream()
                         .filter(model -> Objects.equals(model.getId(), memberId))
-                        .findFirst()
+                .findFirst()
                         .orElse(null))
                 .anyMatch(model -> model != null
                         && model.isEnabled()
+                        && supportsTierCapabilities(tier, model)
                         && ModelCapabilityPolicy.supportsScene(model, scene)
                         && declaresScene(model, scene));
     }
@@ -482,6 +575,29 @@ public class ModelConfigCenter {
         if (eventPublisher != null) {
             eventPublisher.publishEvent(new ModelConfigUpdatedEvent(this, cloned));
         }
+    }
+
+    private synchronized boolean applyIfNewer(ModelRoutingProperties config, String source) {
+        ModelRoutingProperties current = currentConfig.get();
+        if (current != null && config != null && config.getVersion() < current.getVersion()) {
+            log.warn("Ignored stale model routing config: source={}, incomingVersion={}, currentVersion={}",
+                    source, config.getVersion(), current.getVersion());
+            return false;
+        }
+        applyLocal(config);
+        return true;
+    }
+
+    private void logEffectiveConfig(String source, ModelRoutingProperties config) {
+        log.info("Effective model routing config: source={}, version={}, schemaVersion={}, defaultTier={}, "
+                        + "modelCount={}, tierCount={}, routeCount={}",
+                source,
+                config == null ? null : config.getVersion(),
+                config == null ? null : config.getSchemaVersion(),
+                config == null ? null : config.getDefaultTier(),
+                config == null || config.getModels() == null ? 0 : config.getModels().size(),
+                config == null || config.getTiers() == null ? 0 : config.getTiers().size(),
+                config == null || config.getRoutes() == null ? 0 : config.getRoutes().size());
     }
 
     private String truncate(String message) {

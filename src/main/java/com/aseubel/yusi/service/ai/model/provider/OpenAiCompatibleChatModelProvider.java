@@ -44,16 +44,17 @@ public class OpenAiCompatibleChatModelProvider implements ChatModelProviderAdapt
         Duration timeout = Duration.ofSeconds(
                 definition.getTimeoutSeconds() == null ? 60 : definition.getTimeoutSeconds());
         ModelProtocol protocol = ModelProtocol.normalize(definition.getProtocol());
+        String baseUrl = normalizeBaseUrl(definition.getBaseurl(), protocol);
         if (protocol == ModelProtocol.RESPONSES) {
             OpenAiResponsesChatModel chatModel = OpenAiResponsesChatModel.builder()
-                    .httpClientBuilder(httpClientBuilder(timeout))
-                    .baseUrl(definition.getBaseurl())
+                    .httpClientBuilder(httpClientBuilder(timeout, definition))
+                    .baseUrl(baseUrl)
                     .apiKey(definition.getApikey())
                     .modelName(definition.getModel())
                     .build();
             OpenAiResponsesStreamingChatModel streamingChatModel = OpenAiResponsesStreamingChatModel.builder()
-                    .httpClientBuilder(httpClientBuilder(timeout))
-                    .baseUrl(definition.getBaseurl())
+                    .httpClientBuilder(httpClientBuilder(timeout, definition))
+                    .baseUrl(baseUrl)
                     .apiKey(definition.getApikey())
                     .modelName(definition.getModel())
                     .build();
@@ -61,13 +62,13 @@ public class OpenAiCompatibleChatModelProvider implements ChatModelProviderAdapt
         }
 
         OpenAiChatModel chatModel = OpenAiChatModel.builder()
-                .baseUrl(definition.getBaseurl())
+                .baseUrl(baseUrl)
                 .apiKey(definition.getApikey())
                 .modelName(definition.getModel())
                 .timeout(timeout)
                 .build();
         OpenAiStreamingChatModel streamingChatModel = OpenAiStreamingChatModel.builder()
-                .baseUrl(definition.getBaseurl())
+                .baseUrl(baseUrl)
                 .apiKey(definition.getApikey())
                 .modelName(definition.getModel())
                 .timeout(timeout)
@@ -75,10 +76,36 @@ public class OpenAiCompatibleChatModelProvider implements ChatModelProviderAdapt
         return new ProviderClientBundle(providerId(), chatModel, streamingChatModel);
     }
 
-    private dev.langchain4j.http.client.HttpClientBuilder httpClientBuilder(Duration timeout) {
-        return HttpClientBuilderLoader.loadHttpClientBuilder()
+    private dev.langchain4j.http.client.HttpClientBuilder httpClientBuilder(Duration timeout,
+            ModelRoutingProperties.ModelDefinition definition) {
+        dev.langchain4j.http.client.HttpClientBuilder builder = HttpClientBuilderLoader.loadHttpClientBuilder()
                 .connectTimeout(timeout)
                 .readTimeout(timeout);
+        return isDeepSeekResponses(definition)
+                ? new DeepSeekResponsesHttpClientBuilder(builder)
+                : builder;
+    }
+
+    private boolean isDeepSeekResponses(ModelRoutingProperties.ModelDefinition definition) {
+        String provider = definition.getProvider() == null
+                ? "" : definition.getProvider().trim().toLowerCase(Locale.ROOT);
+        String model = definition.getModel() == null
+                ? "" : definition.getModel().trim().toLowerCase(Locale.ROOT);
+        return "deepseek".equals(provider) || model.startsWith("deepseek-");
+    }
+
+    private String normalizeBaseUrl(String configuredBaseUrl, ModelProtocol protocol) {
+        if (configuredBaseUrl == null || configuredBaseUrl.isBlank()) {
+            return configuredBaseUrl;
+        }
+        String value = configuredBaseUrl.trim().replaceFirst("/+$", "");
+        String suffix = protocol == ModelProtocol.RESPONSES
+                ? "/responses" : "/chat/completions";
+        if (value.length() >= suffix.length()
+                && value.regionMatches(true, value.length() - suffix.length(), suffix, 0, suffix.length())) {
+            return value.substring(0, value.length() - suffix.length());
+        }
+        return value;
     }
 
     @Override
