@@ -646,7 +646,12 @@ Agentic Runtime 因无真实消费方移入[上线后扩展 Backlog](2026-08-17-
       （共鸣信号 cardId/toUserId 归属未校验，待业务确认）已登记；AUTHZ-001 已先红
       后绿修复（5cfb3e8：getPrompt 入口 +checkAdmin，非管理员固定 FORBIDDEN 且
       service 零调用，管理员成功路径锁定，聚焦 16 tests 与相邻回归 9 tests 全绿）；
-      剩余：Trace 边界红绿契约（Task 4-5）与证据标签报告（Task 6））。
+      剩余：Trace 边界红绿契约（Task 4-5）与证据标签报告（Task 6）；save 投影
+      口径裁定 2026-08-22：三个 save 红点经核实为误报——生产代码为纯字段原样
+      投影，哨兵由测试直接注入合法元数据参数（设计自身允许标识类字段），
+      errorCode 实际存 normalized.kind().name() 分类枚举而非异常消息，无内容
+      传播路径；裁定为测试注入方式修正（生产零改动），真实修复点收敛为日志 10 处 +
+      LifeGraph retry error 2 处）。
 - [ ] 限流与成本准入复核：`@RateLimiter` 场景覆盖面与 `model.gateway.admission` 阈值按
       上线标准复核，补齐无限流的写接口。（本地门控已就绪：c778137 交付 90 写映射
       覆盖 manifest、96 个注解（22 既有 + 74 新增）、HMAC subject fail-closed、固定
