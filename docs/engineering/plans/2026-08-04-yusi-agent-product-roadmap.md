@@ -651,7 +651,11 @@ Agentic Runtime 因无真实消费方移入[上线后扩展 Backlog](2026-08-17-
       投影，哨兵由测试直接注入合法元数据参数（设计自身允许标识类字段），
       errorCode 实际存 normalized.kind().name() 分类枚举而非异常消息，无内容
       传播路径；裁定为测试注入方式修正（生产零改动），真实修复点收敛为日志 10 处 +
-      LifeGraph retry error 2 处）。
+      LifeGraph retry error 2 处）。两子项本地部分均已闭环（17888c7：12 处
+      低敏修复 + Trace 字段/保存/日志四维度契约，全量 500 tests 全绿；本地证据为
+      application-invariant-only/mock-contract-only）；剩余为真实依赖与部署机上的
+      deployment-only 证据（双用户渗透、代理/管理端口、WebSocket handshake、真实日志
+      采集、跨用户残留验证）。
 - [ ] 限流与成本准入复核：`@RateLimiter` 场景覆盖面与 `model.gateway.admission` 阈值按
       上线标准复核，补齐无限流的写接口。（本地门控已就绪：c778137 交付 90 写映射
       覆盖 manifest、96 个注解（22 既有 + 74 新增）、HMAC subject fail-closed、固定
