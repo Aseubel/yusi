@@ -134,7 +134,7 @@ public class AgentRunTraceService {
         try {
             agentToolTraceService.closeRunning(userId, runId, status, failureCategory);
         } catch (RuntimeException exception) {
-            log.warn("AgentToolTrace terminal convergence failed for run {}", runId, exception);
+            log.warn("AgentToolTrace terminal convergence failed: operation=agent_tool_trace_terminal_convergence, exceptionType={}", com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
         }
     }
 

@@ -41,8 +41,8 @@ public class ModelCallTraceService {
             traceRepository.save(toEntity(event));
         } catch (RuntimeException exception) {
             persistenceFailureCount.incrementAndGet();
-            log.warn("Failed to persist model call trace attemptId={}: {}",
-                    event.attemptId(), exception.getMessage());
+            log.warn("Failed to persist model call trace: operation=model_call_trace_persist, exceptionType={}",
+                    com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
         }
     }
 

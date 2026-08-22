@@ -639,7 +639,7 @@ public class AiController {
         try {
             action.run();
         } catch (RuntimeException exception) {
-            log.warn("AgentRun trace {} failed; continuing chat stream", operation, exception);
+            log.warn("AgentRun trace failed: operation=agent_run_trace, operationName={}, exceptionType={}", operation, com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
         }
     }
 
@@ -650,7 +650,7 @@ public class AiController {
         try {
             action.run();
         } catch (RuntimeException exception) {
-            log.warn("AgentToolTrace {} failed; continuing chat stream", operation, exception);
+            log.warn("AgentToolTrace failed: operation=agent_tool_trace, operationName={}, exceptionType={}", operation, com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
         }
     }
 

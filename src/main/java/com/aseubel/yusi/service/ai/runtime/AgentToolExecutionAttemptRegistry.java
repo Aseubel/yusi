@@ -69,7 +69,7 @@ public class AgentToolExecutionAttemptRegistry
         try {
             traceService.incrementAttemptCount(pending.userId, pending.runId, pending.localToolCallId);
         } catch (RuntimeException exception) {
-            log.debug("Unable to persist agent tool retry count for run {}", pending.runId, exception);
+            log.debug("Unable to persist agent tool retry count: operation=agent_tool_retry_count, runId={}, exceptionType={}", pending.runId, com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
         }
     }
 

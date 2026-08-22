@@ -267,8 +267,8 @@ public class DiaryVoiceWebSocketHandler extends AbstractWebSocketHandler {
     private void fail(VoiceConnection connection, String code, String message,
                       Throwable cause, CloseStatus closeStatus) {
         if (cause != null) {
-            log.warn("日记语音输入失败: connectionId={}, code={}, userId={}",
-                    connection.socket.getId(), code, connection.userId, cause);
+            log.warn("日记语音输入失败: operation=diary_voice_input, exceptionType={}",
+                    com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(cause));
         }
         if (!connection.closed.compareAndSet(false, true)) {
             return;

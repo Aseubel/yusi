@@ -90,8 +90,8 @@ public class PlazaLifeGraphListener {
             taskExecutionService.fail(execution.getTaskId(), TaskFailureCategory.DEPENDENCY,
                     null, LocalDateTime.now());
             scope.fail(TaskFailureCategory.DEPENDENCY.name().toLowerCase());
-            log.warn("Plaza LifeGraph source processing failed: sourceId={}",
-                    event.getCommand().getSourceId(), exception);
+            log.warn("Plaza LifeGraph source processing failed: operation=plaza_life_graph, sourceId={}, exceptionType={}",
+                    event.getCommand().getSourceId(), com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
         } finally {
             scope.close();
         }

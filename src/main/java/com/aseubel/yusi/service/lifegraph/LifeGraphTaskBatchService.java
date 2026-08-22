@@ -175,7 +175,7 @@ public class LifeGraphTaskBatchService {
             completeScope(scope);
         } catch (Exception e) {
             LocalDateTime nextRetry = calculateNextRetry(1);
-            taskRepository.incrementRetryAndSetNextAttempt(taskId, e.getMessage(), nextRetry, now);
+            taskRepository.incrementRetryAndSetNextAttempt(taskId, TaskFailureCategory.DEPENDENCY.name().toLowerCase(), nextRetry, now);
             String executionId = findTaskExecutionId(taskId);
             if (executionId != null) {
                 TaskExecution retry = taskExecutionService.retry(executionId,
@@ -218,7 +218,7 @@ public class LifeGraphTaskBatchService {
 
     private TaskExecution markRetry(LifeGraphTask task, Exception exception, LocalDateTime now) {
         LocalDateTime nextRetry = calculateNextRetry(task.getRetryCount() + 1);
-        taskRepository.incrementRetryAndSetNextAttempt(task.getId(), exception.getMessage(), nextRetry, now);
+        taskRepository.incrementRetryAndSetNextAttempt(task.getId(), TaskFailureCategory.DEPENDENCY.name().toLowerCase(), nextRetry, now);
         if (task.getTaskExecutionId() != null) {
             return taskExecutionService.retry(task.getTaskExecutionId(), TaskFailureCategory.DEPENDENCY, null, now);
         }

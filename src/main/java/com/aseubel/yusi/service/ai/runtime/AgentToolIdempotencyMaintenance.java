@@ -23,7 +23,7 @@ public class AgentToolIdempotencyMaintenance {
             int recovered = ledgerService.recoverOrphanedClaims(LocalDateTime.now());
             log.info("Recovered {} orphaned agent tool idempotency claims", recovered);
         } catch (RuntimeException exception) {
-            log.warn("Unable to recover orphaned agent tool idempotency claims", exception);
+            log.warn("Unable to recover orphaned agent tool idempotency claims: operation=agent_tool_idempotency_recovery, exceptionType={}", com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
         }
     }
 
@@ -33,7 +33,7 @@ public class AgentToolIdempotencyMaintenance {
             int cleared = ledgerService.clearExpiredStates(LocalDateTime.now());
             log.info("Cleared {} expired agent tool idempotency states", cleared);
         } catch (RuntimeException exception) {
-            log.warn("Unable to clear expired agent tool idempotency states", exception);
+            log.warn("Unable to clear expired agent tool idempotency states: operation=agent_tool_idempotency_expiry_cleanup, exceptionType={}", com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));
         }
     }
 }
