@@ -46,6 +46,7 @@ public class PromptController {
     public Response<String> getPrompt(
             @PathVariable @Size(max = 255) String name,
             @RequestParam(defaultValue = "zh-CN") @Size(max = 16) String locale) {
+        checkAdmin();
         return Response.success(promptService.getPrompt(name, normalize(locale)));
     }
 
