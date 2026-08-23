@@ -1162,10 +1162,6 @@ public class ModelProxyFactory {
             ModelRouteContext context = ModelRouteContextHolder.getEffective();
             String scene = context == null ? null : context.getScene();
             String resolvedScene = Objects.requireNonNullElse(scene, defaultScene);
-            if (containsImage(request) && (scene == null || scene.isBlank()
-                    || "chat".equalsIgnoreCase(resolvedScene))) {
-                resolvedScene = ModelCapabilityPolicy.IMAGE_UNDERSTANDING_SCENE;
-            }
             Integer estimatedInputTokens = context == null ? null : context.getEstimatedInputTokens();
             if (estimatedInputTokens == null && request != null) {
                 estimatedInputTokens = tokenEstimator.estimate(request);
@@ -1189,16 +1185,6 @@ public class ModelProxyFactory {
                     .build();
         }
 
-        private boolean containsImage(ChatRequest request) {
-            if (request == null || request.messages() == null) {
-                return false;
-            }
-            return request.messages().stream()
-                    .filter(UserMessage.class::isInstance)
-                    .map(UserMessage.class::cast)
-                    .anyMatch(userMessage -> userMessage.contents() != null
-                            && userMessage.contents().stream().anyMatch(ImageContent.class::isInstance));
-        }
     }
 
     private static String sanitizeEndpoint(String baseUrl) {

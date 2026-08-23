@@ -5,6 +5,7 @@ import com.aseubel.yusi.observability.metrics.YusiMetrics;
 import com.aseubel.yusi.service.ai.mask.MaskResult;
 import com.aseubel.yusi.service.ai.mask.SensitiveDataMaskService;
 import com.aseubel.yusi.service.ai.runtime.ModelCallAttemptEvent;
+import dev.langchain4j.data.message.ImageContent;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.chat.ChatModel;
@@ -34,6 +35,7 @@ import org.redisson.client.codec.StringCodec;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.net.URI;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -309,6 +311,36 @@ class ModelProxyFactoryTest {
         verify(router).plan(contextCaptor.capture());
         assertThat(contextCaptor.getValue().getEstimatedInputTokens()).isPositive();
         assertEquals(64, contextCaptor.getValue().getReservedOutputTokens());
+    }
+
+    @Test
+    void explicitChatSceneIsPreservedForMultimodalRequests() {
+        ModelRouterService router = mock(ModelRouterService.class);
+        ModelStateCenter stateCenter = mock(ModelStateCenter.class);
+        SensitiveDataMaskService maskService = mock(SensitiveDataMaskService.class);
+        ChatModel delegate = mock(ChatModel.class);
+        ModelInstance selected = instance("multimodal-chat", delegate, mock(StreamingChatModel.class));
+        when(router.plan(any(ModelRouteContext.class))).thenReturn(new ModelRouteDecision(
+                "fixture-chat-image-route", "chat", 1L, "chat", List.of(),
+                List.of(new ModelRouteCandidate("chat", selected, true, null)),
+                "policy=chat;primary-tier=chat"));
+        when(stateCenter.allowRequest("multimodal-chat")).thenReturn(true);
+        when(maskService.mask(anyString())).thenReturn(new MaskResult("plain", Map.of(), false));
+        when(delegate.chat(any(ChatRequest.class))).thenReturn(ChatResponse.builder()
+                .aiMessage(AiMessage.from("ok"))
+                .build());
+
+        ModelProxyFactory factory = new ModelProxyFactory(router, stateCenter, maskService);
+        factory.createChatProxy("chat").chat(ChatRequest.builder()
+                .messages(List.of(UserMessage.from(List.of(
+                        dev.langchain4j.data.message.TextContent.from("fixture-chat-message"),
+                        ImageContent.from(URI.create("https://example.test/fixture-chat-image")))))
+                )
+                .build());
+
+        var contextCaptor = org.mockito.ArgumentCaptor.forClass(ModelRouteContext.class);
+        verify(router).plan(contextCaptor.capture());
+        assertEquals("chat", contextCaptor.getValue().getScene());
     }
 
     private StreamingChatResponseHandler createWrappedHandler(StreamingChatResponseHandler downstream) {

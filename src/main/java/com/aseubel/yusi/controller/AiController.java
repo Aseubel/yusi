@@ -321,9 +321,9 @@ public class AiController {
                         .requestId(requestId)
                         .runId(requestId)
                         .userId(userId)
-                        .scene(imageContents.isEmpty()
-                                ? PromptKey.CHAT.getKey()
-                                : PromptKey.IMAGE_UNDERSTANDING.getKey())
+                        .scene(
+                                PromptKey.CHAT.getKey()
+                        )
                         .cancellationToken(session.cancellationToken())
                         .build());
 

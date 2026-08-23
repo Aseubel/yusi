@@ -15,6 +15,8 @@ import com.aseubel.yusi.service.ai.tool.constant.AgentToolIdempotencyMode;
 import com.aseubel.yusi.service.ai.runtime.ChatStreamCancellationRegistry;
 import com.aseubel.yusi.service.ai.model.ModelFailureKind;
 import com.aseubel.yusi.service.ai.model.ModelInvocationException;
+import com.aseubel.yusi.service.ai.model.ModelRouteContext;
+import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
 import com.aseubel.yusi.service.diary.Assistant;
 import com.aseubel.yusi.service.oss.OssService;
 import dev.langchain4j.agent.tool.ToolExecutionRequest;
@@ -188,6 +190,29 @@ class AiControllerCancellationTest {
         assertTrue(controller.events().stream().anyMatch(event -> "run.failed".equals(event.type())));
         assertTrue(registry.find("user-1", "request-provider-error").isEmpty());
         verify(aiLockService).releaseLock("user-1");
+    }
+
+    @Test
+    void chatWithImageKeepsTheChatRouteScene() {
+        TokenStream tokenStream = tokenStream();
+        AtomicReference<ModelRouteContext> capturedContext = new AtomicReference<>();
+        when(ossService.generateOwnedUrl("fixture-chat-image", "user-1"))
+                .thenReturn("https://example.test/fixture-chat-image");
+        when(diaryAssistant.chatWithMessage(eq("user-1"), anyString(), anyList()))
+                .thenAnswer(invocation -> {
+                    capturedContext.set(ModelRouteContextHolder.get());
+                    return tokenStream;
+                });
+
+        controller.chatStream(ChatRequest.builder()
+                .requestId("fixture-chat-image-route")
+                .message("fixture-chat-message")
+                .images(List.of("fixture-chat-image"))
+                .build());
+        submittedTask.get().run();
+
+        assertNotNull(capturedContext.get());
+        assertEquals("chat", capturedContext.get().getScene());
     }
 
     @Test
