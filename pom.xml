@@ -331,7 +331,9 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
+                <!-- Lowercase evaluation packages must run before the root aggregate gate. -->
                 <configuration>
+                    <runOrder>reversealphabetical</runOrder>
                     <systemPropertyVariables>
                         <spring.profiles.active>test</spring.profiles.active>
                     </systemPropertyVariables>

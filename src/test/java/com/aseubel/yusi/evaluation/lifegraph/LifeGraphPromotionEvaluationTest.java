@@ -57,7 +57,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.when;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "spring.datasource.url=jdbc:h2:mem:yusi_promotion_evaluation;MODE=MySQL;"
+                + "DATABASE_TO_LOWER=TRUE;NON_KEYWORDS=USER;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE"
+})
 @ActiveProfiles("test")
 @Import(TestInfrastructureConfig.class)
 class LifeGraphPromotionEvaluationTest {
