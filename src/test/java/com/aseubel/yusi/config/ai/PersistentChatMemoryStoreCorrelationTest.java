@@ -6,6 +6,7 @@ import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.service.ai.chat.ContextBuilderService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
+import com.aseubel.yusi.service.oss.OssService;
 import com.aseubel.yusi.redis.service.IRedisService;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.data.message.UserMessage;
@@ -41,6 +42,9 @@ class PersistentChatMemoryStoreCorrelationTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private OssService ossService;
+
     @AfterEach
     void clearRouteContext() {
         ModelRouteContextHolder.clear();
@@ -51,7 +55,7 @@ class PersistentChatMemoryStoreCorrelationTest {
         when(messageRepository.findByMemoryIdOrderByCreatedAtDesc(eq("user-1"), any(Pageable.class)))
                 .thenReturn(List.of());
         PersistentChatMemoryStore store = new PersistentChatMemoryStore(
-                messageRepository, redisService, contextBuilderService, eventPublisher);
+                messageRepository, redisService, contextBuilderService, eventPublisher, ossService);
         ModelRouteContextHolder.set(ModelRouteContext.builder()
                 .userId("user-1")
                 .runId("chat-run-1")

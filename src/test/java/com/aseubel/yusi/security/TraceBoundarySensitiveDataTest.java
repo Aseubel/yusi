@@ -151,11 +151,11 @@ class TraceBoundarySensitiveDataTest {
             ModelCallAttemptEvent.class, MODEL_ATTEMPT_FIELDS);
 
     private static final List<SourceLine> EXPECTED_WRITE_POINTS = List.of(
-            new SourceLine("src/main/java/com/aseubel/yusi/controller/AiController.java", 447,
+            new SourceLine("src/main/java/com/aseubel/yusi/controller/AiController.java", 445,
                     "log.error(\"AI chat stream failed: operation=ai_chat_stream_callback, requestId={}, \""),
-            new SourceLine("src/main/java/com/aseubel/yusi/controller/AiController.java", 657,
+            new SourceLine("src/main/java/com/aseubel/yusi/controller/AiController.java", 655,
                     "log.warn(\"AgentRun trace failed: operation=agent_run_trace, operationName={}, exceptionType={}\", operation, com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));"),
-            new SourceLine("src/main/java/com/aseubel/yusi/controller/AiController.java", 668,
+            new SourceLine("src/main/java/com/aseubel/yusi/controller/AiController.java", 666,
                     "log.warn(\"AgentToolTrace failed: operation=agent_tool_trace, operationName={}, exceptionType={}\", operation, com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));"),
             new SourceLine("src/main/java/com/aseubel/yusi/service/ai/runtime/AgentRunTraceService.java", 137,
                     "log.warn(\"AgentToolTrace terminal convergence failed: operation=agent_tool_trace_terminal_convergence, exceptionType={}\", com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(exception));"),

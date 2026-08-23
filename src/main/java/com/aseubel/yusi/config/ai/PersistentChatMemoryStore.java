@@ -10,6 +10,7 @@ import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.service.ai.chat.ContextBuilderService;
 import com.aseubel.yusi.service.ai.model.ModelRouteContext;
 import com.aseubel.yusi.service.ai.model.ModelRouteContextHolder;
+import com.aseubel.yusi.service.oss.OssService;
 import com.aseubel.yusi.redis.service.IRedisService;
 import dev.langchain4j.data.message.*;
 import dev.langchain4j.store.memory.chat.ChatMemoryStore;
@@ -25,7 +26,10 @@ import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -43,6 +47,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     private final IRedisService redisService;
     private final ContextBuilderService contextBuilderService;
     private final ApplicationEventPublisher eventPublisher;
+    private final OssService ossService;
 
     private static final int MAX_LOAD_MESSAGES = 100;
     private static final long REDIS_TTL_MS = 30 * 60 * 1000;
@@ -61,7 +66,9 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         String json = redisService.getValue(cacheKey);
         if (json != null) {
             try {
-                List<ChatMessage> messages = messagesFromJson(json);
+                List<ChatMessage> messages = messagesFromJson(json).stream()
+                        .map(message -> refreshImageContents(message, memId))
+                        .collect(Collectors.toCollection(ArrayList::new));
                 messages.addFirst(contextBuilderService.buildSystemMessage(memoryId));
                 return messages;
             } catch (Exception e) {
@@ -110,6 +117,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         ChatMessage lastMsg = messagesWithoutSystem.get(messagesWithoutSystem.size() - 1);
 
         String serializedLastMsg = serializeForDb(lastMsg);
+        String imageObjectKeys = extractImages(lastMsg, memId);
         if (serializedLastMsg == null) {
             log.debug("Skipping message with null content: {}", lastMsg.type());
             return;
@@ -121,7 +129,8 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         boolean shouldInsert = true;
         if (!lastDbMsgs.isEmpty()) {
             ChatMemoryMessage lastDb = lastDbMsgs.get(0);
-            if (lastDb.getContent().equals(serializedLastMsg)) {
+            if (Objects.equals(lastDb.getContent(), serializedLastMsg)
+                    && Objects.equals(lastDb.getImages(), imageObjectKeys)) {
                 shouldInsert = false;
             }
         }
@@ -132,7 +141,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
                     .runId(currentRunId(memId))
                     .role(lastMsg.type().name())
                     .content(serializedLastMsg)
-                    .images(extractImages(lastMsg))
+                    .images(imageObjectKeys)
                     .createdAt(LocalDateTime.now())
                     .build();
             messageRepository.save(entity);
@@ -163,6 +172,11 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
     }
 
     private String serializeForDb(ChatMessage message) {
+        if (message instanceof UserMessage userMessage && hasImageContents(userMessage)) {
+            // Image URLs are short-lived. The durable image references live in
+            // ChatMemoryMessage.images, so keep signed URLs out of content too.
+            return messagesToJson(List.of(textOnlyMessage(userMessage)));
+        }
         return messagesToJson(List.of(message));
     }
 
@@ -178,22 +192,8 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
             List<ChatMessage> deserialized = messagesFromJson(content);
             if (!deserialized.isEmpty()) {
                 ChatMessage msg = deserialized.get(0);
-                
-                if (msg instanceof UserMessage userMsg && StrUtil.isNotBlank(entity.getImages())) {
-                    boolean hasImages = userMsg.contents().stream().anyMatch(c -> c instanceof ImageContent);
-                    if (!hasImages) {
-                        List<Content> imageContents = parseImageContents(entity.getImages());
-                        if (!imageContents.isEmpty()) {
-                            String text = userMsg.contents().stream()
-                                    .filter(c -> c instanceof TextContent)
-                                    .map(c -> ((TextContent) c).text())
-                                    .findFirst().orElse("");
-                            List<Content> newContents = new ArrayList<>();
-                            newContents.add(TextContent.from(text));
-                            newContents.addAll(imageContents);
-                            return UserMessage.from(newContents);
-                        }
-                    }
+                if (msg instanceof UserMessage userMsg) {
+                    return rebuildUserMessage(userMsg, imageReferences(entity, userMsg), entity.getMemoryId());
                 }
                 return msg;
             }
@@ -211,13 +211,7 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
                 return AiMessage.from(content);
             case USER:
                 UserMessage userMsg = UserMessage.from(content);
-                if (StrUtil.isNotBlank(entity.getImages())) {
-                    List<Content> imageContents = parseImageContents(entity.getImages());
-                    if (!imageContents.isEmpty()) {
-                        return UserMessage.from(content, imageContents);
-                    }
-                }
-                return userMsg;
+                return rebuildUserMessage(userMsg, parseImageReferences(entity.getImages()), entity.getMemoryId());
             case SYSTEM:
                 return SystemMessage.from(content);
             default:
@@ -283,36 +277,164 @@ public class PersistentChatMemoryStore implements ChatMemoryStore {
         return text;
     }
 
-    private String extractImages(ChatMessage message) {
-        if (message instanceof UserMessage userMessage) {
-            List<ImageContent> imageContents = userMessage.contents().stream()
-                    .filter(c -> c instanceof ImageContent)
-                    .map(c -> (ImageContent) c)
-                    .collect(Collectors.toList());
-            if (!imageContents.isEmpty()) {
-                List<String> imageUrls = imageContents.stream()
-                        .map(img -> img.image().url().toString())
-                        .filter(StrUtil::isNotBlank)
-                        .collect(Collectors.toList());
-                if (!imageUrls.isEmpty()) {
-                    return JSONUtil.toJsonStr(imageUrls);
-                }
-            }
+    private String extractImages(ChatMessage message, String userId) {
+        if (!(message instanceof UserMessage userMessage)) {
+            return null;
         }
-        return null;
+
+        Set<String> objectKeys = new LinkedHashSet<>();
+        extractImageReferences(userMessage).stream()
+                .map(reference -> normalizeImageReference(reference, userId))
+                .filter(StrUtil::isNotBlank)
+                .forEach(objectKeys::add);
+        return objectKeys.isEmpty() ? null : JSONUtil.toJsonStr(objectKeys);
     }
 
-    private List<Content> parseImageContents(String imagesJson) {
+    /**
+     * Resolves image URLs for the history endpoint without exposing persisted
+     * signed URLs. This also gives legacy rows the same read-time repair path.
+     */
+    public List<String> resolveImageUrls(ChatMemoryMessage entity) {
+        ChatMessage message = toChatMessage(entity);
+        if (!(message instanceof UserMessage userMessage)) {
+            return List.of();
+        }
+        return userMessage.contents().stream()
+                .filter(content -> content instanceof ImageContent)
+                .map(content -> ((ImageContent) content).image().url().toString())
+                .toList();
+    }
+
+    /**
+     * Returns durable image references for API clients that need to refresh a
+     * signed URL after it expires. Legacy rows are normalized on read as well.
+     */
+    public List<String> resolveImageObjectKeys(ChatMemoryMessage entity) {
+        Set<String> objectKeys = new LinkedHashSet<>();
+        parseImageReferences(entity.getImages()).stream()
+                .map(reference -> normalizeImageReference(reference, entity.getMemoryId()))
+                .filter(StrUtil::isNotBlank)
+                .forEach(objectKeys::add);
+
+        if (!objectKeys.isEmpty() || StrUtil.isBlank(entity.getContent())) {
+            return List.copyOf(objectKeys);
+        }
+
         try {
-            List<String> urls = JSONUtil.toList(imagesJson, String.class);
-            return urls.stream()
+            List<ChatMessage> messages = messagesFromJson(entity.getContent());
+            if (!messages.isEmpty() && messages.get(0) instanceof UserMessage userMessage) {
+                extractImageReferences(userMessage).stream()
+                        .map(reference -> normalizeImageReference(reference, entity.getMemoryId()))
+                        .filter(StrUtil::isNotBlank)
+                        .forEach(objectKeys::add);
+            }
+        } catch (RuntimeException exception) {
+            log.warn("Chat memory image reference recovery failed: operation=recover_image_keys, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(exception));
+        }
+        return List.copyOf(objectKeys);
+    }
+
+    private ChatMessage refreshImageContents(ChatMessage message, String userId) {
+        if (!(message instanceof UserMessage userMessage) || !hasImageContents(userMessage)) {
+            return message;
+        }
+        return rebuildUserMessage(userMessage, extractImageReferences(userMessage), userId);
+    }
+
+    private UserMessage rebuildUserMessage(UserMessage original, List<String> references, String userId) {
+        boolean hasEmbeddedImages = hasImageContents(original);
+        if (!hasEmbeddedImages && references.isEmpty()) {
+            return original;
+        }
+
+        List<Content> freshImages = resolveImageContents(references, userId);
+        List<Content> contents = original.contents().stream()
+                .filter(content -> content instanceof TextContent)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (contents.isEmpty()) {
+            contents.add(TextContent.from(""));
+        }
+        contents.addAll(freshImages);
+        return new UserMessage(original.name(), contents);
+    }
+
+    private UserMessage textOnlyMessage(UserMessage original) {
+        List<Content> textContents = original.contents().stream()
+                .filter(content -> content instanceof TextContent)
+                .collect(Collectors.toCollection(ArrayList::new));
+        if (textContents.isEmpty()) {
+            textContents.add(TextContent.from(""));
+        }
+        return new UserMessage(original.name(), textContents);
+    }
+
+    private boolean hasImageContents(UserMessage message) {
+        return message.contents().stream().anyMatch(content -> content instanceof ImageContent);
+    }
+
+    private List<String> imageReferences(ChatMemoryMessage entity, UserMessage userMessage) {
+        List<String> persistedReferences = parseImageReferences(entity.getImages());
+        return persistedReferences.isEmpty() ? extractImageReferences(userMessage) : persistedReferences;
+    }
+
+    private List<String> extractImageReferences(UserMessage userMessage) {
+        return userMessage.contents().stream()
+                .filter(content -> content instanceof ImageContent)
+                .map(content -> ((ImageContent) content).image().url())
+                .filter(Objects::nonNull)
+                .map(URI::toString)
+                .filter(StrUtil::isNotBlank)
+                .toList();
+    }
+
+    private List<String> parseImageReferences(String imagesJson) {
+        if (StrUtil.isBlank(imagesJson)) {
+            return List.of();
+        }
+        try {
+            return JSONUtil.toList(imagesJson, String.class).stream()
                     .filter(StrUtil::isNotBlank)
-                    .map(url -> ImageContent.from(URI.create(url)))
-                    .collect(Collectors.toList());
+                    .toList();
         } catch (Exception e) {
             log.warn("Chat memory image payload invalid: operation=parse_images, exceptionType={}",
                     LowSensitivityLogSummary.exceptionType(e));
-            return Collections.emptyList();
+            return List.of();
+        }
+    }
+
+    private List<Content> resolveImageContents(List<String> references, String userId) {
+        if (references == null || references.isEmpty() || StrUtil.isBlank(userId)) {
+            return List.of();
+        }
+
+        List<Content> contents = new ArrayList<>();
+        for (String reference : references) {
+            String objectKey = normalizeImageReference(reference, userId);
+            if (StrUtil.isBlank(objectKey)) {
+                continue;
+            }
+            try {
+                String freshUrl = ossService.generateOwnedUrl(objectKey, userId);
+                contents.add(ImageContent.from(URI.create(freshUrl)));
+            } catch (RuntimeException exception) {
+                log.warn("Chat memory image resolve failed: operation=resolve_images, exceptionType={}",
+                        LowSensitivityLogSummary.exceptionType(exception));
+            }
+        }
+        return contents;
+    }
+
+    private String normalizeImageReference(String reference, String userId) {
+        String objectKey = ossService.getObjectKeyFromUrl(reference);
+        if (StrUtil.isBlank(objectKey) || StrUtil.isBlank(userId)) {
+            return null;
+        }
+        try {
+            ossService.validateOwnedObjectKeys(List.of(objectKey), userId);
+            return objectKey;
+        } catch (RuntimeException exception) {
+            return null;
         }
     }
 }

@@ -197,6 +197,11 @@ public class AiController {
 
                         item.put("content", textContent);
 
+                        List<String> imageObjectKeys = chatMemoryStore.resolveImageObjectKeys(entity);
+                        if (!imageObjectKeys.isEmpty()) {
+                            item.put("imageObjectKeys", imageObjectKeys);
+                        }
+
                         List<ImageContent> imageContents = userMsg.contents().stream()
                                 .filter(c -> c instanceof ImageContent)
                                 .map(c -> (ImageContent) c)
@@ -210,18 +215,11 @@ public class AiController {
                                 item.put("images", imageUrls);
                             }
                         } else {
-                            // Backup check for images in string format if deserialization failed to map to
-                            // ImageContent
-                            String dbImagesStr = entity.getImages();
-                            if (StrUtil.isNotBlank(dbImagesStr)) {
-                                try {
-                                    List<String> urls = cn.hutool.json.JSONUtil.toList(dbImagesStr, String.class);
-                                    if (!urls.isEmpty()) {
-                                        item.put("images", urls);
-                                    }
-                                } catch (Exception e) {
-                                    // ignore JSON parse error
-                                }
+                            // Resolve legacy/key references through the memory store;
+                            // never return persisted signed URLs directly.
+                            List<String> imageUrls = chatMemoryStore.resolveImageUrls(entity);
+                            if (!imageUrls.isEmpty()) {
+                                item.put("images", imageUrls);
                             }
                         }
                     } else if (msg instanceof AiMessage aiMsg) {

@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -241,15 +242,59 @@ public class OssService {
         }
     }
 
-    public String getObjectKeyFromUrl(String url) {
-        if (url == null || url.isEmpty()) {
+    /**
+     * Normalizes either a persisted object key or one of this service's signed
+     * URLs to the durable object key. Unknown URLs are rejected instead of
+     * being carried into chat history and model requests.
+     */
+    public String getObjectKeyFromUrl(String reference) {
+        if (reference == null || reference.isBlank()) {
             return null;
         }
-        int bucketIndex = url.indexOf(ossProperties.getBucketName() + "/");
-        if (bucketIndex == -1) {
-            return url;
+        String value = reference.trim();
+        if (!value.startsWith("http://") && !value.startsWith("https://")) {
+            return value;
         }
-        return url.substring(bucketIndex + ossProperties.getBucketName().length() + 1);
+
+        try {
+            URI uri = URI.create(value);
+            String host = uri.getHost();
+            String path = uri.getPath();
+            String bucket = ossProperties.getBucketName();
+            if (host == null || path == null || path.isBlank() || bucket == null || bucket.isBlank()) {
+                return null;
+            }
+
+            String endpointHost = configuredHost(ossProperties.getEndpoint());
+            String domainHost = configuredHost(ossProperties.getDomain());
+            boolean virtualHostedOss = endpointHost != null
+                    && host.equalsIgnoreCase(bucket + "." + endpointHost);
+            boolean endpointHostedOss = endpointHost != null && host.equalsIgnoreCase(endpointHost);
+            boolean customDomain = domainHost != null && host.equalsIgnoreCase(domainHost);
+            if (!virtualHostedOss && !endpointHostedOss && !customDomain) {
+                return null;
+            }
+
+            String objectKey = path.startsWith("/") ? path.substring(1) : path;
+            if (endpointHostedOss && objectKey.startsWith(bucket + "/")) {
+                objectKey = objectKey.substring(bucket.length() + 1);
+            }
+            return objectKey.isBlank() ? null : objectKey;
+        } catch (RuntimeException exception) {
+            return null;
+        }
+    }
+
+    private String configuredHost(String endpoint) {
+        if (endpoint == null || endpoint.isBlank()) {
+            return null;
+        }
+        try {
+            String normalized = endpoint.contains("://") ? endpoint : "https://" + endpoint;
+            return URI.create(normalized).getHost();
+        } catch (RuntimeException exception) {
+            return null;
+        }
     }
 
     public String checkSkipUpload(String fileMd5, String userId) {

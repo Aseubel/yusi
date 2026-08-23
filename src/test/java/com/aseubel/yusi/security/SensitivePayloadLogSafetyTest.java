@@ -36,6 +36,7 @@ import com.aseubel.yusi.service.room.SituationRoomAgent;
 import com.aseubel.yusi.service.room.impl.SituationReportService;
 import com.aseubel.yusi.service.diary.impl.DiaryServiceImpl;
 import com.aseubel.yusi.service.plaza.impl.EmotionAnalyzerImpl;
+import com.aseubel.yusi.service.oss.OssService;
 import com.aseubel.yusi.service.task.TaskExecutionService;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.aseubel.yusi.service.user.UserService;
@@ -164,6 +165,8 @@ class SensitivePayloadLogSafetyTest {
     private ContextBuilderService contextBuilderService;
     @Mock
     private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @Mock
+    private OssService ossService;
     @Mock
     private ProceedingJoinPoint joinPoint;
     @Mock
@@ -403,7 +406,7 @@ class SensitivePayloadLogSafetyTest {
     @Test
     void chatImagePayloadDoesNotAppearInLogs() {
         PersistentChatMemoryStore store = new PersistentChatMemoryStore(messageRepository, redisService,
-                contextBuilderService, eventPublisher);
+                contextBuilderService, eventPublisher, ossService);
         var entity = com.aseubel.yusi.pojo.entity.ChatMemoryMessage.builder()
                 .role("USER")
                 .content(messagesToJson(List.<ChatMessage>of(UserMessage.from("fixture-chat-text"))))
