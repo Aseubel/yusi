@@ -22,7 +22,11 @@ public class RedisAlertStateStore implements AlertStateStore {
             "service_unavailable", "model_failure_rate", "task_backlog", "budget_denied");
     private static final Set<String> OPERATIONS = Set.of(
             "readiness", "db", "redis", "milvus", "model_gateway", "tasks", "model_call",
-            "model_admission", "weekly-match", "embedding-worker", "lifegraph-worker");
+            "model_admission", "usage-sync", "memory-scan", "room-cleanup", "memory-fusion",
+            "proactive-greeting", "embedding-cleanup", "lifegraph-cleanup",
+            "task-execution-recovery", "security-audit-cleanup", "lifegraph-merge-suggestion",
+            "weekly-report", "weekly-match", "embedding-worker", "lifegraph-worker",
+            "model-state-sync");
     private static final Set<String> LEVELS = Set.of("warning", "critical");
 
     private final RedissonClient redissonClient;
