@@ -11,6 +11,10 @@ import com.aseubel.yusi.pojo.dto.model.ModelCallTraceQuery;
 import com.aseubel.yusi.pojo.dto.model.ModelGovernanceSnapshot;
 import com.aseubel.yusi.pojo.dto.model.ModelGovernanceUpdateRequest;
 import com.aseubel.yusi.pojo.dto.model.ModelMetricSummary;
+import com.aseubel.yusi.pojo.dto.model.ModelMetricAggregate;
+import com.aseubel.yusi.pojo.dto.model.ModelMetricBucket;
+import com.aseubel.yusi.pojo.dto.model.ModelMetricTrendQuery;
+import com.aseubel.yusi.pojo.dto.model.ModelMetricTrendResponse;
 import com.aseubel.yusi.pojo.dto.model.ModelRouteReason;
 import com.aseubel.yusi.pojo.dto.model.ModelRoutePreviewRequest;
 import com.aseubel.yusi.pojo.dto.model.ModelRoutePreviewResponse;
@@ -23,6 +27,7 @@ import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
 import com.aseubel.yusi.pojo.constant.SecurityAuditReasonCode;
 import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.repository.ModelCallTraceRepository;
+import com.aseubel.yusi.repository.ModelCallTraceMetricsRepository;
 import com.aseubel.yusi.service.security.SecurityAuditService;
 import com.aseubel.yusi.service.ai.model.constant.ModelHealthPhase;
 import com.aseubel.yusi.service.ai.model.constant.ModelRouteExclusionReason;
@@ -65,6 +70,7 @@ public class ModelManagementService {
     private final ModelConfigCenter modelConfigCenter;
     private final ModelRoutePlanner modelRoutePlanner;
     private final ModelCallTraceRepository modelCallTraceRepository;
+    private final ModelCallTraceMetricsRepository modelCallTraceMetricsRepository;
     private final SecurityAuditService securityAuditService;
     private final ObjectMapper objectMapper;
 
@@ -295,48 +301,58 @@ public class ModelManagementService {
 
     public ModelMetricSummary getMetrics(ModelCallTraceQuery query) {
         ModelCallTraceQuery safeQuery = query == null ? ModelCallTraceQuery.builder().build() : query;
-        if (modelCallTraceRepository == null) {
+        if (modelCallTraceMetricsRepository == null) {
             return emptyMetrics();
         }
-        List<ModelCallTrace> traces = modelCallTraceRepository.findAll(buildSpecification(safeQuery));
-        if (traces.isEmpty()) {
-            return emptyMetrics();
-        }
-
-        long fallbackCount = traces.stream().filter(trace -> Boolean.TRUE.equals(trace.getFallbackUsed())).count();
-        long successCount = traces.stream().filter(this::isSuccess).count();
-        long rateLimitedCount = traces.stream().filter(this::isRateLimited).count();
-        long errorCount = traces.stream().filter(trace -> !isSuccess(trace)).count();
-        List<Long> latencies = traces.stream()
-                .map(ModelCallTrace::getLatencyMs)
-                .filter(Objects::nonNull)
-                .filter(value -> value >= 0)
-                .sorted()
-                .toList();
-        double averageLatency = latencies.stream().mapToLong(Long::longValue).average().orElse(0D);
-        Double p95 = latencies.size() >= 20 ? percentile(latencies, 0.95D) : null;
-        long inputTokens = traces.stream().map(ModelCallTrace::getInputTokens)
-                .filter(Objects::nonNull).mapToLong(Long::longValue).sum();
-        long outputTokens = traces.stream().map(ModelCallTrace::getOutputTokens)
-                .filter(Objects::nonNull).mapToLong(Long::longValue).sum();
-        BigDecimal knownCost = traces.stream().map(ModelCallTrace::getCost)
-                .filter(Objects::nonNull).reduce(BigDecimal.ZERO, BigDecimal::add);
-        long unknownCostCount = traces.stream().filter(trace -> trace.getCost() == null).count();
-
+        ModelMetricAggregate aggregate = modelCallTraceMetricsRepository.aggregate(buildSpecification(safeQuery));
+        long totalTokens = aggregate.inputTokens() + aggregate.outputTokens();
         return ModelMetricSummary.builder()
-                .routeCount(traces.size())
-                .fallbackCount(fallbackCount)
-                .fallbackRate(rate(traces.size(), fallbackCount))
-                .successRate(rate(traces.size(), successCount))
-                .averageLatencyMs(averageLatency)
-                .p95LatencyMs(p95)
-                .rateLimitedCount(rateLimitedCount)
-                .errorCount(errorCount)
-                .inputTokens(inputTokens)
-                .outputTokens(outputTokens)
-                .knownCost(knownCost)
-                .unknownCostCount(unknownCostCount)
+                .callCount(aggregate.callCount())
+                .totalTokens(totalTokens)
+                .routeCount(aggregate.callCount())
+                .fallbackCount(aggregate.fallbackCount())
+                .fallbackRate(aggregate.fallbackRate())
+                .successRate(aggregate.successRate())
+                .averageLatencyMs(aggregate.averageLatencyMs())
+                .p95LatencyMs(aggregate.p95LatencyMs())
+                .rateLimitedCount(aggregate.rateLimitedCount())
+                .errorCount(aggregate.errorCount())
+                .inputTokens(aggregate.inputTokens())
+                .outputTokens(aggregate.outputTokens())
+                .knownCost(aggregate.knownCost())
+                .unknownCostCount(aggregate.unknownCostCount())
                 .build();
+    }
+
+    public ModelMetricTrendResponse getMetricTrend(ModelMetricTrendQuery query) {
+        ModelMetricTrendQuery safeQuery = query == null ? new ModelMetricTrendQuery() : query;
+        validateMetricTrendQuery(safeQuery);
+        ModelMetricTrendQuery.Bucket bucket = safeQuery.getBucket() == null
+                ? ModelMetricTrendQuery.Bucket.HOUR : safeQuery.getBucket();
+        List<ModelMetricBucket> items = modelCallTraceMetricsRepository == null
+                ? List.of()
+                : modelCallTraceMetricsRepository.aggregateTrend(
+                        buildSpecification(safeQuery.toTraceQuery()), bucket);
+        return ModelMetricTrendResponse.builder()
+                .bucket(bucket)
+                .from(safeQuery.getFrom())
+                .to(safeQuery.getTo())
+                .items(items)
+                .build();
+    }
+
+    private void validateMetricTrendQuery(ModelMetricTrendQuery query) {
+        if (query.getBucket() == null) {
+            query.setBucket(ModelMetricTrendQuery.Bucket.HOUR);
+        }
+        if (query.getFrom() != null && query.getTo() != null) {
+            if (!query.getFrom().isBefore(query.getTo())) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "指标时间范围必须满足 from < to");
+            }
+            if (query.getFrom().plusDays(366).isBefore(query.getTo())) {
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "指标时间范围不能超过 366 天");
+            }
+        }
     }
 
     private Specification<ModelCallTrace> buildSpecification(ModelCallTraceQuery query) {
@@ -747,6 +763,9 @@ public class ModelManagementService {
 
     private ModelMetricSummary emptyMetrics() {
         return ModelMetricSummary.builder()
+                .callCount(0L)
+                .totalTokens(0L)
+                .routeCount(0L)
                 .knownCost(BigDecimal.ZERO)
                 .build();
     }

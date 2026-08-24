@@ -6,6 +6,8 @@ import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.pojo.dto.model.ModelGovernanceSnapshot;
 import com.aseubel.yusi.pojo.dto.model.ModelRoutePreviewRequest;
 import com.aseubel.yusi.pojo.dto.model.ModelRoutePreviewResponse;
+import com.aseubel.yusi.pojo.dto.model.ModelMetricTrendQuery;
+import com.aseubel.yusi.pojo.dto.model.ModelMetricTrendResponse;
 import com.aseubel.yusi.service.ai.model.ModelManagementService;
 import com.aseubel.yusi.service.user.UserService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -80,5 +82,27 @@ class ModelManagementControllerTest {
 
         assertThat(response.getData().getPolicyId()).isEqualTo("chat-zh");
         verify(service).previewRoute(any(ModelRoutePreviewRequest.class));
+    }
+
+    @Test
+    void metricTrendRequiresAdminAndDelegatesTheFilter() {
+        UserContext.setUserId("user-1");
+        when(userService.checkAdmin("user-1")).thenReturn(false);
+
+        assertThatThrownBy(() -> controller.metricTrend(new ModelMetricTrendQuery()))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("Admin");
+
+        UserContext.setUserId("admin-1");
+        when(userService.checkAdmin("admin-1")).thenReturn(true);
+        when(service.getMetricTrend(any(ModelMetricTrendQuery.class))).thenReturn(
+                ModelMetricTrendResponse.builder()
+                        .bucket(ModelMetricTrendQuery.Bucket.HOUR)
+                        .items(List.of())
+                        .build());
+
+        assertThat(controller.metricTrend(new ModelMetricTrendQuery()).getData().bucket())
+                .isEqualTo(ModelMetricTrendQuery.Bucket.HOUR);
+        verify(service).getMetricTrend(any(ModelMetricTrendQuery.class));
     }
 }

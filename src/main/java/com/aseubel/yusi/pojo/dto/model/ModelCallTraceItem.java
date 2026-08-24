@@ -17,6 +17,7 @@ public class ModelCallTraceItem {
     private LocalDateTime createdAt;
     private String requestId;
     private String attemptId;
+    private String runId;
     private String userId;
     private String scene;
     private String promptKey;
@@ -46,6 +47,7 @@ public class ModelCallTraceItem {
                 .createdAt(trace.getCreatedAt())
                 .requestId(trace.getRequestId())
                 .attemptId(trace.getAttemptId())
+                .runId(trace.getRunId())
                 .userId(trace.getUserId())
                 .scene(trace.getScene())
                 .promptKey(trace.getPromptKey())

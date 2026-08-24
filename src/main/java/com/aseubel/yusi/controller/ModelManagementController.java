@@ -12,6 +12,8 @@ import com.aseubel.yusi.pojo.dto.model.ModelCallTraceQuery;
 import com.aseubel.yusi.pojo.dto.model.ModelGovernanceSnapshot;
 import com.aseubel.yusi.pojo.dto.model.ModelGovernanceUpdateRequest;
 import com.aseubel.yusi.pojo.dto.model.ModelMetricSummary;
+import com.aseubel.yusi.pojo.dto.model.ModelMetricTrendQuery;
+import com.aseubel.yusi.pojo.dto.model.ModelMetricTrendResponse;
 import com.aseubel.yusi.pojo.dto.model.ModelRoutePreviewRequest;
 import com.aseubel.yusi.pojo.dto.model.ModelRoutePreviewResponse;
 import com.aseubel.yusi.pojo.dto.model.ModelRuntimeResetResponse;
@@ -88,6 +90,12 @@ public class ModelManagementController {
     public Response<ModelMetricSummary> metrics(@ModelAttribute ModelCallTraceQuery query) {
         checkAdmin();
         return Response.success(modelManagementService.getMetrics(query));
+    }
+
+    @GetMapping("/metrics/trend")
+    public Response<ModelMetricTrendResponse> metricTrend(@ModelAttribute ModelMetricTrendQuery query) {
+        checkAdmin();
+        return Response.success(modelManagementService.getMetricTrend(query));
     }
 
     private void checkAdmin() {

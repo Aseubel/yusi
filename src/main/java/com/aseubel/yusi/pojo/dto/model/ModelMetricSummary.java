@@ -12,6 +12,11 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 @AllArgsConstructor
 public class ModelMetricSummary {
+    private long callCount;
+    private long totalTokens;
+    /**
+     * Kept for older management clients; it has the same value as callCount.
+     */
     private long routeCount;
     private long fallbackCount;
     private double fallbackRate;

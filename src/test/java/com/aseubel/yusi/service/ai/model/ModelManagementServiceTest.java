@@ -1,8 +1,11 @@
 package com.aseubel.yusi.service.ai.model;
 
 import com.aseubel.yusi.pojo.dto.model.ModelCallTraceQuery;
+import com.aseubel.yusi.pojo.dto.model.ModelMetricAggregate;
+import com.aseubel.yusi.pojo.dto.model.ModelMetricSummary;
 import com.aseubel.yusi.pojo.entity.ModelCallTrace;
 import com.aseubel.yusi.repository.ModelCallTraceRepository;
+import com.aseubel.yusi.repository.ModelCallTraceMetricsRepository;
 import com.aseubel.yusi.service.security.SecurityAuditService;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -20,8 +23,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
+import java.math.BigDecimal;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -42,6 +48,9 @@ class ModelManagementServiceTest {
 
     @Mock
     private ModelCallTraceRepository modelCallTraceRepository;
+
+    @Mock
+    private ModelCallTraceMetricsRepository metricsRepository;
 
     @Mock
     private SecurityAuditService securityAuditService;
@@ -81,5 +90,22 @@ class ModelManagementServiceTest {
         verify(root).get("runId");
         verify(criteriaBuilder).equal(userLower, "user-1");
         verify(criteriaBuilder).equal(runLower, "run-1");
+    }
+
+    @Test
+    void mapsDatabaseAggregateWithoutLoadingAllTraces() {
+        when(metricsRepository.aggregate(any())).thenReturn(new ModelMetricAggregate(
+                42L, 5L, 0.119D, 0.952D, 180D, 420D,
+                2L, 2L, 120_000L, 30_000L, new BigDecimal("1.25"), 3L));
+
+        ModelMetricSummary result = service.getMetrics(ModelCallTraceQuery.builder().provider("openai").build());
+
+        org.assertj.core.api.Assertions.assertThat(result.getCallCount()).isEqualTo(42L);
+        org.assertj.core.api.Assertions.assertThat(result.getTotalTokens()).isEqualTo(150_000L);
+        org.assertj.core.api.Assertions.assertThat(result.getInputTokens()).isEqualTo(120_000L);
+        org.assertj.core.api.Assertions.assertThat(result.getOutputTokens()).isEqualTo(30_000L);
+        org.assertj.core.api.Assertions.assertThat(result.getKnownCost()).isEqualByComparingTo("1.25");
+        verify(metricsRepository).aggregate(any());
+        verify(modelCallTraceRepository, never()).findAll(any(Specification.class));
     }
 }
