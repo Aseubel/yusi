@@ -5,6 +5,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.aseubel.yusi.common.auth.Auth;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.web.ClientIpResolver;
 import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.service.user.UserService;
@@ -15,6 +16,8 @@ import com.aseubel.yusi.pojo.dto.admin.AdminUserResponse;
 import com.aseubel.yusi.pojo.dto.admin.ScenarioAuditRequest;
 import com.aseubel.yusi.pojo.dto.admin.SecurityAuditEventResponse;
 import com.aseubel.yusi.pojo.dto.admin.SecurityAuditQuery;
+import com.aseubel.yusi.pojo.dto.admin.WebAccessPolicyResponse;
+import com.aseubel.yusi.pojo.dto.admin.WebAccessPolicyUpdateRequest;
 import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
 import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
 import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
@@ -33,6 +36,7 @@ import com.aseubel.yusi.service.ai.embedding.EmbeddingBatchService;
 import com.aseubel.yusi.service.notification.NotificationService;
 import com.aseubel.yusi.service.suggestion.SuggestionService;
 import com.aseubel.yusi.service.security.SecurityAuditService;
+import com.aseubel.yusi.service.web.RuntimeAccessPolicyService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
@@ -50,6 +54,7 @@ import java.util.Map;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.servlet.http.HttpServletRequest;
 
 @Auth
 @Slf4j
@@ -67,6 +72,8 @@ public class AdminController {
     private final MemoryConfigProperties memoryConfigProperties;
     private final NotificationService notificationService;
     private final SecurityAuditService securityAuditService;
+    private final RuntimeAccessPolicyService runtimeAccessPolicyService;
+    private final ClientIpResolver clientIpResolver;
 
     private void checkAdminPermission() {
         String userId = UserContext.getUserId();
@@ -279,5 +286,32 @@ public class AdminController {
         config.put("midTermSummaryIntervalMinutes", memoryConfigProperties.getMidTermSummaryInterval() / 1000 / 60);
         config.put("midTermScanCron", memoryConfigProperties.getMidTermScanCron());
         return Response.success(config);
+    }
+
+    @GetMapping("/web-access-policy")
+    public Response<WebAccessPolicyResponse> getWebAccessPolicy(HttpServletRequest request) {
+        checkAdminPermission();
+        return Response.success(runtimeAccessPolicyService.getPolicy(clientIpResolver.resolve(request)));
+    }
+
+    @PutMapping("/web-access-policy")
+    @RateLimiter(key = "admin-web-access-policy", time = 60, count = 10, limitType = LimitType.USER)
+    public Response<WebAccessPolicyResponse> updateWebAccessPolicy(
+            HttpServletRequest servletRequest,
+            @Valid @RequestBody WebAccessPolicyUpdateRequest request) {
+        checkSuperAdminPermission();
+        WebAccessPolicyResponse response = runtimeAccessPolicyService.updatePolicy(
+                request, UserContext.getUserId(), clientIpResolver.resolve(servletRequest));
+        securityAuditService.recordAdmin(
+                SecurityAuditAction.WEB_ACCESS_POLICY_UPDATED,
+                UserContext.getUserId(),
+                null,
+                SecurityAuditResourceType.WEB_ACCESS_POLICY,
+                "global",
+                SecurityAuditOutcome.SUCCESS,
+                SecurityAuditReasonCode.ADMIN_MUTATION,
+                Map.of(SecurityAuditDetailKeys.OPERATION, "update",
+                        SecurityAuditDetailKeys.VERSION, String.valueOf(response.version())));
+        return Response.success(response);
     }
 }

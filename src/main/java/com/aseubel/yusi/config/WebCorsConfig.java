@@ -1,31 +1,24 @@
 package com.aseubel.yusi.config;
 
-import org.springframework.beans.factory.annotation.Value;
+import com.aseubel.yusi.common.web.DynamicCorsConfigurationSource;
+import com.aseubel.yusi.service.web.RuntimeAccessPolicyService;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.util.StringUtils;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.core.Ordered;
+import org.springframework.web.filter.CorsFilter;
 
-/** Central CORS policy for browser clients. */
+/** CORS filter backed by the runtime access policy. */
 @Configuration
-public class WebCorsConfig implements WebMvcConfigurer {
+public class WebCorsConfig {
 
-    private final String allowedOrigin;
-
-    public WebCorsConfig(@Value("${yusi.web.allowed-origin:http://localhost:5173}") String allowedOrigin) {
-        this.allowedOrigin = allowedOrigin;
-    }
-
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        String[] origins = StringUtils.commaDelimitedListToStringArray(allowedOrigin);
-        registry.addMapping("/api/**")
-                .allowedOrigins(origins)
-                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-                .allowedHeaders("Authorization", "Content-Type", "Accept", "X-Refresh-Token",
-                        "X-Old-Access-Token")
-                .exposedHeaders("Content-Type")
-                .allowCredentials(false)
-                .maxAge(3600);
+    @Bean
+    public FilterRegistrationBean<CorsFilter> runtimeCorsFilter(RuntimeAccessPolicyService policyService) {
+        FilterRegistrationBean<CorsFilter> registration = new FilterRegistrationBean<>();
+        registration.setFilter(new CorsFilter(new DynamicCorsConfigurationSource(policyService::getEffectivePolicy)));
+        registration.setName("runtimeCorsFilter");
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
+        registration.addUrlPatterns("/*");
+        return registration;
     }
 }

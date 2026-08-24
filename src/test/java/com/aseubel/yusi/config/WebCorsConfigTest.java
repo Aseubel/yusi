@@ -1,29 +1,23 @@
 package com.aseubel.yusi.config;
 
+import com.aseubel.yusi.common.web.DynamicCorsConfigurationSource;
+import com.aseubel.yusi.common.web.RuntimeAccessPolicySnapshot;
 import org.junit.jupiter.api.Test;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-
-import java.util.Map;
+import org.springframework.mock.web.MockHttpServletRequest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class WebCorsConfigTest {
 
     @Test
-    void allowsPatchPreflightForMemoryCenterUpdates() {
-        InspectableCorsRegistry registry = new InspectableCorsRegistry();
+    void keepsPatchInTheRuntimeCorsConfiguration() {
+        RuntimeAccessPolicySnapshot policy = new RuntimeAccessPolicySnapshot(
+                false, null, java.util.List.of("http://localhost:5174"), java.util.List.of(),
+                java.util.List.of(), java.util.List.of(), java.util.List.of(), 1L, null);
+        DynamicCorsConfigurationSource source = new DynamicCorsConfigurationSource(() -> policy);
+        MockHttpServletRequest request = new MockHttpServletRequest("OPTIONS", "/api/memory/center/1");
+        request.addHeader("Origin", "http://localhost:5174");
 
-        new WebCorsConfig("http://localhost:5173").addCorsMappings(registry);
-
-        assertThat(registry.configurations().get("/api/**").getAllowedMethods())
-                .contains("PATCH");
-    }
-
-    private static final class InspectableCorsRegistry extends CorsRegistry {
-
-        private Map<String, CorsConfiguration> configurations() {
-            return getCorsConfigurations();
-        }
+        assertThat(source.getCorsConfiguration(request).getAllowedMethods()).contains("PATCH");
     }
 }

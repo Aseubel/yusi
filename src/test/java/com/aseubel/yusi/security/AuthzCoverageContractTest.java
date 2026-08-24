@@ -40,15 +40,15 @@ class AuthzCoverageContractTest {
     void locksExactRouteAndAuthenticationBaseline() throws IOException {
         List<Mapping> mappings = scanMappings();
 
-        assertThat(mappings).hasSize(160);
+        assertThat(mappings).hasSize(163);
         assertThat(mappings.stream().filter(mapping -> WRITE_METHODS.contains(mapping.httpMethod())).count())
-                .isEqualTo(92);
+                .isEqualTo(93);
         assertThat(mappings.stream().filter(mapping -> !WRITE_METHODS.contains(mapping.httpMethod())).count())
-                .isEqualTo(68);
+                .isEqualTo(70);
         assertThat(mappings).noneMatch(mapping -> mapping.endpoint().equals("POST /api/match/run"));
 
-        assertThat(mappings.stream().filter(Mapping::requiredAuth).count()).isEqualTo(148);
-        assertThat(mappings.stream().filter(Mapping::hasExplicitAuthContract).count()).isEqualTo(156);
+        assertThat(mappings.stream().filter(Mapping::requiredAuth).count()).isEqualTo(151);
+        assertThat(mappings.stream().filter(Mapping::hasExplicitAuthContract).count()).isEqualTo(159);
         assertThat(mappings.stream().filter(mapping -> !mapping.hasExplicitAuthContract())
                 .map(Mapping::endpoint))
                 .containsExactlyInAnyOrder(
@@ -64,7 +64,7 @@ class AuthzCoverageContractTest {
                 .collect(Collectors.groupingBy(Mapping::controllerName, LinkedHashMap::new, Collectors.counting()));
 
         assertThat(actual).containsExactlyInAnyOrderEntriesOf(Map.ofEntries(
-                Map.entry("AdminController", 18L),
+                Map.entry("AdminController", 20L),
                 Map.entry("AiController", 12L),
                 Map.entry("DeveloperConfigController", 4L),
                 Map.entry("DiaryController", 6L),
@@ -74,7 +74,7 @@ class AuthzCoverageContractTest {
                 Map.entry("LifeGraphController", 16L),
                 Map.entry("MatchController", 8L),
                 Map.entry("MemoryCenterController", 9L),
-                Map.entry("ModelManagementController", 8L),
+                Map.entry("ModelManagementController", 9L),
                 Map.entry("NotificationController", 6L),
                 Map.entry("PingController", 1L),
                 Map.entry("PromptController", 6L),

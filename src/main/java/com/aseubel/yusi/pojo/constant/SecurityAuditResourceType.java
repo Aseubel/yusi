@@ -16,5 +16,6 @@ public enum SecurityAuditResourceType {
     LIFE_GRAPH_ENTITY,
     PERSONA,
     TASK_EXECUTION,
+    WEB_ACCESS_POLICY,
     RESOURCE
 }

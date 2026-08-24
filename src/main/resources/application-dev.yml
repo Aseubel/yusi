@@ -215,7 +215,10 @@ yusi:
       enabled: ${YUSI_ALERT_FEISHU_ENABLED:false}
       interval-ms: ${YUSI_ALERT_FEISHU_INTERVAL_MS:30000}
   web:
+    allowed-origin: ${YUSI_WEB_ALLOWED_ORIGIN:http://localhost:5173}
     trusted-proxy-addresses: ${YUSI_TRUSTED_PROXY_ADDRESSES:}
+    dev-mode-enabled: ${YUSI_WEB_DEV_MODE_ENABLED:false}
+    policy-refresh-ms: ${YUSI_WEB_POLICY_REFRESH_MS:5000}
   diary:
     voice:
       max-duration-seconds: ${YUSI_VOICE_MAX_DURATION_SECONDS:120}

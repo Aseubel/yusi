@@ -1,14 +1,13 @@
 package com.aseubel.yusi.config;
 
+import com.aseubel.yusi.common.web.RuntimeOriginHandshakeInterceptor;
 import com.aseubel.yusi.observability.trace.TraceIdWebSocketInterceptor;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
-import org.springframework.util.StringUtils;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -16,14 +15,14 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final WebSocketAuthChannelInterceptor authChannelInterceptor;
     private final TraceIdWebSocketInterceptor traceIdWebSocketInterceptor;
-
-    @Value("${yusi.web.allowed-origin:http://localhost:5173}")
-    private String allowedOrigin;
+    private final RuntimeOriginHandshakeInterceptor originHandshakeInterceptor;
 
     public WebSocketConfig(WebSocketAuthChannelInterceptor authChannelInterceptor,
-            TraceIdWebSocketInterceptor traceIdWebSocketInterceptor) {
+            TraceIdWebSocketInterceptor traceIdWebSocketInterceptor,
+            RuntimeOriginHandshakeInterceptor originHandshakeInterceptor) {
         this.authChannelInterceptor = authChannelInterceptor;
         this.traceIdWebSocketInterceptor = traceIdWebSocketInterceptor;
+        this.originHandshakeInterceptor = originHandshakeInterceptor;
     }
 
     @Override
@@ -46,12 +45,13 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // 配置 WebSocket 端点
-        String[] allowedOrigins = StringUtils.commaDelimitedListToStringArray(allowedOrigin);
         registry.addEndpoint("/ws-chat")
-                .setAllowedOriginPatterns(allowedOrigins)
+                .setAllowedOriginPatterns("*")
+                .addInterceptors(originHandshakeInterceptor)
                 .withSockJS();
         
         registry.addEndpoint("/ws-chat")
-                .setAllowedOriginPatterns(allowedOrigins);
+                .setAllowedOriginPatterns("*")
+                .addInterceptors(originHandshakeInterceptor);
     }
 }

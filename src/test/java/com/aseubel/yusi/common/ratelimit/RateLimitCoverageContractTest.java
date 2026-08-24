@@ -35,6 +35,7 @@ class RateLimitCoverageContractTest {
             "POST /api/admin/announcements",
             "POST /api/admin/embeddings/full-sync",
             "POST /api/admin/users/{userId}/deregister",
+            "PUT /api/admin/web-access-policy",
             "POST /api/ai/chat/stream",
             "POST /api/ai/chat/cancel",
             "PUT /api/ai/persona-config",
@@ -155,14 +156,14 @@ class RateLimitCoverageContractTest {
             spec("POST /api/key/reencrypt-diaries", "key-reencrypt-diaries", 600, 2, "USER"));
 
     @Test
-    void coversExactlyNinetyTwoRealWriteMappingsAndExcludesCommentedMapping() throws IOException {
+    void coversExactlyNinetyThreeRealWriteMappingsAndExcludesCommentedMapping() throws IOException {
         Set<String> actual = scanMappings().stream()
                 .filter(mapping -> WRITE_METHODS.contains(mapping.httpMethod()))
                 .map(Mapping::endpoint)
                 .collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
 
         assertThat(actual).containsExactlyInAnyOrderElementsOf(EXPECTED_WRITE_ENDPOINTS);
-        assertThat(actual).hasSize(92);
+        assertThat(actual).hasSize(93);
         assertThat(actual).doesNotContain("POST /api/match/run");
     }
 

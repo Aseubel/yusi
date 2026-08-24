@@ -237,6 +237,8 @@ yusi:
   web:
     allowed-origin: ${YUSI_WEB_ALLOWED_ORIGIN:https://app.aseubel.cn}
     trusted-proxy-addresses: ${YUSI_TRUSTED_PROXY_ADDRESSES:}
+    dev-mode-enabled: ${YUSI_WEB_DEV_MODE_ENABLED:false}
+    policy-refresh-ms: ${YUSI_WEB_POLICY_REFRESH_MS:5000}
   diary:
     voice:
       max-duration-seconds: ${YUSI_VOICE_MAX_DURATION_SECONDS:120}
