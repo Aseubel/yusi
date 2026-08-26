@@ -38,6 +38,11 @@ public class RedissonService implements IRedisService {
     }
 
     @Override
+    public String getStringValue(String key) {
+        return redissonClient.<String>getBucket(key, StringCodec.INSTANCE).get();
+    }
+
+    @Override
     public <T> RQueue<T> getQueue(String key) {
         return redissonClient.getQueue(key);
     }

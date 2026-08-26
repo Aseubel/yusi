@@ -108,7 +108,7 @@ public class DefaultAccountDeletionExternalPort implements AccountDeletionExtern
                     || !exactRedisKey.endsWith(TOTAL_CHUNKS_SUFFIX)) {
                 continue;
             }
-            String totalChunksValue = redisService.getValue(exactRedisKey);
+            String totalChunksValue = redisService.getStringValue(exactRedisKey);
             if (totalChunksValue == null || totalChunksValue.isBlank()) {
                 continue;
             }
@@ -124,7 +124,7 @@ public class DefaultAccountDeletionExternalPort implements AccountDeletionExtern
             String chunkPrefix = exactRedisKey.substring(0,
                     exactRedisKey.length() - TOTAL_CHUNKS_SUFFIX.length());
             for (int index = 0; index < totalChunks; index++) {
-                String chunkObjectKey = redisService.getValue(chunkPrefix + ":" + index);
+                String chunkObjectKey = redisService.getStringValue(chunkPrefix + ":" + index);
                 if (chunkObjectKey != null && !chunkObjectKey.isBlank()) {
                     chunkObjectKeys.add(chunkObjectKey);
                 }

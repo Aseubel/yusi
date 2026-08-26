@@ -457,6 +457,8 @@ public class AccountDeletionCoordinator {
         inventory.addRedisKeyPattern(NOTIFICATION_CACHE_PREFIX + escapeRedisGlob(userId) + ":*");
         inventory.addRedisKeyPattern(MATCH_LIST_CACHE_PREFIX + escapeRedisGlob(userId) + ":*");
         inventory.addRedisKeyPattern(PLAZA_MINE_CACHE_PREFIX + escapeRedisGlob(userId) + ":*");
+        inventory.addRedisKeyPattern(CHUNK_PREFIX + escapeRedisGlob(userId) + ":*");
+        inventory.addRedisKeyPattern(MD5_PREFIX + escapeRedisGlob(userId) + ":*");
     }
 
     private void collectSituationRoomCacheKeys(AccountDeletionInventory inventory) {

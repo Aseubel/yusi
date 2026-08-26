@@ -38,6 +38,14 @@ public interface IRedisService {
     <T> T getValue(String key);
 
     /**
+     * 获取由 StringRedisTemplate 写入的原始字符串值。
+     *
+     * @param key 键
+     * @return 原始字符串值
+     */
+    String getStringValue(String key);
+
+    /**
      * 获取队列
      *
      * @param key 键

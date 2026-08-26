@@ -205,6 +205,10 @@ class AccountDeletionPrivacyAuditTest {
                 "yusi:md5:" + TARGET_USER + ":fixture-file-digest"));
         assertTrue(captured.get().exactRedisKeys().contains(
                 "yusi:chunk:" + TARGET_USER + ":fixture-file-digest:uploadId"));
+        assertTrue(captured.get().redisKeyPatterns().contains(
+                "yusi:chunk:" + TARGET_USER + ":*"));
+        assertTrue(captured.get().redisKeyPatterns().contains(
+                "yusi:md5:" + TARGET_USER + ":*"));
     }
 
     @Test

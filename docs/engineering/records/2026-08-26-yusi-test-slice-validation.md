@@ -224,3 +224,23 @@ inventory，不能被 `removeFromMap` 清理。该问题不是 MySQL 删除失�
 共享数据和 orphan 查询范围内通过，但真实 OSS SDK 发现 B 用户前缀仍有 `2` 个无映射对象。
 本地已补充前缀 inventory 修复并通过 `537` 项全量测试，尚未部署复测；C 测试数据清理和生产
 只读复查也尚未完成，因此仍不能声称 Phase 5 完整闭环或勾选 roadmap。
+
+## 第四轮：OSS 前缀修复部署与分片会话 codec 缺陷
+
+- 本地 `ea9d284` 已完成用户图片、音频和分片 OSS 前缀 inventory 修复，已执行
+  `commit + push`；远端执行 `/root/projects/yusi/rebuild.sh` 成功，容器源码 SHA 与
+  `ea9d284` 一致，readiness 返回 `UP`。
+- 首次 OSS 音频夹具误放在 `yusi/audio/<user>/`；核对生产配置后确认实际前缀是
+  `audio/<user>/`，错误对象已删除。之后按正确前缀重新注入图片、音频、分片对象和有效
+  分片会话进行注销验证。
+- 第二次真实注销返回 `HTTP 50002`，删除台账为 `PENDING_RETRY / external_or_database`。
+  MySQL 中 B、`image_file` 和 diary 数据因事务回滚而保留；Milvus 已完成删除；日志显示
+  图片和音频对象已删除，随后在读取分片会话时失败；Redis 分片会话 key 仍有残留。
+- 根因已确认：`OssService.uploadChunk` 通过 `StringRedisTemplate` 写入原始字符串，
+  `DefaultAccountDeletionExternalPort.deleteSessionChunkObjects` 却通过
+  `IRedisService.getValue()` 使用 Redisson 默认 JSON codec 读取 `totalChunks` 和分片
+  object key，导致 codec/type 不兼容并被归类为 `external_or_database`。当前会话的
+  `:0`、`:1`、`:reserved`、`:size` 等用户限定 key 也没有统一纳入清理边界。
+- 下一步先为原始 Redis 字符串读取和完整分片会话 key 清理补红测，再本地全量验证；之后
+  按“提交、推送、远端 rebuild、yusi-test 重建夹具、真实注销”的流程复测 OSS 三个前缀、
+  MySQL、Redis、Milvus 和共享数据，最后再清理测试账号并只读复查生产库。

@@ -105,10 +105,10 @@ class AccountDeletionExternalContractTest {
         TokenService tokens = mock(TokenService.class);
         com.aseubel.yusi.service.oss.OssService oss = mock(com.aseubel.yusi.service.oss.OssService.class);
         String totalKey = "yusi:chunk:" + TARGET_USER + ":fixture-file-digest:totalChunks";
-        when(redis.<String>getValue(totalKey)).thenReturn("2");
-        when(redis.<String>getValue("yusi:chunk:" + TARGET_USER + ":fixture-file-digest:0"))
+        when(redis.getStringValue(totalKey)).thenReturn("2");
+        when(redis.getStringValue("yusi:chunk:" + TARGET_USER + ":fixture-file-digest:0"))
                 .thenReturn("fixture-chunk-object-a");
-        when(redis.<String>getValue("yusi:chunk:" + TARGET_USER + ":fixture-file-digest:1"))
+        when(redis.getStringValue("yusi:chunk:" + TARGET_USER + ":fixture-file-digest:1"))
                 .thenReturn("fixture-chunk-object-b");
 
         AccountDeletionInventory inventory = new AccountDeletionInventory(TARGET_USER);
@@ -124,6 +124,9 @@ class AccountDeletionExternalContractTest {
         verify(oss, times(1)).deleteOwnedImagePrefix(TARGET_USER);
         verify(oss, times(1)).deleteOwnedAudioPrefix(TARGET_USER);
         verify(oss, times(1)).deleteOwnedChunkPrefix(TARGET_USER);
+        verify(redis).getStringValue(totalKey);
+        verify(redis).getStringValue("yusi:chunk:" + TARGET_USER + ":fixture-file-digest:0");
+        verify(redis).getStringValue("yusi:chunk:" + TARGET_USER + ":fixture-file-digest:1");
     }
 
     @Test
