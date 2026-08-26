@@ -14,8 +14,10 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static com.aseubel.yusi.redis.common.RedisKey.USAGE_PREFIX;
 import static com.aseubel.yusi.redis.common.RedisKey.SEPARATOR;
@@ -41,6 +43,39 @@ public class InterfaceUsageMonitor {
     // field 内部分隔符，使用不会在数据中出现的字符
     private static final String FIELD_SEPARATOR = "\u0001";
 
+    private final Set<String> suppressedUserIds = ConcurrentHashMap.newKeySet();
+    private final ReentrantReadWriteLock usageStateLock = new ReentrantReadWriteLock();
+
+    /** Block new usage writes and remove all in-process and Redis usage state for a deleted user. */
+    public void suppressUserFromUsage(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return;
+        }
+
+        usageStateLock.writeLock().lock();
+        try {
+            suppressedUserIds.add(userId);
+            removeBufferedUsage(userId);
+            redissonService.removeUsageFields(userId);
+        } finally {
+            usageStateLock.writeLock().unlock();
+        }
+    }
+
+    /** Release the in-process usage block when account deletion must be retried. */
+    public void releaseUserFromUsage(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return;
+        }
+
+        usageStateLock.writeLock().lock();
+        try {
+            suppressedUserIds.remove(userId);
+        } finally {
+            usageStateLock.writeLock().unlock();
+        }
+    }
+
     /**
      * 记录接口使用情况到 Redis（带批量缓冲）
      */
@@ -51,22 +86,31 @@ public class InterfaceUsageMonitor {
             if (ip == null)
                 ip = "unknown";
 
-            String dateStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-            String redisKey = USAGE_PREFIX + dateStr;
-            String field = userId + FIELD_SEPARATOR + ip + FIELD_SEPARATOR + interfaceName;
+            usageStateLock.readLock().lock();
+            try {
+                if (suppressedUserIds.contains(userId)) {
+                    return;
+                }
 
-            // 先写入本地缓冲区
-            AtomicLong count = usageBuffer.computeIfAbsent(redisKey + ":" + field, k -> new AtomicLong(0));
-            count.incrementAndGet();
-            bufferCount.incrementAndGet();
+                String dateStr = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
+                String redisKey = USAGE_PREFIX + dateStr;
+                String field = userId + FIELD_SEPARATOR + ip + FIELD_SEPARATOR + interfaceName;
 
-            // 使用 Redisson 的 addAndGet 进行原子递增
-            RMap<String, Object> map = redissonService.getMap(redisKey);
-            map.addAndGet(field, 1L);
+                // 先写入本地缓冲区
+                AtomicLong count = usageBuffer.computeIfAbsent(redisKey + ":" + field, k -> new AtomicLong(0));
+                count.incrementAndGet();
+                bufferCount.incrementAndGet();
 
-            // 当缓冲区达到阈值时，批量同步到数据库
-            if (bufferCount.get() >= BATCH_SIZE_THRESHOLD) {
-                syncBufferToDatabaseAsync();
+                // 使用 Redisson 的 addAndGet 进行原子递增
+                RMap<String, Object> map = redissonService.getMap(redisKey);
+                map.addAndGet(field, 1L);
+
+                // 当缓冲区达到阈值时，批量同步到数据库
+                if (bufferCount.get() >= BATCH_SIZE_THRESHOLD) {
+                    syncBufferToDatabaseAsync();
+                }
+            } finally {
+                usageStateLock.readLock().unlock();
             }
 
         } catch (Exception e) {
@@ -78,16 +122,21 @@ public class InterfaceUsageMonitor {
      * 每 30 分钟同步一次数据到数据库
      */
     public void syncToDatabase() {
-        log.debug("Starting interface usage sync...");
-        LocalDate today = LocalDate.now();
-        LocalDate yesterday = today.minusDays(1);
+        usageStateLock.writeLock().lock();
+        try {
+            log.debug("Starting interface usage sync...");
+            LocalDate today = LocalDate.now();
+            LocalDate yesterday = today.minusDays(1);
 
-        // 先落本地增量，再用 Redis 的累计值校准，避免增量覆盖累计统计。
-        syncBufferToDatabase();
-        syncDate(yesterday);
-        syncDate(today);
+            // 先落本地增量，再用 Redis 的累计值校准，避免增量覆盖累计统计。
+            syncBufferToDatabase();
+            syncDate(yesterday);
+            syncDate(today);
 
-        log.debug("Interface usage sync completed.");
+            log.debug("Interface usage sync completed.");
+        } finally {
+            usageStateLock.writeLock().unlock();
+        }
     }
 
     /**
@@ -96,12 +145,38 @@ public class InterfaceUsageMonitor {
     private void syncBufferToDatabaseAsync() {
         // 使用独立线程异步处理，避免阻塞主线程
         threadPoolExecutor.execute(() -> {
+            usageStateLock.writeLock().lock();
             try {
                 syncBufferToDatabase();
             } catch (Exception e) {
                 log.error("异步批量同步失败", e);
+            } finally {
+                usageStateLock.writeLock().unlock();
             }
         });
+    }
+
+    private void removeBufferedUsage(String userId) {
+        String rawPrefix = userId + FIELD_SEPARATOR;
+        String legacyPrefix = userId + SEPARATOR;
+        for (Map.Entry<String, AtomicLong> entry : usageBuffer.entrySet()) {
+            String field = extractBufferField(entry.getKey());
+            if (!field.startsWith(rawPrefix) && !field.startsWith(legacyPrefix)) {
+                continue;
+            }
+
+            AtomicLong count = entry.getValue();
+            long removed = count.getAndSet(0);
+            if (removed > 0) {
+                bufferCount.addAndGet(-removed);
+            }
+            usageBuffer.remove(entry.getKey(), count);
+        }
+    }
+
+    private String extractBufferField(String bufferKey) {
+        int fieldSeparator = bufferKey.indexOf(':', USAGE_PREFIX.length());
+        return fieldSeparator < 0 ? "" : bufferKey.substring(fieldSeparator + 1);
     }
 
     /**

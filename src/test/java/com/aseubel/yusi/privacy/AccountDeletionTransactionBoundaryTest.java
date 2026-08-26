@@ -1,6 +1,7 @@
 package com.aseubel.yusi.privacy;
 
 import com.aseubel.yusi.TestInfrastructureConfig;
+import com.aseubel.yusi.monitor.InterfaceUsageMonitor;
 import com.aseubel.yusi.pojo.entity.AccountDeletionRequest;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.AccountDeletionRequestRepository;
@@ -29,6 +30,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest
 @ActiveProfiles("test")
@@ -52,6 +55,8 @@ class AccountDeletionTransactionBoundaryTest {
     private AccountDeletionExternalPort externalPort;
     @MockBean
     private SecurityAuditService securityAuditService;
+    @MockBean
+    private InterfaceUsageMonitor interfaceUsageMonitor;
 
     @BeforeEach
     void setUp() {
@@ -87,6 +92,8 @@ class AccountDeletionTransactionBoundaryTest {
                     assertThat(request.getFailureCategory()).isEqualTo("external_or_database");
                 });
         assertThat(userRepository.findByUserId(TARGET_USER)).isNotNull();
+        verify(interfaceUsageMonitor).suppressUserFromUsage(TARGET_USER);
+        verify(interfaceUsageMonitor).releaseUserFromUsage(TARGET_USER);
     }
 
     @Test
@@ -129,6 +136,7 @@ class AccountDeletionTransactionBoundaryTest {
                 .get()
                 .extracting(AccountDeletionRequest::getStatus)
                 .isEqualTo(AccountDeletionRequest.Status.SUPERSEDED);
+        verify(interfaceUsageMonitor, times(2)).suppressUserFromUsage(TARGET_USER);
     }
 
     @Test

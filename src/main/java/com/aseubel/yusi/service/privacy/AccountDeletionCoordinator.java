@@ -1,5 +1,6 @@
 package com.aseubel.yusi.service.privacy;
 
+import com.aseubel.yusi.monitor.InterfaceUsageMonitor;
 import com.aseubel.yusi.pojo.constant.SecurityAuditAction;
 import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
 import com.aseubel.yusi.pojo.constant.SecurityAuditOperation;
@@ -45,19 +46,31 @@ public class AccountDeletionCoordinator {
     private final AccountDeletionRequestRepository requestRepository;
     private final ObjectMapper objectMapper;
     private final PlatformTransactionManager transactionManager;
+    private final InterfaceUsageMonitor interfaceUsageMonitor;
 
     @Autowired
     public AccountDeletionCoordinator(JdbcTemplate jdbcTemplate,
             AccountDeletionExternalPort externalPort,
             SecurityAuditService securityAuditService,
             AccountDeletionRequestRepository requestRepository,
-            PlatformTransactionManager transactionManager) {
+            PlatformTransactionManager transactionManager,
+            InterfaceUsageMonitor interfaceUsageMonitor) {
         this.jdbcTemplate = jdbcTemplate;
         this.externalPort = externalPort;
         this.securityAuditService = securityAuditService;
         this.requestRepository = requestRepository;
         this.objectMapper = new ObjectMapper();
         this.transactionManager = transactionManager;
+        this.interfaceUsageMonitor = interfaceUsageMonitor;
+    }
+
+    public AccountDeletionCoordinator(JdbcTemplate jdbcTemplate,
+            AccountDeletionExternalPort externalPort,
+            SecurityAuditService securityAuditService,
+            AccountDeletionRequestRepository requestRepository,
+            PlatformTransactionManager transactionManager) {
+        this(jdbcTemplate, externalPort, securityAuditService, requestRepository,
+                transactionManager, null);
     }
 
     /** Constructor used by application-invariant tests without a JPA context. */
@@ -70,6 +83,7 @@ public class AccountDeletionCoordinator {
         this.requestRepository = null;
         this.objectMapper = new ObjectMapper();
         this.transactionManager = null;
+        this.interfaceUsageMonitor = null;
     }
 
     /** Compatibility constructor for callers that provide a repository but no transaction manager. */
@@ -83,7 +97,11 @@ public class AccountDeletionCoordinator {
     public DeletionResult requestDeletion(String targetUserId, String adminUserId) {
         String requestId = newRequestId();
         AccountDeletionRequest request = createRequest(requestId, targetUserId, adminUserId);
+        boolean usageSuppressionAttempted = interfaceUsageMonitor != null;
         try {
+            if (usageSuppressionAttempted) {
+                interfaceUsageMonitor.suppressUserFromUsage(targetUserId);
+            }
             AccountDeletionInventory inventory = collectInventory(targetUserId);
             markRunning(request);
             Runnable deletion = () -> {
@@ -103,14 +121,22 @@ public class AccountDeletionCoordinator {
             }
             return DeletionResult.completed(requestId);
         } catch (AccountDeletionFailure failure) {
+            releaseUsageSuppression(targetUserId, usageSuppressionAttempted);
             markRetry(request, failure.category());
             log.warn("Account deletion pending retry: operation=account_delete, failureCategory={}",
                     failure.category());
             return DeletionResult.pendingRetry(requestId, failure.category());
         } catch (Exception exception) {
+            releaseUsageSuppression(targetUserId, usageSuppressionAttempted);
             markRetry(request, "external_or_database");
             log.warn("Account deletion pending retry: operation=account_delete, failureCategory=external_or_database");
             return DeletionResult.pendingRetry(requestId, "external_or_database");
+        }
+    }
+
+    private void releaseUsageSuppression(String targetUserId, boolean usageSuppressionAttempted) {
+        if (usageSuppressionAttempted) {
+            interfaceUsageMonitor.releaseUserFromUsage(targetUserId);
         }
     }
 
