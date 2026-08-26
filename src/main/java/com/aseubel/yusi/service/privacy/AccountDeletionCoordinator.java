@@ -142,6 +142,7 @@ public class AccountDeletionCoordinator {
     private void markCompleted(AccountDeletionRequest request) {
         request.setStatus(AccountDeletionRequest.Status.COMPLETED);
         request.setTargetUserRef(null);
+        request.setRequestedByRef(null);
         request.setFailureCategory(null);
         request.setCompletedAt(java.time.LocalDateTime.now());
         request.setUpdatedAt(java.time.LocalDateTime.now());
@@ -163,6 +164,7 @@ public class AccountDeletionCoordinator {
             }
             priorRequest.setStatus(AccountDeletionRequest.Status.SUPERSEDED);
             priorRequest.setTargetUserRef(null);
+            priorRequest.setRequestedByRef(null);
             priorRequest.setFailureCategory(SUPERSEDED_CATEGORY);
             priorRequest.setUpdatedAt(java.time.LocalDateTime.now());
             saveInCurrentTransaction(priorRequest);
@@ -450,6 +452,7 @@ public class AccountDeletionCoordinator {
 
     private void deleteChildFirst(AccountDeletionInventory inventory) {
         String targetUserId = inventory.targetUserId();
+        deidentifyDeletionRequestReferences(targetUserId);
         deleteCrossOwnerDependents(inventory);
         cleanSituationRooms(targetUserId);
         List<DeleteStatement> statements = List.of(
@@ -542,6 +545,13 @@ public class AccountDeletionCoordinator {
             } else {
                 jdbcTemplate.update(sql, targetUserId);
             }
+        }
+    }
+
+    private void deidentifyDeletionRequestReferences(String targetUserId) {
+        if (tableExists("account_deletion_request") && columnExists("account_deletion_request", "requested_by_ref")) {
+            jdbcTemplate.update("UPDATE account_deletion_request SET requested_by_ref = NULL WHERE requested_by_ref = ?",
+                    targetUserId);
         }
     }
 

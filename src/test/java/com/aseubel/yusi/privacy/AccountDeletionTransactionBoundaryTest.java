@@ -123,10 +123,30 @@ class AccountDeletionTransactionBoundaryTest {
         assertThat(second.status()).isEqualTo(DeletionResult.Status.COMPLETED);
         assertThat(requestRepository.findAll())
                 .allSatisfy(request -> assertThat(request.getTargetUserRef()).isNull());
+        assertThat(requestRepository.findAll())
+                .allSatisfy(request -> assertThat(request.getRequestedByRef()).isNull());
         assertThat(requestRepository.findByRequestId(first.requestId()))
                 .get()
                 .extracting(AccountDeletionRequest::getStatus)
                 .isEqualTo(AccountDeletionRequest.Status.SUPERSEDED);
+    }
+
+    @Test
+    void deletingRequesterMustDeidentifyExistingLedgerReferences() {
+        requestRepository.save(AccountDeletionRequest.builder()
+                .requestId("fixture-existing-request")
+                .targetUserRef("fixture-unrelated-target")
+                .requestedByRef(TARGET_USER)
+                .status(AccountDeletionRequest.Status.PENDING_RETRY)
+                .retryCount(1)
+                .build());
+
+        DeletionResult result = coordinator.requestDeletion(TARGET_USER, ADMIN_USER);
+
+        assertThat(result.status()).isEqualTo(DeletionResult.Status.COMPLETED);
+        assertThat(requestRepository.findByRequestId("fixture-existing-request"))
+                .get()
+                .satisfies(request -> assertThat(request.getRequestedByRef()).isNull());
     }
 
     private void deleteUserIfPresent(String userId) {
