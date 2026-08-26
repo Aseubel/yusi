@@ -8,6 +8,7 @@ import org.redisson.client.codec.StringCodec;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -164,6 +165,40 @@ public class RedissonService implements IRedisService {
     public void removeFromMap(String key, String field) {
         RMap<String, String> map = redissonClient.getMap(key);
         map.remove(field);
+    }
+
+    @Override
+    public void removeUsageFields(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return;
+        }
+
+        Iterable<String> usageKeys = redissonClient.getKeys().getKeysByPattern("yusi:usage:*");
+        if (usageKeys == null) {
+            return;
+        }
+        String rawPrefix = userId + "\u0001";
+        String jsonPrefix = "\"" + rawPrefix;
+        String escapedJsonPrefix = "\"" + userId + "\\u0001";
+        for (String usageKey : usageKeys) {
+            if (usageKey == null || !usageKey.startsWith("yusi:usage:")) {
+                continue;
+            }
+            // StringCodec reads only hash fields and never attempts to decode
+            // legacy or mixed-format hash values during HSCAN.
+            RMap<Object, Object> map = redissonClient.getMap(usageKey, StringCodec.INSTANCE);
+            for (Object rawField : new HashSet<>(map.keySet())) {
+                if (!(rawField instanceof String field)) {
+                    continue;
+                }
+                boolean rawMatch = field.startsWith(rawPrefix);
+                boolean jsonMatch = field.startsWith(jsonPrefix) && field.endsWith("\"");
+                boolean escapedJsonMatch = field.startsWith(escapedJsonPrefix) && field.endsWith("\"");
+                if (rawMatch || jsonMatch || escapedJsonMatch) {
+                    map.remove(field);
+                }
+            }
+        }
     }
 
     @Override

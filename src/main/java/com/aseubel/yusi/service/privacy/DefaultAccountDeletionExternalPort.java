@@ -65,6 +65,7 @@ public class DefaultAccountDeletionExternalPort implements AccountDeletionExtern
         tokenService.removeAllDeviceTokens(targetUserId);
         redisService.remove("yusi:langchain:" + targetUserId);
         redisService.remove(VIOLATION_KEY_PREFIX + targetUserId);
+        redisService.removeUsageFields(targetUserId);
 
         for (AccountDeletionInventory.UsageField usageField : inventory.usageFields()) {
             redisService.removeFromMap(usageField.redisKey(), usageField.field());

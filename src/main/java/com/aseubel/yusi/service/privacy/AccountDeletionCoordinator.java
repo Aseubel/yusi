@@ -36,6 +36,7 @@ public class AccountDeletionCoordinator {
     private static final String CHUNK_PREFIX = "yusi:chunk:";
     private static final String MD5_PREFIX = "yusi:md5:";
     private static final String DEIDENTIFIED_USER_REF = "account-deleted";
+    private static final String SUPERSEDED_CATEGORY = "superseded_by_completed_request";
     private static final String FIELD_SEPARATOR = "\u0001";
 
     private final JdbcTemplate jdbcTemplate;
@@ -91,6 +92,7 @@ public class AccountDeletionCoordinator {
                 externalPort.deleteRedis(inventory);
                 deleteChildFirst(inventory);
                 new AccountDeletionInvariantValidator(jdbcTemplate).requireClean(targetUserId);
+                supersedePriorRequests(targetUserId, requestId);
                 markCompleted(request);
                 recordDeidentifiedSuccess(requestId, adminUserId);
             };
@@ -144,6 +146,27 @@ public class AccountDeletionCoordinator {
         request.setCompletedAt(java.time.LocalDateTime.now());
         request.setUpdatedAt(java.time.LocalDateTime.now());
         saveInCurrentTransaction(request);
+    }
+
+    private void supersedePriorRequests(String targetUserId, String completedRequestId) {
+        if (requestRepository == null) {
+            return;
+        }
+        List<AccountDeletionRequest> priorRequests = requestRepository.findByTargetUserRefAndStatusIn(
+                targetUserId,
+                List.of(AccountDeletionRequest.Status.PENDING,
+                        AccountDeletionRequest.Status.RUNNING,
+                        AccountDeletionRequest.Status.PENDING_RETRY));
+        for (AccountDeletionRequest priorRequest : priorRequests) {
+            if (completedRequestId.equals(priorRequest.getRequestId())) {
+                continue;
+            }
+            priorRequest.setStatus(AccountDeletionRequest.Status.SUPERSEDED);
+            priorRequest.setTargetUserRef(null);
+            priorRequest.setFailureCategory(SUPERSEDED_CATEGORY);
+            priorRequest.setUpdatedAt(java.time.LocalDateTime.now());
+            saveInCurrentTransaction(priorRequest);
+        }
     }
 
     private AccountDeletionRequest saveInCurrentTransaction(AccountDeletionRequest request) {

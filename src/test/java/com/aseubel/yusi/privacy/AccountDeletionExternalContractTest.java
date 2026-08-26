@@ -141,6 +141,7 @@ class AccountDeletionExternalContractTest {
         verify(tokenService).removeAllDeviceTokens(TARGET_USER);
         verify(redisService).remove("yusi:langchain:" + TARGET_USER);
         verify(redisService).remove("yusi:violation:count:" + TARGET_USER);
+        verify(redisService).removeUsageFields(TARGET_USER);
         verify(redisService).remove("yusi:user:data:" + TARGET_USER);
         verify(redisService).remove("yusi:user:admin:" + TARGET_USER);
     }

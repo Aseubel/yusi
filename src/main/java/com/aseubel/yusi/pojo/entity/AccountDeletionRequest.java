@@ -91,6 +91,7 @@ public class AccountDeletionRequest {
         PENDING,
         RUNNING,
         PENDING_RETRY,
+        SUPERSEDED,
         COMPLETED
     }
 }

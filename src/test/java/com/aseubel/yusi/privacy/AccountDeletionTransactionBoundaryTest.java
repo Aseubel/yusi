@@ -1,6 +1,7 @@
 package com.aseubel.yusi.privacy;
 
 import com.aseubel.yusi.TestInfrastructureConfig;
+import com.aseubel.yusi.pojo.entity.AccountDeletionRequest;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.repository.AccountDeletionRequestRepository;
 import com.aseubel.yusi.repository.UserRepository;
@@ -106,6 +107,26 @@ class AccountDeletionTransactionBoundaryTest {
         assertThat(result.status()).isEqualTo(DeletionResult.Status.PENDING_RETRY);
         assertThat(observedStatus).hasValue("RUNNING");
         assertThat(userRepository.findByUserId(TARGET_USER)).isNotNull();
+    }
+
+    @Test
+    void successfulDeletionMustDeidentifyPriorPendingTargetReferences() {
+        doThrow(new IllegalStateException("fixture-external-failure"))
+                .doNothing()
+                .when(externalPort).deleteMilvus(any());
+
+        DeletionResult first = coordinator.requestDeletion(TARGET_USER, ADMIN_USER);
+        assertThat(first.status()).isEqualTo(DeletionResult.Status.PENDING_RETRY);
+
+        DeletionResult second = coordinator.requestDeletion(TARGET_USER, ADMIN_USER);
+
+        assertThat(second.status()).isEqualTo(DeletionResult.Status.COMPLETED);
+        assertThat(requestRepository.findAll())
+                .allSatisfy(request -> assertThat(request.getTargetUserRef()).isNull());
+        assertThat(requestRepository.findByRequestId(first.requestId()))
+                .get()
+                .extracting(AccountDeletionRequest::getStatus)
+                .isEqualTo(AccountDeletionRequest.Status.SUPERSEDED);
     }
 
     private void deleteUserIfPresent(String userId) {

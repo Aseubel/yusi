@@ -1,9 +1,9 @@
 # Yusi-test 切片验证记录
 
-> **Status:** In progress — 本地修复已完成，远端 `yusi-test` 闭环复测未完成
+> **Status:** In progress — `7b55894` 已 commit + push，远端已执行 `rebuild.sh`；本地已补 usage/台账收尾修复，等待新切片部署复测
 > **Date:** 2026-08-26
 > **Scope:** 仅使用 `yusi-test` 做验证；生产库 `yusi` 只读
-> **Runtime:** 远端运行实例源码 release SHA `2f67430f5b3eb3fc5d0dfadd909a74200d907ca6`
+> **Runtime:** 远端运行实例源码 release SHA `7b55894f8b81cfbffe45b642d4fcf7eebbe64dab`
 > **Related:** [Yusi Agent 产品与工程演进计划](../plans/2026-08-04-yusi-agent-product-roadmap.md)
 
 ## 验证边界
@@ -12,7 +12,10 @@
 - 所有账号、权限、跨用户访问和注销验证均以测试库 `yusi-test` 为目标。
 - Milvus 使用官方云端实例；本轮只按测试账号范围核对和清理，不把它视为 MySQL 事务的一部分。
 - OSS、Redis 和 Milvus 的既有测试副本可以在重测前按账号重建；不会把测试账号密码写入记录。
-- 当前本地工作区已完成注销事务边界、待重试语义和 `SecurityException` 响应映射修复；尚未 commit 或同步远端。已有用户改动保持不变。
+- 当前本地工作区已完成注销事务边界、待重试语义和 `SecurityException` 响应映射修复；已提交为
+  `7b55894f8b81cfbffe45b642d4fcf7eebbe64dab` 并推送到 `origin/main`。远端已执行
+  `/root/projects/yusi/rebuild.sh`，Maven 构建成功、容器重建并启动，健康检查通过。远端原有的
+  `build_yusi_mcp.sh`、`frontend` 用户改动保持不变。
 
 ## 测试账号
 
@@ -71,6 +74,32 @@ POST /api/admin/users/{userId}/deregister
 3. 外部清理发生在 MySQL 事务前，导致数据库失败时出现“外部副本已删、MySQL 未删”的半删除状态。
 4. `AdminServiceImpl` 当前忽略 `DeletionResult.PENDING_RETRY`，存在把未完成删除当作成功处理的风险。
 
+### 5. usage hash 残留的根因
+
+最新运行实例中，`yusi:usage:2026-08-26` 仍有 8 个 B 的目标 field；同时 B 的
+`interface_daily_usage` MySQL 行数为 0。usage worker 因混合编码数据在 `HSCAN` 阶段解码失败，
+未能把这些 Redis 统计落库，而协调器原先只从 MySQL 行反推 Redis field，因此这些 field 没有进入
+inventory，不能被 `removeFromMap` 清理。该问题不是 MySQL 删除失败，但会阻止全路径隐私验收。
+
+### 6. 历史 PENDING_RETRY 引用
+
+`account_deletion_request` 中存在 4 条 B 的历史 `PENDING_RETRY`，其中
+`database_invariant` 2 条、`external_or_database` 2 条。最新成功请求只清空了自己的
+`target_user_ref`，旧失败请求仍保留目标引用；这会使成功收尾后的临时台账仍可直接检索目标账号。
+
+## 本地追加修复与证据
+
+- `RedissonService` 新增专用 `removeUsageFields`：扫描 `yusi:usage:*`，以 `StringCodec` 只读取
+  hash field，支持 JSON 包裹和历史裸 field，按目标用户精确删除，不解码混杂的 hash value，
+  也不删除 usage hash 或使用无边界 wildcard 删除。
+- `DefaultAccountDeletionExternalPort` 在清理 refresh/device、LangChain 和 violation 后调用该专用操作；
+  MySQL inventory 中已有的 usage field 清理仍保留，作为精确删除兜底。
+- 成功删除事务在写成功审计前，将同一目标的旧 `PENDING`、`RUNNING`、`PENDING_RETRY` 请求标为
+  `SUPERSEDED` 并清空 `target_user_ref`；失败时事务回滚，仍保留可重试引用。
+- 已先确认红测失败，再实现并通过：usage 原始 field 清理测试、历史待重试引用测试，以及删除隐私、
+  外部契约、源覆盖、事务边界和管理员相邻测试。
+- 本地 `\.\mvnw.cmd -q test` 退出码为 `0`；当前远端仍是旧 release `7b55894`，真实依赖复测尚未开始。
+
 ## 孤儿数据说明
 
 “生产 yusi 孤儿关系”是指关系、alias、mention 等记录仍引用已经不存在的用户或 LifeGraph 实体。例如 `life_graph_relation.source_id` 或 `target_id` 找不到对应实体。它是数据完整性问题，不等于生产库一定存在真实用户。
@@ -84,12 +113,16 @@ POST /api/admin/users/{userId}/deregister
 1. [x] 为注销失败台账、事务边界、`PENDING_RETRY` 返回语义和 LifeGraph `SecurityException` 映射补充回归测试，并确认测试先 RED。
 2. [x] 修复删除台账独立提交、协调器失败不被外层事务吞掉、待重试不返回普通成功，以及 LifeGraph 跨用户删除固定返回 `403`。
 3. [ ] 只在 `yusi-test` 清理已确认的 orphan alias/mention，并记录清理前后计数。
-4. [ ] 重建用户 B 的 Redis、OSS、Milvus fixture，再次执行真实注销。
-5. [ ] 核对 B 的所有 MySQL 用户数据为 0；A 的控制数据仍存在；共享 match/connection/room 只做正确去标识化；B 的三个 Milvus collection、Redis key 和 OSS 对象均为 0；orphan 查询为 0；删除台账为 `COMPLETED`。
-6. [ ] 通过管理员 C 删除 A，清理 C 与剩余 fixture，避免留下测试数据。
-7. [ ] 只读复查生产 `yusi` 未发生变化。
-8. [ ] 根据最终证据更新 roadmap；在闭环完成前不勾选账号删除、安全授权或数据完整性条目。
+4. [x] 修复 usage hash 未落库时的 Redis field 清理，并在成功删除时收敛旧待重试台账引用；本地红绿测试和全套 Maven 已通过，待部署复测。
+5. [ ] 提交并推送追加修复，远端执行 `rebuild.sh`。
+6. [ ] 只在 `yusi-test` 清理已确认的 orphan alias/mention，并记录清理前后计数。
+7. [ ] 重建用户 B 的 Redis、OSS、Milvus fixture，再次执行真实注销。
+8. [ ] 核对 B 的所有 MySQL 用户数据为 0；A 的控制数据仍存在；共享 match/connection/room 只做正确去标识化；B 的三个 Milvus collection、Redis key 和 OSS 对象均为 0；orphan 查询为 0；删除台账为 `COMPLETED`。
+9. [ ] 通过管理员 C 删除 A，清理 C 与剩余 fixture，避免留下测试数据。
+10. [ ] 只读复查生产 `yusi` 未发生变化。
+11. [ ] 根据最终证据更新 roadmap；在闭环完成前不勾选账号删除、安全授权或数据完整性条目。
 
 ## 当前结论
 
-授权边界的大部分 HTTP 验证已通过，但账号删除链路尚未达到可接受的闭环标准。当前不能声称“注销成功”、不能把 `PENDING_RETRY` 当作完成，也不能将生产数据完整性标记为通过。
+授权边界的大部分 HTTP 验证已通过；本地已修复 Redis usage field 漏清和历史删除台账引用问题，
+但追加修复尚未部署到远端，账号删除链路仍不能声称达到完整闭环，也不能将生产数据完整性标记为通过。

@@ -248,6 +248,15 @@ public interface IRedisService {
     void removeFromMap(String key, String field);
 
     /**
+     * Removes only fields owned by the supplied user from usage hashes.
+     * Implementations must scan and delete exact fields, never delete the
+     * usage key or an unbounded key pattern.
+     *
+     * @param userId user whose usage fields should be removed
+     */
+    void removeUsageFields(String userId);
+
+    /**
      * 获取哈希表中指定字段的值
      *
      * @param key   键
