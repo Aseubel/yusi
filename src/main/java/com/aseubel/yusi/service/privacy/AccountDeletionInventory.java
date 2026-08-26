@@ -16,6 +16,7 @@ public final class AccountDeletionInventory {
     private final Set<String> attachmentObjectKeys = new LinkedHashSet<>();
     private final Set<String> chunkObjectKeys = new LinkedHashSet<>();
     private final Set<String> exactRedisKeys = new LinkedHashSet<>();
+    private final Set<String> redisKeyPatterns = new LinkedHashSet<>();
     private final Set<UsageField> usageFields = new LinkedHashSet<>();
     private final Set<String> diaryIds = new LinkedHashSet<>();
     private final Set<String> graphEntityIds = new LinkedHashSet<>();
@@ -54,6 +55,10 @@ public final class AccountDeletionInventory {
 
     public Set<String> exactRedisKeys() {
         return Collections.unmodifiableSet(exactRedisKeys);
+    }
+
+    public Set<String> redisKeyPatterns() {
+        return Collections.unmodifiableSet(redisKeyPatterns);
     }
 
     public Set<UsageField> usageFields() {
@@ -108,6 +113,10 @@ public final class AccountDeletionInventory {
         addNonBlank(exactRedisKeys, key);
     }
 
+    void addRedisKeyPattern(String pattern) {
+        addNonBlank(redisKeyPatterns, pattern);
+    }
+
     void addUsageField(String redisKey, String field) {
         if (redisKey != null && !redisKey.isBlank() && field != null && !field.isBlank()) {
             usageFields.add(new UsageField(redisKey, field));
@@ -156,6 +165,7 @@ public final class AccountDeletionInventory {
                 + ", attachmentCount=" + attachmentObjectKeys.size()
                 + ", chunkCount=" + chunkObjectKeys.size()
                 + ", redisKeyCount=" + exactRedisKeys.size()
+                + ", redisPatternCount=" + redisKeyPatterns.size()
                 + ", usageFieldCount=" + usageFields.size()
                 + ", diaryCount=" + diaryIds.size()
                 + ", graphEntityCount=" + graphEntityIds.size()

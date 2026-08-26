@@ -146,6 +146,35 @@ class AccountDeletionExternalContractTest {
         verify(redisService).remove("yusi:user:admin:" + TARGET_USER);
     }
 
+    @Test
+    void currentDeregisterEntryMustClearUserDiaryListCacheVariants() {
+        newAdminService(mock(MilvusClientV2.class)).deregisterUser(TARGET_USER);
+
+        verify(redisService).removeByPattern("yusi:diary:list:v4:" + TARGET_USER + ":*");
+    }
+
+    @Test
+    void currentDeregisterEntryMustClearUserNotificationCacheVariants() {
+        newAdminService(mock(MilvusClientV2.class)).deregisterUser(TARGET_USER);
+
+        verify(redisService).removeByPattern("yusi:notifications:user:" + TARGET_USER + ":*");
+    }
+
+    @Test
+    void currentDeregisterEntryMustClearUserMatchCacheVariants() {
+        newAdminService(mock(MilvusClientV2.class)).deregisterUser(TARGET_USER);
+
+        verify(redisService).removeByPattern("yusi:match:list:" + TARGET_USER + ":*");
+        verify(redisService).remove("yusi:match:status:" + TARGET_USER);
+    }
+
+    @Test
+    void currentDeregisterEntryMustClearUserPlazaCacheVariants() {
+        newAdminService(mock(MilvusClientV2.class)).deregisterUser(TARGET_USER);
+
+        verify(redisService).removeByPattern("yusi:plaza:my:" + TARGET_USER + ":*");
+    }
+
     private AdminServiceImpl newAdminService(MilvusClientV2 milvusClient) {
         UserRepository userRepository = mock(UserRepository.class);
         when(userRepository.findByUserId(TARGET_USER))

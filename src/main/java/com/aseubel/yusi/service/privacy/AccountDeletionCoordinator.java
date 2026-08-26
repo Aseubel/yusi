@@ -39,6 +39,11 @@ public class AccountDeletionCoordinator {
     private static final String DEIDENTIFIED_USER_REF = "account-deleted";
     private static final String SUPERSEDED_CATEGORY = "superseded_by_completed_request";
     private static final String FIELD_SEPARATOR = "\u0001";
+    private static final String DIARY_LIST_CACHE_PREFIX = "yusi:diary:list:v4:";
+    private static final String NOTIFICATION_CACHE_PREFIX = "yusi:notifications:user:";
+    private static final String MATCH_LIST_CACHE_PREFIX = "yusi:match:list:";
+    private static final String PLAZA_MINE_CACHE_PREFIX = "yusi:plaza:my:";
+    private static final String ROOM_CHAT_CACHE_PREFIX = "yusi:room:chat:";
 
     private final JdbcTemplate jdbcTemplate;
     private final AccountDeletionExternalPort externalPort;
@@ -438,6 +443,7 @@ public class AccountDeletionCoordinator {
                 "yusi:user:data:" + userId,
                 "yusi:user:admin:" + userId,
                 "yusi:match:list:" + userId,
+                "yusi:match:status:" + userId,
                 "yusi:notifications:user:" + userId + ":unread",
                 "yusi:notifications:user:" + userId + ":unread-count",
                 "yusi:diary:footprints:" + userId)) {
@@ -446,6 +452,38 @@ public class AccountDeletionCoordinator {
         for (String diaryId : inventory.diaryIds()) {
             inventory.addExactRedisKey("yusi:diary:detail:v4:" + diaryId + ":" + userId);
         }
+        collectSituationRoomCacheKeys(inventory);
+        inventory.addRedisKeyPattern(DIARY_LIST_CACHE_PREFIX + escapeRedisGlob(userId) + ":*");
+        inventory.addRedisKeyPattern(NOTIFICATION_CACHE_PREFIX + escapeRedisGlob(userId) + ":*");
+        inventory.addRedisKeyPattern(MATCH_LIST_CACHE_PREFIX + escapeRedisGlob(userId) + ":*");
+        inventory.addRedisKeyPattern(PLAZA_MINE_CACHE_PREFIX + escapeRedisGlob(userId) + ":*");
+    }
+
+    private void collectSituationRoomCacheKeys(AccountDeletionInventory inventory) {
+        String userId = inventory.targetUserId();
+        if (!tableExists("situation_room") || !columnExists("situation_room", "code")
+                || !columnExists("situation_room", "members")) {
+            return;
+        }
+        boolean hasOwner = columnExists("situation_room", "owner_id");
+        String sql = "SELECT code FROM situation_room WHERE members LIKE ?"
+                + (hasOwner ? " OR owner_id = ?" : "");
+        Object[] args = hasOwner
+                ? new Object[]{"%\"" + userId + "\"%", userId}
+                : new Object[]{"%\"" + userId + "\"%"};
+        jdbcTemplate.query(sql, args, (org.springframework.jdbc.core.ResultSetExtractor<Void>) rs -> {
+            while (rs.next()) {
+                inventory.addExactRedisKey(ROOM_CHAT_CACHE_PREFIX + rs.getString("code"));
+            }
+            return null;
+        });
+    }
+
+    private String escapeRedisGlob(String value) {
+        return value.replace("\\", "\\\\")
+                .replace("*", "\\*")
+                .replace("?", "\\?")
+                .replace("[", "\\[");
     }
 
     private void addJsonStrings(String json, AccountDeletionInventory inventory, ReferenceKind kind) {

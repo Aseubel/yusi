@@ -55,6 +55,13 @@ class AccountDeletionSourceCoverageTest {
                  () -> assertTrue(source.contains("yusi:chunk:")),
                  () -> assertTrue(source.contains("yusi:md5:")),
                  () -> assertTrue(source.contains("removeFromMap")),
+                 () -> assertTrue(source.contains("addRedisKeyPattern")),
+                 () -> assertTrue(source.contains("removeByPattern")),
+                 () -> assertTrue(source.contains("yusi:diary:list:v4:")),
+                 () -> assertTrue(source.contains("yusi:notifications:user:")),
+                 () -> assertTrue(source.contains("yusi:match:list:")),
+                 () -> assertTrue(source.contains("yusi:plaza:my:")),
+                 () -> assertTrue(source.contains("yusi:room:chat:")),
                  () -> assertTrue(source.contains("deidentifySharedMatchData")),
                  () -> assertTrue(source.contains("deleteObjects")));
 

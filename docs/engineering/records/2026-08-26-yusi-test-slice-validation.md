@@ -118,7 +118,8 @@ inventory，不能被 `removeFromMap` 清理。该问题不是 MySQL 删除失�
 - 真实 MySQL 复查发现共享 `soul_match.status_b` 仍为原值。根因是同一条 `UPDATE` 先修改
   `user_a_id/user_b_id`，再用已修改的 ID 判断 `status_a/status_b`；MySQL 的赋值顺序会跳过目标状态槽。
 - 已新增 H2 行为断言和 SQL 赋值顺序 source contract；修复前 source contract 两个槽位均 RED，
-  修复后 focused privacy/source tests 全部 GREEN。修复尚未部署，第一轮真实结果不能作为最终闭环证据。
+  修复后 focused privacy/source tests 全部 GREEN。修复已提交为 `33f26ef`、推送并部署，
+  第一轮真实结果因此进入后续复测阶段。
 
 ## 依赖复测基线：fixture 重建前
 
@@ -141,6 +142,23 @@ inventory，不能被 `removeFromMap` 清理。该问题不是 MySQL 删除失�
 
 本轮注销失败触发的是另一类全局 orphan alias/mention 校验问题。重测前只允许在 `yusi-test` 清理已确认的测试环境孤儿数据；不能据此修改或清理生产 `yusi`。
 
+## 第二轮真实注销结果：发现动态 diary 分页缓存残留
+
+- `33f26ef` 部署后，重新创建 B 的测试数据并通过真实登录、访问自身 diary、产生 usage、注销完成；B 的 MySQL 用户归属数据、usage field、Milvus 三个 collection 数据和共享 match 状态均已按预期收敛，`soul_match.status_b` 残留已消失。
+- 复查 B 的 Redis 时仍发现一条确认属于 B 的动态缓存：`yusi:diary:list:v4:<B>:1:10:null:true`。
+- 根因已定位到 `AccountDeletionCoordinator.collectExactCacheKeys` 只登记固定 key 和 diary detail key，没有覆盖 diary list 的分页参数组合；当前删除外部端口也没有一个按用户前缀、受限 allow-list 的清理入口。因此本次注销不能作为全路径闭环证据。
+- 本轮 OSS 尚未注入真实图片对象与 `image_file` 映射，OSS 删除路径仍缺 deployment-only 证据；第二轮 Milvus 删除后的最终 count 也需要再单独确认。
+
+## 当前追加切片
+
+- 已为动态 diary list cache 先补红测，再实现按用户精确前缀的受限清理；同一 inventory 现在覆盖
+  diary list、notification list、match list/status、Plaza 我的列表，并从目标用户参与/拥有的
+  situation room 收集 `room:chat` exact key。没有纳入全局 `plaza:feed:*` 或其他共享公共 key。
+- 本地 focused privacy 集合和全量 `\.\mvnw.cmd -q test` 均退出码 `0`；当前补丁已完成本地提交，尚未推送或部署。
+- 已按仓库要求检查 roadmap：Phase 5“安全与隐私自检”保持 `[ ]`，不能用本地测试替代真实
+  OSS fixture、Milvus 最终 count、部署后全路径复测、测试数据清理和生产只读复核。
+- 下一步是提交推送并执行远端 `rebuild.sh`，然后重建 B fixture，补 OSS 对象映射和最终依赖残留核对。
+
 ## 待完成切片
 
 1. [x] 为注销失败台账、事务边界、`PENDING_RETRY` 返回语义和 LifeGraph `SecurityException` 映射补充回归测试，并确认测试先 RED。
@@ -156,5 +174,6 @@ inventory，不能被 `removeFromMap` 清理。该问题不是 MySQL 删除失�
 
 ## 当前结论
 
-授权边界的大部分 HTTP 验证已通过；追加修复已部署且依赖复测基线已记录，账号删除链路仍待
-真实 fixture 注入、注销和全路径残留核对，不能提前声称达到完整闭环，也不能将生产数据完整性标记为通过。
+授权边界的大部分 HTTP 验证已通过；上一轮追加修复已部署，本轮用户级缓存补丁已在本地全量
+通过但尚未部署，账号删除链路仍待真实 fixture 注入、注销和全路径残留核对，不能提前声称达到
+完整闭环，也不能将生产数据完整性标记为通过。

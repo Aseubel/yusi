@@ -70,6 +70,9 @@ public class DefaultAccountDeletionExternalPort implements AccountDeletionExtern
         for (AccountDeletionInventory.UsageField usageField : inventory.usageFields()) {
             redisService.removeFromMap(usageField.redisKey(), usageField.field());
         }
+        for (String redisKeyPattern : inventory.redisKeyPatterns()) {
+            redisService.removeByPattern(redisKeyPattern);
+        }
         for (String exactRedisKey : inventory.exactRedisKeys()) {
             redisService.remove(exactRedisKey);
         }

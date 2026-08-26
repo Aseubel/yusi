@@ -208,6 +208,40 @@ class AccountDeletionPrivacyAuditTest {
     }
 
     @Test
+    void inventoryMustIncludeRoomChatCacheKeysForTargetMemberRooms() {
+        jdbcTemplate.execute("ALTER TABLE room_message ADD room_code VARCHAR(32)");
+        jdbcTemplate.execute("CREATE TABLE situation_room (code VARCHAR(32), owner_id VARCHAR(128), "
+                + "members VARCHAR(4096))");
+        jdbcTemplate.update("INSERT INTO situation_room (code, owner_id, members) VALUES (?, ?, ?), (?, ?, ?)",
+                "fixture-shared-room", CONTROL_USER, "[\"" + TARGET_USER + "\",\"" + CONTROL_USER + "\"]",
+                "fixture-owned-room", TARGET_USER, "[\"" + TARGET_USER + "\",\"" + CONTROL_USER + "\"]");
+
+        AtomicReference<com.aseubel.yusi.service.privacy.AccountDeletionInventory> captured = new AtomicReference<>();
+        AccountDeletionExternalPort capturingPort = new AccountDeletionExternalPort() {
+            @Override
+            public void deleteMilvus(com.aseubel.yusi.service.privacy.AccountDeletionInventory inventory) {
+                captured.set(inventory);
+            }
+
+            @Override
+            public void deleteRedis(com.aseubel.yusi.service.privacy.AccountDeletionInventory inventory) {
+            }
+
+            @Override
+            public void deleteObjects(com.aseubel.yusi.service.privacy.AccountDeletionInventory inventory) {
+            }
+        };
+
+        DeletionResult result = new AccountDeletionCoordinator(
+                jdbcTemplate, capturingPort, mock(SecurityAuditService.class))
+                .requestDeletion(TARGET_USER, ADMIN_USER);
+
+        assertEquals(DeletionResult.Status.COMPLETED, result.status());
+        assertTrue(captured.get().exactRedisKeys().contains("yusi:room:chat:fixture-shared-room"));
+        assertTrue(captured.get().exactRedisKeys().contains("yusi:room:chat:fixture-owned-room"));
+    }
+
+    @Test
     void externalFailureMustRemainPendingRetryAndMustNotDeleteDatabaseOrWriteSuccessAudit() {
         SecurityAuditService auditService = mock(SecurityAuditService.class);
         AccountDeletionExternalPort failingPort = new AccountDeletionExternalPort() {
