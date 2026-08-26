@@ -701,10 +701,7 @@ public class AccountDeletionCoordinator {
         }
         List<String> assignments = new ArrayList<>();
         List<Object> args = new ArrayList<>();
-        assignments.add("user_a_id = CASE WHEN user_a_id = ? THEN NULL ELSE user_a_id END");
-        args.add(targetUserId);
-        assignments.add("user_b_id = CASE WHEN user_b_id = ? THEN NULL ELSE user_b_id END");
-        args.add(targetUserId);
+        // Clear participant-specific state before changing the IDs used by the CASE expressions.
         if (columnExists("soul_match", "status_a")) {
             assignments.add("status_a = CASE WHEN user_a_id = ? THEN NULL ELSE status_a END");
             args.add(targetUserId);
@@ -713,6 +710,10 @@ public class AccountDeletionCoordinator {
             assignments.add("status_b = CASE WHEN user_b_id = ? THEN NULL ELSE status_b END");
             args.add(targetUserId);
         }
+        assignments.add("user_a_id = CASE WHEN user_a_id = ? THEN NULL ELSE user_a_id END");
+        args.add(targetUserId);
+        assignments.add("user_b_id = CASE WHEN user_b_id = ? THEN NULL ELSE user_b_id END");
+        args.add(targetUserId);
         for (String column : List.of("letter_a_to_b", "letter_b_to_a", "reason",
                 "timing_reason", "ice_breaker", "generation_run_id", "recommendation_event_id")) {
             if (columnExists("soul_match", column)) {

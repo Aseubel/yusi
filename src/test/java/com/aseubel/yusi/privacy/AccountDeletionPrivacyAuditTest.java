@@ -71,6 +71,11 @@ class AccountDeletionPrivacyAuditTest {
     void currentDeregisterEntryMustLeaveNoTargetRowsAcrossAllDataSurfaces() {
         jdbcTemplate.update("INSERT INTO soul_match (id, user_a_id, user_b_id) VALUES (?, ?, ?)",
                 3L, TARGET_USER, TARGET_USER);
+        jdbcTemplate.update("INSERT INTO soul_match "
+                        + "(id, user_a_id, user_b_id, status_a, status_b, is_matched) VALUES (?, ?, ?, ?, ?, ?)",
+                4L, CONTROL_USER, TARGET_USER, 2, 1, true);
+        jdbcTemplate.update("UPDATE soul_match SET status_a = ?, status_b = ?, is_matched = ? WHERE id = ?",
+                1, 2, true, 1L);
         jdbcTemplate.update("INSERT INTO soul_connection (id, match_id, user_a_id, user_b_id) VALUES (?, ?, ?, ?)",
                 2L, 3L, TARGET_USER, TARGET_USER);
 
@@ -117,12 +122,22 @@ class AccountDeletionPrivacyAuditTest {
                 "retained security audit must not keep target subject id");
         assertEquals(0L, countWhere("security_audit_event", "resource_id", TARGET_USER),
                 "retained security audit must not keep target resource id");
-        assertEquals(2L, countAll("soul_match"),
-                "shared match row and control-only match row must remain available to the control user");
+        assertEquals(3L, countAll("soul_match"),
+                "shared matches and control-only match row must remain available to the control user");
         assertEquals(1L, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM soul_match WHERE id = ? AND user_b_id = ? AND user_a_id IS NULL",
                 Long.class, 1L, CONTROL_USER),
                 "shared match must retain the control participant without retaining the target identity");
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM soul_match WHERE id = ? AND user_a_id IS NULL AND status_a IS NULL "
+                        + "AND status_b = ? AND is_matched = FALSE",
+                Long.class, 1L, 2),
+                "target status in user_a slot must be cleared with the target identity");
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM soul_match WHERE id = ? AND user_a_id = ? AND user_b_id IS NULL "
+                        + "AND status_a = ? AND status_b IS NULL AND is_matched = FALSE",
+                Long.class, 4L, CONTROL_USER, 2),
+                "target status in user_b slot must be cleared with the target identity");
         assertEquals(1L, countAll("soul_connection"),
                 "shared connection lifecycle must remain as de-identified control data");
         assertEquals(1L, jdbcTemplate.queryForObject(
@@ -272,7 +287,8 @@ class AccountDeletionPrivacyAuditTest {
         jdbcTemplate.execute("CREATE TABLE chat_memory_message (memory_id VARCHAR(128), images VARCHAR(4096))");
         jdbcTemplate.execute("CREATE TABLE resonance_signal (from_user_id VARCHAR(128), to_user_id VARCHAR(128))");
         jdbcTemplate.execute("CREATE TABLE room_message (sender_id VARCHAR(128))");
-        jdbcTemplate.execute("CREATE TABLE soul_match (id BIGINT, user_a_id VARCHAR(128), user_b_id VARCHAR(128))");
+        jdbcTemplate.execute("CREATE TABLE soul_match (id BIGINT, user_a_id VARCHAR(128), user_b_id VARCHAR(128), "
+                + "status_a INT, status_b INT, is_matched BOOLEAN)");
         jdbcTemplate.execute("CREATE TABLE soul_message (sender_id VARCHAR(128), receiver_id VARCHAR(128))");
         jdbcTemplate.execute("CREATE TABLE soul_connection (id BIGINT, match_id BIGINT, user_a_id VARCHAR(128), user_b_id VARCHAR(128))");
         jdbcTemplate.execute("CREATE TABLE soul_connection_event (connection_id BIGINT, match_id BIGINT, actor_user_id VARCHAR(128))");

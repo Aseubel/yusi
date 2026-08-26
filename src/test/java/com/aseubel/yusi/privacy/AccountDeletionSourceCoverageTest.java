@@ -63,6 +63,19 @@ class AccountDeletionSourceCoverageTest {
     }
 
     @Test
+    void sharedMatchStatusesMustBeEvaluatedBeforeParticipantIdsChange() throws Exception {
+        String source = implementationSource();
+        int statusA = source.indexOf("status_a = CASE WHEN user_a_id = ? THEN NULL ELSE status_a END");
+        int statusB = source.indexOf("status_b = CASE WHEN user_b_id = ? THEN NULL ELSE status_b END");
+        int userA = source.indexOf("user_a_id = CASE WHEN user_a_id = ? THEN NULL ELSE user_a_id END");
+        int userB = source.indexOf("user_b_id = CASE WHEN user_b_id = ? THEN NULL ELSE user_b_id END");
+
+        assertAll("participant status must use the original IDs",
+                () -> assertTrue(statusA >= 0 && statusA < userA),
+                () -> assertTrue(statusB >= 0 && statusB < userB));
+    }
+
+    @Test
     void modifiedOssLoggerProjectionsMustExcludeObjectKeysDigestsAndThrowables() throws Exception {
         String source = Files.readString(Path.of(
                 "src/main/java/com/aseubel/yusi/service/oss/OssService.java"));
