@@ -16,4 +16,6 @@ public interface ImageFileRepository extends JpaRepository<ImageFile, Long> {
     boolean existsByFileMd5(String fileMd5);
 
     boolean existsByFileMd5AndUserId(String fileMd5, String userId);
+
+    boolean existsByObjectKeyAndUserIdNot(String objectKey, String userId);
 }

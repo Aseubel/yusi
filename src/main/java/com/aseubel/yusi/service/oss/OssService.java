@@ -52,6 +52,7 @@ public class OssService {
     private static final long CHUNK_EXPIRE_HOURS = 24;
     private static final long MD5_CACHE_EXPIRE_DAYS = 30;
     private static final int MAX_CHUNKS = 1000;
+    private static final int MAX_OBJECT_LIST_PAGE_SIZE = 1000;
     private static final int MAX_URL_EXPIRE_SECONDS = 24 * 60 * 60;
     private static final long MAX_CHUNK_SIZE = 5L * 1024 * 1024;
 
@@ -224,6 +225,85 @@ public class OssService {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "图片数量超出限制");
         }
         objectKeys.forEach(key -> deleteOwnedImage(key, userId));
+    }
+
+    /** Removes image objects left under a user's owned prefix. */
+    public void deleteOwnedImagePrefix(String userId) {
+        validateUserId(userId);
+        String imageFolder = ossProperties.getImageFolder();
+        if (imageFolder == null || imageFolder.isBlank()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片存储路径未配置");
+        }
+        deleteOwnedObjectPrefix(imageFolder + userId + "/", userId, OwnedObjectKind.IMAGE);
+    }
+
+    /** Removes audio objects left under a user's owned prefix. */
+    public void deleteOwnedAudioPrefix(String userId) {
+        validateUserId(userId);
+        String audioFolder = ossProperties.getAudioFolder();
+        if (audioFolder == null || audioFolder.isBlank()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "音频存储路径未配置");
+        }
+        deleteOwnedObjectPrefix(audioFolder + userId + "/", userId, OwnedObjectKind.AUDIO);
+    }
+
+    /** Removes multipart chunk objects left under a user's owned prefix. */
+    public void deleteOwnedChunkPrefix(String userId) {
+        validateUserId(userId);
+        String imageFolder = ossProperties.getImageFolder();
+        if (imageFolder == null || imageFolder.isBlank()) {
+            throw new BusinessException(ErrorCode.INTERNAL_ERROR, "图片存储路径未配置");
+        }
+        deleteOwnedObjectPrefix(imageFolder + "chunks/" + userId + "/", userId, OwnedObjectKind.CHUNK);
+    }
+
+    private void deleteOwnedObjectPrefix(String ownerPrefix, String userId, OwnedObjectKind kind) {
+        String continuationToken = null;
+        while (true) {
+            ListObjectsV2Request.Builder requestBuilder = ListObjectsV2Request.newBuilder()
+                    .bucket(ossProperties.getBucketName())
+                    .prefix(ownerPrefix)
+                    .maxKeys((long) MAX_OBJECT_LIST_PAGE_SIZE);
+            if (continuationToken != null && !continuationToken.isBlank()) {
+                requestBuilder.continuationToken(continuationToken);
+            }
+
+            ListObjectsV2Result result = ossClient.listObjectsV2(requestBuilder.build());
+            if (result == null) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR, "对象清单为空");
+            }
+            if (result.contents() != null) {
+                for (ObjectSummary object : result.contents()) {
+                    String objectKey = object.key();
+                    validateOwnedObjectKeyForDeletion(objectKey, userId, kind);
+                    if (kind != OwnedObjectKind.IMAGE
+                            || !imageFileRepository.existsByObjectKeyAndUserIdNot(objectKey, userId)) {
+                        deleteObject(objectKey);
+                    }
+                }
+            }
+            if (!Boolean.TRUE.equals(result.isTruncated())) {
+                return;
+            }
+            continuationToken = result.nextContinuationToken();
+            if (continuationToken == null || continuationToken.isBlank()) {
+                throw new BusinessException(ErrorCode.INTERNAL_ERROR, "对象清单不完整");
+            }
+        }
+    }
+
+    private void validateOwnedObjectKeyForDeletion(String objectKey, String userId, OwnedObjectKind kind) {
+        switch (kind) {
+            case IMAGE -> validateOwnedObjectKey(objectKey, userId);
+            case AUDIO -> validateOwnedAudioObjectKey(objectKey, userId);
+            case CHUNK -> validateOwnedChunkObjectKey(objectKey, userId);
+        }
+    }
+
+    private enum OwnedObjectKind {
+        IMAGE,
+        AUDIO,
+        CHUNK
     }
 
     private void deleteObject(String objectKey) {

@@ -121,6 +121,9 @@ class AccountDeletionExternalContractTest {
 
         verify(oss, times(1)).deleteOwnedChunkObject("fixture-chunk-object-a", TARGET_USER);
         verify(oss, times(1)).deleteOwnedChunkObject("fixture-chunk-object-b", TARGET_USER);
+        verify(oss, times(1)).deleteOwnedImagePrefix(TARGET_USER);
+        verify(oss, times(1)).deleteOwnedAudioPrefix(TARGET_USER);
+        verify(oss, times(1)).deleteOwnedChunkPrefix(TARGET_USER);
     }
 
     @Test

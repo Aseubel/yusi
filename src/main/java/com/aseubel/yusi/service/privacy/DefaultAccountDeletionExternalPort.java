@@ -90,6 +90,8 @@ public class DefaultAccountDeletionExternalPort implements AccountDeletionExtern
             int end = Math.min(start + MAX_OBJECT_DELETE_BATCH_SIZE, imageKeys.size());
             ossService.deleteOwnedImages(imageKeys.subList(start, end), inventory.targetUserId());
         }
+        ossService.deleteOwnedImagePrefix(inventory.targetUserId());
+        ossService.deleteOwnedAudioPrefix(inventory.targetUserId());
         for (String audioKey : inventory.audioObjectKeys()) {
             ossService.deleteOwnedAudioObject(audioKey, inventory.targetUserId());
         }
@@ -131,6 +133,7 @@ public class DefaultAccountDeletionExternalPort implements AccountDeletionExtern
         for (String chunkObjectKey : chunkObjectKeys) {
             ossService.deleteOwnedChunkObject(chunkObjectKey, inventory.targetUserId());
         }
+        ossService.deleteOwnedChunkPrefix(inventory.targetUserId());
     }
 
     private void deleteCollection(String collectionName, String filter) {

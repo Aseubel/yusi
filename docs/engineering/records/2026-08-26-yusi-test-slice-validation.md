@@ -1,9 +1,9 @@
 # Yusi-test 切片验证记录
 
-> **Status:** In progress — `eece5e7` 已部署并完成第一轮真实注销；发现共享 match 状态槽残留，修复已在本地红绿验证，待提交部署
+> **Status:** In progress — `70977bf` 已部署；真实 SDK 对账发现 B 用户 OSS 前缀残留 2 个无映射对象，本地已完成红绿修复，待提交部署后重测
 > **Date:** 2026-08-26
 > **Scope:** 仅使用 `yusi-test` 做验证；生产库 `yusi` 只读
-> **Runtime:** 远端运行实例源码 release SHA `eece5e76ba7bc376a4cfdf0ce471c882e8ed4e35`
+> **Runtime:** 远端运行实例源码 release SHA `70977bf5fe0783845d18d85ea09594239d3dae11`
 > **Related:** [Yusi Agent 产品与工程演进计划](../plans/2026-08-04-yusi-agent-product-roadmap.md)
 
 ## 验证边界
@@ -13,18 +13,18 @@
 - Milvus 使用官方云端实例；本轮只按测试账号范围核对和清理，不把它视为 MySQL 事务的一部分。
 - OSS、Redis 和 Milvus 的既有测试副本可以在重测前按账号重建；不会把测试账号密码写入记录。
 - 当前本地工作区已完成注销事务边界、待重试语义、usage 原始 field 清理、历史待重试引用收敛、
-  删除期间 usage 写入抑制和 `SecurityException` 响应映射修复；已提交为
-  `eece5e76ba7bc376a4cfdf0ce471c882e8ed4e35` 并推送到 `origin/main`。远端已执行
+  删除期间 usage 写入抑制、`SecurityException` 响应映射、共享 match 状态清理和用户级动态缓存
+  清理；已提交为 `70977bf5fe0783845d18d85ea09594239d3dae11` 并推送到 `origin/main`。远端已执行
   `/root/projects/yusi/rebuild.sh`，Maven 构建成功、容器重建并启动，健康检查通过。远端原有的
   `build_yusi_mcp.sh`、`frontend` 用户改动保持不变。
 
-## 续接起点：追加修复已部署
+## 续接起点：用户级缓存修复已部署
 
 - 本次验证严格以 `yusi-test` 为写入、删除和 fixture 重建范围；生产库 `yusi` 只做只读复查。
-- 已确认本地提交 `eece5e76ba7bc376a4cfdf0ce471c882e8ed4e35` 已推送，远端
+- 已确认本地提交 `70977bf5fe0783845d18d85ea09594239d3dae11` 已推送，远端
   `/root/projects/yusi/rebuild.sh` 返回成功，管理端口 readiness 为 `UP`。
-- 本阶段先记录再开始依赖复测；验证重点是 orphan alias/mention 清理、Redis usage 原始 field、
-  历史删除台账去标识化，以及 MySQL、Redis、OSS、Milvus 的真实注销闭环。
+- 本阶段先记录再开始依赖复测；验证重点是动态用户级缓存、orphan alias/mention、Redis usage
+  原始 field、历史删除台账去标识化，以及 MySQL、Redis、OSS、Milvus 的真实注销闭环。
 
 ## 测试账号
 
@@ -154,26 +154,73 @@ inventory，不能被 `removeFromMap` 清理。该问题不是 MySQL 删除失�
 - 已为动态 diary list cache 先补红测，再实现按用户精确前缀的受限清理；同一 inventory 现在覆盖
   diary list、notification list、match list/status、Plaza 我的列表，并从目标用户参与/拥有的
   situation room 收集 `room:chat` exact key。没有纳入全局 `plaza:feed:*` 或其他共享公共 key。
-- 本地 focused privacy 集合和全量 `\.\mvnw.cmd -q test` 均退出码 `0`；当前补丁已完成本地提交，尚未推送或部署。
+- 本地 focused privacy 集合和全量 `\.\mvnw.cmd -q test` 均退出码 `0`；补丁已提交为
+  `70977bf`、推送并部署，容器源码 SHA 与该提交一致，readiness 为 `UP`。
 - 已按仓库要求检查 roadmap：Phase 5“安全与隐私自检”保持 `[ ]`，不能用本地测试替代真实
   OSS fixture、Milvus 最终 count、部署后全路径复测、测试数据清理和生产只读复核。
-- 下一步是提交推送并执行远端 `rebuild.sh`，然后重建 B fixture，补 OSS 对象映射和最终依赖残留核对。
+
+## 第三轮真实注销结果：用户级缓存清理已验证
+
+- 在 `yusi-test` 重建 B/A/C、LifeGraph、共享 match/connection/room、Redis 和 Milvus fixture；
+  B 通过真实登录和自身接口访问，真实上传接口生成 OSS 图片对象及 `image_file` 映射。
+- 三个 Milvus collection 各插入 1 条 B 数据；管理员 C 真实调用注销 B 返回 `200 / success`。
+- 注销后 B 的 MySQL 用户归属数据、Redis 用户级 key、usage hash field、`room:chat` 缓存和三个
+  Milvus collection 查询结果均为 `0`；删除台账最新记录为 `COMPLETED`。
+- 共享数据正确去标识化：`soul_match` 保留 A 并清空 B 槽位及私有推荐内容，
+  `soul_connection` 保留控制记录并将 B 替换为 `account-deleted`、状态置为 `BLOCKED`，
+  房间保留 A 并移除 B 的成员、提交和投票。
+- relation endpoint、entity/relation evidence、alias/mention、product event、
+  connection/match、feedback/message、task/event 和 audit scope 的 orphan 查询均为 `0`。
+- 2026-08-27 使用远端 OSS SDK 认证对账：本轮已知的两个 B 对象 key 均返回
+  `HEAD=404 / NoSuchKey`，但 B 用户图片前缀下仍列出 `2` 个 `HEAD=PRESENT` 对象，且
+  `image_file` 映射为 `0`。这确认当前注销流程只按 MySQL/正文引用收集对象，未覆盖用户前缀下
+  的无映射对象；该残留是本轮发现的真实隐私缺口，不能将 B 的 OSS 删除验收标为通过。
+- presigned URL 在注销前后均返回 `403`，不再作为对象存在性证据；后续需要先补充受限的用户
+  前缀 inventory/删除逻辑并通过本地红绿测试，再重新部署和复测。
+
+## 第三轮收尾：A 清理与 OSS 根因
+
+- 在 `70977bf` 实例上，管理员 C 真实注销 A 返回 `HTTP 200 / code 200 / success`；A/B 的
+  MySQL 用户归属引用、共享 fixture、用户级 Redis key 和关系 orphan 查询均为 `0`，C 仍保留。
+- C 的 4 条测试管理员审计事件和 13 条 usage 记录仍在，这是当前测试账号继续执行管理请求的
+  结果；它们属于测试清理范围，不作为删除失败证据。生产库 `yusi` 的 fixture 事件、fixture
+  审计和测试账号查询均为 `0`。
+- A 删除后复查发现 B 的两个已知上传 key 均为 `HEAD=404 / NoSuchKey`，但 B 图片前缀仍有
+  `2` 个 `HEAD=PRESENT` 对象，且 `image_file` 映射为 `0`。这两个对象是当前真实 OSS 孤儿，
+  证明仅按 MySQL/正文引用收集 object inventory 不足。
+
+## 本地修复：用户前缀 OSS inventory
+
+- 先写 `OssServiceDeletionTest` 红测：当前源码缺少前缀 inventory API，编译失败；随后实现最小
+  受限前缀清理，并补 adapter 契约断言。
+- `OssService` 现在按页列举并校验三个前缀：图片 `imageFolder/<user>/`、音频
+  `audioFolder/<user>/`、分片 `imageFolder/chunks/<user>/`。图片仍被其他用户 `image_file`
+  映射引用时保留，否则删除；列表或删除异常直接向协调器传播，保持 `PENDING_RETRY`。
+- focused privacy/OSS 集合退出码 `0`；全量 `\.\mvnw.cmd -q test` 退出码 `0`，报告汇总为
+  `537 tests / 0 failures / 0 errors / 0 skipped`。本地修复尚未提交、推送或部署。
+- 当前 remote 仍运行 `70977bf`；下一步必须提交推送、执行 `/root/projects/yusi/rebuild.sh`，
+  在 `yusi-test` 重建 B 并再次通过真实注销验证三个 OSS 前缀均为 `0`，再清理 C 和临时测试对象。
 
 ## 待完成切片
 
 1. [x] 为注销失败台账、事务边界、`PENDING_RETRY` 返回语义和 LifeGraph `SecurityException` 映射补充回归测试，并确认测试先 RED。
 2. [x] 修复删除台账独立提交、协调器失败不被外层事务吞掉、待重试不返回普通成功，以及 LifeGraph 跨用户删除固定返回 `403`。
 3. [x] 只在 `yusi-test` 核对已确认的 orphan alias/mention；当前无 orphan，清理前后计数均为 0。
-4. [x] 修复 usage hash 未落库时的 Redis field 清理，并在成功删除时收敛旧待重试台账引用；本地红绿测试和全套 Maven 已通过，待部署复测。
+4. [x] 修复 usage hash 未落库时的 Redis field 清理，并在成功删除时收敛旧待重试台账引用；本地红绿测试和全套 Maven 已通过，部署后真实复测通过。
 5. [x] 提交并推送追加修复，远端执行 `rebuild.sh`。
-6. [ ] 重建用户 B 的 Redis、OSS、Milvus fixture，再次执行真实注销（Redis/Milvus 已重建并完成第一轮；OSS 本轮尚未注入对象 fixture）。
-7. [ ] 核对 B 的所有 MySQL 用户数据为 0；A 的控制数据仍存在；共享 match/connection/room 只做正确去标识化；B 的三个 Milvus collection、Redis key 和 OSS 对象均为 0；orphan 查询为 0；删除台账为 `COMPLETED`。
-8. [ ] 通过管理员 C 删除 A，清理 C 与剩余 fixture，避免留下测试数据。
-9. [ ] 只读复查生产 `yusi` 未发生变化。
-10. [ ] 根据最终证据更新 roadmap；在闭环完成前不勾选账号删除、安全授权或数据完整性条目。
+6. [x] 在 `70977bf` 上重建 B/A/C 并执行 B、A 的真实注销；MySQL、Redis、Milvus、共享数据和
+   orphan 查询通过，但 SDK 发现 B 图片前缀仍有 `2` 个无映射对象。
+7. [x] 为图片、音频、分片用户前缀 inventory 先补红测，再完成本地最小修复；focused 和全量
+   Maven 均通过，待部署复测。
+8. [ ] 提交推送本地 OSS 前缀修复，远端执行 `rebuild.sh`，重建 B fixture 并再次真实注销；三个
+   OSS 前缀、MySQL、Redis、Milvus 和共享数据必须全部收敛。
+9. [ ] 通过管理员 C 清理 C 与剩余测试 fixture/对象，保留必要审计边界并核对测试库无用户残留。
+10. [ ] 只读复查生产 `yusi` 未发生变化，并清理远端临时验证工具。
+11. [ ] 根据最终证据更新 roadmap；在闭环完成前不勾选账号删除、安全授权或数据完整性条目。
 
 ## 当前结论
 
-授权边界的大部分 HTTP 验证已通过；上一轮追加修复已部署，本轮用户级缓存补丁已在本地全量
-通过但尚未部署，账号删除链路仍待真实 fixture 注入、注销和全路径残留核对，不能提前声称达到
-完整闭环，也不能将生产数据完整性标记为通过。
+授权边界的大部分 HTTP 验证已通过；`70977bf` 上 B/A 的真实注销在 MySQL、Redis、Milvus、
+共享数据和 orphan 查询范围内通过，但真实 OSS SDK 发现 B 用户前缀仍有 `2` 个无映射对象。
+本地已补充前缀 inventory 修复并通过 `537` 项全量测试，尚未部署复测；C 测试数据清理和生产
+只读复查也尚未完成，因此仍不能声称 Phase 5 完整闭环或勾选 roadmap。
