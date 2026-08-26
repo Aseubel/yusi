@@ -292,6 +292,19 @@ class AuthzBoundaryMockMvcTest {
     }
 
     @Test
+    void h06b_mapsRawLifeGraphSecurityExceptionToFixedForbidden() throws Exception {
+        doThrow(new SecurityException("fixture-cross-user-relation"))
+                .when(lifeGraphDataService).deleteRelation(USER, 3002L);
+
+        mockMvc.perform(authenticated(delete("/api/lifegraph/relations/{id}", 3002L), USER))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(ErrorCode.FORBIDDEN.getCode()))
+                .andExpect(jsonPath("$.info").value(ErrorCode.FORBIDDEN.getMsg()));
+
+        verify(lifeGraphDataService, times(1)).deleteRelation(USER, 3002L);
+    }
+
+    @Test
     void h07_requiresNotificationServiceToRejectOtherUsersNotification() throws Exception {
         when(notificationService.getNotifications(USER, 0, 20, null))
                 .thenThrow(new BusinessException(ErrorCode.FORBIDDEN));

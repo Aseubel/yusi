@@ -218,7 +218,6 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void deregisterUser(String userId) {
         User user = userRepository.findByUserId(userId);
         if (user == null) {
@@ -245,6 +244,7 @@ public class AdminServiceImpl implements AdminService {
         if (!result.success()) {
             log.warn("Admin deregistration pending retry: operation=account_delete, failureCategory={}",
                     result.failureCategory());
+            throw new BusinessException(ErrorCode.OPERATION_FAILED, "账号删除未完成，请稍后重试");
         }
     }
 

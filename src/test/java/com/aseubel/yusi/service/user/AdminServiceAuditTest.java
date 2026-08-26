@@ -6,6 +6,8 @@ import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
 import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.entity.User;
 import com.aseubel.yusi.common.auth.UserContext;
+import com.aseubel.yusi.common.exception.BusinessException;
+import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.repository.DiaryRepository;
 import com.aseubel.yusi.repository.InterfaceDailyUsageRepository;
 import com.aseubel.yusi.repository.SituationRoomRepository;
@@ -14,6 +16,8 @@ import com.aseubel.yusi.repository.SuggestionRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.security.SecurityAuditCommand;
 import com.aseubel.yusi.service.security.SecurityAuditService;
+import com.aseubel.yusi.service.privacy.AccountDeletionCoordinator;
+import com.aseubel.yusi.service.privacy.DeletionResult;
 import com.aseubel.yusi.service.user.impl.AdminServiceImpl;
 import com.aseubel.yusi.service.user.TokenService;
 import com.aseubel.yusi.redis.service.IRedisService;
@@ -58,6 +62,8 @@ class AdminServiceAuditTest {
     private MilvusClientV2 milvusClientV2;
     @Mock
     private SecurityAuditService securityAuditService;
+    @Mock
+    private AccountDeletionCoordinator accountDeletionCoordinator;
 
     @InjectMocks
     private AdminServiceImpl adminService;
@@ -85,5 +91,26 @@ class AdminServiceAuditTest {
                 eq(SecurityAuditOutcome.SUCCESS), eq("ADMIN_MUTATION"), captor.capture());
         assertThat(captor.getValue()).containsEntry("fromStatus", "1")
                 .containsEntry("toStatus", "5");
+    }
+
+    @Test
+    void pendingDeletionMustNotBeReportedAsSuccessful() {
+        UserContext.setUserId("admin-1");
+        when(userRepository.findByUserId("user-1")).thenReturn(User.builder()
+                .userId("user-1")
+                .permissionLevel(1)
+                .build());
+        when(userRepository.findByUserId("admin-1")).thenReturn(User.builder()
+                .userId("admin-1")
+                .permissionLevel(10)
+                .build());
+        when(accountDeletionCoordinator.requestDeletion("user-1", "admin-1"))
+                .thenReturn(DeletionResult.pendingRetry("request-1", "database_invariant"));
+
+        BusinessException exception = org.junit.jupiter.api.Assertions.assertThrows(
+                BusinessException.class, () -> adminService.deregisterUser("user-1"));
+
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.OPERATION_FAILED);
+        assertThat(exception.getMessage()).isEqualTo("账号删除未完成，请稍后重试");
     }
 }

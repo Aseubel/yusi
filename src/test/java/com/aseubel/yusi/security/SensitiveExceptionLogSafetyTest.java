@@ -7,6 +7,7 @@ import ch.qos.logback.classic.spi.IThrowableProxy;
 import ch.qos.logback.classic.spi.StackTraceElementProxy;
 import ch.qos.logback.core.read.ListAppender;
 import com.aseubel.yusi.common.exception.GlobalExceptionHandler;
+import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.redis.annotation.QueryCache;
 import com.aseubel.yusi.redis.aspect.CacheAspect;
@@ -236,7 +237,8 @@ class SensitiveExceptionLogSafetyTest {
         AdminService service = new AdminServiceImpl(userRepository, diaryRepository, situationRoomRepository,
                 situationScenarioRepository, suggestionRepository, interfaceDailyUsageRepository, jdbcTemplate,
                 tokenService, redissonService, milvusClientV2, securityAuditService);
-        service.deregisterUser("fixture-target-id");
+        org.junit.jupiter.api.Assertions.assertThrows(BusinessException.class,
+                () -> service.deregisterUser("fixture-target-id"));
 
         assertNoSensitiveThrowable(appender, ADMIN_ERROR);
         assertFalse(rendered(appender).contains("DELETE FROM"));

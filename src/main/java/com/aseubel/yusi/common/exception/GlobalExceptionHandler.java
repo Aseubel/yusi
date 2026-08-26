@@ -118,6 +118,18 @@ public class GlobalExceptionHandler {
         return Response.<String>builder().code(ErrorCode.FORBIDDEN.getCode()).info(e.getMessage()).build();
     }
 
+    @ExceptionHandler(SecurityException.class)
+    public Response<String> handleSecurityException(SecurityException e) {
+        if (isStreamingResponse()) {
+            return null;
+        }
+        setStatus(HttpServletResponse.SC_OK);
+        return Response.<String>builder()
+                .code(ErrorCode.FORBIDDEN.getCode())
+                .info(ErrorCode.FORBIDDEN.getMsg())
+                .build();
+    }
+
     @ExceptionHandler(AiLockException.class)
     public Response<String> handleAiLockException(AiLockException e) {
         if (isStreamingResponse()) {

@@ -369,6 +369,39 @@ Invocation Context 中的调用 ID 和账本 key。只有能力目录明确声�
 - 本次不覆盖 `McpGrpcServiceImpl` 中原始 `keyword/query` 日志，不增加用户确认、暂停/恢复或跨请求重放；
   这些边界另行切片处理。
 
+### 2026-08-26：Phase 5 deployment-only 验收（部分完成，证据部分已记录）
+
+在部署机（单机 Compose，`/root/projects/yusi`，release SHA `2f67430`）执行了
+`docs/engineering/plans/2026-08-22-yusi-single-machine-release-checklist.md` 的 OPS 项，
+完成后按用户要求恢复了所有演练环境（删除 fixture 数据、清空 `yusi-test`、清理备份与
+临时文件）。
+
+- **OPS-01（发布观察窗口）已通过**：readiness=UP、liveness=UP，`dependency_health` 六类
+  （db / milvus / model_gateway / redis / tasks / readiness）全部 `up`；任务积压
+  `task_lag/task_due_gap` 全 0；只读 smoke 前端 443=200、应用 611=404(正常)、api 404；
+  观察连续 35s 稳定。未跑 K8s、未启用 Prometheus（按用户约束）。
+- **OPS-02（HMAC）已通过**：`YUSI_RATE_LIMIT_HMAC_SECRET` 已注入（非空）；缺失 fail-closed
+  由代码契约（`RateLimiterAspect`）保证。
+- **OPS-03（管理端口 20611）已通过**：公网 20611/611 返回 000（不可达，安全组隔离有效）；
+  本机/内部可访问；管理端点只暴露 `health`+`prometheus`（env/beans/metrics 等全 404，
+  `show-details: never`）；nginx 未代理管理端口。
+- **OPS-04（MySQL 备份恢复演练，目标库 yusi-test）已通过（含一个残余风险）**：dump 生产
+  `yusi`（49 表，含真实数据）→ SHA256 校验一致 → restore 到 `yusi-test` 成功（49 表，
+  RTO≈3.4s）；恢复后行数与生产逐表一致（41 diary / 64 LG-relation / 42 MTM / 238 chat /
+  64 run-trace / 35 soul-card / 2075 usage）。**发现生产既有孤儿数据**：
+  `life_graph_relation` 有 7 条 source/target 悬挂（`relation_orphans=7`），且 `yusi-test`
+  与生产完全一致（非恢复引入）。已在 yusi-test 用级联删除（relation+evidence）验证 repair
+  到 orphan=0、integrity=PASS；生产修复方案已定位，但**未在生产库执行**（另开变更评审）。
+  因此 OPS-04 的 `data_integrity_result` 记为 **BLOCKED（生产孤儿待修复）**，其余步骤如 dump/
+  checksum/restore/RTO 均 PASS。
+- **OPS-05（外部依赖只读对账）已通过**：Milvus 为 Zilliz serverless 云托管，三 collection
+  （embedding/mid_term_memory/match_profile）存在且只读可查，与契约一致；Redis DBSIZE=8，
+  key family 全部正常（auth:refresh、usage、model:state、model:runtime:config），无异常
+  家族；OSS bucket 只读 inventory 417 对象（image 406 / audio 0 / attachment 9 / other 2）。
+
+未完成项（用户要求不标记、不做记录）：OPS-06/07/08/09/10/11 与 AUTHZ-TRACE-01~05 均未在
+本次执行到位，保持清单初始 `NOT_RUN` 状态，不写入完成记录。
+
 ### 后续推进顺序
 
 按“先完成闭环，再完成上线准备，最后上线验收”推进，期间不扩展新的用户可见功能：

@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
@@ -82,9 +83,9 @@ public class AccountDeletionCoordinator {
         String requestId = newRequestId();
         AccountDeletionRequest request = createRequest(requestId, targetUserId, adminUserId);
         try {
+            AccountDeletionInventory inventory = collectInventory(targetUserId);
+            markRunning(request);
             Runnable deletion = () -> {
-                AccountDeletionInventory inventory = collectInventory(targetUserId);
-                markRunning(request);
                 externalPort.deleteMilvus(inventory);
                 externalPort.deleteObjects(inventory);
                 externalPort.deleteRedis(inventory);
@@ -96,7 +97,7 @@ public class AccountDeletionCoordinator {
             if (transactionManager == null) {
                 deletion.run();
             } else {
-                new TransactionTemplate(transactionManager).executeWithoutResult(status -> deletion.run());
+                inNewTransaction(deletion);
             }
             return DeletionResult.completed(requestId);
         } catch (AccountDeletionFailure failure) {
@@ -119,13 +120,13 @@ public class AccountDeletionCoordinator {
                 .status(AccountDeletionRequest.Status.PENDING)
                 .retryCount(0)
                 .build();
-        return requestRepository == null ? request : requestRepository.save(request);
+        return saveInNewTransaction(request);
     }
 
     private void markRunning(AccountDeletionRequest request) {
         request.setStatus(AccountDeletionRequest.Status.RUNNING);
         request.setUpdatedAt(java.time.LocalDateTime.now());
-        save(request);
+        saveInNewTransaction(request);
     }
 
     private void markRetry(AccountDeletionRequest request, String category) {
@@ -133,7 +134,7 @@ public class AccountDeletionCoordinator {
         request.setFailureCategory(category);
         request.setRetryCount((request.getRetryCount() == null ? 0 : request.getRetryCount()) + 1);
         request.setUpdatedAt(java.time.LocalDateTime.now());
-        save(request);
+        saveInNewTransaction(request);
     }
 
     private void markCompleted(AccountDeletionRequest request) {
@@ -142,13 +143,34 @@ public class AccountDeletionCoordinator {
         request.setFailureCategory(null);
         request.setCompletedAt(java.time.LocalDateTime.now());
         request.setUpdatedAt(java.time.LocalDateTime.now());
-        save(request);
+        saveInCurrentTransaction(request);
     }
 
-    private void save(AccountDeletionRequest request) {
-        if (requestRepository != null) {
-            requestRepository.save(request);
+    private AccountDeletionRequest saveInCurrentTransaction(AccountDeletionRequest request) {
+        if (requestRepository == null) {
+            return request;
         }
+        return requestRepository.save(request);
+    }
+
+    private AccountDeletionRequest saveInNewTransaction(AccountDeletionRequest request) {
+        if (requestRepository == null) {
+            return request;
+        }
+        if (transactionManager == null) {
+            return requestRepository.save(request);
+        }
+        return newTransactionTemplate().execute(status -> requestRepository.save(request));
+    }
+
+    private void inNewTransaction(Runnable action) {
+        newTransactionTemplate().executeWithoutResult(status -> action.run());
+    }
+
+    private TransactionTemplate newTransactionTemplate() {
+        TransactionTemplate template = new TransactionTemplate(transactionManager);
+        template.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return template;
     }
 
     private AccountDeletionInventory collectInventory(String targetUserId) {
