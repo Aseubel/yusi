@@ -1,9 +1,9 @@
 # Yusi-test 切片验证记录
 
-> **Status:** In progress — `70977bf` 已部署；真实 SDK 对账发现 B 用户 OSS 前缀残留 2 个无映射对象，本地已完成红绿修复，待提交部署后重测
+> **Status:** In progress — `988fbda` 已部署；B/A 注销、测试 fixture 清理和生产只读复查已完成，roadmap Phase 5 仍有其他 deployment-only 子项待验收
 > **Date:** 2026-08-26
 > **Scope:** 仅使用 `yusi-test` 做验证；生产库 `yusi` 只读
-> **Runtime:** 远端运行实例源码 release SHA `70977bf5fe0783845d18d85ea09594239d3dae11`
+> **Runtime:** 远端运行实例源码 release SHA `988fbda`
 > **Related:** [Yusi Agent 产品与工程演进计划](../plans/2026-08-04-yusi-agent-product-roadmap.md)
 
 ## 验证边界
@@ -14,7 +14,7 @@
 - OSS、Redis 和 Milvus 的既有测试副本可以在重测前按账号重建；不会把测试账号密码写入记录。
 - 当前本地工作区已完成注销事务边界、待重试语义、usage 原始 field 清理、历史待重试引用收敛、
   删除期间 usage 写入抑制、`SecurityException` 响应映射、共享 match 状态清理和用户级动态缓存
-  清理；已提交为 `70977bf5fe0783845d18d85ea09594239d3dae11` 并推送到 `origin/main`。远端已执行
+  清理；当前已提交为 `988fbda` 并推送到 `origin/main`。远端已执行
   `/root/projects/yusi/rebuild.sh`，Maven 构建成功、容器重建并启动，健康检查通过。远端原有的
   `build_yusi_mcp.sh`、`frontend` 用户改动保持不变。
 
@@ -212,13 +212,13 @@ inventory，不能被 `removeFromMap` 清理。该问题不是 MySQL 删除失�
    orphan 查询通过，但 SDK 发现 B 图片前缀仍有 `2` 个无映射对象。
 7. [x] 为图片、音频、分片用户前缀 inventory 先补红测，再完成本地最小修复；focused 和全量
    Maven 均通过，待部署复测。
-8. [ ] 提交推送本地 OSS 前缀修复，远端执行 `rebuild.sh`，重建 B fixture 并再次真实注销；三个
+8. [x] 提交推送本地 OSS 前缀修复，远端执行 `rebuild.sh`，重建 B fixture 并再次真实注销；三个
    OSS 前缀、MySQL、Redis、Milvus 和共享数据必须全部收敛。
-9. [ ] 通过管理员 C 清理 C 与剩余测试 fixture/对象，保留必要审计边界并核对测试库无用户残留。
-10. [ ] 只读复查生产 `yusi` 未发生变化，并清理远端临时验证工具。
+9. [x] 通过管理员 C 清理 C 与剩余测试 fixture/对象，保留必要审计边界并核对测试库无用户残留。
+10. [x] 只读复查生产 `yusi` 未发生变化，并清理远端临时验证工具。
 11. [ ] 根据最终证据更新 roadmap；在闭环完成前不勾选账号删除、安全授权或数据完整性条目。
 
-## 当前结论
+## 阶段性结论（第四轮后）
 
 授权边界的大部分 HTTP 验证已通过；`70977bf` 上 B/A 的真实注销在 MySQL、Redis、Milvus、
 共享数据和 orphan 查询范围内通过，但真实 OSS SDK 发现 B 用户前缀仍有 `2` 个无映射对象。
@@ -244,3 +244,54 @@ inventory，不能被 `removeFromMap` 清理。该问题不是 MySQL 删除失�
 - 下一步先为原始 Redis 字符串读取和完整分片会话 key 清理补红测，再本地全量验证；之后
   按“提交、推送、远端 rebuild、yusi-test 重建夹具、真实注销”的流程复测 OSS 三个前缀、
   MySQL、Redis、Milvus 和共享数据，最后再清理测试账号并只读复查生产库。
+
+## 第五轮：分片 codec 修复部署与真实注销闭环
+
+- 本地先补红测：在 `AccountDeletionExternalContractTest` 中要求分片 session 使用专用原始
+  字符串读取，在 `RedissonServiceUsageCleanupTest` 中锁定 `StringCodec`，并要求 inventory
+  登记 `yusi:chunk:<user>:*`、`yusi:md5:<user>:*`；修复前测试编译失败，修复后 focused
+  测试通过。
+- 新增 `IRedisService.getStringValue`；`RedissonService` 通过 `StringCodec` 读取
+  `StringRedisTemplate` 写入的 raw string，分片 object key/totalChunks 改用该接口；删除
+  inventory 增加用户限定的 chunk 和 MD5 key pattern。全量 Maven 为 `537 tests / 0
+  failures / 0 errors / 0 skipped`。
+- 修复已提交为 `988fbda`、推送到 `origin/main`，远端执行 `/root/projects/yusi/rebuild.sh`
+  成功；Maven `BUILD SUCCESS`、Docker 容器重建完成，运行实例源码 SHA 为 `988fbda`，
+  readiness 为 `UP`。
+- 在 `yusi-test` 重建 B、共享 match/connection/room、图片映射和有效分片 session；通过
+  正确的 `audio/<B>/`、`yusi/images/<B>/`、`yusi/images/chunks/<B>/` 前缀注入对象，并
+  在三个 Milvus collection 各插入 1 条 B 数据。管理员 C 调用真实注销接口返回
+  `HTTP 200 / success`。
+- 注销后验收结果：B 的 MySQL 归属残留 `0`；共享 match 保留 1 条且 B ID/status 槽均为
+  `0`；共享 connection 保留 1 条、B 已替换为 `account-deleted` 且状态为 `BLOCKED`；
+  共享 room 不再含 B；审计事件保留 1 条但不再含 B；全局 orphan 汇总为 `0`。
+- Redis 的 B chunk、MD5、diary/notification/match/plaza 动态缓存、refresh/device、
+  LangChain、violation、room-chat 和 usage field 均为 `0`；三个 Milvus collection
+  最终查询均为 `0`；已知图片、音频、分片对象均 `HEAD=404 / NoSuchKey`，三个用户前缀
+  分页清单均为 `0`。
+- 远端日志另有一条由旧测试夹具 `embedding_task.task_type=DIARY_EMBEDDING` 触发的
+  worker enum 解析告警；该值不属于当前枚举，属于测试夹具兼容性问题，未影响本次注销
+  请求或最终残留验收，后续清理夹具时一并移除。
+- 本轮分片/OSS/外部副本切片已完成；仍未完成的是清理 C 和剩余测试夹具、生产 `yusi`
+  只读复查及最终 roadmap/Phase 5 总体安全与隐私条目判定。
+
+## 第六轮：测试收尾与生产只读复查
+
+- 在 `yusi-test` 中按精确 ID 删除剩余两条 `FIXTURE` 审计事件
+  （`fixture-authz-audit-b`、`fixture-audit-b-260826`）；C 注销后新增的 2 条
+  `AdminController#deregisterUser` 测试 usage 行也已按 C 用户 ID 清理。
+- 测试库最终复查：`fxAuthz%` 用户、fixture 产品事件/范围、任务、embedding task、
+  room/scenario/message、审计事件均为 `0`；删除台账 `target_user_ref` 和
+  `requested_by_ref` 均为空；关系端点、entity/relation evidence、alias/mention、
+  产品 scope、匹配/连接/消息、chat/task/audit scope 全局 orphan 均为 `0`。
+- C 的 Redis refresh/device、LangChain、violation、用户缓存、chunk/MD5 和 usage field
+  均为 `0`；三个 Milvus collection 查询均为 `0`；OSS 的
+  `yusi/images/<C>/`、`audio/<C>/`、`yusi/images/chunks/<C>/` 前缀对象数均为 `0`。
+- 对生产 `yusi` 仅执行只读查询：本轮 fixture 用户、产品事件、审计事件、删除台账引用和
+  fixture diary 均为 `0`，未发现本轮测试写入；生产既有 LifeGraph orphan 为关系端点
+  `7`、alias `1`、mention `15`，未执行生产修复。
+- 已删除远端 `/tmp` 中本轮的 token、fixture、响应文件、Milvus/OSS 探针和 classpath；
+  系统临时文件未触碰。roadmap Phase 5“安全与隐私自检”仍保持 `[ ]`，因为真实鉴权/
+  越权、Trace、代理/日志采集等其他 deployment-only 子项尚未完成。
+- 收口前重新执行本地 Maven 全量测试：`maven_exit=0`，`538 tests / 0 failures /
+  0 errors / 0 skipped`；远端容器内部 readiness 返回 `{"status":"UP"}`。
