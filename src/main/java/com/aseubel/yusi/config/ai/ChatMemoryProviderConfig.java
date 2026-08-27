@@ -1,5 +1,6 @@
 package com.aseubel.yusi.config.ai;
 
+import com.aseubel.yusi.config.MemoryConfigProperties;
 import dev.langchain4j.memory.chat.ChatMemoryProvider;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import lombok.extern.slf4j.Slf4j;
@@ -24,11 +25,14 @@ public class ChatMemoryProviderConfig {
     @Autowired
     private ApplicationContext applicationContext;
 
+    @Autowired
+    private MemoryConfigProperties memoryConfigProperties;
+
     @Bean(name = "chatMemoryProvider")
     public ChatMemoryProvider chatMemoryProviderConfig() {
         ChatMemoryProvider chatMemoryProvider = memoryId -> MessageWindowChatMemory.builder()
                 .id(memoryId)
-                .maxMessages(60)
+                .maxMessages(Math.max(1, memoryConfigProperties.getContextWindowSize()))
                 .chatMemoryStore(applicationContext.getBean(PersistentChatMemoryStore.class))
                 .build();
         return chatMemoryProvider;

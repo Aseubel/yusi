@@ -11,6 +11,16 @@ public record ModelTokenBudget(long estimatedInputTokens, long reservedOutputTok
     }
 
     public long totalTokens() {
-        return estimatedInputTokens + reservedOutputTokens;
+        return saturatingAdd(estimatedInputTokens, reservedOutputTokens);
+    }
+
+    public static long saturatingAdd(long left, long right) {
+        if (right > 0L && left > Long.MAX_VALUE - right) {
+            return Long.MAX_VALUE;
+        }
+        if (right < 0L && left < Long.MIN_VALUE - right) {
+            return Long.MIN_VALUE;
+        }
+        return left + right;
     }
 }

@@ -3,12 +3,16 @@ package com.aseubel.yusi.common.ratelimit;
 import com.aseubel.yusi.common.auth.UserContext;
 import com.aseubel.yusi.common.exception.RateLimitException;
 import com.aseubel.yusi.common.web.ClientIpResolver;
+import com.aseubel.yusi.common.utils.LowSensitivityLogSummary;
 import com.aseubel.yusi.observability.metrics.YusiMetrics;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.JoinPoint;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.redisson.api.RateLimiterConfig;
 import org.redisson.api.RRateLimiter;
 import org.redisson.api.RateIntervalUnit;
 import org.redisson.api.RateType;
@@ -20,7 +24,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.core.annotation.Order;
 
 import java.lang.reflect.Method;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 限流切面（支持 Redis 故障降级到 Guava RateLimiter）
@@ -43,8 +47,17 @@ public class RateLimiterAspect {
     @Autowired(required = false)
     private RateLimiterSubjectEncoder subjectEncoder = RateLimiterSubjectEncoder.fromEnvironment();
 
-    // 本地 Guava RateLimiter 缓存，用于 Redis 故障时降级
-    private final ConcurrentHashMap<String, com.google.common.util.concurrent.RateLimiter> localRateLimiters = new ConcurrentHashMap<>();
+    private static final long MAX_LOCAL_LIMITERS = 10_000L;
+    private static final long LOCAL_LIMITER_EXPIRE_MINUTES = 10L;
+    private static final double LOCAL_FALLBACK_RATE_FACTOR = 0.25D;
+    private static final double MAX_LOCAL_PERMITS_PER_SECOND = 1D;
+
+    // 本地 Guava RateLimiter 缓存，用于 Redis 故障时降级。缓存必须有界，避免
+    // 用户/IP 维度不断增长把故障实例的堆内存耗尽。
+    private final Cache<String, LocalLimiter> localRateLimiters = CacheBuilder.newBuilder()
+            .maximumSize(MAX_LOCAL_LIMITERS)
+            .expireAfterAccess(LOCAL_LIMITER_EXPIRE_MINUTES, TimeUnit.MINUTES)
+            .build();
 
     // Redis 故障标记
     private volatile boolean redisAvailable = true;
@@ -91,12 +104,15 @@ public class RateLimiterAspect {
             int time = rateLimiterAnnotation.time();
             int count = rateLimiterAnnotation.count();
 
+            if (time <= 0 || count <= 0) {
+                return false;
+            }
+
             RRateLimiter rRateLimiter = redissonClient.getRateLimiter(combineKey);
-            // 尝试设置速率，如果已存在则忽略
-            rRateLimiter.trySetRate(RateType.OVERALL, count, time, RateIntervalUnit.SECONDS);
+            ensureRedisRate(rRateLimiter, count, time);
 
             // 设置过期时间，避免 key 永久存在 (稍微长于限流窗口)
-            rRateLimiter.expire(java.time.Duration.ofSeconds(time + 10));
+            rRateLimiter.expire(java.time.Duration.ofSeconds((long) time + 10L));
 
             boolean acquired = rRateLimiter.tryAcquire();
 
@@ -105,7 +121,8 @@ public class RateLimiterAspect {
             return acquired;
 
         } catch (Exception e) {
-            log.warn("Rate limit backend unavailable: operation=rate_limit, failure_category=dependency, fallback=bounded_local");
+            log.warn("Rate limit backend unavailable: operation=rate_limit, failure_category=dependency, "
+                    + "fallback=bounded_local, exceptionType={}", LowSensitivityLogSummary.exceptionType(e));
             redisAvailable = false;
             lastRedisFailureTime = System.currentTimeMillis();
             // 降级到本地限流
@@ -122,21 +139,24 @@ public class RateLimiterAspect {
             int time = rateLimiterAnnotation.time();
             int count = rateLimiterAnnotation.count();
 
-            // 计算每秒许可数
-            double permitsPerSecond = (double) count / time;
+            if (time <= 0 || count <= 0) {
+                return false;
+            }
 
-            // 获取或创建本地 RateLimiter
-            com.google.common.util.concurrent.RateLimiter localLimiter = localRateLimiters.computeIfAbsent(combineKey,
-                k -> com.google.common.util.concurrent.RateLimiter.create(permitsPerSecond));
-
-            // 动态调整速率（如果配置变化）
-            // 注意：Guava RateLimiter 不支持动态调整，这里只是简单处理
-            // 如果需要精确控制，可以考虑重新创建或使用其他库
-
-            return localLimiter.tryAcquire();
+            // 降级实例只承担保守的单机保护，不能把分布式窗口额度原样复制到每个实例。
+            double permitsPerSecond = Math.min(
+                    ((double) count / time) * LOCAL_FALLBACK_RATE_FACTOR,
+                    MAX_LOCAL_PERMITS_PER_SECOND);
+            LocalLimiter localLimiter = localRateLimiters.asMap().compute(combineKey,
+                    (key, current) -> current == null || !current.matches(count, time)
+                            ? new LocalLimiter(count, time,
+                                    com.google.common.util.concurrent.RateLimiter.create(permitsPerSecond))
+                            : current);
+            return localLimiter.limiter.tryAcquire();
 
         } catch (Exception e) {
-            log.warn("Local rate limit failed: operation=rate_limit, failure_category=dependency");
+            log.warn("Local rate limit failed: operation=rate_limit, failure_category=dependency, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
             // 限流失败时，为了安全起见，默认拒绝
             return false;
         }
@@ -164,7 +184,8 @@ public class RateLimiterAspect {
                     log.info("Rate limit backend recovered: operation=rate_limit");
                 } catch (Exception e) {
                     // 仍然不可用
-                    log.debug("Rate limit backend remains unavailable: operation=rate_limit, fallback=bounded_local");
+                    log.debug("Rate limit backend remains unavailable: operation=rate_limit, "
+                            + "fallback=bounded_local, exceptionType={}", LowSensitivityLogSummary.exceptionType(e));
                 }
             }
         }
@@ -200,7 +221,8 @@ public class RateLimiterAspect {
                 return clientIpResolver.resolve(attributes.getRequest());
             }
         } catch (Exception e) {
-            log.warn("Client subject resolution failed: operation=rate_limit, failure_category=dependency");
+            log.warn("Client subject resolution failed: operation=rate_limit, failure_category=dependency, "
+                    + "exceptionType={}", LowSensitivityLogSummary.exceptionType(e));
         }
         return "unknown";
     }
@@ -212,6 +234,44 @@ public class RateLimiterAspect {
     private void recordRateLimited(String operation, String failureCategory) {
         if (metrics != null) {
             metrics.recordRateLimited(operation, failureCategory);
+        }
+    }
+
+    private void ensureRedisRate(RRateLimiter limiter, int count, int time) {
+        long intervalMillis = (long) time * 1000L;
+        RateLimiterConfig current = limiter.getConfig();
+        if (current == null) {
+            limiter.trySetRate(RateType.OVERALL, count, time, RateIntervalUnit.SECONDS);
+            current = limiter.getConfig();
+        }
+        if (!matches(current, count, intervalMillis)) {
+            // setRate also clears the old permit state, so a changed annotation
+            // takes effect immediately instead of inheriting stale capacity.
+            limiter.setRate(RateType.OVERALL, count, time, RateIntervalUnit.SECONDS);
+        }
+    }
+
+    private boolean matches(RateLimiterConfig config, int count, long intervalMillis) {
+        return config != null
+                && config.getRateType() == RateType.OVERALL
+                && Long.valueOf(count).equals(config.getRate())
+                && Long.valueOf(intervalMillis).equals(config.getRateInterval());
+    }
+
+    private static final class LocalLimiter {
+        private final int count;
+        private final int time;
+        private final com.google.common.util.concurrent.RateLimiter limiter;
+
+        private LocalLimiter(int count, int time,
+                com.google.common.util.concurrent.RateLimiter limiter) {
+            this.count = count;
+            this.time = time;
+            this.limiter = limiter;
+        }
+
+        private boolean matches(int expectedCount, int expectedTime) {
+            return count == expectedCount && time == expectedTime;
         }
     }
 }

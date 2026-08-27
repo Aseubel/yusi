@@ -305,7 +305,7 @@ public class ModelManagementService {
             return emptyMetrics();
         }
         ModelMetricAggregate aggregate = modelCallTraceMetricsRepository.aggregate(buildSpecification(safeQuery));
-        long totalTokens = aggregate.inputTokens() + aggregate.outputTokens();
+        long totalTokens = ModelTokenBudget.saturatingAdd(aggregate.inputTokens(), aggregate.outputTokens());
         return ModelMetricSummary.builder()
                 .callCount(aggregate.callCount())
                 .totalTokens(totalTokens)

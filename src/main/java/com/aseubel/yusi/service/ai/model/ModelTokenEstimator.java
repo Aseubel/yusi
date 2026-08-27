@@ -108,7 +108,7 @@ public class ModelTokenEstimator {
         return estimateText(String.valueOf(content));
     }
 
-    private int estimateText(String text) {
+    public int estimateText(String text) {
         if (text == null || text.isBlank()) {
             return 0;
         }

@@ -14,15 +14,15 @@ public class ModelUsageExtractor {
     private static final BigDecimal ONE_MILLION = BigDecimal.valueOf(1_000_000L);
 
     public ModelUsageSnapshot extract(ChatResponse response, ModelInstance model) {
-        String priceVersion = model == null ? null : model.getPriceVersion();
+        String priceVersion = normalizePriceVersion(model == null ? null : model.getPriceVersion());
         if (response == null) {
             return ModelUsageSnapshot.unavailable(priceVersion);
         }
         TokenUsage tokenUsage = response.tokenUsage();
         Long inputTokens = tokenUsage == null || tokenUsage.inputTokenCount() == null
-                ? null : tokenUsage.inputTokenCount().longValue();
+                ? null : nonNegative(tokenUsage.inputTokenCount().longValue());
         Long outputTokens = tokenUsage == null || tokenUsage.outputTokenCount() == null
-                ? null : tokenUsage.outputTokenCount().longValue();
+                ? null : nonNegative(tokenUsage.outputTokenCount().longValue());
         String finishReason = finishReason(response.finishReason());
         BigDecimal cost = calculateCost(inputTokens, outputTokens, model);
         return new ModelUsageSnapshot(inputTokens, outputTokens, null, finishReason, cost,
@@ -30,8 +30,12 @@ public class ModelUsageExtractor {
     }
 
     private BigDecimal calculateCost(Long inputTokens, Long outputTokens, ModelInstance model) {
+        String priceVersion = normalizePriceVersion(model == null ? null : model.getPriceVersion());
         if (inputTokens == null || outputTokens == null || model == null
-                || model.getInputPricePerMillion() == null || model.getOutputPricePerMillion() == null) {
+                || priceVersion == null
+                || model.getInputPricePerMillion() == null || model.getOutputPricePerMillion() == null
+                || model.getInputPricePerMillion().signum() < 0
+                || model.getOutputPricePerMillion().signum() < 0) {
             return null;
         }
         BigDecimal inputCost = BigDecimal.valueOf(inputTokens)
@@ -45,5 +49,16 @@ public class ModelUsageExtractor {
 
     private String finishReason(FinishReason finishReason) {
         return finishReason == null ? null : finishReason.name();
+    }
+
+    private Long nonNegative(long value) {
+        return Math.max(0L, value);
+    }
+
+    private String normalizePriceVersion(String priceVersion) {
+        if (priceVersion == null || priceVersion.isBlank()) {
+            return null;
+        }
+        return priceVersion.trim();
     }
 }

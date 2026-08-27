@@ -3,6 +3,7 @@ package com.aseubel.yusi.service.ai.chat;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.StrUtil;
 import com.aseubel.yusi.common.constant.PromptKey;
+import com.aseubel.yusi.config.MemoryConfigProperties;
 import com.aseubel.yusi.pojo.entity.AgentPersonaConfig;
 import com.aseubel.yusi.pojo.constant.ProactiveFrequency;
 import com.aseubel.yusi.pojo.entity.MidTermMemory;
@@ -13,6 +14,7 @@ import com.aseubel.yusi.repository.ChatMemoryMessageRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
+import com.aseubel.yusi.service.ai.model.ModelTokenEstimator;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -66,6 +68,11 @@ public class ContextBuilderService {
     private static final String TIME_CONTEXT_END = "</time_context>";
     private static final String MID_MEMORY_START = "<mid_memory_context>";
     private static final String MID_MEMORY_END = "</mid_memory_context>";
+    private static final int MAX_PERSONA_CODE_POINTS = 1200;
+    private static final int MAX_NICKNAME_CODE_POINTS = 100;
+    private static final int MAX_PROFILE_FIELD_CODE_POINTS = 400;
+    private static final int MAX_CUSTOM_INSTRUCTIONS_CODE_POINTS = 800;
+    private static final int MAX_CONFLICT_CODE_POINTS = 1200;
 
     private final UserRepository userRepository;
     private final PromptManager promptManager;
@@ -75,6 +82,8 @@ public class ContextBuilderService {
     private final MidTermMemoryRepository midTermMemoryRepository;
     private final CognitiveConflictDetector conflictDetector;
     private final ObjectMapper objectMapper;
+    private final MemoryConfigProperties memoryConfigProperties;
+    private final ModelTokenEstimator tokenEstimator;
 
     /**
      * 构建 System Message 内容
@@ -84,27 +93,50 @@ public class ContextBuilderService {
      * @return 完整的 System Message 字符串
      */
     public String buildSystemMessageStr(Object memoryId) {
-        String userId = memoryId.toString();
+        String userId = memoryId == null ? "" : memoryId.toString();
 
         String basePrompt = loadBasePrompt();
-        log.debug("Building system message for user: {}, basePrompt length: {}", userId, basePrompt.length());
+        if (basePrompt == null) {
+            basePrompt = "";
+        }
+        log.debug("Building system message: operation=build_context, basePromptLength={}", basePrompt.length());
 
         StringBuilder systemMessage = new StringBuilder();
         systemMessage.append(basePrompt).append("\n\n");
         systemMessage.append(CONTEXT_START).append("\n");
 
-        injectTimeContext(systemMessage);
-        injectAgentPersona(systemMessage, userId);
-        injectUserProfile(systemMessage, userId);
-        injectMidMemoryContext(systemMessage, userId);
-        injectCognitiveConflicts(systemMessage, userId);
-        injectMemoryGuidelines(systemMessage);
-        injectRelationshipStage(systemMessage, userId);
+        List<ContextSection> sections = List.of(
+                new ContextSection("time", injectTimeContext(), true),
+                new ContextSection("memory_guidelines", injectMemoryGuidelines(), true),
+                new ContextSection("relationship_stage", injectRelationshipStage(userId), true),
+                new ContextSection("agent_persona", injectAgentPersona(userId), false),
+                new ContextSection("user_profile", injectUserProfile(userId), false),
+                new ContextSection("mid_memory", injectMidMemoryContext(userId), false),
+                new ContextSection("cognitive_conflicts", injectCognitiveConflicts(userId), false));
+
+        int tokenBudget = Math.max(1, memoryConfigProperties.getContextTokenBudget());
+        for (ContextSection section : sections) {
+            if (StrUtil.isBlank(section.content())) {
+                continue;
+            }
+            if (!section.required() && !fitsWithinBudget(systemMessage, section.content(), tokenBudget)) {
+                log.debug("Context section omitted: operation=build_context, section={}, reason=token_budget",
+                        section.name());
+                continue;
+            }
+            systemMessage.append(section.content());
+        }
 
         systemMessage.append(CONTEXT_END).append("\n");
 
         String result = systemMessage.toString();
-        log.debug("System message built, total length: {}", result.length());
+        int estimatedTokens = tokenEstimator.estimateText(result);
+        if (estimatedTokens > tokenBudget) {
+            log.warn("System message core exceeds configured budget: operation=build_context, "
+                    + "estimatedTokens={}, budget={}", estimatedTokens, tokenBudget);
+        }
+        log.debug("System message built: operation=build_context, estimatedTokens={}, length={}",
+                estimatedTokens, result.length());
         return result;
     }
 
@@ -123,80 +155,71 @@ public class ContextBuilderService {
     /**
      * 注入时间上下文信息
      */
-    private void injectTimeContext(StringBuilder sb) {
+    private String injectTimeContext() {
+        StringBuilder sb = new StringBuilder();
         sb.append("    ").append(TIME_CONTEXT_START).append("\n");
         sb.append("        ").append("<current_time>").append(DateUtil.now()).append("</current_time>").append("\n");
         sb.append("        ").append("<current_date>").append(DateUtil.date().toString()).append("</current_date>").append("\n");
         sb.append("        ").append("<timezone>").append(java.util.TimeZone.getDefault().getID()).append("</timezone>").append("\n");
         sb.append("    ").append(TIME_CONTEXT_END).append("\n");
+        return sb.toString();
     }
 
     /**
      * 注入用户画像信息
      */
-    private void injectUserProfile(StringBuilder sb, String userId) {
+    private String injectUserProfile(String userId) {
         User user = userRepository.findByUserId(userId);
         if (user == null) {
-            return;
+            return "";
         }
 
+        StringBuilder sb = new StringBuilder();
         sb.append("    ").append(USER_PROFILE_START).append("\n");
         sb.append("        ").append(USER_ID_START).append(userId).append(USER_ID_END).append("\n");
 
-        if (StrUtil.isNotBlank(user.getUserName())) {
-            sb.append("        ").append(NICKNAME_START).append(user.getUserName()).append(NICKNAME_END).append("\n");
-        }
+        appendTag(sb, "nickname", user.getUserName(), MAX_NICKNAME_CODE_POINTS);
 
         // 注入用户画像/偏好 (UserPersona)
         UserPersona persona = userPersonaService.getUserPersona(userId);
         if (persona != null) {
-            if (StrUtil.isNotBlank(persona.getPreferredName())) {
-                sb.append("        ").append("<preferred_name>").append(persona.getPreferredName())
-                        .append("</preferred_name>").append("\n");
-            }
-            if (StrUtil.isNotBlank(persona.getLocation())) {
-                sb.append("        ").append("<location>").append(persona.getLocation()).append("</location>")
-                        .append("\n");
-            }
-            if (StrUtil.isNotBlank(persona.getInterests())) {
-                sb.append("        ").append("<interests>").append(persona.getInterests()).append("</interests>")
-                        .append("\n");
-            }
-            if (StrUtil.isNotBlank(persona.getTone())) {
-                sb.append("        ").append("<tone_preference>").append(persona.getTone()).append("</tone_preference>")
-                        .append("\n");
-            }
-            if (StrUtil.isNotBlank(persona.getCustomInstructions())) {
-                sb.append("        ").append("<custom_instructions>").append(persona.getCustomInstructions())
-                        .append("</custom_instructions>").append("\n");
-            }
+            appendTag(sb, "preferred_name", persona.getPreferredName(), MAX_PROFILE_FIELD_CODE_POINTS);
+            appendTag(sb, "location", persona.getLocation(), MAX_PROFILE_FIELD_CODE_POINTS);
+            appendTag(sb, "interests", persona.getInterests(), MAX_PROFILE_FIELD_CODE_POINTS);
+            appendTag(sb, "tone_preference", persona.getTone(), MAX_PROFILE_FIELD_CODE_POINTS);
+            appendTag(sb, "custom_instructions", persona.getCustomInstructions(),
+                    MAX_CUSTOM_INSTRUCTIONS_CODE_POINTS);
         }
 
         sb.append("    ").append(USER_PROFILE_END).append("\n");
+        return sb.toString();
     }
 
     /**
      * 注入记忆引导
      */
-    private void injectMemoryGuidelines(StringBuilder sb) {
+    private String injectMemoryGuidelines() {
+        StringBuilder sb = new StringBuilder();
         sb.append("    ").append(MEMORY_GUIDELINES_START).append("\n");
         sb.append("        ").append(MEMORY_GUIDELINES_CONTENT);
         sb.append("    ").append(MEMORY_GUIDELINES_END).append("\n");
+        return sb.toString();
     }
 
     /**
      * 注入 Agent 人格配置，让 Agent 保持稳定的性格和陪伴风格。
      */
-    private void injectAgentPersona(StringBuilder sb, String userId) {
+    private String injectAgentPersona(String userId) {
         AgentPersonaConfig config = agentPersonaConfigRepository.findByUserId(userId).orElse(null);
         if (config == null) {
             config = AgentPersonaConfig.builder().userId(userId).build();
         }
 
+        StringBuilder sb = new StringBuilder();
         sb.append("    ").append(AGENT_PERSONA_START).append("\n");
 
         String style = config.getPersonalityStyle();
-        String personaInstruction = resolvePersonaInstruction(style);
+        String personaInstruction = limitCodePoints(resolvePersonaInstruction(style), MAX_PERSONA_CODE_POINTS);
         sb.append("        ").append("<style>").append(personaInstruction).append("</style>").append("\n");
 
         if (ProactiveFrequency.fromCode(config.getProactiveFrequency()) != ProactiveFrequency.OFF) {
@@ -205,6 +228,7 @@ public class ContextBuilderService {
         }
 
         sb.append("    ").append(AGENT_PERSONA_END).append("\n");
+        return sb.toString();
     }
 
     /**
@@ -226,11 +250,11 @@ public class ContextBuilderService {
     /**
      * 注入用户近期状态摘要（中期记忆），让 Agent 了解用户当前阶段。
      */
-    private void injectMidMemoryContext(StringBuilder sb, String userId) {
+    private String injectMidMemoryContext(String userId) {
         List<MidTermMemory> recentMemories = midTermMemoryRepository
                 .findValidByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 10));
         if (recentMemories.isEmpty()) {
-            return;
+            return "";
         }
 
         // Apply soft decay sorting
@@ -239,20 +263,27 @@ public class ContextBuilderService {
                 .limit(3)
                 .collect(Collectors.toList());
 
-        sb.append("    ").append(MID_MEMORY_START).append("\n");
-        sb.append("        <description>以下是你对用户近期状态的了解，你可以在对话中自然地提及，但不要机械复述。</description>\n");
+        StringBuilder sb = new StringBuilder();
+        StringBuilder memories = new StringBuilder();
+        memories.append("        <description>以下是你对用户近期状态的了解，你可以在对话中自然地提及，但不要机械复述。</description>\n");
+        int renderedMemoryCount = 0;
         for (MidTermMemory memory : sortedMemories) {
-            String summary = memory.getSummary();
-            if (summary != null && summary.codePointCount(0, summary.length()) > 150) {
-                int endIndex = summary.offsetByCodePoints(0, 150);
-                summary = summary.substring(0, endIndex) + "...";
+            String summary = limitCodePoints(memory.getSummary(), 150);
+            if (StrUtil.isBlank(summary)) {
+                continue;
             }
             double decayedImp = calculateDecayedImportance(memory);
-            sb.append("        ").append("<recent_insight importance=\"")
+            memories.append("        ").append("<recent_insight importance=\"")
                     .append(String.format("%.2f", decayedImp))
                     .append("\">").append(summary).append("</recent_insight>").append("\n");
+            renderedMemoryCount++;
         }
+        if (renderedMemoryCount == 0) {
+            return "";
+        }
+        sb.append("    ").append(MID_MEMORY_START).append("\n").append(memories);
         sb.append("    ").append(MID_MEMORY_END).append("\n");
+        return sb.toString();
     }
 
     private double calculateDecayedImportance(MidTermMemory memory) {
@@ -271,20 +302,22 @@ public class ContextBuilderService {
     /**
      * 注入未解决的认知冲突，引导 Agent 在对话中自然地"注意到变化"（F11.3）。
      */
-    private void injectCognitiveConflicts(StringBuilder sb, String userId) {
+    private String injectCognitiveConflicts(String userId) {
         String conflictContext = conflictDetector.getUnresolvedContext(userId);
-        if (conflictContext != null) {
-            sb.append("    <cognitive_conflicts>\n");
-            sb.append("        ").append(conflictContext).append("\n");
-            sb.append("    </cognitive_conflicts>\n");
+        if (StrUtil.isBlank(conflictContext)) {
+            return "";
         }
+        return "    <cognitive_conflicts>\n"
+                + "        " + limitCodePoints(conflictContext, MAX_CONFLICT_CODE_POINTS) + "\n"
+                + "    </cognitive_conflicts>\n";
     }
 
     // 在 ContextBuilderService 中注入关系阶段
-    private void injectRelationshipStage(StringBuilder sb, String userId) {
+    private String injectRelationshipStage(String userId) {
         // 获取用户的对话轮数 (以用户发言次数作为轮数)
         long chatTurns = chatMemoryMessageRepository.countByMemoryIdAndRole(userId, "user");
 
+        StringBuilder sb = new StringBuilder();
         sb.append("    <relationship_stage>\n");
         if (chatTurns < 10) {
             sb.append("        你们刚刚认识，这是前几次交流。请保持友好、好奇但克制的距离感，不要假装你们有很久的过去，不要凭空捏造回忆。\n");
@@ -294,6 +327,36 @@ public class ContextBuilderService {
             sb.append("        你们是非常亲密的灵魂知己，拥有深厚的共同记忆，可以极其自然、默契地互动。\n");
         }
         sb.append("    </relationship_stage>\n");
+        return sb.toString();
+    }
+
+    private boolean fitsWithinBudget(StringBuilder current, String section, int budget) {
+        String candidate = current.toString() + section + CONTEXT_END + "\n";
+        return tokenEstimator.estimateText(candidate) <= budget;
+    }
+
+    private void appendTag(StringBuilder sb, String tag, String value, int maxCodePoints) {
+        String bounded = limitCodePoints(value, maxCodePoints);
+        if (StrUtil.isBlank(bounded)) {
+            return;
+        }
+        sb.append("        <").append(tag).append(">").append(bounded)
+                .append("</").append(tag).append(">\n");
+    }
+
+    private String limitCodePoints(String value, int maxCodePoints) {
+        if (value == null || maxCodePoints <= 0) {
+            return "";
+        }
+        int codePointCount = value.codePointCount(0, value.length());
+        if (codePointCount <= maxCodePoints) {
+            return value;
+        }
+        int retained = Math.max(0, maxCodePoints - 3);
+        return value.substring(0, value.offsetByCodePoints(0, retained)) + "...";
+    }
+
+    private record ContextSection(String name, String content, boolean required) {
     }
 
     /**

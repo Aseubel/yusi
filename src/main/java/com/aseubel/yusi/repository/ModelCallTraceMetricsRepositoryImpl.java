@@ -52,8 +52,12 @@ public class ModelCallTraceMetricsRepositoryImpl implements ModelCallTraceMetric
         Expression<Integer> rateLimitedFlag = builder.<Integer>selectCase()
                 .when(rateLimitedPredicate(builder, root), 1)
                 .otherwise(0);
+        Expression<String> status = builder.upper(root.<String>get("status"));
         Expression<Integer> unknownCostFlag = builder.<Integer>selectCase()
-                .when(builder.isNull(root.get("cost")), 1)
+                .when(builder.and(
+                        builder.isNull(root.get("cost")),
+                        builder.or(builder.isNull(root.get("status")),
+                                builder.notEqual(status, ModelCallStatus.REJECTED.code()))), 1)
                 .otherwise(0);
 
         query.multiselect(

@@ -174,7 +174,7 @@ public class ModelBudgetAdmission {
                 ? permit.estimatedInputTokens() : Math.max(0L, usage.inputTokens());
         long actualOutput = usage == null || usage.outputTokens() == null
                 ? permit.reservedOutputTokens() : Math.max(0L, usage.outputTokens());
-        long actualTokens = release ? 0L : actualInput + actualOutput;
+        long actualTokens = release ? 0L : ModelTokenBudget.saturatingAdd(actualInput, actualOutput);
 
         List<Object> keys = new ArrayList<>(permit.charges().size() + 1);
         keys.add(permit.reservationKey());

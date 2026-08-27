@@ -154,6 +154,8 @@ model:
         scene: chat
         risk-level: LOW
         primary-tier: chat-primary
+        max-input-tokens: ${LLM_CHAT_MAX_INPUT_TOKENS:12000}
+        max-output-tokens: ${LLM_CHAT_MAX_OUTPUT_TOKENS:1024}
         priority: 100
       - id: logic
         scene: logic
@@ -258,6 +260,8 @@ yusi:
   memory:
     # 上下文记忆窗口大小（短期记忆的消息条数）
     context-window-size: 20
+    # 动态 System Message 的 token 预算
+    context-token-budget: ${YUSI_CONTEXT_TOKEN_BUDGET:4096}
     # 中期记忆总结间隔（毫秒，默认 1 小时）
     mid-term-summary-interval: 7200000
     # 中期记忆触发扫描的 Cron 表达式（默认每 30 分钟执行一次）

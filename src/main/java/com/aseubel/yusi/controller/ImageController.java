@@ -153,6 +153,7 @@ public class ImageController {
     }
 
     @GetMapping("/url")
+    @RateLimiter(key = "image-url", time = 60, count = 60, limitType = LimitType.USER)
     public Response<String> getPresignedUrl(@RequestParam("objectKey") String objectKey) {
         String url = ossService.generateOwnedUrl(objectKey, UserContext.getUserId());
         return Response.success(url);

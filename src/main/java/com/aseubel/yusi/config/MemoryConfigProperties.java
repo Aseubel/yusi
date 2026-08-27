@@ -24,6 +24,12 @@ public class MemoryConfigProperties {
     private int contextWindowSize = 50;
 
     /**
+     * 动态 System Message 的 token 预算。基础提示词和核心规则优先保留，
+     * 低优先级的画像、冲突和中期记忆在预算不足时跳过。
+     */
+    private int contextTokenBudget = 4096;
+
+    /**
      * 中期记忆总结间隔（毫秒）
      * 用户最后一次对话后多久未总结则触发总结，默认 1 小时（3600000 毫秒）
      */

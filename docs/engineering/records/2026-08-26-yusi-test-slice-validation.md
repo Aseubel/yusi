@@ -325,3 +325,20 @@ inventory，不能被 `removeFromMap` 清理。该问题不是 MySQL 删除失�
 按用户要求本轮不新增测试；现有健康端点、指标、任务账本和 Embedding 聚焦测试，以及全量 Maven
 测试均已通过（退出码 `0`）。提交前已复查 roadmap 对应项，本轮不勾选任何 Phase 5
 deployment-only 条目；远端部署和重建后的真实健康/日志验证仍待完成。
+
+## 第八轮：限流、Token 成本与上下文组成优先切片
+
+- 本轮范围收敛为三项：Redis/本地 HTTP 限流、模型 Token 预算与成本统计、聊天上下文组成与裁剪。
+- 不执行远端 `rebuild.sh`，由部署责任人完成；不新增测试，不修改生产库 `yusi`，也不推进 Phase 5
+  其他 deployment-only 条目。
+- 已确认的实现缺口：Redis 限流 key 已存在时 `trySetRate` 不会更新代码配置；本地 fallback
+  缓存无上限且速率等于分布式阈值；`GET /api/image/url` 未限流；非法 usage、无价格版本成本和
+  `REJECTED` 未调用记录的未知成本边界不完整；预算相加存在溢出风险；上下文消息窗口、数据库加载量
+  和动态 System Message 没有统一配置，空历史首次聊天可能没有 System Message，动态上下文没有总
+  Token 预算。
+- 本轮验收目标：配置变更能作用于既有 Redis 限流器；Redis 故障时本地 fallback 有界且拒绝安全；
+  provider usage 只接受非负值并要求价格版本才能形成已知成本；预算统计不把准入拒绝当作未知成本；
+  首次聊天始终带系统消息，短期历史与动态上下文按统一条数/token 边界组成并优先保留核心规则。
+- roadmap 对应 Phase 5“限流与成本准入复核”仍不勾选：真实并发/SSE/Multipart、网关字节与并发、
+  Redis 故障演练、供应商配额校准和生产阈值仍需部署环境证据；上下文切片也不替代其他 Phase 5
+  安全、备份和运维验收。
