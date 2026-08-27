@@ -5,6 +5,12 @@ public enum TaskExecutionType {
     DIARY("DIARY"),
     PLAZA("PLAZA"),
     EMBEDDING("EMBEDDING"),
+    /**
+     * @deprecated retained only for reading task_execution rows written by an older release;
+     * new embedding tasks must use {@link #EMBEDDING}.
+     */
+    @Deprecated
+    DIARY_EMBEDDING("DIARY_EMBEDDING"),
     LIFE_GRAPH("LIFE_GRAPH"),
     PERSONA("PERSONA"),
     WEEKLY_REPORT("WEEKLY_REPORT"),
@@ -20,5 +26,9 @@ public enum TaskExecutionType {
 
     public String code() {
         return code;
+    }
+
+    public TaskExecutionType canonical() {
+        return this == DIARY_EMBEDDING ? EMBEDDING : this;
     }
 }

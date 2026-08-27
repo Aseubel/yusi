@@ -7,6 +7,7 @@ import com.aseubel.yusi.pojo.constant.SecurityAuditDetailKeys;
 import com.aseubel.yusi.pojo.constant.SecurityAuditOutcome;
 import com.aseubel.yusi.pojo.constant.SecurityAuditResourceType;
 import com.aseubel.yusi.pojo.constant.TaskExecutionStatus;
+import com.aseubel.yusi.pojo.constant.TaskExecutionType;
 import com.aseubel.yusi.pojo.constant.TaskFailureCategory;
 import com.aseubel.yusi.pojo.entity.TaskExecution;
 import com.aseubel.yusi.repository.TaskExecutionRepository;
@@ -238,7 +239,9 @@ public class TaskExecutionService {
     }
 
     private void validateReplay(TaskExecution existing, TaskExecutionCommand command) {
-        if (existing.getTaskType() != command.getTaskType()
+        TaskExecutionType existingType = existing.getTaskType();
+        TaskExecutionType requestedType = command.getTaskType();
+        if (existingType == null || existingType.canonical() != requestedType.canonical()
                 || !command.getSourceType().equals(existing.getSourceType())
                 || !command.getSourceId().equals(existing.getSourceId())) {
             throw new IllegalArgumentException("Idempotency key belongs to another task execution");

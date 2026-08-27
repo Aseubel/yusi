@@ -18,6 +18,7 @@ import com.aseubel.yusi.service.room.RoomScheduler;
 import com.aseubel.yusi.service.security.SecurityAuditService;
 import com.aseubel.yusi.service.task.TaskExecutionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.context.annotation.Profile;
@@ -32,6 +33,7 @@ import java.time.LocalDateTime;
 @Component
 @Profile("!test")
 @RequiredArgsConstructor
+@Slf4j
 public class YusiScheduledTasks {
 
     private final DistributedJobRunner jobRunner;
@@ -149,7 +151,8 @@ public class YusiScheduledTasks {
         } catch (RuntimeException exception) {
             taskHealthRegistry.recordFailure(taskName, classify(exception));
             metrics.recordTask(taskName, "failure");
-            throw exception;
+            log.error("Scheduled task failed: task={}, exceptionType={}", taskName,
+                    exception.getClass().getSimpleName());
         }
     }
 

@@ -78,6 +78,7 @@ public class YusiMetrics {
 
     private final MeterRegistry registry;
     private final Map<String, AtomicReference<Double>> gaugeValues = new ConcurrentHashMap<>();
+    private final Map<String, Gauge> registeredGauges = new ConcurrentHashMap<>();
 
     public YusiMetrics(MeterRegistry registry) {
         this.registry = registry;
@@ -296,12 +297,14 @@ public class YusiMetrics {
         AtomicReference<Double> reference = gaugeValues.computeIfAbsent(key,
                 ignored -> new AtomicReference<>(value));
         reference.set(value);
-        Gauge.Builder<AtomicReference<Double>> builder = Gauge.builder(name, reference,
-                current -> current.get()).tags(tags);
-        if (baseUnit != null) {
-            builder.baseUnit(baseUnit);
-        }
-        builder.register(registry);
+        registeredGauges.computeIfAbsent(key, ignored -> {
+            Gauge.Builder<AtomicReference<Double>> builder = Gauge.builder(name, reference,
+                    current -> current.get()).tags(tags);
+            if (baseUnit != null) {
+                builder.baseUnit(baseUnit);
+            }
+            return builder.register(registry);
+        });
     }
 
     private double finiteNonNegative(double value) {

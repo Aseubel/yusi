@@ -295,3 +295,33 @@ inventory，不能被 `removeFromMap` 清理。该问题不是 MySQL 删除失�
   越权、Trace、代理/日志采集等其他 deployment-only 子项尚未完成。
 - 收口前重新执行本地 Maven 全量测试：`maven_exit=0`，`538 tests / 0 failures /
   0 errors / 0 skipped`；远端容器内部 readiness 返回 `{"status":"UP"}`。
+
+## 第七轮：定时任务异常与 readiness 误报定位
+
+- 远端实例当前仍连接 `yusi-test`，运行源码为 `988fbda`；本轮没有向生产库 `yusi` 写入、删除或修复数据。
+- 2026-08-27 远端只读检查确认：liveness 为 `UP`，readiness 为 `503`；`dependency_health` 中
+  `db`、`redis`、`milvus`、`model_gateway` 为 `up`，只有 `tasks` 为 `down`，因此不是容器进程或外部依赖
+  整体不可用。
+- `task_due_gap` 显示唯一过期任务为 `memory-fusion`。调度入口实际是每日 03:00（Asia/Shanghai），
+  但 `TaskScheduleCatalog` 将其按 1 小时计算；当天上午最后一次成功后超过两小时，`TaskHealthIndicator`
+  的固定 2 小时 stale 阈值便把正常状态判成 `DOWN`，触发 `YUSI-SVC-READINESS`。
+- 远端日志还确认一次历史 `task_execution.task_type=DIARY_EMBEDDING` 反序列化异常。该值是旧任务账本
+  的兼容值，当前生产代码只生成 `EMBEDDING`；异常由 `YusiScheduledTasks.runTracked` 重新抛给 Spring
+  定时器，因而产生完整的 `Unexpected error occurred in scheduled task` 堆栈，并可能终止该 fixed-delay
+  worker。修复需保留旧值读取兼容、将新写入继续固定为 `EMBEDDING`，并在调度边界记录低敏单行失败后继续
+  后续调度。
+- 同一窗口发现 `dependency_health` Gauge 重复注册 WARN。`YusiMetrics.recordGauge` 每次更新都重新向
+  Micrometer 注册同名 Gauge；后续改为同一标签键复用已注册 Gauge，避免健康轮询污染日志。
+
+### 本轮修复边界
+
+1. 为旧 `DIARY_EMBEDDING` 提供持久化枚举兼容和与 `EMBEDDING` 的幂等语义兼容；不向新任务写入旧值。
+2. 按实际调度周期计算任务健康 stale 窗口；每日/每周任务不再因固定两小时阈值误报，真正失败仍保持
+   readiness 降级。
+3. 定时任务失败只保留任务名、异常类型和固定分类的单行日志，不向 Spring 继续抛出已记录异常；业务
+   失败状态仍进入 `TaskHealthRegistry`，下一次成功后恢复。
+4. 复用 Micrometer Gauge 注册对象，消除重复注册 WARN；不改变指标名称、标签白名单或业务结果。
+
+按用户要求本轮不新增测试；现有健康端点、指标、任务账本和 Embedding 聚焦测试，以及全量 Maven
+测试均已通过（退出码 `0`）。提交前已复查 roadmap 对应项，本轮不勾选任何 Phase 5
+deployment-only 条目；远端部署和重建后的真实健康/日志验证仍待完成。
