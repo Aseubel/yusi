@@ -9,6 +9,9 @@ import com.aseubel.yusi.common.exception.BusinessException;
 import com.aseubel.yusi.common.exception.ErrorCode;
 import com.aseubel.yusi.pojo.dto.model.ModelCallTraceItem;
 import com.aseubel.yusi.pojo.dto.model.ModelCallTraceQuery;
+import com.aseubel.yusi.pojo.dto.model.ModelConfigRestoreRequest;
+import com.aseubel.yusi.pojo.dto.model.ModelConfigRestoreResponse;
+import com.aseubel.yusi.pojo.dto.model.ModelConfigVersionInfo;
 import com.aseubel.yusi.pojo.dto.model.ModelGovernanceSnapshot;
 import com.aseubel.yusi.pojo.dto.model.ModelGovernanceUpdateRequest;
 import com.aseubel.yusi.pojo.dto.model.ModelMetricSummary;
@@ -71,6 +74,27 @@ public class ModelManagementController {
         checkAdmin();
         long version = modelManagementService.updateGovernance(request, UserContext.getUserId());
         return Response.success(Map.of("version", version, "status", "updated"));
+    }
+
+    @GetMapping("/config/versions")
+    public Response<List<ModelConfigVersionInfo>> configVersions() {
+        checkAdmin();
+        return Response.success(modelManagementService.listConfigVersions());
+    }
+
+    @GetMapping("/config/preview")
+    public Response<ModelGovernanceSnapshot> restorePreview(
+            @RequestParam String mode, @RequestParam(required = false) Long version) {
+        checkAdmin();
+        return Response.success(modelManagementService.getRestorePreview(mode, version));
+    }
+
+    @PostMapping("/config/restore")
+    @RateLimiter(key = "model-config-restore", time = 60, count = 5, limitType = LimitType.USER)
+    public Response<ModelConfigRestoreResponse> restoreConfig(
+            @Valid @RequestBody ModelConfigRestoreRequest request) {
+        checkAdmin();
+        return Response.success(modelManagementService.restoreConfig(request, UserContext.getUserId()));
     }
 
     @PostMapping("/routes/preview")

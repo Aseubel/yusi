@@ -8,6 +8,9 @@ import com.aseubel.yusi.config.ai.properties.ModelTierDefinition;
 import com.aseubel.yusi.config.ai.properties.RoutePolicyDefinition;
 import com.aseubel.yusi.pojo.dto.model.ModelCallTraceItem;
 import com.aseubel.yusi.pojo.dto.model.ModelCallTraceQuery;
+import com.aseubel.yusi.pojo.dto.model.ModelConfigRestoreRequest;
+import com.aseubel.yusi.pojo.dto.model.ModelConfigRestoreResponse;
+import com.aseubel.yusi.pojo.dto.model.ModelConfigVersionInfo;
 import com.aseubel.yusi.pojo.dto.model.ModelGovernanceSnapshot;
 import com.aseubel.yusi.pojo.dto.model.ModelGovernanceUpdateRequest;
 import com.aseubel.yusi.pojo.dto.model.ModelMetricSummary;
@@ -196,6 +199,113 @@ public class ModelManagementService {
                             SecurityAuditDetailKeys.VERSION, String.valueOf(updated.getVersion())));
         }
         return updated.getVersion();
+    }
+
+    public List<ModelConfigVersionInfo> listConfigVersions() {
+        return modelConfigCenter.listRestoreVersions();
+    }
+
+    public ModelGovernanceSnapshot getRestorePreview(String mode, Long version) {
+        ModelRoutingProperties target = resolveRestoreTarget(mode, version);
+        return toRestorePreviewSnapshot(target);
+    }
+
+    public ModelConfigRestoreResponse restoreConfig(ModelConfigRestoreRequest request, String operatorId) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "恢复请求不能为空");
+        }
+        boolean factory = isFactoryMode(request.getMode());
+        if (!factory && request.getVersion() == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "历史回滚必须指定 version");
+        }
+        ModelRoutingProperties target = resolveRestoreTarget(request.getMode(), request.getVersion());
+        ModelRoutingProperties restored = modelConfigCenter.restoreCanonical(target,
+                request.getExpectedVersion(), operatorId, factory);
+        List<String> missingApiKeyModels = safeModels(restored).stream()
+                .filter(model -> model.getApikey() == null || model.getApikey().isBlank())
+                .map(ModelRoutingProperties.ModelDefinition::getId)
+                .toList();
+        String action = factory ? "RESTORE_FACTORY" : "ROLLBACK";
+        if (securityAuditService != null && operatorId != null && !operatorId.isBlank()) {
+            try {
+                securityAuditService.recordAdmin(SecurityAuditAction.MODEL_CONFIG_RESTORED, operatorId, null,
+                        SecurityAuditResourceType.MODEL_GOVERNANCE, "active", SecurityAuditOutcome.SUCCESS,
+                        SecurityAuditReasonCode.ADMIN_MUTATION,
+                        Map.of(
+                                SecurityAuditDetailKeys.OPERATION, SecurityAuditOperation.UPDATE.name(),
+                                SecurityAuditDetailKeys.VERSION, String.valueOf(restored.getVersion()),
+                                SecurityAuditDetailKeys.ACTION, action));
+            } catch (RuntimeException auditException) {
+                log.warn("Model config restore audit failed: exceptionType={}",
+                        com.aseubel.yusi.common.utils.LowSensitivityLogSummary.exceptionType(auditException));
+            }
+        }
+        return ModelConfigRestoreResponse.builder()
+                .version(restored.getVersion())
+                .action(action)
+                .missingApiKeyModels(missingApiKeyModels)
+                .build();
+    }
+
+    private boolean isFactoryMode(String mode) {
+        if ("FACTORY".equalsIgnoreCase(mode == null ? "" : mode.trim())) {
+            return true;
+        }
+        if ("VERSION".equalsIgnoreCase(mode == null ? "" : mode.trim())) {
+            return false;
+        }
+        throw new BusinessException(ErrorCode.PARAM_ERROR, "mode 只能是 FACTORY 或 VERSION");
+    }
+
+    private ModelRoutingProperties resolveRestoreTarget(String mode, Long version) {
+        if (isFactoryMode(mode)) {
+            return modelConfigCenter.getFactoryDefaultConfig();
+        }
+        if (version == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "历史回滚必须指定 version");
+        }
+        return modelConfigCenter.getRestoreSnapshot(version);
+    }
+
+    /** 仅装配配置字段（models/tiers/routes/defaultRoute）的快照，供前端恢复预览复用 createGovernanceDraft。 */
+    private ModelGovernanceSnapshot toRestorePreviewSnapshot(ModelRoutingProperties config) {
+        Map<String, ModelRoutingProperties.ModelDefinition> modelsById = safeModels(config).stream()
+                .filter(model -> model != null && model.getId() != null)
+                .collect(Collectors.toMap(ModelRoutingProperties.ModelDefinition::getId,
+                        model -> model, (first, ignored) -> first, LinkedHashMap::new));
+        Map<String, List<String>> tierIdsByModel = new HashMap<>();
+        safeTiers(config).forEach((tierId, tier) -> {
+            if (tier != null && tier.getMembers() != null) {
+                tier.getMembers().forEach(modelId -> tierIdsByModel
+                        .computeIfAbsent(modelId, ignored -> new ArrayList<>()).add(tierId));
+            }
+        });
+        List<RoutePolicyDefinition> routeDefinitions = config.getRoutes() == null
+                ? List.of() : config.getRoutes();
+        Map<String, List<String>> routeIdsByModel = new HashMap<>();
+        routeDefinitions.forEach(route -> routeModelIds(route, config).forEach(modelId -> routeIdsByModel
+                .computeIfAbsent(modelId, ignored -> new ArrayList<>()).add(route.getId())));
+
+        return ModelGovernanceSnapshot.builder()
+                .version(config.getVersion())
+                .schemaVersion(config.getSchemaVersion())
+                .defaultScene(config.getDefaultScene())
+                .defaultTier(config.getDefaultTier())
+                .models(safeModels(config).stream()
+                        .map(model -> toGovernanceModel(model, Map.of(),
+                                tierIdsByModel.getOrDefault(model.getId(), List.of()),
+                                routeIdsByModel.getOrDefault(model.getId(), List.of())))
+                        .toList())
+                .tiers(safeTiers(config).entrySet().stream()
+                        .map(entry -> toGovernanceTier(entry.getKey(), entry.getValue(), modelsById, Map.of()))
+                        .toList())
+                .routes(routeDefinitions)
+                .defaultRoute(config.getDefaultRoute())
+                .runtimeStates(List.of())
+                .summary(emptyMetrics())
+                .lastRefreshedAt(System.currentTimeMillis())
+                .routeProjections(List.of())
+                .build();
     }
 
     public ModelRoutePreviewResponse previewRoute(ModelRoutePreviewRequest request) {
