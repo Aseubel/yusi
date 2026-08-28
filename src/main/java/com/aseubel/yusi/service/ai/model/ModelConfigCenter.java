@@ -6,6 +6,7 @@ import com.aseubel.yusi.config.ai.properties.ModelRoutingProperties;
 import com.aseubel.yusi.service.ai.model.constant.ModelProviderType;
 import com.aseubel.yusi.config.ai.properties.ModelTierDefinition;
 import com.aseubel.yusi.config.ai.properties.RoutePolicyDefinition;
+import com.aseubel.yusi.pojo.dto.model.ModelConfigVersionInfo;
 import com.aseubel.yusi.pojo.entity.ModelConfigChangeLog;
 import com.aseubel.yusi.pojo.entity.ModelRuntimeConfig;
 import com.aseubel.yusi.repository.ModelConfigChangeLogRepository;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -40,6 +42,8 @@ public class ModelConfigCenter {
     private static final String ACTIVE_CONFIG_KEY = "active";
     private static final String SECRET_PLACEHOLDER = "******";
     private static final String UPDATE_CONFIG = "UPDATE_CONFIG";
+    private static final String RESTORE_FACTORY_ACTION = "RESTORE_FACTORY";
+    private static final String ROLLBACK_ACTION = "ROLLBACK";
 
     private final ModelRoutingProperties bootstrapProperties;
     private final RedissonClient redissonClient;
@@ -144,6 +148,121 @@ public class ModelConfigCenter {
         validate(config);
     }
 
+    /** 列出可回滚的历史版本（成功变更按版本号去重、倒序）。 */
+    public List<ModelConfigVersionInfo> listRestoreVersions() {
+        if (changeLogRepository == null) {
+            return List.of();
+        }
+        Map<Long, ModelConfigVersionInfo> latestByVersion = new LinkedHashMap<>();
+        for (ModelConfigChangeLog entry : changeLogRepository.findTop500BySuccessTrueOrderByCreatedAtDesc()) {
+            Long version = extractVersion(entry.getAfterJson());
+            if (version == null) {
+                continue;
+            }
+            latestByVersion.putIfAbsent(version, ModelConfigVersionInfo.builder()
+                    .changeId(entry.getChangeId())
+                    .version(version)
+                    .operatorId(entry.getOperatorId())
+                    .action(entry.getAction())
+                    .createdAt(entry.getCreatedAt())
+                    .build());
+        }
+        return List.copyOf(latestByVersion.values());
+    }
+
+    /** 读取指定历史版本的脱敏快照（apikey 为掩码），version 重置为当前版本以便草稿预览。 */
+    public ModelRoutingProperties getRestoreSnapshot(long version) {
+        ModelRoutingProperties snapshot = findSnapshotByVersion(version);
+        if (snapshot == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "配置版本不存在: " + version);
+        }
+        snapshot.setVersion(getCurrentVersion());
+        return cloneConfig(snapshot);
+    }
+
+    /** 出厂默认配置（YAML bootstrap 副本），version 置为当前版本以便草稿预览。 */
+    public ModelRoutingProperties getFactoryDefaultConfig() {
+        ModelRoutingProperties factory = cloneConfig(bootstrapProperties);
+        factory.setVersion(getCurrentVersion());
+        return factory;
+    }
+
+    /**
+     * 以服务端持有的目标快照恢复整份配置：跳过 stable model id 校验（回滚允许移除新增模型），
+     * 其余校验全保留；密钥按 modelId 从当前配置回填；审计 action 区分 RESTORE_FACTORY / ROLLBACK。
+     */
+    @Transactional(noRollbackFor = ModelRuntimePublishException.class)
+    public ModelRoutingProperties restoreCanonical(ModelRoutingProperties target, long expectedVersion,
+            String operatorId, boolean factory) {
+        return restoreVersioned(target, expectedVersion, operatorId, factory);
+    }
+
+    private synchronized ModelRoutingProperties restoreVersioned(ModelRoutingProperties target,
+            long expectedVersion, String operatorId, boolean factory) {
+        if (target == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "恢复目标配置不能为空");
+        }
+        ModelRoutingProperties current = currentConfigForWrite();
+        if (expectedVersion != current.getVersion()) {
+            throw new BusinessException(ErrorCode.CONFIG_VERSION_CONFLICT,
+                    "配置版本已过期，当前版本为 " + current.getVersion()
+                            + ", 提交版本为 " + expectedVersion);
+        }
+
+        ModelRoutingProperties merged = mergeSecrets(cloneConfig(target), current);
+        validate(merged);
+        merged.setVersion(current.getVersion() + 1);
+
+        String action = factory ? RESTORE_FACTORY_ACTION : ROLLBACK_ACTION;
+        String beforeJson = toAuditJson(current);
+        String afterJson = toAuditJson(merged);
+        try {
+            saveRuntimeSnapshot(merged, operatorId);
+            saveChangeLog(operatorId, action, beforeJson, afterJson, true, null);
+            publishRuntimeConfig(merged);
+        } catch (ModelRuntimePublishException exception) {
+            saveChangeLogSafely(operatorId, action, beforeJson, afterJson, false, exception.getMessage());
+            throw exception;
+        } catch (RuntimeException exception) {
+            saveChangeLogSafely(operatorId, action, beforeJson, afterJson, false, exception.getMessage());
+            throw exception;
+        }
+
+        applyLocal(merged);
+        return cloneConfig(merged);
+    }
+
+    private ModelRoutingProperties findSnapshotByVersion(long version) {
+        if (changeLogRepository == null) {
+            return null;
+        }
+        for (ModelConfigChangeLog entry : changeLogRepository.findTop500BySuccessTrueOrderByCreatedAtDesc()) {
+            String afterJson = entry.getAfterJson();
+            if (afterJson == null || afterJson.isBlank()
+                    || !Objects.equals(extractVersion(afterJson), version)) {
+                continue;
+            }
+            try {
+                return objectMapper.readValue(afterJson, ModelRoutingProperties.class);
+            } catch (JsonProcessingException exception) {
+                log.warn("Failed to parse restore snapshot for version {}: {}", version, exception.getMessage());
+            }
+        }
+        return null;
+    }
+
+    private Long extractVersion(String afterJson) {
+        if (afterJson == null || afterJson.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(afterJson);
+            return root.hasNonNull("version") ? root.get("version").asLong() : null;
+        } catch (JsonProcessingException exception) {
+            return null;
+        }
+    }
+
     private synchronized ModelRoutingProperties updateVersioned(ModelRoutingProperties request,
             long expectedVersion, String operatorId) {
         if (request == null) {
@@ -165,13 +284,13 @@ public class ModelConfigCenter {
         String afterJson = toAuditJson(merged);
         try {
             saveRuntimeSnapshot(merged, operatorId);
-            saveChangeLog(operatorId, beforeJson, afterJson, true, null);
+            saveChangeLog(operatorId, UPDATE_CONFIG, beforeJson, afterJson, true, null);
             publishRuntimeConfig(merged);
         } catch (ModelRuntimePublishException exception) {
-            saveChangeLogSafely(operatorId, beforeJson, afterJson, false, exception.getMessage());
+            saveChangeLogSafely(operatorId, UPDATE_CONFIG, beforeJson, afterJson, false, exception.getMessage());
             throw exception;
         } catch (RuntimeException exception) {
-            saveChangeLogSafely(operatorId, beforeJson, afterJson, false, exception.getMessage());
+            saveChangeLogSafely(operatorId, UPDATE_CONFIG, beforeJson, afterJson, false, exception.getMessage());
             throw exception;
         }
 
@@ -213,7 +332,7 @@ public class ModelConfigCenter {
         runtimeConfigRepository.save(snapshot);
     }
 
-    private void saveChangeLog(String operatorId, String beforeJson, String afterJson,
+    private void saveChangeLog(String operatorId, String action, String beforeJson, String afterJson,
             boolean success, String errorMessage) {
         if (changeLogRepository == null) {
             return;
@@ -221,7 +340,7 @@ public class ModelConfigCenter {
         ModelConfigChangeLog changeLog = ModelConfigChangeLog.builder()
                 .changeId(UUID.randomUUID().toString().replace("-", ""))
                 .operatorId(operatorId)
-                .action(UPDATE_CONFIG)
+                .action(action)
                 .beforeJson(beforeJson)
                 .afterJson(afterJson)
                 .success(success)
@@ -230,10 +349,10 @@ public class ModelConfigCenter {
         changeLogRepository.save(changeLog);
     }
 
-    private void saveChangeLogSafely(String operatorId, String beforeJson, String afterJson,
+    private void saveChangeLogSafely(String operatorId, String action, String beforeJson, String afterJson,
             boolean success, String errorMessage) {
         try {
-            saveChangeLog(operatorId, beforeJson, afterJson, success, truncate(errorMessage));
+            saveChangeLog(operatorId, action, beforeJson, afterJson, success, truncate(errorMessage));
         } catch (RuntimeException logException) {
             log.warn("Failed to persist model config failure audit: {}", logException.getMessage());
         }
