@@ -364,13 +364,13 @@ class AuthzBoundaryMockMvcTest {
     void retainsIndependentRouteStatisticsContract() throws Exception {
         var mappings = AuthzCoverageContractTest.scanMappings();
 
-        assertThat(mappings).hasSize(163);
+        assertThat(mappings).hasSize(166);
         assertThat(mappings.stream()
                 .filter(mapping -> AuthzCoverageContractTest.WRITE_METHODS.contains(mapping.httpMethod()))
-                .count()).isEqualTo(93);
+                .count()).isEqualTo(94);
         assertThat(mappings.stream()
                 .filter(mapping -> !AuthzCoverageContractTest.WRITE_METHODS.contains(mapping.httpMethod()))
-                .count()).isEqualTo(70);
+                .count()).isEqualTo(72);
     }
 
     private void saveFixtureUser(String userId, int permissionLevel) {
