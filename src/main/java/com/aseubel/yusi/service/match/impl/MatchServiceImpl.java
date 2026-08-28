@@ -85,7 +85,6 @@ import java.util.concurrent.CompletableFuture;
 @RequiredArgsConstructor
 public class MatchServiceImpl implements MatchService {
 
-    private static final String MATCH_PROFILE_COLLECTION = "yusi_match_profile";
     private static final int RECALL_TOP_K = 8;
     private static final int MIN_RERANK_SCORE = 70;
     private static final int MIN_WEAK_SIGNAL_SCORE = 78;
@@ -114,6 +113,7 @@ public class MatchServiceImpl implements MatchService {
     private final ObjectMapper objectMapper;
     private final ThreadPoolTaskExecutor threadPoolExecutor;
     private final TaskExecutionService taskExecutionService;
+    private final com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties;
 
     @Override
     public void runWeeklyMatching() {
@@ -299,7 +299,7 @@ public class MatchServiceImpl implements MatchService {
         return count;
     }
 
-    private CompletableFuture<String> generateLetter(String userId, String myProfile, String partnerProfile,
+    public CompletableFuture<String> generateLetter(String userId, String myProfile, String partnerProfile,
             MatchRerankResult rerankResult) {
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -375,7 +375,7 @@ public class MatchServiceImpl implements MatchService {
         return prioritized;
     }
 
-    private List<String> recallByMilvus(String userId, String profileText) {
+    public List<String> recallByMilvus(String userId, String profileText) {
         if (StrUtil.isBlank(profileText)) {
             return List.of();
         }
@@ -400,7 +400,7 @@ public class MatchServiceImpl implements MatchService {
                     .build();
 
             HybridSearchReq hybridSearchReq = HybridSearchReq.builder()
-                    .collectionName(MATCH_PROFILE_COLLECTION)
+                    .collectionName(collectionProperties.getMatchProfile())
                     .searchRequests(Arrays.asList(denseReq, sparseReq))
                     .ranker(RRFRanker.builder().k(60).build())
                     .limit(RECALL_TOP_K)
@@ -680,7 +680,7 @@ public class MatchServiceImpl implements MatchService {
         return null;
     }
 
-    private MatchRerankResult rerank(MatchProfile targetProfile, MatchProfile candidateProfile) {
+    public MatchRerankResult rerank(MatchProfile targetProfile, MatchProfile candidateProfile) {
         try {
             String preferenceContext = buildRerankPreferenceContext(targetProfile.getUserId());
             PromptSnapshot snapshot = promptManager.getSnapshot(PromptKey.SOUL_MATCH);
@@ -720,7 +720,7 @@ public class MatchServiceImpl implements MatchService {
         return context != null ? "用户匹配偏好：" + context + "\n" : "";
     }
 
-    private String buildStructuredProfileForMatching(MatchProfile profile) {
+    public String buildStructuredProfileForMatching(MatchProfile profile) {
         if (profile == null) {
             return "匹配画像缺失。";
         }

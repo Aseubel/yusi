@@ -21,8 +21,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MidTermMemoryVectorService {
 
-    private static final String COLLECTION = "yusi_mid_term_memory";
-
+    private final com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties;
     private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
 
@@ -53,7 +52,7 @@ public class MidTermMemoryVectorService {
         row.add("metadata", metadata);
 
         milvusClientV2.insert(InsertReq.builder()
-                .collectionName(COLLECTION)
+                .collectionName(collectionProperties.getMidTermMemory())
                 .data(List.of(row))
                 .build());
     }
@@ -63,7 +62,7 @@ public class MidTermMemoryVectorService {
             return;
         }
         milvusClientV2.delete(DeleteReq.builder()
-                .collectionName(COLLECTION)
+                .collectionName(collectionProperties.getMidTermMemory())
                 .filter("metadata[\"memoryId\"] == '" + memoryId + "'")
                 .build());
     }

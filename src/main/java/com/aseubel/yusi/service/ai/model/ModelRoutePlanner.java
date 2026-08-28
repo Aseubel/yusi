@@ -92,13 +92,22 @@ public class ModelRoutePlanner {
                 + ";health-filter=" + (healthReasons.isEmpty() ? "none" : String.join(",", healthReasons));
         return new ModelRouteDecision(budgetContext.getRequestId(), policy.getId(),
                 properties.getVersion(), primaryTier, fallbackTiers, candidates, routeReason,
-                ModelRouteParameters.from(policy),
+                ModelRouteParameters.from(policy, tierThinkingOverride(properties, primaryTier)),
                 new ModelRouteDecision.RouteReason(policy.getId(), routeMatch.sceneMatchLevel(),
                         routeMatch.riskMatchLevel(), policy.getPriority(), primaryTier, fallbackTiers,
                         tierOrder.stream()
                                 .map(tier -> tier + "=" + strategyType(properties.getTiers() == null
                                         ? null : properties.getTiers().get(tier)).name())
                                 .toList()));
+    }
+
+    /** primary-tier 的思考开关覆盖：tier 显式配置优先于模型级，null 表示不干预。 */
+    private Boolean tierThinkingOverride(ModelRoutingProperties properties, String tierId) {
+        if (tierId == null || properties.getTiers() == null) {
+            return null;
+        }
+        ModelTierDefinition tier = properties.getTiers().get(tierId);
+        return tier == null ? null : tier.getThinkingEnabled();
     }
 
     private List<ModelRouteCandidate> routeTier(ModelRoutingProperties properties, String tierId,

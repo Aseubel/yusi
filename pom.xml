@@ -47,6 +47,11 @@
         <protobuf.version>3.25.3</protobuf.version>
         <grpc-spring-boot.version>3.1.0.RELEASE</grpc-spring-boot.version>
         <milvus-sdk.version>2.6.16</milvus-sdk.version>
+        <!-- surefire 开关默认值：普通单测（排除 benchmark 分组）；-Pbenchmark 时由 profile 覆盖 -->
+        <surefire.groups></surefire.groups>
+        <surefire.excludedGroups>benchmark</surefire.excludedGroups>
+        <surefire.failIfNoTests>false</surefire.failIfNoTests>
+        <surefire.springProfile>test</surefire.springProfile>
     </properties>
 
     <dependencies>
@@ -334,8 +339,20 @@
                 <!-- Lowercase evaluation packages must run before the root aggregate gate. -->
                 <configuration>
                     <runOrder>reversealphabetical</runOrder>
+                    <!-- 分组与 profile 开关经属性注入：默认跑普通单测；-Pbenchmark 时由 profile 覆盖属性。
+                         不在 profile 里写 <groups>/</excludedGroups> 是因为父 POM 的 default-test 执行体
+                         配置优先于插件级配置，会吞掉覆盖。 -->
+                    <groups>${surefire.groups}</groups>
+                    <excludedGroups>${surefire.excludedGroups}</excludedGroups>
+                    <!-- benchmark 用例以 *BenchmarkRunner 命名，默认 include 匹配不到，显式加入 -->
+                    <includes>
+                        <include>**/*Test.java</include>
+                        <include>**/*Tests.java</include>
+                        <include>**/*BenchmarkRunner.java</include>
+                    </includes>
+                    <failIfNoTests>${surefire.failIfNoTests}</failIfNoTests>
                     <systemPropertyVariables>
-                        <spring.profiles.active>test</spring.profiles.active>
+                        <spring.profiles.active>${surefire.springProfile}</spring.profiles.active>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>
@@ -360,5 +377,20 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- 真实依赖质量基准：mvn verify -Pbenchmark -Dyusi.benchmark.env=local|server -->
+        <profile>
+            <id>benchmark</id>
+            <!-- 覆盖 surefire 开关属性（见 build/plugins/surefire 注释）：
+                 只按 benchmark 分组选测试、允许 *BenchmarkRunner 命名、禁用普通单测的 spring profile -->
+            <properties>
+                <surefire.groups>benchmark</surefire.groups>
+                <surefire.excludedGroups></surefire.excludedGroups>
+                <surefire.failIfNoTests>true</surefire.failIfNoTests>
+                <surefire.springProfile>benchmark</surefire.springProfile>
+            </properties>
+        </profile>
+    </profiles>
 
 </project>

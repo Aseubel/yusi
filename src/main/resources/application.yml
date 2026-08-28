@@ -5,6 +5,12 @@ spring:
     active: prod
 
 yusi:
+  milvus:
+    collections:
+      # 集合名默认与历史硬编码一致；benchmark 等隔离场景可覆盖为独立前缀
+      embedding: yusi_embedding_collection
+      mid-term-memory: yusi_mid_term_memory
+      match-profile: yusi_match_profile
   web:
     trusted-proxy-addresses: ${YUSI_TRUSTED_PROXY_ADDRESSES:}
   rate-limit:

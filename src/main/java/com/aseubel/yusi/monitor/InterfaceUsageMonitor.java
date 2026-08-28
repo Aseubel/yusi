@@ -76,6 +76,19 @@ public class InterfaceUsageMonitor {
         }
     }
 
+    /** Whether the account-deletion flow currently suppresses writes for this user. */
+    public boolean isUserSuppressed(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        usageStateLock.readLock().lock();
+        try {
+            return suppressedUserIds.contains(userId);
+        } finally {
+            usageStateLock.readLock().unlock();
+        }
+    }
+
     /**
      * 记录接口使用情况到 Redis（带批量缓冲）
      */

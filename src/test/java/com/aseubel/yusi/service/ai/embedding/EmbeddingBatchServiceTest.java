@@ -58,7 +58,8 @@ class EmbeddingBatchServiceTest {
     void processPendingTasks_writesDiaryChunkMetadataAndContextualText() {
         EmbeddingBatchService service = new EmbeddingBatchService(taskRepository, taskClaimService,
                 taskMaintenanceService, diaryRepository, userRepository, milvusClientV2, embeddingGateway,
-                diaryChunker, diaryService, taskExecutionService);
+                diaryChunker, diaryService, taskExecutionService,
+                new com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties());
         EmbeddingTask task = EmbeddingTask.createUpsertTask("diary-1", "user-1");
         task.setId(1L);
         Diary diary = Diary.builder().diaryId("diary-1").userId("user-1")
@@ -94,7 +95,8 @@ class EmbeddingBatchServiceTest {
     void processPendingTasks_skipsOlderDiaryRevision() {
         EmbeddingBatchService service = new EmbeddingBatchService(taskRepository, taskClaimService,
                 taskMaintenanceService, diaryRepository, userRepository, milvusClientV2, embeddingGateway,
-                diaryChunker, diaryService, taskExecutionService);
+                diaryChunker, diaryService, taskExecutionService,
+                new com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties());
         EmbeddingTask task = EmbeddingTask.createUpsertTask("diary-2", "user-1", "event-old");
         task.setId(2L);
         task.setSourceRevision(1L);

@@ -47,10 +47,17 @@ public class AgentCognitionOrchestratorImpl implements AgentCognitionOrchestrato
     private final ImageUnderstandingService imageUnderstandingService;
     private final TaskExecutionService taskExecutionService;
     private final AgentRunTraceService agentRunTraceService;
+    private final com.aseubel.yusi.monitor.InterfaceUsageMonitor interfaceUsageMonitor;
 
     @Override
     public void ingest(CognitionIngestCommand command) {
         if (command == null || StrUtil.isBlank(command.getUserId())) {
+            return;
+        }
+        // 注销删除进行中的用户：跳过异步摄取，避免与删除事务竞态重写数据
+        if (interfaceUsageMonitor.isUserSuppressed(command.getUserId())) {
+            log.info("Skip cognition ingest for deletion-in-progress user: userId={}, sourceType={}, sourceId={}",
+                    command.getUserId(), command.getSourceType(), command.getSourceId());
             return;
         }
         TaskExecution execution = createExecution(command);

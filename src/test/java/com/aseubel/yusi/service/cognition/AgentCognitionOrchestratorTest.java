@@ -60,7 +60,26 @@ class AgentCognitionOrchestratorTest {
     private AgentRunTraceService agentRunTraceService;
 
     @Mock
+    private com.aseubel.yusi.monitor.InterfaceUsageMonitor interfaceUsageMonitor;
+
+    @Mock
     private AgentRunTraceService.RunScope runScope;
+
+    @Test
+    void suppressedUserMustSkipIngestionDuringAccountDeletion() {
+        when(interfaceUsageMonitor.isUserSuppressed("user-1")).thenReturn(true);
+
+        service().ingest(CognitionIngestCommand.builder()
+                .userId("user-1")
+                .sourceType("DIARY")
+                .sourceId("diary-1")
+                .maskedText("masked")
+                .build());
+
+        verifyNoInteractions(taskExecutionService, agentRunTraceService, cognitionRoutingService,
+                userPersonaUpdateService, midMemoryUpdateService, lifeGraphCognitionBridgeService,
+                matchProfileAssembler, imageUnderstandingService);
+    }
 
     @Test
     void emptyDiaryIngestRemovesPreviousMemoryWithoutCallingCognition() {
@@ -153,6 +172,6 @@ class AgentCognitionOrchestratorTest {
     private AgentCognitionOrchestratorImpl service() {
         return new AgentCognitionOrchestratorImpl(cognitionRoutingService, userPersonaUpdateService,
                 midMemoryUpdateService, lifeGraphCognitionBridgeService, matchProfileAssembler,
-                imageUnderstandingService, taskExecutionService, agentRunTraceService);
+                imageUnderstandingService, taskExecutionService, agentRunTraceService, interfaceUsageMonitor);
     }
 }

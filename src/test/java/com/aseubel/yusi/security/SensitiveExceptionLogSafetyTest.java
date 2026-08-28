@@ -225,6 +225,9 @@ class SensitiveExceptionLogSafetyTest {
     @Test
     void adminCleanupDoesNotLogSqlOrExceptionMessage() {
         UserContext.setUserId("fixture-admin-id");
+        org.mockito.Mockito.when(milvusClientV2.getLoadState(
+                        org.mockito.ArgumentMatchers.any(io.milvus.v2.service.collection.request.GetLoadStateReq.class)))
+                .thenReturn(true);
         when(userRepository.findByUserId("fixture-target-id"))
                 .thenReturn(com.aseubel.yusi.pojo.entity.User.builder().userId("fixture-target-id")
                         .permissionLevel(1).build());

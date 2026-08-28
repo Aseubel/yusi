@@ -1,0 +1,252 @@
+{
+  "fixtureVersion": "v1",
+  "groups": [
+    {
+      "groupId": "g1-outdoor-writing",
+      "intent": "想找能长期保持联系、一起把喜欢的事情慢慢做下去的同频朋友",
+      "target": {
+        "tag": "g1-target",
+        "name": "山野笔记",
+        "interests": "徒步登山、自然观察、随手写自然散文",
+        "tone": "安静克制，不喜欢太热闹的群聊",
+        "customInstructions": "希望对方也愿意走进山里，但不接受每次都赶时间打卡式爬山",
+        "memories": [
+          "周末沿东梁走了七公里，认出了三种蕨类，回来在笔记本上画了叶形图。",
+          "最近想把两年来写的徒步随笔整理成一本小册子，题目都拟好了。",
+          "下个月的计划是完成一次两天一夜的山脊线重装徒步。"
+        ],
+        "entities": [
+          {"type": "Topic", "name": "自然写作", "summary": "长期坚持写自然散文，计划结集", "importance": 0.9},
+          {"type": "Topic", "name": "徒步", "summary": "每周一山的慢节奏徒步习惯", "importance": 0.85}
+        ]
+      },
+      "candidates": [
+        {
+          "tag": "g1-c1",
+          "tier": 0,
+          "name": "青梧",
+          "interests": "徒步、观鸟、野外写生与自然笔记",
+          "tone": "温和慢热，重视独处与深入交流",
+          "customInstructions": "偏好不赶路的野线散步，路上顺手做观察记录",
+          "memories": [
+            "上周走了一条冷门山脊线，边走边给遇到的鸟做了行为记录。",
+            "正在把手绘的自然笔记扫描成电子版，打算和小范围的朋友交换阅读。"
+          ],
+          "entities": [
+            {"type": "Topic", "name": "自然观察", "summary": "坚持做野外自然笔记两年", "importance": 0.88}
+          ]
+        },
+        {
+          "tag": "g1-c2",
+          "tier": 1,
+          "name": "远山淡影",
+          "interests": "公路骑行、风光摄影、轻量徒步",
+          "tone": "开朗直接",
+          "customInstructions": "运动强度随缘，更在意路上的照片出不出片",
+          "memories": [
+            "环湖骑了五十公里，拍到日落时分的水面，发了九宫格。",
+            "偶尔跟朋友走走郊山步道，更喜欢行程结束时的大餐。"
+          ],
+          "entities": [
+            {"type": "Topic", "name": "户外运动", "summary": "以骑行摄影为主的户外爱好者", "importance": 0.7}
+          ]
+        },
+        {
+          "tag": "g1-c3",
+          "tier": 2,
+          "name": "岩语",
+          "interests": "竞技攀岩、力量训练、赛事跟踪",
+          "tone": "好胜心强，说话简短有力",
+          "customInstructions": "训练计划优先于娱乐安排，每周七天里有五天泡馆子",
+          "memories": [
+            "刷新了自己的难度线个人最好成绩，下一步备战秋季分站赛。",
+            "觉得休闲爬山没有挑战性，宁可反复磕同一条难线。"
+          ],
+          "entities": [
+            {"type": "Topic", "name": "竞技攀岩", "summary": "备赛中的业余攀岩选手", "importance": 0.85}
+          ]
+        },
+        {
+          "tag": "g1-c4",
+          "tier": 2,
+          "name": "书房灯",
+          "interests": "都市文学、长篇写作、旧书店淘书",
+          "tone": "细腻敏感",
+          "customInstructions": "明确表示不喜欢出汗和暴晒，社交以茶室和书店为主",
+          "memories": [
+            "小说第三章卡了两周，把主角搬进了雨季的小城旅馆。",
+            "周六常去旧书店，淘到过一版印刷很漂亮的《瓦尔登湖》却没读完。"
+          ],
+          "entities": [
+            {"type": "Topic", "name": "文学创作", "summary": "写长篇小说，几乎纯室内活动", "importance": 0.8}
+          ]
+        }
+      ]
+    },
+    {
+      "groupId": "g2-sound-night",
+      "intent": "处于创作活跃期，想找能互相听 demo、交换意见的创作型朋友",
+      "target": {
+        "tag": "g2-target",
+        "name": "夜航电台",
+        "interests": "独立音乐创作、深夜录电台节目、合成器音色设计",
+        "tone": "轻松幽默，爱用比喻",
+        "customInstructions": "沟通节奏随意就好，凌晨也在工作状态，不希望被催早点睡",
+        "memories": [
+          "凌晨两点把一首 demo 的副歌混音改了四版，最后还是选了第一版。",
+          "在自己的夜间电台里读了一封听众来信，居然读哭了。",
+          "最近在研究怎么让合成器的 pad 音色更像雨声。"
+        ],
+        "entities": [
+          {"type": "Topic", "name": "音乐创作", "summary": "坚持做原创歌曲并运营深夜电台", "importance": 0.9},
+          {"type": "Topic", "name": "夜间作息", "summary": "深夜是灵感高峰期，长期晚睡", "importance": 0.75}
+        ]
+      },
+      "candidates": [
+        {
+          "tag": "g2-c1",
+          "tier": 0,
+          "name": "低频少年",
+          "interests": "词曲创作、编曲、独立发行单曲",
+          "tone": "话不多但聊起音乐会兴奋",
+          "customInstructions": "习惯夜里写歌，希望找到同样半夜还在做 demo 的伙伴",
+          "memories": [
+            "刚发了一首关于梅雨季节的单曲，评论区有乐迷逐句解读歌词。",
+            "昨晚为新歌的和声走向纠结到三点，早上起来发现还挺对味。"
+          ],
+          "entities": [
+            {"type": "Topic", "name": "原创音乐", "summary": "持续产出词曲作品，夜间创作型", "importance": 0.88}
+          ]
+        },
+        {
+          "tag": "g2-c2",
+          "tier": 1,
+          "name": "剪辑猫头鹰",
+          "interests": "播客剪辑、声音设计、纪录片配乐收集",
+          "tone": "认真细致，回复慢但可靠",
+          "customInstructions": "深夜工作时间为主，重度依赖降噪耳机和检查清单",
+          "memories": [
+            "给一档访谈播客修了一整期气口，客户说这期听起来特别松弛。",
+            "收藏了几百段环境音，做梦都想拿它们剪一支声音拼贴。"
+          ],
+          "entities": [
+            {"type": "Topic", "name": "音频剪辑", "summary": "职业剪辑师，昼伏夜出的工作节奏", "importance": 0.8}
+          ]
+        },
+        {
+          "tag": "g2-c3",
+          "tier": 2,
+          "name": "晨跑弹簧",
+          "interests": "清晨跑步、大学网课、健身餐制作",
+          "tone": "元气满满",
+          "customInstructions": "十一点前必须睡觉，特别不理解熬夜这件事",
+          "memories": [
+            "连续三十天六点起床晨跑了，感觉自己像上了发条。",
+            "研究了新的一周减脂食谱，蛋白质含量拉满。"
+          ],
+          "entities": [
+            {"type": "Topic", "name": "自律生活", "summary": "严格的早起作息与健康饮食", "importance": 0.78}
+          ]
+        },
+        {
+          "tag": "g2-c4",
+          "tier": 2,
+          "name": "乐评收藏家",
+          "interests": "古典乐欣赏、黑胶收藏、音乐会观演",
+          "tone": "优雅客气",
+          "customInstructions": "只欣赏不创作，二十二点就寝，周末听音乐会",
+          "memories": [
+            "收了一张绝版肖邦协奏曲的黑胶，包装完美。",
+            "听完现场的马勒第九，回家的地铁上一直在回味第三乐章。"
+          ],
+          "entities": [
+            {"type": "Topic", "name": "古典音乐", "summary": "资深的聆听型古典乐爱好者", "importance": 0.72}
+          ]
+        }
+      ]
+    },
+    {
+      "groupId": "g3-career-shift",
+      "intent": "正处于职业转换期，想找同阶段的人或者已经走过这条路的前辈定期聊聊",
+      "target": {
+        "tag": "g3-target",
+        "name": "折叠地图",
+        "interests": "数据分析自学中、Excel 进阶技巧、城市行走解压",
+        "tone": "务实，有点自我怀疑倾向",
+        "customInstructions": "希望对方理解转型的焦虑，别灌鸡汤也别泼冷水",
+        "memories": [
+          "昨晚刷 SQL 练习题刷到十二点，其中窗口函数那道卡了很久。",
+          "投了三份数据岗的简历，还没有回音，心里有点打鼓。",
+          "和朋友说了转型的决定后反而轻松了一些。"
+        ],
+        "entities": [
+          {"type": "Topic", "name": "职业转型", "summary": "从财务转向数据分析的自学过渡期", "importance": 0.92},
+          {"type": "Topic", "name": "技能学习", "summary": "系统学习 SQL 与统计学基础", "importance": 0.82}
+        ]
+      },
+      "candidates": [
+        {
+          "tag": "g3-c1",
+          "tier": 0,
+          "name": "迁徙的鸟",
+          "interests": "数据可视化、转行经验复盘、通勤播客",
+          "tone": "耐心坦诚，讲方法也讲心态",
+          "customInstructions": "半年前从运营转行数据分析成功，愿意定期分享路径和方法",
+          "memories": [
+            "入职新公司满三个月，第一次独立交付了业务看板。",
+            "把自己转行的作品集拆成了模板，答应分给咨询的朋友。",
+            "常提醒自己：当时的焦虑后来回头看都是节点而已。"
+          ],
+          "entities": [
+            {"type": "Topic", "name": "转行经验", "summary": "半年前完成运营到数据的转行，乐于复盘", "importance": 0.9}
+          ]
+        },
+        {
+          "tag": "g3-c2",
+          "tier": 1,
+          "name": "慢速快门",
+          "interests": "UX 设计、用户研究入门、胶片摄影",
+          "tone": "敏感内省，容易共情",
+          "customInstructions": "正在从平面设计转向用户研究，想找同期互相打气",
+          "memories": [
+            "改了第八版作品集，越改越怀疑自己的选择是不是对的。",
+            "参加了一场线上用户研究的分享会，记了满满几页笔记。"
+          ],
+          "entities": [
+            {"type": "Topic", "name": "转型探索期", "summary": "设计中转用户研究的同路人", "importance": 0.85}
+          ]
+        },
+        {
+          "tag": "g3-c3",
+          "tier": 2,
+          "name": "安稳锚点",
+          "interests": "单位团建组织、家庭烘焙、电视综艺",
+          "tone": "热心直爽",
+          "customInstructions": "信奉编制和稳定，看到别人折腾总会忍不住劝一句",
+          "memories": [
+            "帮办公室同事集体订了下午茶的蛋糕，大家都说好吃。",
+            "最近劝表弟别裸辞考研未果，觉得年轻人还是安稳最要紧。"
+          ],
+          "entities": [
+            {"type": "Topic", "name": "稳定生活", "summary": "推崇编制与安稳的职业观", "importance": 0.75}
+          ]
+        },
+        {
+          "tag": "g3-c4",
+          "tier": 2,
+          "name": "备考之地",
+          "interests": "公务员备考、申论素材积累、清晨图书馆占座",
+          "tone": "规律沉稳",
+          "customInstructions": "每天学习八小时，社交时间严格压缩到饭后半小时",
+          "memories": [
+            "申论大作文这次模考进步了两分，奖励自己一顿火锅。",
+            "开始理解为什么大家都说备考是一场孤独的长跑。"
+          ],
+          "entities": [
+            {"type": "Topic", "name": "考公备考", "summary": "全职备考公务员，追求体制内稳定", "importance": 0.8}
+          ]
+        }
+      ]
+    }
+  ]
+}

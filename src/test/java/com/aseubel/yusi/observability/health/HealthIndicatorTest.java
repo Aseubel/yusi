@@ -22,7 +22,8 @@ class HealthIndicatorTest {
     @Test
     void dependencyIndicatorsExposeOnlyFixedLowSensitivityDetails() {
         HealthView redis = new HealthView(new RedisHealthIndicator(mock(RedissonClient.class)).health());
-        HealthView milvus = new HealthView(new MilvusHealthIndicator(mock(MilvusClientV2.class)).health());
+        HealthView milvus = new HealthView(new MilvusHealthIndicator(mock(MilvusClientV2.class),
+                new com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties()).health());
         HealthView tasks = new HealthView(new TaskHealthIndicator(new TaskHealthRegistry()).health());
 
         assertThat(redis.text()).contains("redis").doesNotContain(QUERY_SENTINEL, SQL_SENTINEL,

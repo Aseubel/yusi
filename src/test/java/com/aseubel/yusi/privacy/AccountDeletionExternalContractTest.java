@@ -116,7 +116,8 @@ class AccountDeletionExternalContractTest {
         addExactKey.setAccessible(true);
         addExactKey.invoke(inventory, totalKey);
 
-        new DefaultAccountDeletionExternalPort(mock(MilvusClientV2.class), redis, tokens, oss)
+        new DefaultAccountDeletionExternalPort(mock(MilvusClientV2.class), redis, tokens, oss,
+                new com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties())
                 .deleteObjects(inventory);
 
         verify(oss, times(1)).deleteOwnedChunkObject("fixture-chunk-object-a", TARGET_USER);
@@ -182,6 +183,8 @@ class AccountDeletionExternalContractTest {
     }
 
     private AdminServiceImpl newAdminService(MilvusClientV2 milvusClient) {
+        when(milvusClient.getLoadState(any(io.milvus.v2.service.collection.request.GetLoadStateReq.class)))
+                .thenReturn(true);
         UserRepository userRepository = mock(UserRepository.class);
         when(userRepository.findByUserId(TARGET_USER))
                 .thenReturn(User.builder().userId(TARGET_USER).permissionLevel(0).build());

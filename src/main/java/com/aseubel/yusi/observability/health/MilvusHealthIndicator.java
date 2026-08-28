@@ -12,19 +12,20 @@ import org.springframework.stereotype.Component;
 @ConditionalOnBean(name = "milvusClientV2")
 public class MilvusHealthIndicator implements HealthIndicator {
 
-    private static final String COLLECTION = "yusi_embedding_collection";
-
     private final MilvusClientV2 milvusClient;
+    private final String embeddingCollection;
 
-    public MilvusHealthIndicator(MilvusClientV2 milvusClient) {
+    public MilvusHealthIndicator(MilvusClientV2 milvusClient,
+            com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties) {
         this.milvusClient = milvusClient;
+        this.embeddingCollection = collectionProperties.getEmbedding();
     }
 
     @Override
     public Health health() {
         try {
             boolean available = Boolean.TRUE.equals(milvusClient.hasCollection(HasCollectionReq.builder()
-                    .collectionName(COLLECTION)
+                    .collectionName(embeddingCollection)
                     .build()));
             Health.Builder builder = available ? Health.up() : Health.down();
             return builder

@@ -45,10 +45,15 @@ class AccountDeletionSourceCoverageTest {
     void deletionImplementationMustCoverAllMilvusCollectionsAndRedisFamilies() throws Exception {
         String source = implementationSource();
 
+        String propertyDefaults = Files.readString(Path.of(
+                "src/main/java/com/aseubel/yusi/config/ai/properties/MilvusCollectionProperties.java"));
         assertAll("external deletion coverage",
-                () -> assertTrue(source.contains("yusi_embedding_collection")),
-                () -> assertTrue(source.contains("yusi_mid_term_memory")),
-                () -> assertTrue(source.contains("yusi_match_profile")),
+                () -> assertTrue(propertyDefaults.contains("yusi_embedding_collection")
+                        && source.contains("collectionProperties.getEmbedding()")),
+                () -> assertTrue(propertyDefaults.contains("yusi_mid_term_memory")
+                        && source.contains("collectionProperties.getMidTermMemory()")),
+                () -> assertTrue(propertyDefaults.contains("yusi_match_profile")
+                        && source.contains("collectionProperties.getMatchProfile()")),
                 () -> assertTrue(source.contains("yusi:usage:")),
                 () -> assertTrue(source.contains("yusi:violation:count:")),
                  () -> assertTrue(source.contains("yusi:langchain:")),

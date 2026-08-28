@@ -193,7 +193,8 @@ class MatchProfileAssemblerVisibilityTest {
 
     private MatchProfileAssemblerImpl service() {
         return new MatchProfileAssemblerImpl(lifeGraphEntityRepository, midTermMemoryRepository,
-                matchProfileRepository, userPersonaService, userService, milvusClient, embeddingModel);
+                matchProfileRepository, userPersonaService, userService, milvusClient, embeddingModel,
+                new com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties());
     }
 
     private LifeGraphEntity entity(Long id, String name) {

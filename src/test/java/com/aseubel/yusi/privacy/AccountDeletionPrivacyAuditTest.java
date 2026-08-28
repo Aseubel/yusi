@@ -90,6 +90,11 @@ class AccountDeletionPrivacyAuditTest {
         org.mockito.Mockito.when(situationRoomRepository.findByMembersContainingOrderByCreatedAtDesc(TARGET_USER))
                 .thenReturn(List.of());
 
+        io.milvus.v2.client.MilvusClientV2 milvusClientV2 = org.mockito.Mockito.mock(MilvusClientV2.class);
+        org.mockito.Mockito.when(milvusClientV2.getLoadState(
+                        org.mockito.ArgumentMatchers.any(io.milvus.v2.service.collection.request.GetLoadStateReq.class)))
+                .thenReturn(true);
+
         AdminServiceImpl service = new AdminServiceImpl(
                 userRepository,
                 org.mockito.Mockito.mock(DiaryRepository.class),
@@ -100,7 +105,7 @@ class AccountDeletionPrivacyAuditTest {
                 jdbcTemplate,
                 org.mockito.Mockito.mock(TokenService.class),
                 org.mockito.Mockito.mock(IRedisService.class),
-                org.mockito.Mockito.mock(MilvusClientV2.class),
+                milvusClientV2,
                 org.mockito.Mockito.mock(SecurityAuditService.class));
 
         UserContext.setUserId(ADMIN_USER);

@@ -15,6 +15,7 @@ public record ModelRouteParameters(
         Double temperature,
         Double topP,
         Integer maxCompletionTokens,
+        Boolean thinkingEnabled,
         Map<String, Object> customParameters) {
 
     public static final int DEFAULT_OUTPUT_TOKENS = 1024;
@@ -26,8 +27,15 @@ public record ModelRouteParameters(
     }
 
     public static ModelRouteParameters from(RoutePolicyDefinition route) {
+        return from(route, null);
+    }
+
+    /**
+     * @param tierThinkingOverride primary-tier 的思考开关覆盖；null 表示沿用模型级配置。
+     */
+    public static ModelRouteParameters from(RoutePolicyDefinition route, Boolean tierThinkingOverride) {
         if (route == null) {
-            return new ModelRouteParameters(null, null, null, null, null, Map.of());
+            return new ModelRouteParameters(null, null, null, null, null, tierThinkingOverride, Map.of());
         }
         Integer maxOutputTokens = route.getMaxOutputTokens();
         Integer maxCompletionTokens = route.getMaxCompletionTokens();
@@ -40,6 +48,7 @@ public record ModelRouteParameters(
                 route.getTemperature(),
                 route.getTopP(),
                 maxCompletionTokens,
+                tierThinkingOverride,
                 route.getCustomParameters());
     }
 }

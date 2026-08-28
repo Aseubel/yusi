@@ -21,7 +21,7 @@ public record ModelRouteDecision(
         fallbackTiers = fallbackTiers == null ? List.of() : List.copyOf(fallbackTiers);
         candidates = candidates == null ? List.of() : List.copyOf(new ArrayList<>(candidates));
         routeParameters = routeParameters == null
-                ? new ModelRouteParameters(null, null, null, null, null, Map.of())
+                ? new ModelRouteParameters(null, null, null, null, null, null, Map.of())
                 : routeParameters;
         routeReasonDetails = routeReasonDetails == null
                 ? new RouteReason(policyId, 0, 0, 0, primaryTier, fallbackTiers, List.of())

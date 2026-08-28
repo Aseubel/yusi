@@ -339,7 +339,8 @@ class SensitivePayloadLogSafetyTest {
         MatchServiceImpl service = new MatchServiceImpl(userService, soulMatchRepository, diaryRepository,
                 matchProfileAssembler, connectionGuideService, connectionLifecycleService, matchFeedbackService,
                 productEventService, milvusClientV2, embeddingModel, chatModel, promptManager, new ObjectMapper(),
-                threadPoolExecutor, taskExecutionService);
+                threadPoolExecutor, taskExecutionService,
+                new com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties());
         User userA = User.builder().userId("fixture-user-a").userName(NAME_SENTINEL).build();
         User userB = User.builder().userId("fixture-user-b").userName(NAME_SENTINEL).build();
         var profileA = com.aseubel.yusi.pojo.entity.MatchProfile.builder()

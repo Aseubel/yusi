@@ -55,10 +55,14 @@ model:
     models:
       - id: qwen
         provider: dashscope
-        protocol: CHAT_COMPLETIONS
+        protocol: RESPONSES
         baseurl: ${QWEN_BASEURL:https://dashscope.aliyuncs.com/compatible-mode/v1}
         apikey: ${QWEN_APIKEY}
-        model: ${QWEN_MODEL:qwen3.5-flash-2026-02-23}
+        model: ${QWEN_MODEL:qwen3.7-flash-2026-07-15}
+        # DashScope Responses 协议默认仅 1024 输出 tokens，长输出场景会被截断
+        max-output-tokens: ${QWEN_MAX_OUTPUT_TOKENS:8192}
+        # qwen3.x 默认开启思考链；tier 可按场景覆盖（见 tiers.*.thinking-enabled）
+        thinking-enabled: ${QWEN_THINKING_ENABLED:false}
         capabilities: [CHAT, STREAMING_CHAT, VLM]
         weight: 100
         priority: 2
@@ -70,6 +74,8 @@ model:
         baseurl: ${DEEPSEEK_BASEURL:https://api.deepseek.com}
         apikey: ${DEEPSEEK_APIKEY}
         model: ${DEEPSEEK_MODEL:deepseek-v4-flash-vision-exp}
+        # DeepSeek Responses 端点同样存在默认输出上限；严格 API 由客户端剥离不支持字段
+        max-output-tokens: ${DEEPSEEK_MAX_OUTPUT_TOKENS:8192}
         capabilities: [CHAT, STREAMING_CHAT, VLM]
         weight: 100
         priority: 1
@@ -79,7 +85,7 @@ model:
         provider: dashscope
         baseurl: ${DASHSCOPE_ASR_BASEURL:wss://dashscope.aliyuncs.com/api-ws/v1/inference}
         apikey: ${DASHSCOPE_API_KEY:}
-        model: ${DASHSCOPE_ASR_MODEL:paraformer-realtime-v2}
+        model: ${DASHSCOPE_ASR_MODEL:qwen-audio-3.0-asr-flash-streaming}
         timeout-seconds: 120
         capabilities: [STREAMING_SPEECH_TO_TEXT]
     tiers:
@@ -107,6 +113,8 @@ model:
         strategy: FAIL_OVER
         members: [qwen, deepseek]
         capabilities: [CHAT, STREAMING_CHAT]
+        # tier 级思考开关示范：结构化抽取无需推理链，显式关闭以降低延迟
+        thinking-enabled: false
       memory:
         display-name: Memory
         description: Memory extraction and fusion
@@ -168,11 +176,13 @@ model:
         scene: graphrag-extract
         risk-level: LOW
         primary-tier: graph
+        max-output-tokens: ${LLM_GRAPH_MAX_OUTPUT_TOKENS:8192}
         priority: 100
       - id: graphrag-merge-suggest
         scene: graphrag-merge-suggest
         risk-level: LOW
         primary-tier: graph
+        max-output-tokens: ${LLM_GRAPH_MAX_OUTPUT_TOKENS:8192}
         priority: 100
       - id: memory-extract
         scene: memory-extract
@@ -193,6 +203,7 @@ model:
         scene: soul-match-letter
         risk-level: MEDIUM
         primary-tier: match
+        max-output-tokens: ${LLM_LETTER_MAX_OUTPUT_TOKENS:4096}
         priority: 100
       - id: emotion-analysis
         scene: emotion-analysis
@@ -215,6 +226,7 @@ model:
         scene: soul-weekly-report
         risk-level: LOW
         primary-tier: report
+        max-output-tokens: ${LLM_REPORT_MAX_OUTPUT_TOKENS:4096}
         priority: 100
       - id: agent-persona
         scene: agent-persona

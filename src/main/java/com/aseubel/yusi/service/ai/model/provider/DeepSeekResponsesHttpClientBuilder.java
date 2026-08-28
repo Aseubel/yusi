@@ -27,7 +27,10 @@ final class DeepSeekResponsesHttpClientBuilder implements HttpClientBuilder {
             "safety_identifier",
             "prompt_cache_key",
             "prompt_cache_retention",
-            "stream_options");
+            "stream_options",
+            // DashScope 专属思考开关；DeepSeek 按模型区分 reasoning，不接受该字段
+            "enable_thinking",
+            "max_tokens");
 
     private final HttpClientBuilder delegate;
 

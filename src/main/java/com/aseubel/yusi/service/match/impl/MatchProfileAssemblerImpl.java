@@ -36,8 +36,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
 
-    private static final String MATCH_PROFILE_COLLECTION = "yusi_match_profile";
-
     private final LifeGraphEntityRepository lifeGraphEntityRepository;
     private final MidTermMemoryRepository midTermMemoryRepository;
     private final MatchProfileRepository matchProfileRepository;
@@ -45,6 +43,7 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
     private final UserService userService;
     private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
+    private final com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties;
 
     @Override
     @Transactional
@@ -262,7 +261,7 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
         }
         try {
             milvusClientV2.delete(DeleteReq.builder()
-                    .collectionName(MATCH_PROFILE_COLLECTION)
+                    .collectionName(collectionProperties.getMatchProfile())
                     .filter("id == '" + profile.getUserId() + "'")
                     .build());
         } catch (Exception e) {
@@ -286,7 +285,7 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
         row.add("metadata", metadata);
 
         InsertReq insertReq = InsertReq.builder()
-                .collectionName(MATCH_PROFILE_COLLECTION)
+                .collectionName(collectionProperties.getMatchProfile())
                 .data(List.of(row))
                 .build();
         milvusClientV2.insert(insertReq);

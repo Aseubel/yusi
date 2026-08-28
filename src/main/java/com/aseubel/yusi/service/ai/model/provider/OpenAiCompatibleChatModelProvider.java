@@ -46,18 +46,24 @@ public class OpenAiCompatibleChatModelProvider implements ChatModelProviderAdapt
         ModelProtocol protocol = ModelProtocol.normalize(definition.getProtocol());
         String baseUrl = normalizeBaseUrl(definition.getBaseurl(), protocol);
         if (protocol == ModelProtocol.RESPONSES) {
-            OpenAiResponsesChatModel chatModel = OpenAiResponsesChatModel.builder()
+            // DashScope Responses 默认输出上限仅 1024 tokens，GraphRAG 抽取会被截断，必须显式放大
+            Integer maxOutputTokens = definition.getMaxOutputTokens();
+            var chatModelBuilder = OpenAiResponsesChatModel.builder()
                     .httpClientBuilder(httpClientBuilder(timeout, definition))
                     .baseUrl(baseUrl)
                     .apiKey(definition.getApikey())
-                    .modelName(definition.getModel())
-                    .build();
-            OpenAiResponsesStreamingChatModel streamingChatModel = OpenAiResponsesStreamingChatModel.builder()
+                    .modelName(definition.getModel());
+            var streamingBuilder = OpenAiResponsesStreamingChatModel.builder()
                     .httpClientBuilder(httpClientBuilder(timeout, definition))
                     .baseUrl(baseUrl)
                     .apiKey(definition.getApikey())
-                    .modelName(definition.getModel())
-                    .build();
+                    .modelName(definition.getModel());
+            if (maxOutputTokens != null) {
+                chatModelBuilder.maxOutputTokens(maxOutputTokens);
+                streamingBuilder.maxOutputTokens(maxOutputTokens);
+            }
+            OpenAiResponsesChatModel chatModel = chatModelBuilder.build();
+            OpenAiResponsesStreamingChatModel streamingChatModel = streamingBuilder.build();
             return new ProviderClientBundle(providerId(), chatModel, streamingChatModel);
         }
 
@@ -81,9 +87,20 @@ public class OpenAiCompatibleChatModelProvider implements ChatModelProviderAdapt
         dev.langchain4j.http.client.HttpClientBuilder builder = HttpClientBuilderLoader.loadHttpClientBuilder()
                 .connectTimeout(timeout)
                 .readTimeout(timeout);
-        return isDeepSeekResponses(definition)
-                ? new DeepSeekResponsesHttpClientBuilder(builder)
-                : builder;
+        if (definition.getThinkingEnabled() != null || definition.getMaxOutputTokens() != null) {
+            // DeepSeek 过滤器必须包裹在 DashScope 装饰器之外（后执行 sanitize），
+            // 才能剥掉 DashScope 装饰器注入的 enable_thinking/max_tokens；
+            // 反之 patch 发生在 sanitize 之后，严格 API 会收到 DashScope 专属字段。
+            if (isDeepSeekResponses(definition)) {
+                builder = new DashScopeThinkingHttpClientBuilder(
+                        new DeepSeekResponsesHttpClientBuilder(builder),
+                        definition.getThinkingEnabled(), definition.getMaxOutputTokens());
+            } else {
+                builder = new DashScopeThinkingHttpClientBuilder(builder,
+                        definition.getThinkingEnabled(), definition.getMaxOutputTokens());
+            }
+        }
+        return builder;
     }
 
     private boolean isDeepSeekResponses(ModelRoutingProperties.ModelDefinition definition) {

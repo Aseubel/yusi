@@ -54,6 +54,7 @@ public class EmbeddingBatchService {
     private final DiaryChunker diaryChunker;
     private final DiaryService diaryService;
     private final TaskExecutionService taskExecutionService;
+    private final com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties;
 
     /**
      * 每批处理的最大任务数
@@ -202,7 +203,7 @@ public class EmbeddingBatchService {
             for (String id : toRemoveIds) {
                 try {
                     milvusClientV2.delete(DeleteReq.builder()
-                            .collectionName("yusi_embedding_collection")
+                            .collectionName(collectionProperties.getEmbedding())
                             .filter("id like '" + id + "_%'")
                             .build());
                 } catch (Exception e) {
@@ -249,7 +250,7 @@ public class EmbeddingBatchService {
             }
 
             InsertReq insertReq = InsertReq.builder()
-                    .collectionName("yusi_embedding_collection")
+                    .collectionName(collectionProperties.getEmbedding())
                     .data(insertData)
                     .build();
             milvusClientV2.insert(insertReq);
@@ -318,7 +319,7 @@ public class EmbeddingBatchService {
 
     private void deleteEmbeddings(String diaryId) {
         milvusClientV2.delete(DeleteReq.builder()
-                .collectionName("yusi_embedding_collection")
+                .collectionName(collectionProperties.getEmbedding())
                 .filter("id like '" + diaryId + "_%'")
                 .build());
     }
@@ -382,7 +383,7 @@ public class EmbeddingBatchService {
         // 1. 清空 Milvus collection
         try {
             milvusClientV2.delete(DeleteReq.builder()
-                    .collectionName("yusi_embedding_collection")
+                    .collectionName(collectionProperties.getEmbedding())
                     .filter("id != ''")
                     .build());
             log.info("Milvus collection 清空完成");

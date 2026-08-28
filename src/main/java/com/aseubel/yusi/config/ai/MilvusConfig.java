@@ -1,5 +1,6 @@
 package com.aseubel.yusi.config.ai;
 
+import com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties;
 import com.aseubel.yusi.config.ai.properties.MilvusConfigProperties;
 import com.aseubel.yusi.config.ai.properties.EmbeddingModelConfigProperties;
 import io.milvus.v2.client.ConnectConfig;
@@ -28,19 +29,32 @@ import java.util.Collections;
 @EnableConfigurationProperties({ MilvusConfigProperties.class, EmbeddingModelConfigProperties.class })
 public class MilvusConfig {
 
+        private static boolean hasText(String value) {
+                return value != null && !value.isBlank();
+        }
+
         @Bean(name = "milvusClientV2")
         public MilvusClientV2 milvusClientV2(MilvusConfigProperties properties,
-                        EmbeddingModelConfigProperties embeddingProperties) {
+                        EmbeddingModelConfigProperties embeddingProperties,
+                        MilvusCollectionProperties collectionProperties) {
                 var builder = ConnectConfig.builder()
                                 .uri(properties.getUri())
-                                .token(properties.getToken())
-                                .username(properties.getUsername())
-                                .password(properties.getPassword());
+                                .token(properties.getToken());
+                // 无鉴权的本地实例必须省略 username/password，SDK 对非 null 的用户名做非空校验
+                if (hasText(properties.getUsername())) {
+                        builder.username(properties.getUsername());
+                }
+                if (hasText(properties.getPassword())) {
+                        builder.password(properties.getPassword());
+                }
 
                 MilvusClientV2 client = new MilvusClientV2(builder.build());
-                initHybridCollection(client, "yusi_embedding_collection", embeddingProperties.getDimension());
-                initHybridCollection(client, "yusi_mid_term_memory", embeddingProperties.getDimension());
-                initHybridCollection(client, "yusi_match_profile", embeddingProperties.getDimension());
+                initHybridCollection(client, collectionProperties.getEmbedding(),
+                                embeddingProperties.getDimension());
+                initHybridCollection(client, collectionProperties.getMidTermMemory(),
+                                embeddingProperties.getDimension());
+                initHybridCollection(client, collectionProperties.getMatchProfile(),
+                                embeddingProperties.getDimension());
                 return client;
         }
 

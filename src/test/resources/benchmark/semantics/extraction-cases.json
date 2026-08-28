@@ -1,0 +1,91 @@
+{
+  "fixtureVersion": "v2",
+  "note": "全部为虚构合成内容（人名、机构、作品均为杜撰），仅供 Yusi Layer A 认知抽取基准使用。goldRelations 使用 LifeGraphRelationType 英文枚举码与语义方向，且均在 LifeGraphPromotionPolicy 的自动升级边界内：User<->Person 直接关系、重要 Person 的非 Person 属性/事件。",
+  "cases": [
+    {
+      "caseId": "ex-lin-companion",
+      "person": "lin",
+      "userName": "林晚秋",
+      "entryDate": "2026-05-04",
+      "title": "好久没有这么尽兴了",
+      "body": "今天和大学室友叶知秋一起去了城郊新开的恐龙主题展。她说今年艺术市集也会办在公园里，让我别错过。逛完出来她请我吃了一份芒果冰，凉丝丝的特别解暑。回来的公交上我们还约了下个月的陶艺体验课。",
+      "goldEntities": [
+        {"name": "叶知秋", "type": "Person"},
+        {"name": "恐龙主题展", "type": "Event"},
+        {"name": "芒果冰", "type": "Item"},
+        {"name": "陶艺体验课", "type": "Event"}
+      ],
+      "goldRelations": [
+        {"subject": "self", "object": "叶知秋", "type": "FRIEND_OF"},
+        {"subject": "self", "object": "恐龙主题展", "type": "PARTICIPATED_IN"}
+      ]
+    },
+    {
+      "caseId": "ex-chen-colleagues",
+      "person": "chen",
+      "userName": "陈北野",
+      "entryDate": "2026-05-09",
+      "title": "难得的团队聚餐",
+      "body": "部门在新开的川菜馆吃了顿饭，组长方屿给我演示了他一直在用的复盘工具，还建议我这个季度牵头做一次项目总结。散场时雨下得挺大，我和同事赵青禾顺路把加班到最晚的设计师小何送回了家。",
+      "goldEntities": [
+        {"name": "方屿", "type": "Person"},
+        {"name": "赵青禾", "type": "Person"},
+        {"name": "小何", "type": "Person"},
+        {"name": "川菜馆", "type": "Place"}
+      ],
+      "goldRelations": [
+        {"subject": "self", "object": "方屿", "type": "COLLEAGUE_OF"},
+        {"subject": "self", "object": "赵青禾", "type": "COLLEAGUE_OF"},
+        {"subject": "self", "object": "小何", "type": "COLLEAGUE_OF"}
+      ]
+    },
+    {
+      "caseId": "ex-su-book-signing",
+      "person": "su",
+      "userName": "苏晚宁",
+      "entryDate": "2026-05-16",
+      "title": "追星成功的一天",
+      "body": "终于在城市书局见到了喜欢的作者林梦白，《四季便当》这本新书我排了一个半小时的队才拿到签名。她在扉页上画了一只小狗，旁边还放了一沓赠送的枫叶书签。回家的地铁上我读完了前两章。",
+      "goldEntities": [
+        {"name": "林梦白", "type": "Person"},
+        {"name": "四季便当", "type": "Work"},
+        {"name": "城市书局", "type": "Place"}
+      ],
+      "goldRelations": [
+        {"subject": "self", "object": "林梦白", "type": "LIKES"}
+      ]
+    },
+    {
+      "caseId": "ex-zhou-anniversary",
+      "person": "zhou",
+      "userName": "周砚舟",
+      "entryDate": "2026-05-20",
+      "title": "第十个结婚纪念日",
+      "body": "纪念日这天妻子沈疏影带我回了恋爱时常去的江边老渡口。我们把十年来拍的照片挑了二十张冲洗出来，铺满了一整面软木板。晚饭是在巷口那家吃过很多次的小面馆解决的，老板娘还记得我们的口味。",
+      "goldEntities": [
+        {"name": "沈疏影", "type": "Person"},
+        {"name": "老渡口", "type": "Place"},
+        {"name": "小面馆", "type": "Place"}
+      ],
+      "goldRelations": [
+        {"subject": "self", "object": "沈疏影", "type": "PARTNER_OF"},
+        {"subject": "self", "object": "老渡口", "type": "VISITED"}
+      ]
+    },
+    {
+      "caseId": "ex-gu-loan-violin",
+      "person": "gu",
+      "userName": "顾星辞",
+      "entryDate": "2026-05-23",
+      "title": "新的练习伙伴",
+      "body": "弦乐社招新结束后留任的老社长程亦风把他那把松木练习琴借给了我，还说赛前愿意帮我听两次模拟演奏。琴盒里附了一整包备用琴弦，比我自己用的型号粗一号。",
+      "goldEntities": [
+        {"name": "程亦风", "type": "Person"},
+        {"name": "松木练习琴", "type": "Item"}
+      ],
+      "goldRelations": [
+        {"subject": "self", "object": "程亦风", "type": "FRIEND_OF"}
+      ]
+    }
+  ]
+}

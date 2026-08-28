@@ -4,6 +4,8 @@ import com.aseubel.yusi.redis.service.IRedisService;
 import com.aseubel.yusi.service.oss.OssService;
 import com.aseubel.yusi.service.user.TokenService;
 import io.milvus.v2.client.MilvusClientV2;
+import io.milvus.v2.service.collection.request.GetLoadStateReq;
+import io.milvus.v2.service.collection.request.LoadCollectionReq;
 import io.milvus.v2.service.vector.request.DeleteReq;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,37 +26,38 @@ public class DefaultAccountDeletionExternalPort implements AccountDeletionExtern
     private static final String TOTAL_CHUNKS_SUFFIX = ":totalChunks";
     private static final String VIOLATION_KEY_PREFIX = "yusi:violation:count:";
 
-    private static final String EMBEDDING_COLLECTION = "yusi_embedding_collection";
-    private static final String MID_TERM_COLLECTION = "yusi_mid_term_memory";
-    private static final String MATCH_PROFILE_COLLECTION = "yusi_match_profile";
-
     private final MilvusClientV2 milvusClientV2;
     private final IRedisService redisService;
     private final TokenService tokenService;
     private final OssService ossService;
+    private final com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties;
 
     @Autowired
     public DefaultAccountDeletionExternalPort(MilvusClientV2 milvusClientV2,
             IRedisService redisService, TokenService tokenService,
-            ObjectProvider<OssService> ossServiceProvider) {
+            ObjectProvider<OssService> ossServiceProvider,
+            com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties) {
         this(milvusClientV2, redisService, tokenService,
-                ossServiceProvider == null ? null : ossServiceProvider.getIfAvailable());
+                ossServiceProvider == null ? null : ossServiceProvider.getIfAvailable(),
+                collectionProperties);
     }
 
     public DefaultAccountDeletionExternalPort(MilvusClientV2 milvusClientV2,
-            IRedisService redisService, TokenService tokenService, OssService ossService) {
+            IRedisService redisService, TokenService tokenService, OssService ossService,
+            com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties) {
         this.milvusClientV2 = milvusClientV2;
         this.redisService = redisService;
         this.tokenService = tokenService;
         this.ossService = ossService;
+        this.collectionProperties = collectionProperties;
     }
 
     @Override
     public void deleteMilvus(AccountDeletionInventory inventory) {
         String targetUserId = escapeFilterValue(inventory.targetUserId());
-        deleteCollection(EMBEDDING_COLLECTION, "metadata[\"userId\"] == \"" + targetUserId + "\"");
-        deleteCollection(MID_TERM_COLLECTION, "metadata[\"userId\"] == \"" + targetUserId + "\"");
-        deleteCollection(MATCH_PROFILE_COLLECTION,
+        deleteCollection(collectionProperties.getEmbedding(), "metadata[\"userId\"] == \"" + targetUserId + "\"");
+        deleteCollection(collectionProperties.getMidTermMemory(), "metadata[\"userId\"] == \"" + targetUserId + "\"");
+        deleteCollection(collectionProperties.getMatchProfile(),
                 "id == \"" + targetUserId + "\" || metadata[\"userId\"] == \"" + targetUserId + "\"");
     }
 
@@ -137,10 +140,36 @@ public class DefaultAccountDeletionExternalPort implements AccountDeletionExtern
     }
 
     private void deleteCollection(String collectionName, String filter) {
+        ensureCollectionLoaded(collectionName);
         milvusClientV2.delete(DeleteReq.builder()
                 .collectionName(collectionName)
                 .filter(filter)
                 .build());
+    }
+
+    /**
+     * Milvus 空闲会自动释放 collection；删除前确保已加载，否则 delete 抛
+     * "collection not loaded" 导致整个注销流程被判 external_or_database。
+     */
+    private void ensureCollectionLoaded(String collectionName) {
+        GetLoadStateReq stateReq = GetLoadStateReq.builder().collectionName(collectionName).build();
+        try {
+            if (Boolean.TRUE.equals(milvusClientV2.getLoadState(stateReq))) {
+                return;
+            }
+            milvusClientV2.loadCollection(LoadCollectionReq.builder().collectionName(collectionName).build());
+            long deadline = System.currentTimeMillis() + 60_000L;
+            while (System.currentTimeMillis() < deadline) {
+                if (Boolean.TRUE.equals(milvusClientV2.getLoadState(stateReq))) {
+                    return;
+                }
+                Thread.sleep(1_000L);
+            }
+            throw new AccountDeletionFailure("milvus_collection_load_timeout");
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AccountDeletionFailure("milvus_collection_load_interrupted");
+        }
     }
 
     private String escapeFilterValue(String value) {

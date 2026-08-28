@@ -167,7 +167,7 @@ public class ModelProxyFactory {
     private static ChatRequestParameters buildProtocolParameters(ModelProtocol protocol,
             ChatRequestParameters base, ModelRouteParameters routeParameters) {
         ModelRouteParameters parameters = routeParameters == null
-                ? new ModelRouteParameters(null, null, null, null, null, Map.of())
+                ? new ModelRouteParameters(null, null, null, null, null, null, Map.of())
                 : routeParameters;
         Integer maxOutputTokens = parameters.maxOutputTokens();
         if (maxOutputTokens == null) {
@@ -302,6 +302,19 @@ public class ModelProxyFactory {
                         + context.getScene());
             }
 
+            // tier 级思考开关覆盖：整个调用窗口内对 DashScope 装饰器可见（含流式重试）
+            com.aseubel.yusi.service.ai.model.provider.ThinkingRequestContext
+                    .setOverride(decision.routeParameters().thinkingEnabled());
+            try {
+                return invokeCandidates(decision, context, request, method, args, candidates);
+            } finally {
+                com.aseubel.yusi.service.ai.model.provider.ThinkingRequestContext.clear();
+            }
+        }
+
+        private Object invokeCandidates(ModelRouteDecision decision, ModelRouteContext context,
+                ChatRequest request, Method method, Object[] args,
+                List<ModelRouteCandidate> candidates) throws Throwable {
             ModelInvocationException lastError = null;
             int attemptIndex = 0;
             for (int candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {

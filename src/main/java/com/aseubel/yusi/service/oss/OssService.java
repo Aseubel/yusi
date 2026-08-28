@@ -268,7 +268,17 @@ public class OssService {
                 requestBuilder.continuationToken(continuationToken);
             }
 
-            ListObjectsV2Result result = ossClient.listObjectsV2(requestBuilder.build());
+            ListObjectsV2Result result;
+            try {
+                result = ossClient.listObjectsV2(requestBuilder.build());
+            } catch (com.aliyun.sdk.service.oss2.exceptions.OperationException e) {
+                // bucket 不存在时该前缀下必然没有对象，清理语义视为已完成（本地/占位 OSS 场景）
+                if (isNoSuchBucketError(e)) {
+                    log.info("OSS prefix cleanup skipped: operation=oss_delete, category={}, reason=no_such_bucket", kind);
+                    return;
+                }
+                throw e;
+            }
             if (result == null) {
                 throw new BusinessException(ErrorCode.INTERNAL_ERROR, "对象清单为空");
             }
@@ -290,6 +300,17 @@ public class OssService {
                 throw new BusinessException(ErrorCode.INTERNAL_ERROR, "对象清单不完整");
             }
         }
+    }
+
+    /** OSS SDK wraps the remote ServiceException in an OperationException; unwrap to detect NoSuchBucket. */
+    private static boolean isNoSuchBucketError(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof com.aliyun.sdk.service.oss2.exceptions.ServiceException serviceException
+                    && "NoSuchBucket".equals(serviceException.errorCode())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void validateOwnedObjectKeyForDeletion(String objectKey, String userId, OwnedObjectKind kind) {

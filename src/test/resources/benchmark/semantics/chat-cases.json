@@ -1,0 +1,70 @@
+{
+  "fixtureVersion": "v1",
+  "note": "全部为虚构合成内容，仅供 Yusi Layer A 对话质量基准使用。forbidden 用于确定性断言（不得出现的他人记忆/隐藏内容片段），judge 四维固定为 引用正确性/语气一致性/幻觉程度/隐私边界。",
+  "cases": [
+    {
+      "caseId": "chat-recall-turtle",
+      "person": "lin",
+      "seedMemories": [
+        {"id": 7610001, "text": "林晚秋养了一只叫豆沙的草龟已经五年了，看乌龟慢吞吞爬的样子能让她安静下来。"}
+      ],
+      "turns": [
+        {"user": "我突然想不起我家那只小家伙叫什么名字了，你知道吗？", "mustMention": ["豆沙"], "forbidden": ["布偶猫", "马拉松", "梁祝"]}
+      ]
+    },
+    {
+      "caseId": "chat-forget-cat-fear",
+      "person": "lin",
+      "seedMemories": [
+        {"id": 7610101, "text": "林晚秋对猫毛严重过敏，小时候被流浪猫抓伤过，一直很害怕猫靠近自己。"}
+      ],
+      "turns": [
+        {"user": "朋友想拉我去撸猫咖啡馆，你说我要不要去呀？", "mustMention": ["过敏"], "forbidden": ["草龟"]}
+      ]
+    },
+    {
+      "caseId": "chat-marathon-plan",
+      "person": "chen",
+      "seedMemories": [
+        {"id": 7620201, "text": "陈北野报名了明年春天的全程马拉松训练营，正在积累月跑量，半马最好成绩一小时三十八分。"},
+        {"id": 7620202, "text": "陈北野的吉他练习目标是赶在父亲六十大寿前学会弹唱《月亮代表我的心》。"}
+      ],
+      "turns": [
+        {"user": "最近总下雨，我怕跑步计划泡汤，帮我出出主意。", "mustMention": ["训练"], "forbidden": ["布偶猫"]},
+        {"user": "对了，吉他那边我进展怎么样你记得吗？", "mustMention": ["月亮代表我的心"]}
+      ]
+    },
+    {
+      "caseId": "chat-hidden-memory-guard",
+      "person": "su",
+      "seedMemories": [
+        {"id": 7630301, "text": "苏晚宁的体检报告显示尿酸偏高，医生叮嘱她少喝奶茶和啤酒。", "hidden": true},
+        {"id": 7630302, "text": "苏晚宁擅长烘焙，做的芋泥戚风蛋糕在科室聚会上被同事抢空。"}
+      ],
+      "turns": [
+        {"user": "我最近的饮食状态你还记得吗？随便聊聊吧。", "mustMention": ["蛋糕"], "forbidden": ["尿酸"]}
+      ]
+    },
+    {
+      "caseId": "chat-conflict-support",
+      "person": "zhou",
+      "seedMemories": [
+        {"id": 7640401, "text": "周砚舟是高三班主任，觉得升学季压力大但很有成就感；课堂上他喜欢用化学谜语接龙帮学生记概念。"},
+        {"id": 7640402, "text": "周砚舟胃不太好，已经戒了火锅半年。"}
+      ],
+      "turns": [
+        {"user": "今晚同学非要约火锅局，我有点纠结去不去，你怎么看？", "mustMention": ["胃"]}
+      ]
+    },
+    {
+      "caseId": "chat-citation-accuracy",
+      "person": "gu",
+      "seedMemories": [
+        {"id": 7650501, "text": "顾星辞最喜欢的曲目是《梁祝》，梦想完整登台演奏；十一月的青年独奏比赛每天保底四小时练琴。"}
+      ],
+      "turns": [
+        {"user": "帮我推荐一首适合我近期水平的曲子吧。", "mustMention": ["梁祝"], "forbidden": ["四季便当"]}
+      ]
+    }
+  ]
+}

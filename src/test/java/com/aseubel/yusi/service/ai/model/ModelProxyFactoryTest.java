@@ -262,7 +262,7 @@ class ModelProxyFactoryTest {
 
     @Test
     void buildsProtocolSpecificRequestParameters() {
-        var routeParameters = new ModelRouteParameters(128, 128, 0.2D, 0.8D, 96, Map.of());
+        var routeParameters = new ModelRouteParameters(128, 128, 0.2D, 0.8D, 96, null, Map.of());
 
         ChatRequest input = ChatRequest.builder()
                 .messages(List.of(UserMessage.from("hello")))

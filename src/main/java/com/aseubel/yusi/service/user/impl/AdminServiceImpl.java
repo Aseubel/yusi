@@ -90,7 +90,8 @@ public class AdminServiceImpl implements AdminService {
                 redissonService, milvusClientV2, securityAuditService,
                 new AccountDeletionCoordinator(jdbcTemplate,
                         new DefaultAccountDeletionExternalPort(milvusClientV2, redissonService, tokenService,
-                                (com.aseubel.yusi.service.oss.OssService) null),
+                                (com.aseubel.yusi.service.oss.OssService) null,
+                                new com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties()),
                         securityAuditService));
     }
 

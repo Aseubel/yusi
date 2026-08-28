@@ -52,12 +52,14 @@ public class DiarySearchTool {
     private final UserRepository userRepository;
     private final DiaryRetrievalAssembler retrievalAssembler;
     private final YusiMetrics metrics;
+    private final com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties;
 
     public DiarySearchTool(MilvusClientV2 milvusClientV2,
             EmbeddingModel embeddingModel,
             UserRepository userRepository,
             DiaryRetrievalAssembler retrievalAssembler) {
-        this(milvusClientV2, embeddingModel, userRepository, retrievalAssembler, null);
+        this(milvusClientV2, embeddingModel, userRepository, retrievalAssembler, null,
+                new com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties());
     }
 
     @Autowired
@@ -65,12 +67,14 @@ public class DiarySearchTool {
             EmbeddingModel embeddingModel,
             UserRepository userRepository,
             DiaryRetrievalAssembler retrievalAssembler,
-            YusiMetrics metrics) {
+            YusiMetrics metrics,
+            com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties) {
         this.milvusClientV2 = milvusClientV2;
         this.embeddingModel = embeddingModel;
         this.userRepository = userRepository;
         this.retrievalAssembler = retrievalAssembler;
         this.metrics = metrics;
+        this.collectionProperties = collectionProperties;
     }
 
     /**
@@ -169,7 +173,7 @@ public class DiarySearchTool {
 
             // 3. 构建混合搜索请求
             HybridSearchReq hybridSearchReq = HybridSearchReq.builder()
-                    .collectionName("yusi_embedding_collection")
+                    .collectionName(collectionProperties.getEmbedding())
                     .searchRequests(Arrays.asList(denseReq, sparseReq))
                     .ranker(RRFRanker.builder().k(60).build()) // RRF重排序，60为常用的平滑参数k
                     .limit(20)

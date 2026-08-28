@@ -35,22 +35,26 @@ public class MidTermMemorySearchService {
     private final EmbeddingModel embeddingModel;
     private final MidTermMemoryRepository midTermMemoryRepository;
     private final YusiMetrics metrics;
+    private final com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties;
 
     public MidTermMemorySearchService(MilvusClientV2 milvusClientV2,
             EmbeddingModel embeddingModel,
             MidTermMemoryRepository midTermMemoryRepository) {
-        this(milvusClientV2, embeddingModel, midTermMemoryRepository, null);
+        this(milvusClientV2, embeddingModel, midTermMemoryRepository, null,
+                new com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties());
     }
 
     @Autowired
     public MidTermMemorySearchService(MilvusClientV2 milvusClientV2,
             EmbeddingModel embeddingModel,
             MidTermMemoryRepository midTermMemoryRepository,
-            YusiMetrics metrics) {
+            YusiMetrics metrics,
+            com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties) {
         this.milvusClientV2 = milvusClientV2;
         this.embeddingModel = embeddingModel;
         this.midTermMemoryRepository = midTermMemoryRepository;
         this.metrics = metrics;
+        this.collectionProperties = collectionProperties;
     }
 
     /**
@@ -92,7 +96,7 @@ public class MidTermMemorySearchService {
 
             // 3. 构建混合搜索请求
             HybridSearchReq hybridSearchReq = HybridSearchReq.builder()
-                    .collectionName("yusi_mid_term_memory")
+                    .collectionName(collectionProperties.getMidTermMemory())
                     .searchRequests(Arrays.asList(denseReq, sparseReq))
                     .ranker(RRFRanker.builder().k(60).build()) // RRF重排序，60为常用的平滑参数k
                     .limit(Math.max(topK * 3, topK)) // 过滤隐藏/过期记忆后仍尽量填满结果

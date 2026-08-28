@@ -4,6 +4,7 @@ import com.aseubel.yusi.redis.common.RedisKey;
 import com.aseubel.yusi.service.ai.model.ModelCapability;
 import com.aseubel.yusi.service.ai.model.ModelProtocol;
 import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -73,6 +74,25 @@ public class ModelRoutingProperties {
         private Integer contextWindowTokens;
 
         private PricingDefinition pricing = new PricingDefinition();
+
+        /**
+         * 思考模式开关：false 时由 provider 层向 DashScope 兼容请求注入 enable_thinking=false，
+         * 关闭 qwen3.x 默认开启的思考链（显著降低延迟、judge 类调用无需推理）。
+         * null 表示不干预，走服务端默认行为。
+         */
+        private Boolean thinkingEnabled;
+
+        /**
+         * 单次输出上限。DashScope Responses 协议默认仅 1024 tokens，GraphRAG 抽取等长输出场景
+         * 会被截断（finish_reason=LENGTH）导致 JSON 解析失败；必须显式放大。
+         */
+        private Integer maxOutputTokens;
+
+        /** 派生便捷判断，非持久化字段；序列化只走 thinkingEnabled。 */
+        @JsonIgnore
+        public boolean isThinkingDisabled() {
+            return Boolean.FALSE.equals(thinkingEnabled);
+        }
 
         public boolean supports(ModelCapability capability) {
             if (capabilities == null || capabilities.isEmpty()) {

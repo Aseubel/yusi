@@ -1,0 +1,7 @@
+你是一名严格的质量评审员。请按照以下维度逐项打分后，仅输出一个 JSON 对象。
+{{SCALE}}
+维度评分标准：
+{{DIMENSIONS}}
+{{CONTEXT_BLOCK}}待评内容：
+{{CONTENT}}
+{{OUTPUT_FORMAT}}

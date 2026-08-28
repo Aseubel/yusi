@@ -134,7 +134,8 @@ public class AccountDeletionCoordinator {
         } catch (Exception exception) {
             releaseUsageSuppression(targetUserId, usageSuppressionAttempted);
             markRetry(request, "external_or_database");
-            log.warn("Account deletion pending retry: operation=account_delete, failureCategory=external_or_database");
+            log.warn("Account deletion pending retry: operation=account_delete, failureCategory=external_or_database",
+                    exception);
             return DeletionResult.pendingRetry(requestId, "external_or_database");
         }
     }

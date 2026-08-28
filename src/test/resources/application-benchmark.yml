@@ -1,0 +1,59 @@
+# Yusi Benchmark profile：与 dev 叠加使用（@ActiveProfiles({"dev", "benchmark"})）。
+# 仅覆盖需要偏离 dev 的键：数据源、Milvus 隔离集合、以及为缺少本机环境变量时提供的兜底值。
+# 真实模型凭据仍通过 CHAT_MODEL_* / EMBEDDING_MODEL_* 环境变量注入（无则运行期诚实失败并写入记分卡）。
+
+spring:
+  datasource:
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    url: ${YUSI_BENCHMARK_DATASOURCE_URL:jdbc:mysql://127.0.0.1:3306/yusi?useUnicode=true&characterEncoding=utf8&autoReconnect=true&zeroDateTimeBehavior=convertToNull&serverTimezone=UTC&useSSL=true}
+  jpa:
+    show-sql: false
+
+# 覆盖 dev 的 gRPC server 固定 9090：benchmark 随机端口，避免与本地服务/残留 JVM 冲突
+grpc:
+  server:
+    port: 0
+
+milvus:
+  uri: ${MILVUS_URI:http://127.0.0.1:19530}
+  token: ${MILVUS_TOKEN:}
+  host: ${MILVUS_HOST:127.0.0.1}
+  port: ${MILVUS_PORT:19530}
+  username: ${MILVUS_USERNAME:}
+  password: ${MILVUS_PASSWORD:}
+
+yusi:
+  benchmark:
+    scorecard:
+      # 统一记分卡 overallScore 权重（可配置，不写死）；
+      # 与五个 layer 的 aggregateScores 键一致，缺失/不归一/覆盖不全时拒绝合成总分并注明原因
+      weights:
+        retrieval: 0.25
+        extraction: 0.20
+        chat: 0.25
+        match: 0.15
+        e2e: 0.15
+  milvus:
+    collections:
+      # benchmark 专用隔离集合，跑完由 BenchmarkDataGuard drop
+      embedding: ${YUSI_BENCHMARK_MILVUS_EMBEDDING_COLLECTION:yusi_benchmark_embedding_collection}
+      mid-term-memory: ${YUSI_BENCHMARK_MILVUS_MID_TERM_COLLECTION:yusi_benchmark_mid_term_memory}
+      match-profile: ${YUSI_BENCHMARK_MILVUS_MATCH_PROFILE_COLLECTION:yusi_benchmark_match_profile}
+  jwt:
+    secret: ${YUSI_JWT_SECRET:benchmark-only-yusi-jwt-secret-32-bytes-long}
+  security:
+    crypto:
+      server-aes-key-base64: ${YUSI_ENCRYPTION_KEY:MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=}
+      backup-rsa-public-key-spki-base64: ${YUSI_BACKUP_RSA_PUBLIC_KEY_SPKI_BASE64:MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxfHlQfD7lbq9nnAeBYCWcryHDdFR41sfjRLnDB9gE4+q5YVXNMP0FS5xkz4qLns1W++6NQXf3yNZkGSkeAOvX22LrFgqHG1tCWNU1EB38hke14FTwULLv3ll6cuEajmYDYKc+4n2JCgx/pcd0r4Btvm4d6p0E63/m9+RCdGrnEjiyH6/xQQtxwbzzDR4BN8yEsTShYC/wuXVdNdgc91K0hmGyntzqEVoIWy0xgkTu+tv83Vi62djSWqhQuMOOzD55UefmqzkQfpDN0xIkY/J28EqKWN85h+MmXUnZGAMTY6e4CCx013Ms33RXkYJiMTigDeesLgdxEDo4dWb7FHhYwIDAQAB}
+      backup-rsa-private-key-pkcs8-base64: ${YUSI_BACKUP_RSA_PRIVATE_KEY_PKCS8_BASE64:MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDF8eVB8PuVur2ecB4FgJZyvIcN0VHjWx+NEucMH2ATj6rlhVc0w/QVLnGTPiouezVb77o1Bd/fI1mQZKR4A69fbYusWCocbW0JY1TUQHfyGR7XgVPBQsu/eWXpy4RqOZgNgpz7ifYkKDH+lx3SvgG2+bh3qnQTrf+b35EJ0aucSOLIfr/FBC3HBvPMNHgE3zISxNKFgL/C5dV012Bz3UrSGYbKe3OoRWghbLTGCRO762/zdWLrZ2NJaqFC4w47MPnlR5+arORB+kM3TEiRj8nbwSopY3zmH4yZdSdkYAxNjp7gILHTXcyzfdFeRgmIxOKAN56wuB3EQOjh1ZvsUeFjAgMBAAECggEAARFC/ZWwgdzI4IQzrMXNr4ofFBZZlnZl7DenwppjEF2WcLDFCQgLIduFUUV7m1Zxk7CjBZnxGMNrVO5bp4RhVbl2rmqJafN6ShucquhZYuJ7Fq9cUto9mHK8ym0GiF0Nu+qQZa6e5LXYbUpVNeW44VnWc2kaQX8HpwS1nld3WL0aX/JXBgIXFl132Pd/iZTC8XLqjI0b5CM40IRqmje0G1DyCau4XlqHBE8+Q6N3Ttka2zLg0xtNklaxwbrV9aJg4YDXwWch22AiynlxjxwiWEHkuu7p87KoFhk+uqS3X66hdmFvzkb1fblsCGW/VgJBqjEAvW/Sau5gk8CICw1mwQKBgQD/zY5ggjgKURfpSem03JpoCjIwTwYzoWZtTfNwa3yJetCAVjHCU9GhCZ0MJiTFQpdMhdPsXxwarh9Fmx12XppqYctfWXPki8aKQCD++KYQgnwiFvFOGKCXq8KShDZ4yeTiCYg+27e75IYbZxKwy9Y4HpYAwHwIul+TdRozT3/NrwKBgQDGGO4M22Ldl3LkcQpP1xfsvGcsUErYRDpe93gBYmdsUevWMxmD2rS+u1RxBObxyHRPWiMmiaUgC8Mbmo9HEuJJ47pm2g9vv6qnZO7B3hP2QLlodAZV0PmotNQ9hWEKtCZaGmAnf99UqOUNnfbdAVFqe6am6KtQZwvJ045j+KnojQKBgGnWtw4fUuiR3P7dYiE/FXPupA1w5PP/181p70uYbZLEifhPsY7h915WB/C654PmpYs35BNs1sgDO1UldO9A/Ur+45K0BEuPuboCBqT4ZF14X7wLGhRiBDA9FOhiY9deUaFkqEa5yi+nwgUchJM6A4x8uzvcaHWEB3+PeCO6xPppAoGAJtdohZjWj8BMRMJtVS5FgKOIT0YHBtSJ5Wj8XLkgsjp11W/7hsDxQ5yTd/2QEsRNGeoAjmPavqfPv6/UfAkV2YsPV29WK4EXQu8laVnT7CrQr8xgGZ959DxQiSeH2YNtKamWROhrr7vV/Y+FgdvqTMil6oAgZwltZEtY1f1Bw1kCgYBaXy6r7eHcF2Q6OPy8f4yMThhFPvE5f88a8l7uz/lCvkCKv+/8sywbMmdaa99fZPz3zPM+E5VXtmAcIf437YB3DNIBWKszb6GpXXF5wwiceFLnNzWSwj9DkAqMcIcDtfATMPb/kjYCcqfg6NNLQ2s5p5pdtvbmkGAMUcJ50pg2oQ==}
+  oss:
+    domain: ${YUSI_OSS_DOMAIN:}
+    region: ${YUSI_OSS_REGION:cn-hangzhou}
+    bucket-name: ${YUSI_OSS_BUCKET_NAME:}
+    endpoint: ${YUSI_OSS_ENDPOINT:oss-cn-hangzhou.aliyuncs.com}
+    access-key-id: ${YUSI_OSS_ACCESS_KEY_ID:}
+    access-key-secret: ${YUSI_OSS_ACCESS_KEY_SECRET:}
+
+amap:
+  key: ${AMAP_API_KEY:}
