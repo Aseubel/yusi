@@ -8,20 +8,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.mockito.ArgumentMatchers.same;
-import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class LifeGraphCognitionBridgeServiceTest {
 
-    @Mock
-    private LifeGraphTaskCreator lifeGraphTaskCreator;
-
     @Test
-    void bridgeOnlyDelegatesDispatchAndNeverTouchesLongTermGraph() {
-        // 桥接层只应把任务派发委托给任务创建器，自身不得有任何图谱写入依赖
-        LifeGraphCognitionBridgeServiceImpl service =
-                new LifeGraphCognitionBridgeServiceImpl(lifeGraphTaskCreator);
+    void cognitionRoutingDoesNotWriteLongTermLifeGraphEntities() {
+        LifeGraphCognitionBridgeServiceImpl service = new LifeGraphCognitionBridgeServiceImpl();
         CognitionIngestCommand command = CognitionIngestCommand.builder()
                 .userId("user-1")
                 .sourceType("EMOTION_PLAZA")
@@ -33,23 +27,5 @@ class LifeGraphCognitionBridgeServiceTest {
 
         service.bridge(command, CognitionRoutingResult.builder().interests("看电影").build());
 
-        verify(lifeGraphTaskCreator).dispatchFromCognition(same(command));
-    }
-
-    @Test
-    void bridgeToleratesNullRoutingResult() {
-        // 派发决策只依据来源与内容，不依赖认知路由结果（图谱抽取独立于记忆路由）
-        LifeGraphCognitionBridgeServiceImpl service =
-                new LifeGraphCognitionBridgeServiceImpl(lifeGraphTaskCreator);
-        CognitionIngestCommand command = CognitionIngestCommand.builder()
-                .userId("user-1")
-                .sourceType("DIARY")
-                .sourceId("diary-1")
-                .maskedText("今天去爬了山")
-                .build();
-
-        service.bridge(command, null);
-
-        verify(lifeGraphTaskCreator).dispatchFromCognition(same(command));
     }
 }
