@@ -44,3 +44,6 @@ yusi_prod.env
 .lapis-cv
 tmp/
 .worktrees/
+
+### 简历工作区（含字体等大文件，不入库） ###
+resumes/
