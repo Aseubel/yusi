@@ -112,7 +112,6 @@ public class LifeGraphLifecycleService {
                 .entities(items)
                 .activeCount(items.stream().filter(item -> LifecycleStatus.ACTIVE.code().equals(item.getLifecycleStatus())).count())
                 .hiddenCount(items.stream().filter(item -> LifecycleStatus.HIDDEN.code().equals(item.getLifecycleStatus())).count())
-                .expiredCount(items.stream().filter(item -> LifecycleStatus.EXPIRED.code().equals(item.getLifecycleStatus())).count())
                 .matchableCount(items.stream()
                         .filter(item -> LifecycleStatus.ACTIVE.code().equals(item.getLifecycleStatus())
                                 && Boolean.TRUE.equals(item.getMatchAllowed()))
@@ -139,16 +138,6 @@ public class LifeGraphLifecycleService {
         if (request.getHidden() != null
                 && !request.getHidden().equals(Boolean.TRUE.equals(entity.getHidden()))) {
             entity.setHidden(request.getHidden());
-            scopeChanged = true;
-        }
-        if (Boolean.TRUE.equals(request.getClearValidUntil())) {
-            if (entity.getValidUntil() != null) {
-                entity.setValidUntil(null);
-                scopeChanged = true;
-            }
-        } else if (request.getValidUntil() != null
-                && !request.getValidUntil().equals(entity.getValidUntil())) {
-            entity.setValidUntil(request.getValidUntil());
             scopeChanged = true;
         }
 
@@ -221,14 +210,8 @@ public class LifeGraphLifecycleService {
 
     private LifeGraphMemoryItem toItem(String userId, LifeGraphEntity entity, LocalDateTime now,
             RelationProjectionContext relationContext) {
-        String lifecycleStatus;
-        if (Boolean.TRUE.equals(entity.getHidden())) {
-            lifecycleStatus = LifecycleStatus.HIDDEN.code();
-        } else if (entity.getValidUntil() != null && !entity.getValidUntil().isAfter(now)) {
-            lifecycleStatus = LifecycleStatus.EXPIRED.code();
-        } else {
-            lifecycleStatus = LifecycleStatus.ACTIVE.code();
-        }
+        String lifecycleStatus = Boolean.TRUE.equals(entity.getHidden())
+                ? LifecycleStatus.HIDDEN.code() : LifecycleStatus.ACTIVE.code();
 
         Map<String, LifeGraphSourceItem> sourceMap = new LinkedHashMap<>();
         for (LifeGraphEntityEvidence evidence : entityEvidenceRepository
@@ -259,7 +242,6 @@ public class LifeGraphLifecycleService {
                 .relationOrigin(relation == null ? null : relation.relationOrigin())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
-                .validUntil(entity.getValidUntil())
                 .matchAllowed(Boolean.TRUE.equals(entity.getMatchAllowed()))
                 .hidden(Boolean.TRUE.equals(entity.getHidden()))
                 .lifecycleStatus(lifecycleStatus)

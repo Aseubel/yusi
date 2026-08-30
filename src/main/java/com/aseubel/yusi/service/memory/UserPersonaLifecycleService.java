@@ -86,16 +86,6 @@ public class UserPersonaLifecycleService {
             persona.setHidden(request.getHidden());
             lifecycleChanged = true;
         }
-        if (Boolean.TRUE.equals(request.getClearValidUntil())) {
-            if (persona.getValidUntil() != null) {
-                persona.setValidUntil(null);
-                lifecycleChanged = true;
-            }
-        } else if (request.getValidUntil() != null
-                && !request.getValidUntil().equals(persona.getValidUntil())) {
-            persona.setValidUntil(request.getValidUntil());
-            lifecycleChanged = true;
-        }
 
         if (contentChanged) {
             persona.setSourceType(SourceType.USER_EDIT.code());
@@ -195,14 +185,8 @@ public class UserPersonaLifecycleService {
     }
 
     private PersonaMemoryItem toItem(UserPersona persona, LocalDateTime now) {
-        String lifecycleStatus;
-        if (Boolean.TRUE.equals(persona.getHidden())) {
-            lifecycleStatus = LifecycleStatus.HIDDEN.code();
-        } else if (persona.getValidUntil() != null && !persona.getValidUntil().isAfter(now)) {
-            lifecycleStatus = LifecycleStatus.EXPIRED.code();
-        } else {
-            lifecycleStatus = LifecycleStatus.ACTIVE.code();
-        }
+        String lifecycleStatus = Boolean.TRUE.equals(persona.getHidden())
+                ? LifecycleStatus.HIDDEN.code() : LifecycleStatus.ACTIVE.code();
 
         return PersonaMemoryItem.builder()
                 .id(persona.getId())
@@ -216,7 +200,6 @@ public class UserPersonaLifecycleService {
                 .confidence(persona.getConfidence() == null ? 0.5 : persona.getConfidence())
                 .createdAt(persona.getCreatedAt())
                 .updatedAt(persona.getUpdatedAt())
-                .validUntil(persona.getValidUntil())
                 .matchAllowed(Boolean.TRUE.equals(persona.getMatchAllowed()))
                 .hidden(Boolean.TRUE.equals(persona.getHidden()))
                 .lifecycleStatus(lifecycleStatus)

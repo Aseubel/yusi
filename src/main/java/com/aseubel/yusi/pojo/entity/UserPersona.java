@@ -106,12 +106,6 @@ public class UserPersona {
     @Builder.Default
     private Boolean hidden = false;
 
-    /**
-     * 有效期截止时间。
-     */
-    @Column(name = "valid_until")
-    private LocalDateTime validUntil;
-
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

@@ -16,6 +16,5 @@ public class LifeGraphMemoryResponse {
     private List<LifeGraphMemoryItem> entities;
     private long activeCount;
     private long hiddenCount;
-    private long expiredCount;
     private long matchableCount;
 }

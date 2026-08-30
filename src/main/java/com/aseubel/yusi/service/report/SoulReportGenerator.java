@@ -214,7 +214,7 @@ public class SoulReportGenerator {
 
         // 2. 中期记忆摘要（近期状态）
         List<MidTermMemory> memories = midTermMemoryRepository
-                .findValidByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 5));
+                .findValidByUserId(userId, PageRequest.of(0, 5));
         if (!memories.isEmpty()) {
             ctx.append("\n近期状态洞察：\n");
             for (MidTermMemory m : memories) {

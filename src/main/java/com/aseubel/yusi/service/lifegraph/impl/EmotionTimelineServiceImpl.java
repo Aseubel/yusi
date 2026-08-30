@@ -94,7 +94,7 @@ public class EmotionTimelineServiceImpl implements EmotionTimelineService {
     @Override
     public List<EmotionTimeline.EmotionTrigger> getEmotionTriggers(String userId, int limit) {
         List<LifeGraphEntity> emotionEntities = entityRepository.findAllVisibleByUserIdAndType(
-                userId, LifeGraphEntity.EntityType.Emotion, LocalDateTime.now());
+                userId, LifeGraphEntity.EntityType.Emotion);
 
         if (emotionEntities.isEmpty()) {
             return Collections.emptyList();
@@ -102,7 +102,6 @@ public class EmotionTimelineServiceImpl implements EmotionTimelineService {
 
         List<LifeGraphEntity> allEntities = entityRepository.findVisibleByUserId(
                 userId,
-                LocalDateTime.now(),
                 PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "mentionCount")))
                 .getContent();
         Map<Long, LifeGraphEntity> entityMap = allEntities.stream()

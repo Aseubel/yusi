@@ -32,7 +32,6 @@ public class CommunityInsightServiceImpl implements CommunityInsightService {
     public List<CommunityInsight> detectCommunities(String userId) {
         List<LifeGraphEntity> entities = entityRepository.findVisibleByUserId(
                 userId,
-                LocalDateTime.now(),
                 PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "mentionCount")))
                 .getContent();
         if (entities.size() < MIN_COMMUNITY_SIZE) {

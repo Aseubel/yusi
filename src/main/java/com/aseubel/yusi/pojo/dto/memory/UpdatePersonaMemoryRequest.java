@@ -1,12 +1,10 @@
 package com.aseubel.yusi.pojo.dto.memory;
 
-import com.fasterxml.jackson.annotation.JsonFormat;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 /** 稳定画像的用户微调请求。未提供的字段保持原值。 */
@@ -34,12 +32,6 @@ public class UpdatePersonaMemoryRequest {
 
     private Boolean matchAllowed;
     private Boolean hidden;
-
-    @JsonFormat(pattern = "yyyy-MM-dd'T'HH:mm:ss")
-    private LocalDateTime validUntil;
-
-    /** 允许用户将有效期恢复为永不过期。 */
-    private Boolean clearValidUntil;
 
     /** 要清空的 Persona 内容字段名。 */
     private List<String> clearFields;

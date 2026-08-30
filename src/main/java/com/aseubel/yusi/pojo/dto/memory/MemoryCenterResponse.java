@@ -16,6 +16,6 @@ public class MemoryCenterResponse {
     private List<MemoryCenterItem> memories;
     private long activeCount;
     private long hiddenCount;
-    private long expiredCount;
+    private long forgottenCount;
     private long matchableCount;
 }

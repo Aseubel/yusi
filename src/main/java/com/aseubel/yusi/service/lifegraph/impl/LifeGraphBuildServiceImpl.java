@@ -739,7 +739,7 @@ public class LifeGraphBuildServiceImpl implements LifeGraphBuildService {
 
     private String buildKnownEntities(String userId) {
         List<LifeGraphEntity> topEntities = entityRepository.findVisibleByUserId(
-                userId, LocalDateTime.now(),
+                userId,
                 PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "mentionCount"))).getContent();
         Set<Long> visibleIds = topEntities.stream().map(LifeGraphEntity::getId).collect(Collectors.toSet());
         Map<Long, List<LifeGraphEntityAlias>> aliases = new HashMap<>();

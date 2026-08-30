@@ -16,6 +16,7 @@ import com.aseubel.yusi.repository.UserRepository;
 import com.aseubel.yusi.service.ai.prompt.PromptManager;
 import com.aseubel.yusi.service.ai.model.ModelTokenEstimator;
 import com.aseubel.yusi.service.cognition.CognitiveConflictDetector;
+import com.aseubel.yusi.service.memory.MemoryDecayService;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -80,6 +81,7 @@ public class ContextBuilderService {
     private final UserPersonaService userPersonaService;
     private final AgentPersonaConfigRepository agentPersonaConfigRepository;
     private final MidTermMemoryRepository midTermMemoryRepository;
+    private final MemoryDecayService memoryDecayService;
     private final CognitiveConflictDetector conflictDetector;
     private final ObjectMapper objectMapper;
     private final MemoryConfigProperties memoryConfigProperties;
@@ -252,14 +254,18 @@ public class ContextBuilderService {
      */
     private String injectMidMemoryContext(String userId) {
         List<MidTermMemory> recentMemories = midTermMemoryRepository
-                .findValidByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 10));
+                .findValidByUserId(userId, PageRequest.of(0, 10)).stream()
+                // 懒遗忘：满足"低初始重要性 + 衰减后低于阈值"的记忆落库标记并过滤
+                .filter(memory -> !memoryDecayService.checkAndMarkForgotten(memory))
+                .toList();
         if (recentMemories.isEmpty()) {
             return "";
         }
 
-        // Apply soft decay sorting
+        // 半衰期软衰减排序：旧记忆权重自然下沉，但不会被硬过滤
         List<MidTermMemory> sortedMemories = recentMemories.stream()
-                .sorted((a, b) -> Double.compare(calculateDecayedImportance(b), calculateDecayedImportance(a)))
+                .sorted((a, b) -> Double.compare(
+                        memoryDecayService.effectiveImportance(b), memoryDecayService.effectiveImportance(a)))
                 .limit(3)
                 .collect(Collectors.toList());
 
@@ -272,7 +278,9 @@ public class ContextBuilderService {
             if (StrUtil.isBlank(summary)) {
                 continue;
             }
-            double decayedImp = calculateDecayedImportance(memory);
+            // 注入上下文即视为"被想起"：强化记忆并重置衰减时钟
+            memoryDecayService.reinforce(memory);
+            double decayedImp = memoryDecayService.effectiveImportance(memory);
             memories.append("        ").append("<recent_insight importance=\"")
                     .append(String.format("%.2f", decayedImp))
                     .append("\">").append(summary).append("</recent_insight>").append("\n");
@@ -284,19 +292,6 @@ public class ContextBuilderService {
         sb.append("    ").append(MID_MEMORY_START).append("\n").append(memories);
         sb.append("    ").append(MID_MEMORY_END).append("\n");
         return sb.toString();
-    }
-
-    private double calculateDecayedImportance(MidTermMemory memory) {
-        double importance = memory.getImportance() != null ? memory.getImportance() : 0.5;
-        if (memory.getCreatedAt() == null) {
-            return importance;
-        }
-        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(memory.getCreatedAt(), LocalDateTime.now());
-        if (daysBetween <= 0) {
-            return importance;
-        }
-        // 14-day half-life soft decay
-        return importance * Math.pow(0.5, (double) daysBetween / 14.0);
     }
 
     /**

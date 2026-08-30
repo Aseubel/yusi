@@ -84,7 +84,7 @@ public class MidMemoryFusionService {
      * 融合指定用户的记忆。返回合并的对数。
      */
     public int fuseUserMemories(String userId) {
-        List<MidTermMemory> entries = memoryRepository.findUnmergedByUserId(userId, LocalDateTime.now());
+        List<MidTermMemory> entries = memoryRepository.findUnmergedByUserId(userId);
         if (entries.size() < MIN_ENTRIES_TO_FUSE) {
             return 0;
         }
@@ -161,11 +161,10 @@ public class MidMemoryFusionService {
                 String conflictAction = result.has("conflictAction")
                         ? result.get("conflictAction").asText() : MidMemoryConflictAction.NONE.code();
                 if (MidMemoryConflictAction.OVERWRITE_B.code().equalsIgnoreCase(conflictAction)) {
-                    // Make the older memory b expire immediately
-                    b.setValidUntil(LocalDateTime.now());
+                    // 旧记忆 b 直接标记为被 a 吞并，消费侧按 mergedIntoId 过滤
                     b.setMergedIntoId(a.getId());
                     memoryRepository.save(b);
-                    log.info("Mid-memory conflict overwrite: userId={}, keeperMemoryId={}, expiredMemoryId={}, conflictAction=OVERWRITE_B",
+                    log.info("Mid-memory conflict overwrite: userId={}, keeperMemoryId={}, mergedMemoryId={}, conflictAction=OVERWRITE_B",
                             userId, a.getId(), b.getId());
                     return true;
                 }

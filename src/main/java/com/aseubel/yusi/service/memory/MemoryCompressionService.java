@@ -186,7 +186,7 @@ public class MemoryCompressionService {
 
         // 获取此用户最近一次的中期记忆摘要
         List<MidTermMemory> previousMemories = midTermMemoryRepository.findAvailableByUserId(memoryId,
-                LocalDateTime.now(), PageRequest.of(0, 1));
+                PageRequest.of(0, 1));
         String previousSummary = "";
         if (CollUtil.isNotEmpty(previousMemories)) {
             previousSummary = previousMemories.get(0).getSummary();
@@ -261,12 +261,14 @@ public class MemoryCompressionService {
                 .sourceType(SourceType.CHAT_SUMMARY.code())
                 .summary(summaryText)
                 .importance(1.0)
+                // 压缩摘要初始重要性拉满，衰减时钟从创建时刻开始
+                .initialImportance(1.0)
+                .lastReinforcedAt(now)
                 .confidence(1.0)
                 .matchAllowed(false)
                 .hidden(false)
                 .createdAt(now)
                 .updatedAt(now)
-                .validUntil(now.plusDays(30))
                 .build();
         activeMemory = midTermMemoryRepository.save(activeMemory);
         activeMemory.setSourceId(String.valueOf(activeMemory.getId()));

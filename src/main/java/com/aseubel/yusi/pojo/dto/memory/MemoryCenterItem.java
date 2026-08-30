@@ -23,7 +23,6 @@ public class MemoryCenterItem {
     private String sourceTitle;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private LocalDateTime validUntil;
     private Long mergedIntoId;
     private Boolean matchAllowed;
     private Boolean hidden;

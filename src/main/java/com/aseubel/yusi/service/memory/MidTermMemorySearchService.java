@@ -17,11 +17,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.time.LocalDateTime;
 import java.util.stream.Collectors;
 
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
@@ -34,13 +34,14 @@ public class MidTermMemorySearchService {
     private final MilvusClientV2 milvusClientV2;
     private final EmbeddingModel embeddingModel;
     private final MidTermMemoryRepository midTermMemoryRepository;
+    private final MemoryDecayService memoryDecayService;
     private final YusiMetrics metrics;
     private final com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties;
 
     public MidTermMemorySearchService(MilvusClientV2 milvusClientV2,
             EmbeddingModel embeddingModel,
             MidTermMemoryRepository midTermMemoryRepository) {
-        this(milvusClientV2, embeddingModel, midTermMemoryRepository, null,
+        this(milvusClientV2, embeddingModel, midTermMemoryRepository, null, null,
                 new com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties());
     }
 
@@ -48,11 +49,13 @@ public class MidTermMemorySearchService {
     public MidTermMemorySearchService(MilvusClientV2 milvusClientV2,
             EmbeddingModel embeddingModel,
             MidTermMemoryRepository midTermMemoryRepository,
+            MemoryDecayService memoryDecayService,
             YusiMetrics metrics,
             com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties collectionProperties) {
         this.milvusClientV2 = milvusClientV2;
         this.embeddingModel = embeddingModel;
         this.midTermMemoryRepository = midTermMemoryRepository;
+        this.memoryDecayService = memoryDecayService;
         this.metrics = metrics;
         this.collectionProperties = collectionProperties;
     }
@@ -113,16 +116,26 @@ public class MidTermMemorySearchService {
                 return Collections.emptyList();
             }
 
-            LocalDateTime now = LocalDateTime.now();
-            List<String> results = searchResults.get(0).stream()
-                    .filter(result -> isAvailable(result, userId, now))
-                    .map(result -> {
-                        Map<String, Object> entity = result.getEntity();
-                        return entity.containsKey("text") ? entity.get("text").toString() : "";
-                    })
-                    .filter(text -> !text.isBlank())
-                    .limit(topK)
-                    .collect(Collectors.toList());
+            List<String> results = new ArrayList<>();
+            for (SearchResp.SearchResult result : searchResults.get(0)) {
+                MidTermMemory memory = resolveAvailableMemory(result, userId);
+                if (memory == null) {
+                    continue;
+                }
+                // 检索命中即"被想起"：强化记忆并重置衰减时钟
+                if (memoryDecayService != null) {
+                    memoryDecayService.reinforce(memory);
+                }
+                Map<String, Object> entity = result.getEntity();
+                String text = entity.containsKey("text")
+                        ? entity.get("text").toString() : memory.getSummary();
+                if (!text.isBlank()) {
+                    results.add(text);
+                }
+                if (results.size() >= topK) {
+                    break;
+                }
+            }
             recordSearch(results.isEmpty() ? "empty" : "success", results.size(), startedAt);
             return results;
 
@@ -134,20 +147,25 @@ public class MidTermMemorySearchService {
         }
     }
 
-    private boolean isAvailable(SearchResp.SearchResult result, String userId, LocalDateTime now) {
+    /**
+     * 解析检索结果对应的记忆实体，并做可用性过滤（未隐藏、未被融合、未被遗忘）。
+     * 懒遗忘：消费时发现满足遗忘条件则落库标记并过滤。
+     */
+    private MidTermMemory resolveAvailableMemory(SearchResp.SearchResult result, String userId) {
         String memoryId = extractMemoryId(result);
         if (memoryId == null) {
-            return false;
+            return null;
         }
         try {
             Long id = Long.valueOf(memoryId);
             return midTermMemoryRepository.findByIdAndUserId(id, userId)
                     .filter(memory -> !Boolean.TRUE.equals(memory.getHidden()))
                     .filter(memory -> memory.getMergedIntoId() == null)
-                    .filter(memory -> memory.getValidUntil() == null || memory.getValidUntil().isAfter(now))
-                    .isPresent();
+                    .filter(memory -> memoryDecayService == null
+                            || !memoryDecayService.checkAndMarkForgotten(memory))
+                    .orElse(null);
         } catch (NumberFormatException exception) {
-            return false;
+            return null;
         }
     }
 
@@ -177,7 +195,7 @@ public class MidTermMemorySearchService {
         long startedAt = System.nanoTime();
         try {
             List<MidTermMemory> recentMemories = midTermMemoryRepository.findAvailableByUserId(
-                    userId, java.time.LocalDateTime.now(), org.springframework.data.domain.PageRequest.of(0, limit));
+                    userId, org.springframework.data.domain.PageRequest.of(0, limit));
 
             if (recentMemories.isEmpty()) {
                 recordRecent("empty", 0, startedAt);

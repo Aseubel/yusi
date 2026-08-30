@@ -4,7 +4,7 @@ package com.aseubel.yusi.common.constant;
 public enum LifecycleStatus {
     ACTIVE("ACTIVE"),
     HIDDEN("HIDDEN"),
-    EXPIRED("EXPIRED"),
+    FORGOTTEN("FORGOTTEN"),
     MERGED("MERGED"),
     EMPTY("EMPTY");
 

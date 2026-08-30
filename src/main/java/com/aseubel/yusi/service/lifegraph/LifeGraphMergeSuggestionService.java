@@ -28,7 +28,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -197,14 +196,13 @@ public class LifeGraphMergeSuggestionService {
      * 获取待处理的合并建议（从数据库读取，不调用LLM）
      */
     public List<LifeGraphMergeSuggestion> getPendingSuggestions(String userId, int limit) {
-        LocalDateTime now = LocalDateTime.now();
         List<LifeGraphMergeJudgment> pending = judgmentRepository
                 .findByUserIdAndStatusOrderByCreatedAtDesc(userId, LifeGraphMergeStatus.PENDING.code());
 
         return pending.stream()
                 .filter(j -> LifeGraphMergeDecision.isYes(j.getMergeDecision()))
-                .filter(j -> isVisible(userId, j.getEntityIdA(), now)
-                        && isVisible(userId, j.getEntityIdB(), now))
+                .filter(j -> isVisible(userId, j.getEntityIdA())
+                        && isVisible(userId, j.getEntityIdB()))
                 .limit(limit)
                 .map(j -> LifeGraphMergeSuggestion.builder()
                         .judgmentId(j.getId())
@@ -365,7 +363,6 @@ public class LifeGraphMergeSuggestionService {
     private List<CandidatePair> findCandidates(String userId, Set<String> judgedPairs) {
         List<LifeGraphEntity> entities = entityRepository.findVisibleByUserId(
                 userId,
-                LocalDateTime.now(),
                 PageRequest.of(0, 50, Sort.by(Sort.Direction.DESC, "mentionCount")))
                 .getContent();
         List<CandidatePair> candidates = new ArrayList<>();
@@ -396,10 +393,9 @@ public class LifeGraphMergeSuggestionService {
         return candidates;
     }
 
-    private boolean isVisible(String userId, Long entityId, LocalDateTime now) {
+    private boolean isVisible(String userId, Long entityId) {
         return entityRepository.findByIdAndUserId(entityId, userId)
-                .map(entity -> !Boolean.TRUE.equals(entity.getHidden())
-                        && (entity.getValidUntil() == null || entity.getValidUntil().isAfter(now)))
+                .map(entity -> !Boolean.TRUE.equals(entity.getHidden()))
                 .orElse(false);
     }
 

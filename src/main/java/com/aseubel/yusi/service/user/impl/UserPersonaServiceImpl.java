@@ -20,13 +20,13 @@ public class UserPersonaServiceImpl implements UserPersonaService {
 
     @Override
     public UserPersona getUserPersona(String userId) {
-        return userPersonaRepository.findVisibleByUserId(userId, LocalDateTime.now())
+        return userPersonaRepository.findVisibleByUserId(userId)
                 .orElse(UserPersona.builder().userId(userId).build());
     }
 
     @Override
     public UserPersona getMatchableUserPersona(String userId) {
-        return userPersonaRepository.findMatchableByUserId(userId, LocalDateTime.now())
+        return userPersonaRepository.findMatchableByUserId(userId)
                 .orElse(UserPersona.builder().userId(userId).build());
     }
 

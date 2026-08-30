@@ -103,9 +103,6 @@ public class LifeGraphEntity {
     @Builder.Default
     private Origin origin = Origin.MANUAL;
 
-    @Column(name = "valid_until")
-    private LocalDateTime validUntil;
-
     @Column(name = "created_at", nullable = false)
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @JsonSerialize(using = LocalDateTimeSerializer.class)

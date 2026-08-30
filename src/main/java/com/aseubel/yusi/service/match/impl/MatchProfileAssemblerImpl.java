@@ -10,6 +10,7 @@ import com.aseubel.yusi.repository.LifeGraphEntityRepository;
 import com.aseubel.yusi.repository.MatchProfileRepository;
 import com.aseubel.yusi.repository.MidTermMemoryRepository;
 import com.aseubel.yusi.service.match.MatchProfileAssembler;
+import com.aseubel.yusi.service.memory.MemoryDecayService;
 import com.aseubel.yusi.service.user.UserPersonaService;
 import com.aseubel.yusi.service.user.UserService;
 import com.google.gson.JsonArray;
@@ -38,6 +39,7 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
 
     private final LifeGraphEntityRepository lifeGraphEntityRepository;
     private final MidTermMemoryRepository midTermMemoryRepository;
+    private final MemoryDecayService memoryDecayService;
     private final MatchProfileRepository matchProfileRepository;
     private final UserPersonaService userPersonaService;
     private final UserService userService;
@@ -103,7 +105,7 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
 
     private String buildLifeGraphSummary(String userId) {
         List<LifeGraphEntity> entities = lifeGraphEntityRepository.findMatchableTopByUserId(
-                userId, LocalDateTime.now(), PageRequest.of(0, 50));
+                userId, PageRequest.of(0, 50));
         if (entities == null || entities.isEmpty()) {
             return "长期结构信息较少。";
         }
@@ -154,29 +156,17 @@ public class MatchProfileAssemblerImpl implements MatchProfileAssembler {
 
     private String buildMidMemorySummary(String userId) {
         List<MidTermMemory> memories = midTermMemoryRepository
-                .findMatchableByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 10));
+                .findMatchableByUserId(userId, PageRequest.of(0, 10));
         if (memories == null || memories.isEmpty()) {
             return "近期状态信息较少。";
         }
         return memories.stream()
-                .sorted((a, b) -> Double.compare(calculateDecayedImportance(b), calculateDecayedImportance(a)))
+                .sorted((a, b) -> Double.compare(
+                        memoryDecayService.effectiveImportance(b), memoryDecayService.effectiveImportance(a)))
                 .limit(3)
                 .map(memory -> "- " + truncate(memory.getSummary(), 120))
                 .reduce((a, b) -> a + "\n" + b)
                 .orElse("近期状态信息较少。");
-    }
-
-    private double calculateDecayedImportance(MidTermMemory memory) {
-        double importance = memory.getImportance() != null ? memory.getImportance() : 0.5;
-        if (memory.getCreatedAt() == null) {
-            return importance;
-        }
-        long daysBetween = java.time.temporal.ChronoUnit.DAYS.between(memory.getCreatedAt(), LocalDateTime.now());
-        if (daysBetween <= 0) {
-            return importance;
-        }
-        // 14-day half-life soft decay
-        return importance * Math.pow(0.5, (double) daysBetween / 14.0);
     }
 
     private String buildMatchIntentSummary(User user) {

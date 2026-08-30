@@ -41,6 +41,31 @@ public class MemoryConfigProperties {
      */
     private String midTermScanCron = "0 */30 * * * ?";
 
+    /** 半衰期衰减与遗忘配置 */
+    private Decay decay = new Decay();
+
+    /**
+     * 衰减与遗忘参数。
+     * 记忆不再按时间硬过期，而是按半衰期软衰减；
+     * 只有"低初始重要性 + 衰减后低于阈值"的记忆才会被完全遗忘；
+     * 检索命中会强化记忆并重置衰减时钟（被想起的记忆会巩固）。
+     */
+    @Data
+    public static class Decay {
+
+        /** 半衰期（天）：有效重要性每过 N 天减半 */
+        private double halfLifeDays = 14.0;
+
+        /** 衰减后有效重要性低于该值即视为完全遗忘 */
+        private double forgottenThreshold = 0.1;
+
+        /** 初始重要性低于该值的记忆才可能被完全遗忘（重要记忆永生） */
+        private double initialImportanceGate = 0.5;
+
+        /** 检索命中强化系数：new = old + (1 - old) * factor */
+        private double reinforceFactor = 0.2;
+    }
+
     /**
      * 以 Duration 形式返回中期记忆总结间隔，避免调用方手工换算毫秒
      */

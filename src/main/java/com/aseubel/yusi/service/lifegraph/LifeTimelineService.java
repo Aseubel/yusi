@@ -39,7 +39,7 @@ public class LifeTimelineService {
     public List<LifeChapter> getLifeChapters(String userId) {
         // 1. 获取所有 Event 类型的实体
         List<LifeGraphEntity> events = entityRepository.findAllVisibleByUserIdAndType(
-                userId, LifeGraphEntity.EntityType.Event, LocalDateTime.now());
+                userId, LifeGraphEntity.EntityType.Event);
         
         // 过滤掉没有日期的事件
         List<TimelineNode> nodes = events.stream()

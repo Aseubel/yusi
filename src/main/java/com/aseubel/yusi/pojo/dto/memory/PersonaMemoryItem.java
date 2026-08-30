@@ -25,7 +25,6 @@ public class PersonaMemoryItem {
     private Double confidence;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private LocalDateTime validUntil;
     private Boolean matchAllowed;
     private Boolean hidden;
     private String lifecycleStatus;

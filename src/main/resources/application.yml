@@ -24,6 +24,16 @@ yusi:
     mid-term-summary-interval: 7200000
     # 中期记忆触发扫描的 Cron 表达式（默认每 30 分钟执行一次）
     mid-term-scan-cron: "0 */10 * * * ?"
+    # 半衰期衰减与遗忘：软衰减替代硬过期，命中强化巩固记忆
+    decay:
+      # 半衰期（天）：有效重要性每过 N 天减半
+      half-life-days: 14
+      # 衰减后有效重要性低于该值即视为完全遗忘
+      forgotten-threshold: 0.1
+      # 初始重要性低于该值的记忆才可能被完全遗忘
+      initial-importance-gate: 0.5
+      # 检索命中强化系数：new = old + (1 - old) * factor
+      reinforce-factor: 0.2
   oss:
     domain: ${OSS_DOMAIN:}
     region: ${OSS_REGION:cn-hangzhou}

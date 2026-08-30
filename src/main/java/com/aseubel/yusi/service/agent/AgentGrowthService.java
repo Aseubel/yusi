@@ -38,26 +38,25 @@ public class AgentGrowthService {
 
     public AgentGrowthResponse getGrowth(String userId) {
         // 1. 关系图谱（只统计当前仍可见的派生实体）
-        LocalDateTime now = LocalDateTime.now();
-        long entityCount = lifeGraphRepository.countVisibleByUserId(userId, now);
+        long entityCount = lifeGraphRepository.countVisibleByUserId(userId);
         Map<String, Long> breakdown = new LinkedHashMap<>();
         breakdown.put("人物", lifeGraphRepository.countVisibleByUserIdAndType(userId,
-                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Person, now));
+                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Person));
         breakdown.put("事件", lifeGraphRepository.countVisibleByUserIdAndType(userId,
-                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Event, now));
+                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Event));
         breakdown.put("地点", lifeGraphRepository.countVisibleByUserIdAndType(userId,
-                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Place, now));
+                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Place));
         breakdown.put("情绪", lifeGraphRepository.countVisibleByUserIdAndType(userId,
-                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Emotion, now));
+                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Emotion));
         breakdown.put("主题", lifeGraphRepository.countVisibleByUserIdAndType(userId,
-                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Topic, now));
+                com.aseubel.yusi.pojo.entity.LifeGraphEntity.EntityType.Topic));
 
         // 2. 画像完整度
         int personaScore = calcPersonaCompleteness(userId);
 
         // 3. 有效中期记忆
         List<MidTermMemory> validMemories = midTermMemoryRepository
-                .findValidByUserId(userId, LocalDateTime.now(), PageRequest.of(0, 100));
+                .findValidByUserId(userId, PageRequest.of(0, 100));
         long memoryCount = (long) validMemories.size();
 
         // 4. 日记

@@ -59,13 +59,17 @@ public class MidTermMemory {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    /**
-     * 记忆有效期截止时间。
-     * 过期后自动降低匹配和对话上下文中的权重，null 表示永不过期。
-     */
-    // TODO Phase 5 (F11.5): 添加定时任务定期清理 expired (validUntil < now) 的记忆，实施遗忘机制
-    @Column(name = "valid_until")
-    private LocalDateTime validUntil;
+    /** 记忆创建时的初始重要性，作为完全遗忘判定的门槛基准（低重要性记忆才可能衰减遗忘）。 */
+    @Column(name = "initial_importance")
+    private Double initialImportance;
+
+    /** 最后一次被检索命中的时间，作为衰减时钟基准（被想起的记忆会巩固）。 */
+    @Column(name = "last_reinforced_at")
+    private LocalDateTime lastReinforcedAt;
+
+    /** 完全遗忘时间（消费时懒判定后落库），null 表示仍可被检索和注入。 */
+    @Column(name = "forgotten_at")
+    private LocalDateTime forgottenAt;
 
     /**
      * 若被跨源融合到另一条记忆，指向幸存记忆的 ID（F11.4）。

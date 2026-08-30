@@ -23,7 +23,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -99,8 +98,7 @@ public class LifeGraphQueryService {
         int entityBudget = Math.max(1, maxEntities);
         int relationBudget = Math.max(0, maxRelations);
         int mentionBudget = Math.max(0, maxMentions);
-        LocalDateTime now = LocalDateTime.now();
-        Map<Long, LifeGraphEntity> entities = findSeedEntities(userId, query.trim(), entityBudget, now);
+        Map<Long, LifeGraphEntity> entities = findSeedEntities(userId, query.trim(), entityBudget);
         if (entities.isEmpty()) {
             return "";
         }
@@ -120,7 +118,7 @@ public class LifeGraphQueryService {
 
             Set<Long> neighborIds = new LinkedHashSet<>();
             for (LifeGraphRelation relation : adjacent) {
-                if (!isUsableRelation(userId, relation, now)) {
+                if (!isUsableRelation(userId, relation)) {
                     continue;
                 }
                 String relationKey = relationKey(relation);
@@ -143,7 +141,7 @@ public class LifeGraphQueryService {
             }
             List<LifeGraphEntity> found = safeEntities(entityRepository.findAllById(neighborIds));
             for (LifeGraphEntity entity : found) {
-                if (!userId.equals(entity.getUserId()) || !isVisible(entity, now)) {
+                if (!userId.equals(entity.getUserId()) || !isVisible(entity)) {
                     continue;
                 }
                 if (visited.add(entity.getId())) {
@@ -167,18 +165,18 @@ public class LifeGraphQueryService {
     }
 
     private Map<Long, LifeGraphEntity> findSeedEntities(String userId, String query,
-                                                         int maxEntities, LocalDateTime now) {
+                                                         int maxEntities) {
         String normalized = normalize(query);
         Map<Long, LifeGraphEntity> entities = new LinkedHashMap<>();
         aliasRepository.findByUserIdAndAliasNorm(userId, normalized)
                 .flatMap(alias -> entityRepository.findByIdAndUserId(alias.getEntityId(), userId))
-                .filter(entity -> isVisible(entity, now))
+                .filter(this::isVisible)
                 .ifPresent(entity -> entities.put(entity.getId(), entity));
 
         for (LifeGraphEntity entity : entityRepository
                 .findVisibleByUserIdAndDisplayNameContainingOrderByMentionCountDesc(
-                        userId, query, now, PageRequest.of(0, maxEntities)).getContent()) {
-            if (isVisible(entity, now)) {
+                        userId, query, PageRequest.of(0, maxEntities)).getContent()) {
+            if (isVisible(entity)) {
                 entities.putIfAbsent(entity.getId(), entity);
             }
             if (entities.size() >= maxEntities) {
@@ -188,14 +186,14 @@ public class LifeGraphQueryService {
         return entities;
     }
 
-    private boolean isUsableRelation(String userId, LifeGraphRelation relation, LocalDateTime now) {
+    private boolean isUsableRelation(String userId, LifeGraphRelation relation) {
         if (relation == null || relation.getType() == null
                 || LANGUAGE_ONLY_RELATIONS.contains(relation.getType().trim().toUpperCase(Locale.ROOT))) {
             return false;
         }
         LifeGraphEntity source = entityRepository.findByIdAndUserId(physicalSourceId(relation), userId).orElse(null);
         LifeGraphEntity target = entityRepository.findByIdAndUserId(physicalTargetId(relation), userId).orElse(null);
-        if (!isVisible(source, now) || !isVisible(target, now)) {
+        if (!isVisible(source) || !isVisible(target)) {
             return false;
         }
         if (relation.getOrigin() == LifeGraphRelation.Origin.AUTO) {
@@ -383,10 +381,9 @@ public class LifeGraphQueryService {
         }
     }
 
-    private boolean isVisible(LifeGraphEntity entity, LocalDateTime now) {
+    private boolean isVisible(LifeGraphEntity entity) {
         return entity != null
-                && !Boolean.TRUE.equals(entity.getHidden())
-                && (entity.getValidUntil() == null || entity.getValidUntil().isAfter(now));
+                && !Boolean.TRUE.equals(entity.getHidden());
     }
 
     private Long physicalSourceId(LifeGraphRelation relation) {

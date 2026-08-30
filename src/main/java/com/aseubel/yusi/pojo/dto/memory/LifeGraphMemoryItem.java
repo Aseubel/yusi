@@ -27,7 +27,6 @@ public class LifeGraphMemoryItem {
     private String relationOrigin;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
-    private LocalDateTime validUntil;
     private Boolean matchAllowed;
     private Boolean hidden;
     private String lifecycleStatus;

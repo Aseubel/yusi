@@ -93,27 +93,22 @@ public class MidMemoryUpdateServiceImpl implements MidMemoryUpdateService {
             return;
         }
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime validUntil;
-        if (MidMemoryCategory.EMOTION_OR_STATE.code().equalsIgnoreCase(category)) {
-            validUntil = now.plusDays(14);
-        } else if (MidMemoryCategory.PREFERENCE_OR_HABIT.code().equalsIgnoreCase(category)) {
-            validUntil = now.plusDays(180);
-        } else {
-            validUntil = now.plusDays(30); // Default for EVENT_OR_PLAN and others
-        }
+        double importanceValue = importance != null ? importance : 0.5;
 
         MidTermMemory saved = midTermMemoryRepository.save(MidTermMemory.builder()
                 .userId(userId)
                 .sourceType(StrUtil.blankToDefault(sourceType, SourceType.UNKNOWN.code()))
                 .sourceId(StrUtil.isBlank(sourceId) ? null : sourceId.trim())
                 .summary(summary)
-                .importance(importance != null ? importance : 0.5)
+                .importance(importanceValue)
+                // 记录初始重要性作为遗忘门槛基准，衰减时钟从创建时刻开始
+                .initialImportance(importanceValue)
+                .lastReinforcedAt(now)
                 .confidence(normalize(importance))
                 .matchAllowed(false)
                 .hidden(false)
                 .createdAt(now)
                 .updatedAt(now)
-                .validUntil(validUntil)
                 .build());
         recordAudit(SecurityAuditAction.MEMORY_CREATED, userId, saved == null ? null : saved.getId(),
                 sourceType, SecurityAuditOutcome.SUCCESS);

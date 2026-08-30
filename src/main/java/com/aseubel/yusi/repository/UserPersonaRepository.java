@@ -6,7 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
 import java.util.Optional;
 
 @Repository
@@ -17,16 +16,14 @@ public interface UserPersonaRepository extends JpaRepository<UserPersona, Long> 
             SELECT p FROM UserPersona p
             WHERE p.userId = :userId
               AND p.hidden = false
-              AND (p.validUntil IS NULL OR p.validUntil > :now)
             """)
-    Optional<UserPersona> findVisibleByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now);
+    Optional<UserPersona> findVisibleByUserId(@Param("userId") String userId);
 
     @Query("""
             SELECT p FROM UserPersona p
             WHERE p.userId = :userId
               AND p.hidden = false
               AND p.matchAllowed = true
-              AND (p.validUntil IS NULL OR p.validUntil > :now)
             """)
-    Optional<UserPersona> findMatchableByUserId(@Param("userId") String userId, @Param("now") LocalDateTime now);
+    Optional<UserPersona> findMatchableByUserId(@Param("userId") String userId);
 }

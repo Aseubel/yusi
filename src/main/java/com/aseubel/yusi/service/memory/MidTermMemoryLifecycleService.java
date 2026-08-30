@@ -38,22 +38,25 @@ public class MidTermMemoryLifecycleService {
     private final MidTermMemoryVectorService vectorService;
     private final MatchProfileAssembler matchProfileAssembler;
     private final DiaryRepository diaryRepository;
+    private final MemoryDecayService memoryDecayService;
     private final SecurityAuditService securityAuditService;
 
     public MidTermMemoryLifecycleService(MidTermMemoryRepository memoryRepository,
             MidTermMemoryVectorService vectorService, MatchProfileAssembler matchProfileAssembler,
             DiaryRepository diaryRepository) {
-        this(memoryRepository, vectorService, matchProfileAssembler, diaryRepository, null);
+        this(memoryRepository, vectorService, matchProfileAssembler, diaryRepository, null, null);
     }
 
     @Autowired
     public MidTermMemoryLifecycleService(MidTermMemoryRepository memoryRepository,
             MidTermMemoryVectorService vectorService, MatchProfileAssembler matchProfileAssembler,
-            DiaryRepository diaryRepository, SecurityAuditService securityAuditService) {
+            DiaryRepository diaryRepository, MemoryDecayService memoryDecayService,
+            SecurityAuditService securityAuditService) {
         this.memoryRepository = memoryRepository;
         this.vectorService = vectorService;
         this.matchProfileAssembler = matchProfileAssembler;
         this.diaryRepository = diaryRepository;
+        this.memoryDecayService = memoryDecayService;
         this.securityAuditService = securityAuditService;
     }
 
@@ -68,7 +71,7 @@ public class MidTermMemoryLifecycleService {
                 .memories(items)
                 .activeCount(items.stream().filter(item -> LifecycleStatus.ACTIVE.code().equals(item.getLifecycleStatus())).count())
                 .hiddenCount(items.stream().filter(item -> LifecycleStatus.HIDDEN.code().equals(item.getLifecycleStatus())).count())
-                .expiredCount(items.stream().filter(item -> LifecycleStatus.EXPIRED.code().equals(item.getLifecycleStatus())).count())
+                .forgottenCount(items.stream().filter(item -> LifecycleStatus.FORGOTTEN.code().equals(item.getLifecycleStatus())).count())
                 .matchableCount(items.stream()
                         .filter(item -> LifecycleStatus.ACTIVE.code().equals(item.getLifecycleStatus())
                                 && Boolean.TRUE.equals(item.getMatchAllowed()))
@@ -102,14 +105,6 @@ public class MidTermMemoryLifecycleService {
         }
         if (request.getHidden() != null) {
             memory.setHidden(request.getHidden());
-            profileChanged = true;
-        }
-        if (Boolean.TRUE.equals(request.getClearValidUntil())) {
-            memory.setValidUntil(null);
-        } else if (request.getValidUntil() != null) {
-            memory.setValidUntil(request.getValidUntil());
-        }
-        if (Boolean.TRUE.equals(request.getClearValidUntil()) || request.getValidUntil() != null) {
             profileChanged = true;
         }
         if (summaryChanged && Boolean.TRUE.equals(memory.getMatchAllowed())) {
@@ -193,10 +188,11 @@ public class MidTermMemoryLifecycleService {
         String lifecycleStatus;
         if (Boolean.TRUE.equals(memory.getHidden())) {
             lifecycleStatus = LifecycleStatus.HIDDEN.code();
-        } else if (memory.getValidUntil() != null && !memory.getValidUntil().isAfter(now)) {
-            lifecycleStatus = LifecycleStatus.EXPIRED.code();
         } else if (memory.getMergedIntoId() != null) {
             lifecycleStatus = LifecycleStatus.MERGED.code();
+        } else if (memoryDecayService != null && memoryDecayService.isForgotten(memory)) {
+            // 懒遗忘展示：满足"低初始重要性 + 衰减后低于阈值"即视为被遗忘
+            lifecycleStatus = LifecycleStatus.FORGOTTEN.code();
         } else {
             lifecycleStatus = LifecycleStatus.ACTIVE.code();
         }
@@ -218,7 +214,6 @@ public class MidTermMemoryLifecycleService {
                 .sourceTitle(sourceTitle)
                 .createdAt(memory.getCreatedAt())
                 .updatedAt(memory.getUpdatedAt())
-                .validUntil(memory.getValidUntil())
                 .mergedIntoId(memory.getMergedIntoId())
                 .matchAllowed(Boolean.TRUE.equals(memory.getMatchAllowed()))
                 .hidden(Boolean.TRUE.equals(memory.getHidden()))

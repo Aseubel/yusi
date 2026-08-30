@@ -45,9 +45,8 @@ public class LifeGraphDataService {
      * 分页获取全图数据
      */
     public GraphSnapshotDTO getFullGraph(String userId, int page, int size) {
-        LocalDateTime now = LocalDateTime.now();
         Page<LifeGraphEntity> entityPage = entityRepository.findVisibleByUserId(
-                userId, now, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "mentionCount")));
+                userId, PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "mentionCount")));
 
         List<LifeGraphEntity> entities = entityPage.getContent();
         Set<Long> entityIds = entities.stream().map(LifeGraphEntity::getId).collect(Collectors.toSet());
@@ -63,7 +62,7 @@ public class LifeGraphDataService {
             }
         }
 
-        long totalCount = entityRepository.countVisibleByUserId(userId, now);
+        long totalCount = entityRepository.countVisibleByUserId(userId);
 
         return GraphSnapshotDTO.builder()
                 .nodes(entities.stream().map(this::toNodeDTO).toList())
@@ -118,7 +117,7 @@ public class LifeGraphDataService {
             }
         }
 
-        long totalCount = entityRepository.countVisibleByUserId(userId, LocalDateTime.now());
+        long totalCount = entityRepository.countVisibleByUserId(userId);
 
         return GraphSnapshotDTO.builder()
                 .nodes(visitedEntities.values().stream().map(this::toNodeDTO).toList())
@@ -128,8 +127,7 @@ public class LifeGraphDataService {
     }
 
     private boolean isVisible(LifeGraphEntity entity) {
-        return !Boolean.TRUE.equals(entity.getHidden())
-                && (entity.getValidUntil() == null || entity.getValidUntil().isAfter(LocalDateTime.now()));
+        return !Boolean.TRUE.equals(entity.getHidden());
     }
 
     // ======================== Entity CRUD ========================

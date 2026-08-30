@@ -201,7 +201,7 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
         // TODO: 当前简化实现仅检查中期记忆更新时间，应综合检查最近聊天时间 + 日记更新时间
         // 简化实现：检查最近的中期记忆更新时间
         List<MidTermMemory> recentMemories = midTermMemoryRepository.findAvailableByUserId(
-                userId, LocalDateTime.now(), PageRequest.of(0, 1));
+                userId, PageRequest.of(0, 1));
         if (recentMemories.isEmpty()) {
             return false; // 新用户，不打扰
         }
@@ -233,7 +233,7 @@ public class AgentProactiveServiceImpl implements AgentProactiveService {
     private void generateGreetingNotification(User user, AgentPersonaConfig config) {
         String userName = StrUtil.blankToDefault(user.getUserName(), "朋友");
         List<MidTermMemory> memories = midTermMemoryRepository.findValidByUserId(
-                user.getUserId(), LocalDateTime.now(), PageRequest.of(0, 3));
+                user.getUserId(), PageRequest.of(0, 3));
         String midTermMemories = memories.stream()
                 .map(m -> "- " + m.getSummary())
                 .collect(Collectors.joining("\n"));
