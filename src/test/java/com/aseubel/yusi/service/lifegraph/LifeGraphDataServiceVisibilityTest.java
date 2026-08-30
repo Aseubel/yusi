@@ -97,11 +97,11 @@ class LifeGraphDataServiceVisibilityTest {
     }
 
     @Test
-    void fullGraphDoesNotReturnHiddenOrExpiredNodes() {
+    void fullGraphDoesNotReturnHiddenOrForgottenNodes() {
         LifeGraphEntity visible = entity(1L, "visible");
-        when(entityRepository.findVisibleByUserId(eq("user-1"), any(), any(Pageable.class)))
+        when(entityRepository.findVisibleByUserId(eq("user-1"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(visible)));
-        when(entityRepository.countVisibleByUserId(eq("user-1"), any())).thenReturn(1L);
+        when(entityRepository.countVisibleByUserId(eq("user-1"))).thenReturn(1L);
         when(relationRepository.findByUserIdAndSourceIdIn(eq("user-1"), any())).thenReturn(List.of());
 
         GraphSnapshotDTO snapshot = service().getFullGraph("user-1", 0, 200);
@@ -110,7 +110,7 @@ class LifeGraphDataServiceVisibilityTest {
                 .map(GraphSnapshotDTO.NodeDTO::getId)
                 .toList());
         assertEquals(1L, snapshot.getTotalNodeCount());
-        verify(entityRepository).findVisibleByUserId(eq("user-1"), any(), any(Pageable.class));
+        verify(entityRepository).findVisibleByUserId(eq("user-1"), any(Pageable.class));
         verify(entityRepository, never()).findByUserId(eq("user-1"), any(Pageable.class));
         verify(entityRepository, never()).countByUserId("user-1");
     }

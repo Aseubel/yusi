@@ -67,7 +67,7 @@ class LifeGraphSourceReplacementTest {
 
     @Test
     void invalidExtractionPreservesExistingDiaryContributionsAndRaisesForRetry() {
-        when(entityRepository.findVisibleByUserId(eq("user-1"), any(), any()))
+        when(entityRepository.findVisibleByUserId(eq("user-1"), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
         when(aliasRepository.findTop200ByUserIdOrderByConfidenceDesc("user-1")).thenReturn(List.of());
         when(promptManager.getSnapshot(any(PromptKey.class)))
@@ -139,7 +139,7 @@ class LifeGraphSourceReplacementTest {
                 .displayName("我")
                 .build();
 
-        when(entityRepository.findVisibleByUserId(eq("user-1"), any(), any()))
+        when(entityRepository.findVisibleByUserId(eq("user-1"), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
         when(aliasRepository.findTop200ByUserIdOrderByConfidenceDesc("user-1")).thenReturn(List.of());
         when(mentionRepository.findByUserIdAndDiaryId("user-1", "diary-1")).thenReturn(List.of());
@@ -242,7 +242,7 @@ class LifeGraphSourceReplacementTest {
                 .displayName("我")
                 .build();
 
-        when(entityRepository.findVisibleByUserId(eq("user-1"), any(), any()))
+        when(entityRepository.findVisibleByUserId(eq("user-1"), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
         when(aliasRepository.findTop200ByUserIdOrderByConfidenceDesc("user-1")).thenReturn(List.of());
         when(mentionRepository.findByUserIdAndDiaryId("user-1", "diary-1")).thenReturn(List.of());
@@ -305,7 +305,7 @@ class LifeGraphSourceReplacementTest {
                 .displayName("我")
                 .build();
 
-        when(entityRepository.findVisibleByUserId(eq("user-1"), any(), any()))
+        when(entityRepository.findVisibleByUserId(eq("user-1"), any(org.springframework.data.domain.Pageable.class)))
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of()));
         when(aliasRepository.findTop200ByUserIdOrderByConfidenceDesc("user-1")).thenReturn(List.of());
         when(mentionRepository.findByUserIdAndDiaryId("user-1", "diary-1")).thenReturn(List.of());

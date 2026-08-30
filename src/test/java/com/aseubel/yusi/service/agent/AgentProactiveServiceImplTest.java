@@ -95,8 +95,8 @@ class AgentProactiveServiceImplTest {
         when(taskExecutionService.claim(anyString(), anyString(), any())).thenReturn(Optional.of(execution));
         when(agentRunTraceService.open("user-1", "greeting-run-1", "proactive_greeting"))
                 .thenReturn(runScope);
-        when(midTermMemoryRepository.findValidByUserId(
-                eq("user-1"), any(LocalDateTime.class), eq(PageRequest.of(0, 3))))
+        // 半衰期遗忘机制后：有效查询不再按时间过滤，直接按用户分页查询
+        when(midTermMemoryRepository.findValidByUserId(eq("user-1"), eq(PageRequest.of(0, 3))))
                 .thenReturn(List.of());
         when(promptManager.getSnapshot(PromptKey.AGENT_PROACTIVE_GREETING))
                 .thenReturn(new PromptSnapshot("agent-proactive-greeting", "v1", "zh-CN", "问候 {{userName}}"));
@@ -154,8 +154,7 @@ class AgentProactiveServiceImplTest {
         when(taskExecutionService.claim(anyString(), anyString(), any())).thenReturn(Optional.of(execution));
         when(agentRunTraceService.open("user-1", "greeting-run-failed", "proactive_greeting"))
                 .thenReturn(runScope);
-        when(midTermMemoryRepository.findValidByUserId(
-                eq("user-1"), any(LocalDateTime.class), eq(PageRequest.of(0, 3))))
+        when(midTermMemoryRepository.findValidByUserId(eq("user-1"), eq(PageRequest.of(0, 3))))
                 .thenReturn(List.of());
         when(promptManager.getSnapshot(PromptKey.AGENT_PROACTIVE_GREETING))
                 .thenReturn(new PromptSnapshot("agent-proactive-greeting", "v1", "zh-CN", "问候 {{userName}}"));
@@ -187,8 +186,7 @@ class AgentProactiveServiceImplTest {
                 .findByUserIdAndTypeAndCreatedAtAfterOrderByCreatedAtDescIdDesc(
                         eq("user-1"), anyString(), any(LocalDateTime.class)))
                 .thenReturn(List.of());
-        when(midTermMemoryRepository.findAvailableByUserId(
-                eq("user-1"), any(LocalDateTime.class), eq(PageRequest.of(0, 1))))
+        when(midTermMemoryRepository.findAvailableByUserId(eq("user-1"), eq(PageRequest.of(0, 1))))
                 .thenReturn(List.of(MidTermMemory.builder()
                         .createdAt(LocalDateTime.now().minusDays(4))
                         .build()));

@@ -98,14 +98,15 @@ class UserPersonaLifecycleServiceTest {
     }
 
     @Test
-    void expiredPersonaIsReportedAsExpired() {
+    void hiddenPersonaIsReportedAsHidden() {
+        // 半衰期遗忘机制后人格不再有过期态，隐藏态按 HIDDEN 展示
         UserPersona persona = persona("user-1");
-        persona.setValidUntil(LocalDateTime.now().minusMinutes(1));
+        persona.setHidden(true);
         when(repository.findByUserId("user-1")).thenReturn(Optional.of(persona));
 
         PersonaMemoryItem result = lifecycle().get("user-1");
 
-        assertEquals("EXPIRED", result.getLifecycleStatus());
+        assertEquals("HIDDEN", result.getLifecycleStatus());
     }
 
     private UserPersonaLifecycleService lifecycle() {

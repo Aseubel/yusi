@@ -66,7 +66,7 @@ class LifeGraphBuildServiceTest {
                 .mentionCount(0)
                 .build();
 
-        when(entityRepository.findVisibleByUserId(eq("user-1"), any(), any(Pageable.class)))
+        when(entityRepository.findVisibleByUserId(eq("user-1"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of()));
         when(aliasRepository.findTop200ByUserIdOrderByConfidenceDesc("user-1"))
                 .thenReturn(List.of());

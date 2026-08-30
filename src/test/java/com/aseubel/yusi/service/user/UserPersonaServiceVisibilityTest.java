@@ -26,31 +26,32 @@ class UserPersonaServiceVisibilityTest {
 
     @Test
     void hiddenPersonaIsNotReturnedToAgent() {
-        when(repository.findVisibleByUserId(eq("user-1"), any())).thenReturn(Optional.empty());
+        when(repository.findVisibleByUserId(eq("user-1"))).thenReturn(Optional.empty());
 
         UserPersona result = service().getUserPersona("user-1");
 
         assertEquals("user-1", result.getUserId());
         assertNull(result.getPreferredName());
-        verify(repository).findVisibleByUserId(eq("user-1"), any());
+        verify(repository).findVisibleByUserId(eq("user-1"));
         verify(repository, never()).findByUserId("user-1");
     }
 
     @Test
     void matchablePersonaUsesTheExplicitMatchingScope() {
         UserPersona persona = UserPersona.builder().userId("user-1").preferredName("小予").build();
-        when(repository.findMatchableByUserId(eq("user-1"), any())).thenReturn(Optional.of(persona));
+        when(repository.findMatchableByUserId(eq("user-1"))).thenReturn(Optional.of(persona));
 
         UserPersona result = service().getMatchableUserPersona("user-1");
 
         assertEquals("小予", result.getPreferredName());
-        verify(repository).findMatchableByUserId(eq("user-1"), any());
+        verify(repository).findMatchableByUserId(eq("user-1"));
     }
 
     @Test
-    void expiredPersonaIsAbsentFromVisibleAndMatchableReads() {
-        when(repository.findVisibleByUserId(eq("user-1"), any())).thenReturn(Optional.empty());
-        when(repository.findMatchableByUserId(eq("user-1"), any())).thenReturn(Optional.empty());
+    void forgottenPersonaIsAbsentFromVisibleAndMatchableReads() {
+        // 遗忘（forgottenAt 非空）的人格不应出现在可见与可匹配读路径中
+        when(repository.findVisibleByUserId(eq("user-1"))).thenReturn(Optional.empty());
+        when(repository.findMatchableByUserId(eq("user-1"))).thenReturn(Optional.empty());
 
         UserPersona visible = service().getUserPersona("user-1");
         UserPersona matchable = service().getMatchableUserPersona("user-1");

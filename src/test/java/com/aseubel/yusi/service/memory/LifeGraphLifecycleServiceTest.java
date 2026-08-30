@@ -427,16 +427,17 @@ class LifeGraphLifecycleServiceTest {
     }
 
     @Test
-    void listReportsExpiredEntity() {
+    void listReportsHiddenEntity() {
+        // 半衰期遗忘机制后不再有 EXPIRED 状态，隐藏实体按 HIDDEN 统计
         LifeGraphEntity entity = entity(11L, "user-1");
-        entity.setValidUntil(LocalDateTime.now().minusMinutes(1));
+        entity.setHidden(true);
         when(entityRepository.findByUserId(eq("user-1"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
 
         LifeGraphMemoryResponse result = service().list("user-1", 50);
 
-        assertEquals("EXPIRED", result.getEntities().get(0).getLifecycleStatus());
-        assertEquals(1L, result.getExpiredCount());
+        assertEquals("HIDDEN", result.getEntities().get(0).getLifecycleStatus());
+        assertEquals(1L, result.getHiddenCount());
         assertEquals(0L, result.getActiveCount());
     }
 

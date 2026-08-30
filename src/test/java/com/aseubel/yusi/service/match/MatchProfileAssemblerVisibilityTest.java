@@ -58,11 +58,11 @@ class MatchProfileAssemblerVisibilityTest {
     @Test
     void matchProfileOnlyUsesExplicitlyMatchablePersonaAndGraphData() {
         when(userService.getUserByUserId("user-1")).thenReturn(User.builder().userId("user-1").build());
-        when(lifeGraphEntityRepository.findMatchableTopByUserId(anyString(), any(), any()))
+        when(lifeGraphEntityRepository.findMatchableTopByUserId(anyString(), any()))
                 .thenReturn(List.of(entity(1L, "allowed")));
         when(userPersonaService.getMatchableUserPersona("user-1"))
                 .thenReturn(UserPersona.builder().userId("user-1").interests("允许兴趣").build());
-        when(midTermMemoryRepository.findMatchableByUserId(anyString(), any(), any()))
+        when(midTermMemoryRepository.findMatchableByUserId(anyString(), any()))
                 .thenReturn(List.of());
         when(matchProfileRepository.findByUserId("user-1")).thenReturn(Optional.empty());
         when(matchProfileRepository.save(any(MatchProfile.class)))
@@ -74,7 +74,7 @@ class MatchProfileAssemblerVisibilityTest {
 
         assertFalse(profile.getLifeGraphSummary().contains("hidden"));
         assertFalse(profile.getPersonaSummary().contains("hidden"));
-        verify(lifeGraphEntityRepository).findMatchableTopByUserId(anyString(), any(), any());
+        verify(lifeGraphEntityRepository).findMatchableTopByUserId(anyString(), any());
         verify(userPersonaService).getMatchableUserPersona("user-1");
         verify(lifeGraphEntityRepository, never()).findTop50ByUserIdOrderByMentionCountDesc("user-1");
     }
@@ -154,11 +154,11 @@ class MatchProfileAssemblerVisibilityTest {
 
     private MatchProfile refreshProfile(List<LifeGraphEntity> entities, List<MidTermMemory> memories) {
         when(userService.getUserByUserId("user-1")).thenReturn(User.builder().userId("user-1").build());
-        when(lifeGraphEntityRepository.findMatchableTopByUserId(anyString(), any(), any()))
+        when(lifeGraphEntityRepository.findMatchableTopByUserId(anyString(), any()))
                 .thenReturn(entities);
         when(userPersonaService.getMatchableUserPersona("user-1"))
                 .thenReturn(UserPersona.builder().userId("user-1").build());
-        when(midTermMemoryRepository.findMatchableByUserId(anyString(), any(), any()))
+        when(midTermMemoryRepository.findMatchableByUserId(anyString(), any()))
                 .thenReturn(memories);
         when(matchProfileRepository.findByUserId("user-1")).thenReturn(Optional.empty());
         when(matchProfileRepository.save(any(MatchProfile.class)))
@@ -192,8 +192,12 @@ class MatchProfileAssemblerVisibilityTest {
     }
 
     private MatchProfileAssemblerImpl service() {
+        // 使用真实的半衰期衰减服务（默认配置），验证衰减后重要性对排序的影响
+        com.aseubel.yusi.service.memory.MemoryDecayService decayService =
+                new com.aseubel.yusi.service.memory.MemoryDecayService(
+                        new com.aseubel.yusi.config.MemoryConfigProperties(), midTermMemoryRepository);
         return new MatchProfileAssemblerImpl(lifeGraphEntityRepository, midTermMemoryRepository,
-                matchProfileRepository, userPersonaService, userService, milvusClient, embeddingModel,
+                decayService, matchProfileRepository, userPersonaService, userService, milvusClient, embeddingModel,
                 new com.aseubel.yusi.config.ai.properties.MilvusCollectionProperties());
     }
 

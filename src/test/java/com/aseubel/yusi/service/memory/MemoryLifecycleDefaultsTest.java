@@ -19,7 +19,6 @@ class MemoryLifecycleDefaultsTest {
         assertEquals(0.5, persona.getConfidence());
         assertFalse(persona.getMatchAllowed());
         assertFalse(persona.getHidden());
-        assertNull(persona.getValidUntil());
     }
 
     @Test
@@ -29,6 +28,5 @@ class MemoryLifecycleDefaultsTest {
         assertEquals(0.5, entity.getConfidence());
         assertFalse(entity.getMatchAllowed());
         assertFalse(entity.getHidden());
-        assertNull(entity.getValidUntil());
     }
 }

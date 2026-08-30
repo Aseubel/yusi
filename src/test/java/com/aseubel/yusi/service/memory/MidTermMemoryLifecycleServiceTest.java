@@ -98,20 +98,20 @@ class MidTermMemoryLifecycleServiceTest {
     }
 
     @Test
-    void changingValidityAlsoRefreshesProfile() {
+    void listReportsLowValueDecayedMemoryAsForgotten() {
+        // 半衰期遗忘机制后：低初始重要性 + 衰减后低于阈值的记忆按 FORGOTTEN 展示
         MidTermMemory memory = memory(8L, "user-1");
-        when(memoryRepository.findByIdAndUserId(8L, "user-1")).thenReturn(Optional.of(memory));
-        when(memoryRepository.save(any(MidTermMemory.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        memory.setInitialImportance(0.2);
+        memory.setCreatedAt(LocalDateTime.now().minusDays(30));
+        memory.setUpdatedAt(memory.getCreatedAt());
+        when(memoryRepository.findByUserIdOrderByCreatedAtDesc(any(), any()))
+                .thenReturn(java.util.List.of(memory));
 
-        UpdateMemoryRequest request = new UpdateMemoryRequest();
-        request.setValidUntil(LocalDateTime.now().minusMinutes(1));
+        var result = service().list("user-1", 50);
 
-        var result = service().update("user-1", 8L, request);
-
-        assertEquals(request.getValidUntil(), result.getValidUntil());
-        assertEquals("EXPIRED", result.getLifecycleStatus());
-        verify(matchProfileAssembler).refreshProfile("user-1");
-        verify(vectorService, never()).upsert(any());
+        assertEquals("FORGOTTEN", result.getMemories().get(0).getLifecycleStatus());
+        assertEquals(1L, result.getForgottenCount());
+        assertEquals(0L, result.getActiveCount());
     }
 
     @Test
@@ -129,8 +129,12 @@ class MidTermMemoryLifecycleServiceTest {
     }
 
     private MidTermMemoryLifecycleService service() {
+        // 使用真实的半衰期衰减服务（默认配置）驱动懒遗忘展示
+        com.aseubel.yusi.config.MemoryConfigProperties properties =
+                new com.aseubel.yusi.config.MemoryConfigProperties();
+        MemoryDecayService decayService = new MemoryDecayService(properties, memoryRepository);
         return new MidTermMemoryLifecycleService(memoryRepository, vectorService, matchProfileAssembler,
-                diaryRepository, securityAuditService);
+                diaryRepository, decayService, securityAuditService);
     }
 
     private MidTermMemory memory(Long id, String userId) {

@@ -73,7 +73,7 @@ class LifeGraphQueryServiceTest {
         when(aliasRepository.findByUserIdAndAliasNorm("user-1", "topic"))
                 .thenReturn(Optional.empty());
         when(entityRepository.findVisibleByUserIdAndDisplayNameContainingOrderByMentionCountDesc(
-                eq("user-1"), eq("topic"), any(), any(Pageable.class)))
+                eq("user-1"), eq("topic"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
         when(relationRepository.findTop200ByUserIdAndSourceIdOrderByUpdatedAtDesc("user-1", 11L))
                 .thenReturn(List.of());
@@ -112,7 +112,7 @@ class LifeGraphQueryServiceTest {
         when(aliasRepository.findByUserIdAndAliasNorm("user-1", "xiaomei"))
                 .thenReturn(Optional.empty());
         when(entityRepository.findVisibleByUserIdAndDisplayNameContainingOrderByMentionCountDesc(
-                eq("user-1"), eq("xiaomei"), any(), any(Pageable.class)))
+                eq("user-1"), eq("xiaomei"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(entity)));
         when(entityEvidenceRepository.findByUserIdAndEntityId("user-1", 12L))
                 .thenReturn(List.of(evidence));
@@ -148,7 +148,7 @@ class LifeGraphQueryServiceTest {
         when(entityRepository.findByIdAndUserId(3L, "user-1")).thenReturn(Optional.of(trip));
         when(entityRepository.findByIdAndUserId(4L, "user-1")).thenReturn(Optional.of(place));
         when(entityRepository.findVisibleByUserIdAndDisplayNameContainingOrderByMentionCountDesc(
-                eq("user-1"), eq("xiaomei"), any(), any(Pageable.class)))
+                eq("user-1"), eq("xiaomei"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(person)));
         when(entityRepository.findAllById(any())).thenReturn(List.of(user, person, trip, place));
 
@@ -198,7 +198,7 @@ class LifeGraphQueryServiceTest {
         when(aliasRepository.findByUserIdAndAliasNorm("user-1", "xiaomei"))
                 .thenReturn(Optional.empty());
         when(entityRepository.findVisibleByUserIdAndDisplayNameContainingOrderByMentionCountDesc(
-                eq("user-1"), eq("xiaomei"), any(), any(Pageable.class)))
+                eq("user-1"), eq("xiaomei"), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(seed)));
         when(relationRepository.findTop200ByUserIdAndSourceIdOrderByUpdatedAtDesc("user-1", 11L))
                 .thenReturn(List.of(lowConfidence));

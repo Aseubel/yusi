@@ -39,7 +39,7 @@ class LifeTimelineServiceTest {
                 .hidden(false)
                 .build();
         when(entityRepository.findAllVisibleByUserIdAndType(
-                eq("user-1"), eq(LifeGraphEntity.EntityType.Event), org.mockito.ArgumentMatchers.any(LocalDateTime.class)))
+                eq("user-1"), eq(LifeGraphEntity.EntityType.Event)))
                 .thenReturn(List.of(event));
 
         List<LifeChapter> chapters = new LifeTimelineService(entityRepository, new ObjectMapper())
@@ -62,7 +62,7 @@ class LifeTimelineServiceTest {
                 .hidden(false)
                 .build();
         when(entityRepository.findAllVisibleByUserIdAndType(
-                eq("user-1"), eq(LifeGraphEntity.EntityType.Event), org.mockito.ArgumentMatchers.any(LocalDateTime.class)))
+                eq("user-1"), eq(LifeGraphEntity.EntityType.Event)))
                 .thenReturn(List.of(event));
 
         assertEquals(List.of(), new LifeTimelineService(entityRepository, new ObjectMapper())

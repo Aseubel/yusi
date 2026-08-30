@@ -31,13 +31,11 @@ class UserPersonaUpdateServiceTest {
 
     @Test
     void cognitionSourceUpdatesContentWithoutResettingUserLifecycleControls() {
-        LocalDateTime validUntil = LocalDateTime.now().plusDays(30);
         UserPersona existing = UserPersona.builder()
                 .id(3L)
                 .userId("user-1")
                 .hidden(true)
                 .matchAllowed(true)
-                .validUntil(validUntil)
                 .sourceType("USER_EDIT")
                 .confidence(1.0)
                 .build();
@@ -58,6 +56,5 @@ class UserPersonaUpdateServiceTest {
         assertEquals(0.5, existing.getConfidence());
         assertTrue(existing.getHidden());
         assertTrue(existing.getMatchAllowed());
-        assertEquals(validUntil, existing.getValidUntil());
     }
 }
