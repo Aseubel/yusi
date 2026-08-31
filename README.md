@@ -32,11 +32,14 @@ Yusi（「予思」）把日记、对话和人生经历组织成可持续积累�
 | --- | --- |
 | Memory Journal | 记录重要时刻、选择和感受，支持加密存储与富文本内容 |
 | Layered Memory | 结合短期对话、中期记忆、长期摘要和向量检索，形成可持续的上下文 |
+| Memory Center | 透明化的记忆管理：半衰期软衰减替代硬过期，命中强化巩固记忆，双重门槛懒判定遗忘 |
 | RAG Chat | 从个人记忆中检索相关内容，再生成有依据的对话回复 |
-| Life Graph | 抽取人物、地点、事件和情绪，构建可探索的人生关系图谱 |
-| Situation Room | 在具体情境中记录选择，生成行为与情绪分析 |
-| Soul Matching | 基于行为和叙事的深层理解探索精神共鸣，而非简单标签匹配 |
-| Model Control Plane | 按业务场景和故障状态统一管理模型路由、权重与 failover |
+| Life Graph | 抽取人物、地点、事件和情绪，构建可探索的人生关系图谱与情绪时间线 |
+| Situation Room | 在具体情境中记录选择，生成行为与情绪分析报告 |
+| Soul Plaza & Matching | 发布心声卡片、基于情绪与共鸣信号互动；基于行为和叙事的深层理解探索精神共鸣，而非简单标签匹配 |
+| Agent Framework | 后台 Agent 运行与主动关怀，工具调用具备幂等、重试、取消与全链路 trace |
+| Model Control Plane | 按业务场景和故障状态统一管理模型路由、权重、预算准入与 failover |
+| Admin Workbench | 运营后台：模型治理、用户管理、安全审计、场景审计与 Web 访问策略 |
 | MCP Gateway | 通过标准 MCP 对外提供记忆工具；Go 网关经 gRPC 调用 Java 内部能力，并复用后端鉴权与数据边界 |
 
 ## 架构概览
@@ -61,12 +64,13 @@ MCP 层是面向外部模型和客户端的能力适配边界，不是一个独�
 
 ## 技术栈
 
-- **Backend**: Java 21, Spring Boot 3.4.5, Spring Data JPA, MySQL, Redis, Milvus/Zilliz
+- **Backend**: Java 21, Spring Boot 3.4.5, Spring Data JPA, Flyway, MySQL, Redis, Milvus/Zilliz
 - **AI**: LangChain4j 1.18.0, OpenAI-compatible APIs, DashScope, RAG, embeddings
 - **Integration**: gRPC, Protocol Buffers, MCP (Model Context Protocol), WebSocket
-- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, Radix UI, Zustand, Tiptap
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, Radix UI, Zustand, Tiptap, i18next, PWA
 - **MCP gateway**: Go, MCP Go SDK, Gin, gRPC
 - **Security**: JWT, AES/GCM encrypted diary content, scoped MCP authorization
+- **Observability**: Micrometer/Prometheus 指标、调用链 trace、告警评估、限流准入与备份恢复脚本
 
 ## 项目结构
 
@@ -75,16 +79,22 @@ yusi/
 ├── src/main/java/com/aseubel/yusi/
 │   ├── controller/       # HTTP / WebSocket 接口
 │   ├── service/          # 按领域组织的业务能力
-│   │   ├── ai/           # chat, embedding, prompt, rag, model, asr 等
-│   │   ├── memory/       # 记忆检索、摘要与上下文
-│   │   └── cognition/    # 情绪与认知分析
+│   │   ├── agent/        # agent 成长与主动服务
+│   │   ├── ai/           # chat, embedding, prompt, rag, model 路由, asr 等
+│   │   ├── memory/       # 记忆检索、摘要、半衰期衰减与上下文
+│   │   ├── cognition/    # 情绪与认知分析
+│   │   ├── lifegraph/    # 人生图谱构建、查询与洞察
+│   │   ├── match/ plaza/ room/  # 同频匹配、灵魂广场与情境房间
+│   │   └── runtime/      # agent 运行时：锁、trace、幂等与取消
 │   ├── repository/       # 持久化访问
 │   ├── pojo/             # Entity、DTO 与领域数据结构
 │   ├── config/           # Spring、AI、数据和安全配置
+│   ├── observability/    # 指标、告警与 trace 支持
 │   └── grpc/             # 对外部 MCP 网关开放的内部能力边界
-├── src/main/resources/   # application 配置与模板
+├── src/main/resources/   # application 配置、Flyway 迁移与模板
 ├── frontend/             # React web client
 ├── mcp/                  # Go MCP gateway 与 protobuf
+├── ops/                  # 备份与恢复脚本
 └── docs/                 # PRD、设计、指南、计划与工程记录
 ```
 
@@ -171,6 +181,7 @@ go build ./...
 - [产品理念与开发哲学](docs/design/philosophy.md)
 - [后端设计](docs/design/backend-design.md)
 - [模型管理与路由框架](docs/design/model-management-framework.md)
+- [记忆系统优化方案](docs/design/memory_system_optimization_proposal.md)
 - [LangChain4j 1.18 架构演进记录](docs/record/langchain4j-1.18-architecture-evolution.md)
 - [后端目录结构审计记录](docs/record/backend-structure-review-2026-08-02.md)
 - [PRD v4](docs/prd/prd_v4.md)

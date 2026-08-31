@@ -32,11 +32,14 @@ Its guiding idea is simple: **know your vibe, find your tribe.** Understanding c
 | --- | --- |
 | Memory Journal | Capture meaningful moments, choices, and feelings with encrypted storage and rich text |
 | Layered Memory | Combine short-term conversation context, intermediate memories, long-term summaries, and vector retrieval |
+| Memory Center | Transparent memory management: half-life soft decay instead of hard expiry, retrieval-based reinforcement, and lazy two-threshold forgetting |
 | RAG Chat | Retrieve relevant personal memories before generating grounded responses |
-| Life Graph | Extract people, places, events, and emotions into an explorable relationship graph |
-| Situation Room | Record choices in concrete scenarios and generate behavioral and emotional analysis |
-| Soul Matching | Explore deeper resonance through behavior and narratives instead of profile labels |
-| Model Control Plane | Route models by business scene with weights, priorities, health state, and failover |
+| Life Graph | Extract people, places, events, and emotions into an explorable relationship graph with emotion timelines |
+| Situation Room | Record choices in concrete scenarios and generate behavioral and emotional analysis reports |
+| Soul Plaza & Matching | Share soul cards and interact through emotion and resonance signals; explore deeper resonance through behavior and narratives instead of profile labels |
+| Agent Framework | Background agent runs and proactive care with idempotent, retryable, cancellable tool calls and full-chain traces |
+| Model Control Plane | Route models by business scene with weights, priorities, budget admission, health state, and failover |
+| Admin Workbench | Operations console: model governance, user management, security audit, scenario audit, and web access policy |
 | MCP Gateway | Expose memory tools through MCP; a Go gateway calls Java internal capabilities over gRPC |
 
 ## Architecture
@@ -61,12 +64,13 @@ The MCP process is a protocol gateway, not a separate memory backend. Memory que
 
 ## Tech stack
 
-- **Backend**: Java 21, Spring Boot 3.4.5, Spring Data JPA, MySQL, Redis, Milvus/Zilliz
+- **Backend**: Java 21, Spring Boot 3.4.5, Spring Data JPA, Flyway, MySQL, Redis, Milvus/Zilliz
 - **AI**: LangChain4j 1.18.0, OpenAI-compatible APIs, DashScope, RAG, embeddings
 - **Integration**: gRPC, Protocol Buffers, MCP (Model Context Protocol), WebSocket
-- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, Radix UI, Zustand, Tiptap
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS, Radix UI, Zustand, Tiptap, i18next, PWA
 - **MCP gateway**: Go, MCP Go SDK, Gin, gRPC
 - **Security**: JWT, AES/GCM encrypted diary content, scoped MCP authorization
+- **Observability**: Micrometer/Prometheus metrics, call traces, alert evaluation, rate-limit admission, and backup/restore scripts
 
 ## Repository layout
 
@@ -75,16 +79,22 @@ yusi/
 ├── src/main/java/com/aseubel/yusi/
 │   ├── controller/       # HTTP / WebSocket endpoints
 │   ├── service/          # Domain-oriented application capabilities
-│   │   ├── ai/           # chat, embedding, prompt, rag, model, asr, etc.
-│   │   ├── memory/       # Retrieval, summaries, and context assembly
-│   │   └── cognition/    # Emotion and cognitive analysis
+│   │   ├── agent/        # Agent growth and proactive service
+│   │   ├── ai/           # chat, embedding, prompt, rag, model routing, asr, etc.
+│   │   ├── memory/       # Memory retrieval, summaries, half-life decay, and context
+│   │   ├── cognition/    # Emotion and cognitive analysis
+│   │   ├── lifegraph/    # Life graph building, queries, and insights
+│   │   ├── match/ plaza/ room/  # Soul matching, soul plaza, and situation rooms
+│   │   └── runtime/      # Agent runtime: locks, traces, idempotency, cancellation
 │   ├── repository/       # Persistence access
 │   ├── pojo/             # Entities, DTOs, and domain data structures
 │   ├── config/           # Spring, AI, data, and security configuration
+│   ├── observability/    # Metrics, alerts, and trace support
 │   └── grpc/             # Internal capability boundary for the MCP gateway
-├── src/main/resources/   # Application configuration and templates
+├── src/main/resources/   # Application configuration, Flyway migrations, and templates
 ├── frontend/             # React web client
 ├── mcp/                  # Go MCP gateway and protobuf definitions
+├── ops/                  # Backup and restore scripts
 └── docs/                 # PRDs, designs, guides, plans, and engineering records
 ```
 
@@ -169,6 +179,7 @@ go build ./...
 - [Product philosophy](docs/design/philosophy.md)
 - [Backend design](docs/design/backend-design.md)
 - [Model management and routing framework](docs/design/model-management-framework.md)
+- [Memory system optimization proposal](docs/design/memory_system_optimization_proposal.md)
 - [LangChain4j 1.18 architecture evolution record](docs/record/langchain4j-1.18-architecture-evolution.md)
 - [Backend structure review](docs/record/backend-structure-review-2026-08-02.md)
 - [PRD v4](docs/prd/prd_v4.md)

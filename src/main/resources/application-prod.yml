@@ -304,10 +304,6 @@ thread:
 # 数据库配置；启动时配置数据库资源信息
 spring:
   datasource:
-    # ShardingSphere 对 Driver 自定义，实现分库分表等隐藏逻辑
-    #    driver-class-name: org.apache.shardingsphere.driver.ShardingSphereDriver
-    # ShardingSphere 配置文件路径
-    #    url: jdbc:shardingsphere:classpath:shardingsphere-config.yaml
     username: ${SPRING_DATASOURCE_USERNAME:root}
     password: ${SPRING_DATASOURCE_PASSWORD}
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/yusi?serverTimezone=UTC&characterEncoding=utf8&autoReconnect=true&serverTimezone=Asia/Shanghai}

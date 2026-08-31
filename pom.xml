@@ -32,7 +32,6 @@
         <!-- Community/Spring/MCP 1.18.0-beta28 currently pins core 1.18.0. -->
         <langchain4j.version>1.18.0</langchain4j.version>
         <langchain4j-external.version>1.18.0-beta28</langchain4j-external.version>
-        <shardingsphere.version>5.5.0</shardingsphere.version>
         <java-uuid-generator.version>5.0.0</java-uuid-generator.version>
         <lombok.version>1.18.30</lombok.version>
         <jjwt.version>0.11.5</jjwt.version>
@@ -202,21 +201,6 @@
             <groupId>com.fasterxml.uuid</groupId>
             <artifactId>java-uuid-generator</artifactId>
             <version>${java-uuid-generator.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.shardingsphere</groupId>
-            <artifactId>shardingsphere-jdbc</artifactId>
-            <version>${shardingsphere.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.apache.shardingsphere</groupId>
-                    <artifactId>shardingsphere-test-util</artifactId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>antlr4-runtime</artifactId>
-                    <groupId>org.antlr</groupId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <dependency>
