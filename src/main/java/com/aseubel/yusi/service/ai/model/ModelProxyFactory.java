@@ -703,77 +703,117 @@ public class ModelProxyFactory {
 
             @Override
             public void onPartialResponse(String partialResponse) {
-                markOutput();
-                downstream.onPartialResponse(partialResponse);
+                withRouteContext(() -> {
+                    markOutput();
+                    downstream.onPartialResponse(partialResponse);
+                });
             }
 
             @Override
             public void onPartialResponse(PartialResponse partialResponse, PartialResponseContext responseContext) {
-                markOutput();
-                downstream.onPartialResponse(partialResponse, responseContext);
+                withRouteContext(() -> {
+                    markOutput();
+                    downstream.onPartialResponse(partialResponse, responseContext);
+                });
             }
 
             @Override
             public void onPartialThinking(PartialThinking partialThinking) {
-                markOutput();
-                downstream.onPartialThinking(partialThinking);
+                withRouteContext(() -> {
+                    markOutput();
+                    downstream.onPartialThinking(partialThinking);
+                });
             }
 
             @Override
             public void onPartialThinking(PartialThinking partialThinking, PartialThinkingContext thinkingContext) {
-                markOutput();
-                downstream.onPartialThinking(partialThinking, thinkingContext);
+                withRouteContext(() -> {
+                    markOutput();
+                    downstream.onPartialThinking(partialThinking, thinkingContext);
+                });
             }
 
             @Override
             public void onPartialToolCall(PartialToolCall partialToolCall) {
-                markOutput();
-                downstream.onPartialToolCall(partialToolCall);
+                withRouteContext(() -> {
+                    markOutput();
+                    downstream.onPartialToolCall(partialToolCall);
+                });
             }
 
             @Override
             public void onPartialToolCall(PartialToolCall partialToolCall, PartialToolCallContext toolCallContext) {
-                markOutput();
-                downstream.onPartialToolCall(partialToolCall, toolCallContext);
+                withRouteContext(() -> {
+                    markOutput();
+                    downstream.onPartialToolCall(partialToolCall, toolCallContext);
+                });
             }
 
             @Override
             public void onCompleteToolCall(CompleteToolCall completeToolCall) {
-                markOutput();
-                downstream.onCompleteToolCall(completeToolCall);
+                withRouteContext(() -> {
+                    markOutput();
+                    downstream.onCompleteToolCall(completeToolCall);
+                });
             }
 
             @Override
             public void onUnmappedRawEvent(Object event) {
-                markOutput();
-                downstream.onUnmappedRawEvent(event);
+                withRouteContext(() -> {
+                    markOutput();
+                    downstream.onUnmappedRawEvent(event);
+                });
             }
 
             @Override
             public void onCompleteResponse(ChatResponse completeResponse) {
-                if (terminal.compareAndSet(false, true)) {
-                    long latency = System.currentTimeMillis() - start;
-                    ModelUsageSnapshot usage = usageExtractor.extract(completeResponse, candidate.instance());
-                    budgetAdmission.reconcile(permit, usage);
-                    recordStateSuccess(candidate.instance(), latency);
-                    publishAttempt(decision, context, candidate, usage, latency,
-                            firstOutputAt.get() < 0 ? null : firstOutputAt.get() - start,
-                            attemptIndex, ModelCallStatus.SUCCESS.code(), null);
-                    logAttempt("model_stream", "completed", decision, context, candidate,
-                            attemptIndex, findChatRequest(args), latency, null, emitted.get());
-                }
-                downstream.onCompleteResponse(completeResponse);
+                withRouteContext(() -> {
+                    if (terminal.compareAndSet(false, true)) {
+                        long latency = System.currentTimeMillis() - start;
+                        ModelUsageSnapshot usage = usageExtractor.extract(completeResponse, candidate.instance());
+                        budgetAdmission.reconcile(permit, usage);
+                        recordStateSuccess(candidate.instance(), latency);
+                        publishAttempt(decision, context, candidate, usage, latency,
+                                firstOutputAt.get() < 0 ? null : firstOutputAt.get() - start,
+                                attemptIndex, ModelCallStatus.SUCCESS.code(), null);
+                        logAttempt("model_stream", "completed", decision, context, candidate,
+                                attemptIndex, findChatRequest(args), latency, null, emitted.get());
+                    }
+                    // 下游回调内会同步执行工具并可能发起下一轮模型调用
+                    downstream.onCompleteResponse(completeResponse);
+                });
             }
 
             @Override
             public void onError(Throwable error) {
-                if (!terminal.compareAndSet(false, true)) {
-                    downstream.onError(error);
+                withRouteContext(() -> {
+                    if (!terminal.compareAndSet(false, true)) {
+                        downstream.onError(error);
+                        return;
+                    }
+                    handleStreamingFailure(decision, context, candidate, candidates, candidateIndex,
+                            attemptIndex, start, emitted.get(), firstOutputAt.get(), method, args, error, downstream,
+                            permit);
+                });
+            }
+
+            /**
+             * SDK 流式回调线程与发起调用的线程不同，ThreadLocal 路由上下文在此断裂，
+             * 导致后续轮次模型调用与工具执行丢失 run_id/user_id。
+             * 在回调入口用捕获的 context 重建上下文（栈式 push/pop，与作用域嵌套兼容），
+             * 保证整条 agent 循环（含 failover 重试与下一轮请求）归属同一个 run。
+             */
+            private void withRouteContext(Runnable action) {
+                if (context == null) {
+                    action.run();
                     return;
                 }
-                handleStreamingFailure(decision, context, candidate, candidates, candidateIndex,
-                        attemptIndex, start, emitted.get(), firstOutputAt.get(), method, args, error, downstream,
-                        permit);
+                ModelRouteContextHolder.set(context);
+                try {
+                    action.run();
+                } finally {
+                    ModelRouteContextHolder.clear();
+                }
             }
 
             private void markOutput() {
