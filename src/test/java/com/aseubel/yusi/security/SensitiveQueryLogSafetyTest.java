@@ -41,7 +41,6 @@ import ch.qos.logback.classic.spi.IThrowableProxy;
 import ch.qos.logback.classic.spi.StackTraceElementProxy;
 import ch.qos.logback.core.read.ListAppender;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -205,7 +204,7 @@ class SensitiveQueryLogSafetyTest {
     void recentMidTermMemoriesKeepFallbackAndDoNotLogExceptionMessage() {
         MidTermMemorySearchService service = new MidTermMemorySearchService(
                 milvusClientV2, embeddingModel, midTermMemoryRepository);
-        when(midTermMemoryRepository.findAvailableByUserId(anyString(), any(LocalDateTime.class), any(Pageable.class)))
+        when(midTermMemoryRepository.findAvailableByUserId(anyString(), any(Pageable.class)))
                 .thenThrow(new IllegalStateException(QUERY_SENTINEL));
 
         ListAppender<ILoggingEvent> appender = attach(MidTermMemorySearchService.class);

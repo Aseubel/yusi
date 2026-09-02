@@ -297,7 +297,7 @@ class SensitivePayloadLogSafetyTest {
         MidTermMemory a = memory(1L, "fixture-memory-a");
         MidTermMemory b = memory(2L, "fixture-memory-b");
         MidTermMemory c = memory(3L, "fixture-memory-c");
-        when(midTermMemoryRepository.findUnmergedByUserId(eq(USER_ID), any(LocalDateTime.class)))
+        when(midTermMemoryRepository.findUnmergedByUserId(eq(USER_ID)))
                 .thenReturn(new ArrayList<>(List.of(a, b, c)));
         when(promptManager.getSnapshot(any(com.aseubel.yusi.common.constant.PromptKey.class)))
                 .thenReturn(new PromptSnapshot("memory-fusion", "fixture-v1", "zh-CN",

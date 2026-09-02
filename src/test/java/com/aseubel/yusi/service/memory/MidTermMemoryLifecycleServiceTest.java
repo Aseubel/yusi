@@ -101,7 +101,9 @@ class MidTermMemoryLifecycleServiceTest {
     void listReportsLowValueDecayedMemoryAsForgotten() {
         // 半衰期遗忘机制后：低初始重要性 + 衰减后低于阈值的记忆按 FORGOTTEN 展示
         MidTermMemory memory = memory(8L, "user-1");
+        // 创建时初始重要性与当前重要性一致（未被强化过），30 天衰减后 0.2 × 0.5^(30/14) ≈ 0.045 < 0.1
         memory.setInitialImportance(0.2);
+        memory.setImportance(0.2);
         memory.setCreatedAt(LocalDateTime.now().minusDays(30));
         memory.setUpdatedAt(memory.getCreatedAt());
         when(memoryRepository.findByUserIdOrderByCreatedAtDesc(any(), any()))

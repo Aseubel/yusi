@@ -289,7 +289,8 @@ class MemoryLifecycleEvaluationTest {
 
     private MidTermMemory toEntity(MemoryRecord record, int index, Long mergedIntoId) {
         boolean hidden = "HIDDEN".equals(record.lifecycle());
-        LocalDateTime validUntil = "EXPIRED".equals(record.lifecycle())
+        // 生命周期已改为懒遗忘：EXPIRED 用 forgottenAt 表达
+        LocalDateTime forgottenAt = "EXPIRED".equals(record.lifecycle())
                 ? FIXED_NOW.minusMinutes(1) : null;
         return MidTermMemory.builder()
                 .userId(record.ownerUserId())
@@ -302,7 +303,7 @@ class MemoryLifecycleEvaluationTest {
                 .hidden(hidden)
                 .createdAt(FIXED_NOW.minusMinutes(index))
                 .updatedAt(FIXED_NOW)
-                .validUntil(validUntil)
+                .forgottenAt(forgottenAt)
                 .mergedIntoId(mergedIntoId)
                 .build();
     }
@@ -321,11 +322,11 @@ class MemoryLifecycleEvaluationTest {
     }
 
     private int availableCount(String userId) {
-        return memoryRepository.findAvailableByUserId(userId, FIXED_NOW, PageRequest.of(0, 100)).size();
+        return memoryRepository.findAvailableByUserId(userId, PageRequest.of(0, 100)).size();
     }
 
     private int matchableCount(String userId) {
-        return memoryRepository.findMatchableByUserId(userId, FIXED_NOW, PageRequest.of(0, 100)).size();
+        return memoryRepository.findMatchableByUserId(userId, PageRequest.of(0, 100)).size();
     }
 
     private void checkRetrieval(Checks checks, String positiveToken, List<String> restrictedTokens,

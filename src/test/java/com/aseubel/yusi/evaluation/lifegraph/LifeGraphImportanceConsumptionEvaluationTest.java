@@ -228,7 +228,7 @@ class LifeGraphImportanceConsumptionEvaluationTest {
             prepareMatchableProjection(scenario.userId());
 
             List<LifeGraphEntity> candidates = entityRepository.findMatchableTopByUserId(
-                    scenario.userId(), LocalDateTime.now(), PageRequest.of(0, 1));
+                    scenario.userId(), PageRequest.of(0, 1));
             checks.check("MATCHABLE_IMPORTANCE_ORDER",
                     candidates.size() == 1
                             && "fixture-person-b".equals(candidates.get(0).getNameNorm()));

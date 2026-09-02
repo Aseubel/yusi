@@ -349,8 +349,9 @@ class ChatQualityEvaluationTest {
         return tokenStream;
     }
 
+    // validUntil 已被移除，"过期"记忆改用 forgottenAt（懒遗忘）表达
     private MidTermMemory memory(String userId, String summary, LocalDateTime createdAt,
-            LocalDateTime validUntil, boolean hidden) {
+            LocalDateTime forgottenAt, boolean hidden) {
         return MidTermMemory.builder()
                 .userId(userId)
                 .sourceType(SourceType.MANUAL.code())
@@ -362,7 +363,7 @@ class ChatQualityEvaluationTest {
                 .hidden(hidden)
                 .createdAt(createdAt)
                 .updatedAt(createdAt)
-                .validUntil(validUntil)
+                .forgottenAt(forgottenAt)
                 .build();
     }
 
