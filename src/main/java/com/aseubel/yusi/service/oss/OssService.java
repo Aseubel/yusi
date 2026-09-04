@@ -21,8 +21,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
 import java.net.URI;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.Duration;
@@ -69,7 +67,9 @@ public class OssService {
 
             byte[] compressed = ImageUtils.compressImage(bytes);
 
-            String fileMd5 = calculateMd5(compressed);
+            // MD5 统一按"客户端原始文件"口径计算，与 /image/check 秒传检查、分片上传会话保持一致，
+            // 避免直传后秒传查询因口径不同（压缩前 vs 压缩后）而无法命中
+            String fileMd5 = calculateMd5(bytes);
 
             var existingFile = imageFileRepository.findByFileMd5AndUserId(fileMd5, userId);
             if (existingFile.isPresent()) {
@@ -439,6 +439,8 @@ public class OssService {
 
         String chunkKey = chunkKey(fileMd5, userId, chunkIndex);
         if (Boolean.TRUE.equals(redisTemplate.hasKey(chunkKey))) {
+            // 幂等跳过：分片对象已存在。此处补写 Set 成员，防止上次写入后进程中断导致计数缺失
+            markChunkUploaded(fileMd5, userId, chunkIndex);
             log.info("OSS chunk upload skipped: operation=oss_chunk_upload, category=chunk_exists");
             return uploadId;
         }
@@ -482,7 +484,8 @@ public class OssService {
             redisTemplate.opsForValue().set(chunkKey + ":size", String.valueOf(chunkSize),
                     CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
 
-            updateChunkProgress(fileMd5, userId);
+            // 记录已传分片索引，进度查询/合并校验由逐 key 扫描 O(N) 降为 SCARD O(1)
+            markChunkUploaded(fileMd5, userId, chunkIndex);
 
             log.info("OSS chunk upload completed: operation=oss_chunk_upload, category=chunk, outcome=success");
             return uploadId;
@@ -531,33 +534,35 @@ public class OssService {
         return newUploadId;
     }
 
+    /**
+     * 已传分片计数：基于 Redis Set 的 SCARD 实现，O(1)。
+     * Set 成员在分片写入成功后添加，幂等跳过路径会补写，保证与分片 objectKey 最终一致。
+     */
     public int getUploadedChunkCount(String fileMd5, String userId) {
         validateFileMd5(fileMd5);
         validateUserId(userId);
-        String totalChunksStr = redisTemplate.opsForValue().get(chunkPrefix(fileMd5, userId) + ":totalChunks");
-        if (totalChunksStr == null) {
-            return 0;
-        }
-
-        int totalChunks = Integer.parseInt(totalChunksStr);
-        int uploadedCount = 0;
-
-        for (int i = 0; i < totalChunks; i++) {
-            String chunkKey = chunkKey(fileMd5, userId, i);
-            if (Boolean.TRUE.equals(redisTemplate.hasKey(chunkKey))) {
-                uploadedCount++;
-            }
-        }
-
-        return uploadedCount;
+        Long count = redisTemplate.opsForSet().size(uploadedChunkSetKey(fileMd5, userId));
+        return count == null ? 0 : count.intValue();
     }
 
-    private void updateChunkProgress(String fileMd5, String userId) {
-        int uploaded = getUploadedChunkCount(fileMd5, userId);
-        redisTemplate.opsForValue().set(chunkPrefix(fileMd5, userId) + ":uploadedCount",
-                String.valueOf(uploaded), CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
+    /** 将分片索引记入已传集合，供 O(1) 计数使用 */
+    private void markChunkUploaded(String fileMd5, String userId, int chunkIndex) {
+        String setKey = uploadedChunkSetKey(fileMd5, userId);
+        redisTemplate.opsForSet().add(setKey, String.valueOf(chunkIndex));
+        redisTemplate.expire(setKey, CHUNK_EXPIRE_HOURS, TimeUnit.HOURS);
     }
 
+    private String uploadedChunkSetKey(String fileMd5, String userId) {
+        return chunkPrefix(fileMd5, userId) + ":uploadedSet";
+    }
+
+    /**
+     * 合并分片：基于 OSS 原生 Multipart Upload 能力（UploadPartCopy）。
+     * 分片对象由 OSS 服务端直接复制为最终对象的 part，数据不经过业务服务器，
+     * 避免"下载全部分片 → 本地拼接 → 整体再上传"的双倍流量与内存/磁盘开销。
+     * 注：合并后不再做服务端压缩——前端上传前已完成压缩，且压缩必须整体读取文件，
+     * 与零拷贝合并互斥；直传路径仍保留服务端压缩兜底。
+     */
     public String mergeChunks(String fileMd5, Integer totalChunks, String userId, String fileName, Long totalSize) {
         validateFileMd5(fileMd5);
         validateUserId(userId);
@@ -575,48 +580,54 @@ public class OssService {
                     "分片上传不完整，已上传 " + uploadedCount + "/" + totalChunks);
         }
 
-        Path tempDir = null;
+        String finalObjectKey = ossProperties.getImageFolder() + userId + "/" +
+                UuidUtils.genUuidSimple() + extension;
+        String multipartUploadId = null;
         try {
-            tempDir = Files.createTempDirectory("yusi-merge-");
-
-            Path mergedFile = tempDir.resolve("merged.bin");
-            long mergedSize = 0;
-
-            try (OutputStream output = Files.newOutputStream(mergedFile)) {
-                for (int i = 0; i < totalChunks; i++) {
-                    String chunkObjectKey = chunkObjectKey(fileMd5, userId, i);
-                    mergedSize += downloadChunk(chunkObjectKey, output, ossProperties.getMaxFileSize() - mergedSize);
-                }
-            }
-
-            if (mergedSize != totalSize) {
-                throw new BusinessException(ErrorCode.PARAM_ERROR,
-                        "合并文件大小与声明不一致");
-            }
-            if (mergedSize > ossProperties.getMaxFileSize()) {
-                throw new BusinessException(ErrorCode.PARAM_ERROR, "合并文件超过大小限制");
-            }
-
-            byte[] mergedBytes = Files.readAllBytes(mergedFile);
-
-            String finalObjectKey = ossProperties.getImageFolder() + userId + "/" +
-                    UuidUtils.genUuidSimple() + extension;
-
-            byte[] compressedBytes = ImageUtils.compressImage(mergedBytes);
-
-            PutObjectRequest request = PutObjectRequest.newBuilder()
+            // 1. 初始化 multipart upload，直接以最终 objectKey 创建，拿到 OSS 侧 uploadId
+            multipartUploadId = ossClient.initiateMultipartUpload(InitiateMultipartUploadRequest.newBuilder()
                     .bucket(ossProperties.getBucketName())
                     .key(finalObjectKey)
-                    .body(BinaryData.fromBytes(compressedBytes))
                     .contentType(getMimeType(extension))
-                    .build();
+                    .build()).initiateMultipartUpload().uploadId();
 
-            ossClient.putObject(request);
+            // 2. 逐分片 UploadPartCopy：OSS 服务端复制分片为 part，partNumber 从 1 开始
+            List<Part> parts = new ArrayList<>(totalChunks);
+            for (int i = 0; i < totalChunks; i++) {
+                long partNumber = i + 1L;
+                String eTag = ossClient.uploadPartCopy(UploadPartCopyRequest.newBuilder()
+                        .bucket(ossProperties.getBucketName())
+                        .key(finalObjectKey)
+                        .sourceBucket(ossProperties.getBucketName())
+                        .sourceKey(chunkObjectKey(fileMd5, userId, i))
+                        .partNumber(partNumber)
+                        .uploadId(multipartUploadId)
+                        .build()).copyPartResult().eTag();
+                parts.add(Part.newBuilder().partNumber(partNumber).eTag(eTag).build());
+            }
 
+            // 3. 提交合并，生成最终对象
+            ossClient.completeMultipartUpload(CompleteMultipartUploadRequest.newBuilder()
+                    .bucket(ossProperties.getBucketName())
+                    .key(finalObjectKey)
+                    .uploadId(multipartUploadId)
+                    .completeMultipartUpload(CompleteMultipartUpload.newBuilder().parts(parts).build())
+                    .build());
+            multipartUploadId = null; // 已完成，后续失败无需 abort
+
+            // 4. 校验最终对象大小与客户端声明一致，防分片缺失/重复导致的静默错配
+            Long actualSize = ossClient.headObject(HeadObjectRequest.newBuilder()
+                    .bucket(ossProperties.getBucketName())
+                    .key(finalObjectKey)
+                    .build()).contentLength();
+            if (actualSize == null || actualSize != totalSize) {
+                deleteObject(finalObjectKey);
+                throw new BusinessException(ErrorCode.PARAM_ERROR, "合并文件大小与声明不一致");
+            }
+
+            // 5. 登记秒传缓存与元数据，随后清理分片与会话
             cacheMd5ForSkipUpload(finalObjectKey, fileMd5, userId);
-
-            saveImageFileAsync(finalObjectKey, fileMd5, userId, fileName, (long) compressedBytes.length,
-                    getMimeType(extension));
+            saveImageFileAsync(finalObjectKey, fileMd5, userId, fileName, actualSize, getMimeType(extension));
 
             cleanupChunks(fileMd5, totalChunks, userId);
             cleanupUploadId(fileMd5, userId);
@@ -624,47 +635,30 @@ public class OssService {
             log.info("OSS chunk merge completed: operation=oss_chunk_merge, category=image, outcome=success");
             return finalObjectKey;
         } catch (BusinessException e) {
+            abortMultipartQuietly(finalObjectKey, multipartUploadId);
             throw e;
         } catch (Exception e) {
+            abortMultipartQuietly(finalObjectKey, multipartUploadId);
             log.error("OSS chunk merge failed: operation=oss_chunk_merge, category=image, exceptionType={}",
                     LowSensitivityLogSummary.exceptionType(e));
             throw new BusinessException(ErrorCode.INTERNAL_ERROR, "分片合并失败");
-        } finally {
-            if (tempDir != null) {
-                try {
-                    try (var paths = Files.walk(tempDir)) {
-                        paths
-                            .sorted(Comparator.reverseOrder())
-                            .map(Path::toFile)
-                            .forEach(File::delete);
-                    }
-                } catch (IOException e) {
-                    log.warn("OSS temp cleanup failed: operation=oss_temp_cleanup, category=local_directory, exceptionType={}",
-                            LowSensitivityLogSummary.exceptionType(e));
-                }
-            }
         }
     }
 
-    private long downloadChunk(String objectKey, OutputStream output, long remainingBytes) throws Exception {
-        GetObjectRequest request = GetObjectRequest.newBuilder()
-                .bucket(ossProperties.getBucketName())
-                .key(objectKey)
-                .build();
-
-        try (GetObjectResult result = ossClient.getObject(request);
-                InputStream input = result.body()) {
-            long total = 0;
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = input.read(buffer)) != -1) {
-                total += read;
-                if (total > remainingBytes) {
-                    throw new BusinessException(ErrorCode.PARAM_ERROR, "合并文件超过大小限制");
-                }
-                output.write(buffer, 0, read);
-            }
-            return total;
+    /** 合并中途失败时放弃 OSS 侧 multipart 会话，避免残留未完成 part 占用存储 */
+    private void abortMultipartQuietly(String objectKey, String uploadId) {
+        if (uploadId == null) {
+            return;
+        }
+        try {
+            ossClient.abortMultipartUpload(AbortMultipartUploadRequest.newBuilder()
+                    .bucket(ossProperties.getBucketName())
+                    .key(objectKey)
+                    .uploadId(uploadId)
+                    .build());
+        } catch (Exception e) {
+            log.warn("OSS multipart abort failed: operation=oss_multipart_abort, category=object, exceptionType={}",
+                    LowSensitivityLogSummary.exceptionType(e));
         }
     }
 
@@ -687,7 +681,7 @@ public class OssService {
         }
 
         redisTemplate.delete(chunkPrefix(fileMd5, userId) + ":totalChunks");
-        redisTemplate.delete(chunkPrefix(fileMd5, userId) + ":uploadedCount");
+        redisTemplate.delete(uploadedChunkSetKey(fileMd5, userId));
         redisTemplate.delete(chunkPrefix(fileMd5, userId) + ":bytes");
     }
 
